@@ -206,15 +206,15 @@ class Trail
     public function scriptVariables(): array
     {
         $path = '/'.DashboardPath::prefix();
-        $config = $this->container->make(Repository::class);
+        $app = $this->application();
 
         return [
             'path' => $path,
             'apiPath' => $path.'/api',
             'csrfToken' => csrf_token(),
-            'appName' => $config->get('app.name'),
-            'environment' => App::environment(),
-            'timezone' => $config->get('app.timezone'),
+            'appName' => $app['name'],
+            'environment' => $app['environment'],
+            'timezone' => $app['timezone'],
             'version' => $this->version(),
             'staleAfter' => StaleRuns::timeout(),
             'recording' => $this->recording(),
@@ -222,9 +222,21 @@ class Trail
     }
 
     /**
+     * The application Trail runs in, as the dashboard shows it.
+     *
+     * @return array{name: mixed, environment: string, timezone: mixed}
+     */
+    public function application(): array
+    {
+        $config = $this->container->make(Repository::class);
+
+        return ['name' => $config->get('app.name'), 'environment' => App::environment(), 'timezone' => $config->get('app.timezone')];
+    }
+
+    /**
      * The installed version of Trail, or null when Composer cannot say.
      */
-    private function version(): ?string
+    public function version(): ?string
     {
         try {
             return InstalledVersions::getPrettyVersion('astrophp/trail');
@@ -237,7 +249,7 @@ class Trail
      * Whether Trail is recording: enabled, paused, or disabled. Null when the pause flag cannot be
      * read, as then neither enabled nor paused would be known to be true.
      */
-    private function recording(): ?string
+    public function recording(): ?string
     {
         if (! $this->container->make(Repository::class)->get('trail.enabled')) {
             return 'disabled';

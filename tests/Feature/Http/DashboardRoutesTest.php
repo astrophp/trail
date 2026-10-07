@@ -22,5 +22,5 @@ it('serves the page for everything else, including look-alikes of the api space'
 it('registers the fallback before the page', function () {
     $names = collect(Route::getRoutes()->getRoutes())->map->getName()->filter(fn ($name) => str_starts_with((string) $name, 'trail.'))->values()->all();
 
-    expect($names)->toBe(['trail.api.fallback', 'trail.dashboard']);
+    expect($names)->toBe(['trail.api.meta', 'trail.api.fallback', 'trail.dashboard']);
 });

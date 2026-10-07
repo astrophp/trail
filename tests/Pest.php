@@ -19,6 +19,8 @@ uses(MigratesApplicationTables::class)->in('Feature/Capture/Hardening/HostilePay
 uses(DisablesTrail::class)->in('Feature/Capture/MasterSwitchTest.php');
 uses(MigratesLaravelTables::class)->in('Feature/Users');
 uses(RefreshDatabase::class)->in('Feature/Users');
+uses(RefreshDatabase::class)->in('Feature/Http/Api', 'Feature/Queries');
+uses(MigratesLaravelTables::class, RefreshDatabase::class)->in('Feature/Http/Resources/ResolvedUsersTest.php');
 uses(BootsWorkbench::class, RefreshDatabase::class)->in('Feature/Workbench');
 
 /** The window.Trail object of a page, decoded the way the browser decodes it. */
