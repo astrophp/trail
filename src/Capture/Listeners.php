@@ -5,11 +5,15 @@ namespace Astro\Trail\Capture;
 use Closure;
 use Illuminate\Contracts\Container\Container;
 use Illuminate\Contracts\Events\Dispatcher;
+use Laravel\Ai\Events\AgentFailed;
+use Laravel\Ai\Events\AgentFailedOver;
 use Laravel\Ai\Events\AgentPrompted;
 use Laravel\Ai\Events\InvokingTool;
 use Laravel\Ai\Events\PromptingAgent;
 use Laravel\Ai\Events\StartingStep;
 use Laravel\Ai\Events\StepCompleted;
+use Laravel\Ai\Events\StepFailed;
+use Laravel\Ai\Events\ToolFailed;
 use Laravel\Ai\Events\ToolInvoked;
 
 /**
@@ -25,6 +29,10 @@ final class Listeners
         $events->listen(StepCompleted::class, static fn (StepCompleted $event) => self::handle($container, static fn (Recorder $recorder) => $recorder->stepCompleted($event)));
         $events->listen(InvokingTool::class, static fn (InvokingTool $event) => self::handle($container, static fn (Recorder $recorder) => $recorder->toolInvoking($event)));
         $events->listen(ToolInvoked::class, static fn (ToolInvoked $event) => self::handle($container, static fn (Recorder $recorder) => $recorder->toolInvoked($event)));
+        $events->listen(StepFailed::class, static fn (StepFailed $event) => self::handle($container, static fn (Recorder $recorder) => $recorder->stepFailed($event)));
+        $events->listen(ToolFailed::class, static fn (ToolFailed $event) => self::handle($container, static fn (Recorder $recorder) => $recorder->toolFailed($event)));
+        $events->listen(AgentFailedOver::class, static fn (AgentFailedOver $event) => self::handle($container, static fn (Recorder $recorder) => $recorder->agentFailedOver($event)));
+        $events->listen(AgentFailed::class, static fn (AgentFailed $event) => self::handle($container, static fn (Recorder $recorder) => $recorder->agentFailed($event)));
         $events->listen(AgentPrompted::class, static fn (AgentPrompted $event) => self::handle($container, static fn (Recorder $recorder) => $recorder->agentCompleted($event)));
     }
 

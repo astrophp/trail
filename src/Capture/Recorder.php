@@ -2,6 +2,7 @@
 
 namespace Astro\Trail\Capture;
 
+use Astro\Trail\Enums\ErrorSource;
 use Astro\Trail\Enums\SpanType;
 use Astro\Trail\Enums\Status;
 use Astro\Trail\Pricing\CostCalculator;
@@ -13,11 +14,15 @@ use Illuminate\Support\Str;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Tool;
+use Laravel\Ai\Events\AgentFailed;
+use Laravel\Ai\Events\AgentFailedOver;
 use Laravel\Ai\Events\AgentPrompted;
 use Laravel\Ai\Events\InvokingTool;
 use Laravel\Ai\Events\PromptingAgent;
 use Laravel\Ai\Events\StartingStep;
 use Laravel\Ai\Events\StepCompleted;
+use Laravel\Ai\Events\StepFailed;
+use Laravel\Ai\Events\ToolFailed;
 use Laravel\Ai\Events\ToolInvoked;
 use Laravel\Ai\Responses\StructuredAgentResponse;
 use Laravel\Ai\Tools\ToolNameResolver;
@@ -58,6 +63,7 @@ class Recorder
         if ($run !== null) {
             $run->attempt++;
             $run->step = null;
+            $run->forgetFailure();
             $run->span->attempt = $run->attempt;
             $run->span->provider = $provider;
             $run->span->model = $prompt->model;
@@ -209,6 +215,119 @@ class Recorder
         $span->output = $output;
     }
 
+    public function stepFailed(StepFailed $event): void
+    {
+        $run = $this->runs[$event->invocationId] ?? null;
+
+        if ($run === null) {
+            return;
+        }
+
+        $now = Carbon::now();
+        $failure = Failure::from($event->exception, ErrorSource::Step);
+        $step = $run->step;
+
+        if ($step === null || $step->stepNumber !== $event->stepNumber) {
+            $step = $this->openStep(
+                $run,
+                $event->stepNumber,
+                $this->driver($event->provider),
+                $event->model,
+                $now->copy()->subMicroseconds($this->microseconds($event->time)),
+                ['messages' => null, 'options' => null],
+            );
+        }
+
+        // A failed step reports no usage, and none is invented.
+        $step->status = Status::Failed;
+        $step->durationMs = $event->time;
+        $step->endedAt = $now;
+        $step->fail($failure);
+
+        $run->step = null;
+        $run->remember($event->exception, ErrorSource::Step);
+    }
+
+    public function toolFailed(ToolFailed $event): void
+    {
+        $run = $this->runs[$event->invocationId] ?? null;
+
+        if ($run === null) {
+            return;
+        }
+
+        $now = Carbon::now();
+        $failure = Failure::from($event->exception, ErrorSource::Tool);
+        $span = $run->buffer->span($event->toolInvocationId);
+
+        if ($span === null || $span->type !== SpanType::Tool) {
+            $span = $this->openTool($run, $event, $now->copy()->subMicroseconds($this->microseconds($event->time)));
+        }
+
+        // A tool failure does not decide how the run ends: the run's own terminal event does.
+        $span->status = Status::Failed;
+        $span->durationMs = $event->time;
+        $span->endedAt = $now;
+        $span->fail($failure);
+
+        $run->remember($event->exception, ErrorSource::Tool);
+    }
+
+    public function agentFailedOver(AgentFailedOver $event): void
+    {
+        $run = $this->runs[$event->invocationId] ?? null;
+
+        if ($run === null) {
+            return;
+        }
+
+        // The failed attempt's error is already on the step or tool span that failed; the next
+        // PromptingAgent opens the new attempt.
+        $run->failovers++;
+    }
+
+    public function agentFailed(AgentFailed $event): void
+    {
+        $run = $this->runs[$event->invocationId] ?? null;
+
+        if ($run === null) {
+            return;
+        }
+
+        unset($this->runs[$event->invocationId]);
+
+        $now = Carbon::now();
+        $duration = $run->span->openedAt === null ? null : (hrtime(true) - $run->span->openedAt) / 1e6;
+        $failure = Failure::from($event->exception, $run->sourceOf($event->exception));
+        $runFailure = Failure::from($event->exception, ErrorSource::Run);
+
+        // Whatever this run still had open died with it, and is never left running.
+        foreach ($run->buffer->drafts() as $span) {
+            if ($span->parentId === $run->span->id && $span->status === Status::Running) {
+                $span->status = Status::Failed;
+                $span->endedAt = $now;
+                $span->durationMs = null;
+                $span->fail($runFailure);
+            }
+        }
+
+        $run->span->status = Status::Failed;
+        $run->span->endedAt = $now;
+        $run->span->durationMs = $duration;
+        $run->span->fail($failure);
+
+        if (! $run->isRoot()) {
+            return;
+        }
+
+        $run->buffer->status = Status::Failed;
+        $run->buffer->endedAt = $now;
+        $run->buffer->durationMs = $duration;
+        $run->buffer->fail($failure);
+
+        Guard::run(fn () => $this->writeFinishedBeyondLimit());
+    }
+
     public function agentCompleted(AgentPrompted $event): void
     {
         $run = $this->runs[$event->invocationId] ?? null;
@@ -241,6 +360,7 @@ class Recorder
         }
 
         $run->buffer->status = $status;
+        $run->buffer->recovered = $run->failovers > 0;
         $run->buffer->endedAt = $now;
         $run->buffer->durationMs = $duration;
 
@@ -319,7 +439,7 @@ class Recorder
         ));
     }
 
-    private function openTool(Run $run, InvokingTool|ToolInvoked $event, Carbon $startedAt): SpanDraft
+    private function openTool(Run $run, InvokingTool|ToolInvoked|ToolFailed $event, Carbon $startedAt): SpanDraft
     {
         $name = $this->toolName($event->tool);
 
