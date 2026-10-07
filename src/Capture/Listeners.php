@@ -8,11 +8,13 @@ use Illuminate\Contracts\Events\Dispatcher;
 use Laravel\Ai\Events\AgentFailed;
 use Laravel\Ai\Events\AgentFailedOver;
 use Laravel\Ai\Events\AgentPrompted;
+use Laravel\Ai\Events\AgentStreamed;
 use Laravel\Ai\Events\InvokingTool;
 use Laravel\Ai\Events\PromptingAgent;
 use Laravel\Ai\Events\StartingStep;
 use Laravel\Ai\Events\StepCompleted;
 use Laravel\Ai\Events\StepFailed;
+use Laravel\Ai\Events\StreamingAgent;
 use Laravel\Ai\Events\ToolFailed;
 use Laravel\Ai\Events\ToolInvoked;
 
@@ -25,6 +27,10 @@ final class Listeners
     public static function register(Dispatcher $events, Container $container): void
     {
         $events->listen(PromptingAgent::class, static fn (PromptingAgent $event) => self::handle($container, static fn (Recorder $recorder) => $recorder->agentStarting($event)));
+        // The stream events extend the plain ones, but the dispatcher never delivers a subclass to a
+        // parent's listener, so each is registered by its own class.
+        $events->listen(StreamingAgent::class, static fn (StreamingAgent $event) => self::handle($container, static fn (Recorder $recorder) => $recorder->agentStarting($event, streamed: true)));
+        $events->listen(AgentStreamed::class, static fn (AgentStreamed $event) => self::handle($container, static fn (Recorder $recorder) => $recorder->agentCompleted($event)));
         $events->listen(StartingStep::class, static fn (StartingStep $event) => self::handle($container, static fn (Recorder $recorder) => $recorder->stepStarting($event)));
         $events->listen(StepCompleted::class, static fn (StepCompleted $event) => self::handle($container, static fn (Recorder $recorder) => $recorder->stepCompleted($event)));
         $events->listen(InvokingTool::class, static fn (InvokingTool $event) => self::handle($container, static fn (Recorder $recorder) => $recorder->toolInvoking($event)));

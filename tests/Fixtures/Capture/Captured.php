@@ -48,6 +48,26 @@ final class Captured
     }
 
     /**
+     * The trace row exactly as stored, volatile columns included.
+     *
+     * @return array<string, mixed>
+     */
+    public function rawTrace(): array
+    {
+        return $this->trace;
+    }
+
+    /**
+     * The span rows exactly as stored, in sequence order, volatile columns included.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function rawSpans(): array
+    {
+        return $this->spans;
+    }
+
+    /**
      * The trace row without its volatile columns.
      *
      * @return array<string, mixed>

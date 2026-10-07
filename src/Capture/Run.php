@@ -22,6 +22,8 @@ final class Run
         public int $attempt = 1,
         public ?SpanDraft $step = null,
         public int $failovers = 0,
+        public bool $streamed = false,
+        public ?string $lastText = null,
         private ?WeakReference $failure = null,
         private ?ErrorSource $failureSource = null,
     ) {}

@@ -21,7 +21,7 @@ use TypeError;
  */
 class ThrowingRecorder extends Recorder
 {
-    public function agentStarting(PromptingAgent $event): void
+    public function agentStarting(PromptingAgent $event, bool $streamed = false): void
     {
         throw new RuntimeException('agentStarting failed');
     }
