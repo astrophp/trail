@@ -2,6 +2,8 @@
 
 namespace Astro\Trail;
 
+use Astro\Trail\Capture\Guard;
+use Astro\Trail\Capture\Recorder;
 use Astro\Trail\Storage\ArrayTraceStore;
 use Astro\Trail\Storage\Contracts\TraceStore;
 use Illuminate\Contracts\Container\Container;
@@ -28,5 +30,16 @@ class Trail
         $this->container->instance(TraceStore::class, $store);
 
         return $store;
+    }
+
+    /**
+     * Write every trace Trail is still holding, finished or not, and forget it. Never throws.
+     */
+    public function flush(): void
+    {
+        Guard::run(function (): void {
+            $recorder = $this->container->make(Recorder::class);
+            $recorder->flush();
+        });
     }
 }
