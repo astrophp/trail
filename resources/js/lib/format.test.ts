@@ -5,6 +5,7 @@ import {
     formatCount,
     formatDateTime,
     formatDuration,
+    formatOffset,
     formatRelativeTime,
     formatShortDate,
     formatTokens,
@@ -91,6 +92,25 @@ describe('formatDuration', () => {
         [90_000_000, '25h 00m'],
     ])('formats %s ms as %s', (ms, text) => {
         expect(formatDuration(ms)).toBe(text)
+    })
+})
+
+describe('formatOffset', () => {
+    it.each([
+        [0, '+0 ms'],
+        [0.4, '+<1 ms'],
+        [1, '+1.0 ms'],
+        [31, '+31 ms'],
+        [999.4, '+999 ms'],
+        [999.6, '+1.00s'],
+        [1_200, '+1.20s'],
+        [59_996, '+1m 00s'],
+        [3_599_500, '+1h 00m'],
+        [-0.4, '\u2212<1 ms'],
+        [-12, '\u221212 ms'],
+        [-1_200, '\u22121.20s'],
+    ])('formats %s ms as %s', (ms, text) => {
+        expect(formatOffset(ms)).toBe(text)
     })
 })
 

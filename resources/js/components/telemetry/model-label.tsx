@@ -2,7 +2,8 @@ import type { Trace } from '@/api/types'
 import { cn } from '@/lib/utils'
 
 type ModelLabelProps = {
-    of: Pick<Trace, 'provider' | 'model' | 'streamed'>
+    /** A span has no `streamed` of its own: left out, it shows nothing about streaming. */
+    of: Pick<Trace, 'provider' | 'model'> & Partial<Pick<Trace, 'streamed'>>
     className?: string
 }
 

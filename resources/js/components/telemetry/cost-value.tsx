@@ -1,9 +1,10 @@
-import type { Cost } from '@/api/types'
+import type { Cost, SpanCost } from '@/api/types'
 import { formatCost } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
 type CostValueProps = {
-    cost: Cost
+    /** A run's cost or a span's: a span is priced whole, so it is never partial. */
+    cost: Cost | SpanCost
     className?: string
 }
 

@@ -2,7 +2,10 @@ import { ModelLabel } from '@/components/telemetry/model-label'
 import type { Trace } from '@/api/types'
 import type { CatalogueEntry } from '@/catalogue/types'
 
-const models: [string, Pick<Trace, 'provider' | 'model' | 'streamed'>][] = [
+const models: [
+    string,
+    Pick<Trace, 'provider' | 'model'> & Partial<Pick<Trace, 'streamed'>>,
+][] = [
     [
         'Model and provider',
         { model: 'gpt-4o', provider: 'openai', streamed: false },
@@ -13,6 +16,7 @@ const models: [string, Pick<Trace, 'provider' | 'model' | 'streamed'>][] = [
     ],
     ['No model', { model: null, provider: 'openai', streamed: false }],
     ['No provider', { model: 'gpt-4o', provider: null, streamed: true }],
+    ['Span (no streamed field)', { model: 'gpt-4o', provider: 'openai' }],
     ['Neither', { model: null, provider: null, streamed: false }],
 ]
 

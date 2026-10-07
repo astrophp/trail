@@ -57,6 +57,14 @@ describe('ModelLabel', () => {
         expect(screen.getAllByText('Not captured')).toHaveLength(2)
     })
 
+    it('takes a span, which has no streamed field, and shows nothing about streaming', () => {
+        render(<ModelLabel of={{ model: 'gpt-4o', provider: 'openai' }} />)
+
+        expect(screen.getByText('gpt-4o')).toBeInTheDocument()
+        expect(screen.getByText('openai')).toBeInTheDocument()
+        expect(screen.queryByText(/streamed/)).not.toBeInTheDocument()
+    })
+
     it('accepts a className', () => {
         const { container } = render(
             <ModelLabel
