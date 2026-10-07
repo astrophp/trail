@@ -118,3 +118,8 @@ export type TraceListResponse = {
     status_counts: StatusCounts
     slow_threshold_ms: number | null
 }
+
+/** The answer to a bookmark write: the run's bookmark state after it. */
+export type BookmarkResponse = {
+    data: { trace_id: string; bookmarked: boolean }
+}

@@ -23,9 +23,9 @@ export const traceColumns: DataTableColumn<Trace>[] = [
         enableSorting: true,
         meta: {
             rowHeader: true,
-            // The cell is three lines: the name, the prompt and the id.
+            // The cell is three lines (the name, the prompt and the id) beside the bookmark's gutter.
             skeleton: (
-                <div className="flex w-40 flex-col gap-2 py-1.5 md:w-60">
+                <div className="flex w-46.5 flex-col gap-2 py-1.5 pl-6.5 md:w-66.5">
                     <Skeleton className={cn(skeletonBarClass, 'h-3.5 w-3/4')} />
                     <Skeleton className={cn(skeletonBarClass, 'h-3 w-full')} />
                     <Skeleton className={cn(skeletonBarClass, 'h-3 w-1/2')} />

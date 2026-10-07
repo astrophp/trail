@@ -2,8 +2,10 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-/** A response the PHP contract test froze in tests/Contract (`meta`, `traces`, `enums`). */
-export function contractFixture(name: 'meta' | 'traces' | 'enums'): unknown {
+/** A response the PHP contract test froze in tests/Contract (`meta`, `traces`, `enums`, `bookmark`). */
+export function contractFixture(
+    name: 'meta' | 'traces' | 'enums' | 'bookmark',
+): unknown {
     const path = resolve(
         import.meta.dirname,
         `../../../tests/Contract/${name}.json`,

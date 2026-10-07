@@ -1,30 +1,41 @@
 import { SearchIcon, XIcon } from 'lucide-react'
-import { useRef } from 'react'
+import { useRef, type ComponentProps, type RefObject } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Kbd } from '@/components/ui/kbd'
 import { cn } from '@/lib/utils'
 
-type SearchFieldProps = {
+type SearchFieldProps = Omit<
+    ComponentProps<'input'>,
+    'value' | 'onChange' | 'type' | 'className' | 'aria-label' | 'ref'
+> & {
     value: string
     onValueChange: (value: string) => void
-    placeholder?: string
     'aria-label': string
     /** The key that focuses the field, shown while it is empty: `/`. The caller binds the key. */
     shortcutHint?: string
+    /** Gives the caller the input, to move focus to it. */
+    inputRef?: RefObject<HTMLInputElement | null>
+    /** Styles the field's wrapper; the input has its own look. */
     className?: string
 }
 
-/** A text search. Controlled and not debounced: the caller decides when the value is acted on. */
+/**
+ * A text search. Controlled and not debounced: the caller decides when the value is acted on.
+ * Standard input props (`placeholder`, `maxLength`, `onBlur`, `onKeyDown`, `onCompositionStart`,
+ * `onCompositionEnd`, …) go to the input.
+ */
 export function SearchField({
     value,
     onValueChange,
-    placeholder,
     'aria-label': ariaLabel,
     shortcutHint,
+    inputRef,
     className,
+    ...inputProps
 }: SearchFieldProps) {
-    const input = useRef<HTMLInputElement>(null)
+    const own = useRef<HTMLInputElement>(null)
+    const input = inputRef ?? own
 
     return (
         <div
@@ -36,10 +47,10 @@ export function SearchField({
                 className="pointer-events-none absolute top-1/2 left-3 size-3.75 -translate-y-1/2 text-faint"
             />
             <Input
+                {...inputProps}
                 ref={input}
                 type="search"
                 value={value}
-                placeholder={placeholder}
                 aria-label={ariaLabel}
                 aria-keyshortcuts={shortcutHint}
                 onChange={(event) => onValueChange(event.target.value)}
