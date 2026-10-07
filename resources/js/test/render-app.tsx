@@ -1,5 +1,6 @@
 import { render } from '@testing-library/react'
 import { App } from '@/app/app'
+import { createQueryClient } from '@/app/providers/query-provider'
 import { parseBoot, type Boot } from '@/lib/boot'
 
 /** A boot object as the Blade page would write it, with some fields replaced. */
@@ -18,6 +19,11 @@ export function testBoot(overrides: Record<string, unknown> = {}): Boot {
     })
 }
 
+/** A fresh client for one test: the dashboard's defaults, without retries. */
+export function testQueryClient() {
+    return createQueryClient({ queries: { retry: false } })
+}
+
 /**
  * Renders the whole app at `route` (relative to the dashboard's base path), through the
  * real browser router: the URL is set first, as the server would have served it.
@@ -25,11 +31,12 @@ export function testBoot(overrides: Record<string, unknown> = {}): Boot {
 export function renderApp(
     route = '/',
     overrides: Record<string, unknown> = {},
+    queryClient = testQueryClient(),
 ) {
     const boot = testBoot(overrides)
     const base = boot.path === '/' ? '' : boot.path
 
     window.history.pushState({}, '', `${base}${route}`)
 
-    return render(<App boot={boot} />)
+    return render(<App boot={boot} queryClient={queryClient} />)
 }

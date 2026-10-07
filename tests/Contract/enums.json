@@ -1,0 +1,18 @@
+{
+    "status": [
+        "running",
+        "completed",
+        "failed",
+        "incomplete",
+        "awaiting_approval"
+    ],
+    "issue_kind": [
+        "rate_limited",
+        "provider_overloaded",
+        "provider_connection",
+        "insufficient_credits",
+        "tool_error",
+        "exception",
+        "abandoned"
+    ]
+}
