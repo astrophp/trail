@@ -17,6 +17,7 @@ return new class extends Migration
     {
         Schema::connection($this->getConnection())->create('trail_bookmarks', function (Blueprint $table) {
             $table->id();
+            // No foreign key: whatever deletes traces deletes their bookmarks too.
             $table->string('trace_id', 64)->unique();
             $table->string('user_id')->nullable();
             $table->string('user_type')->nullable();

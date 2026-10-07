@@ -26,11 +26,13 @@ it('creates the price and bookmark tables with exactly their columns', function 
         ]);
 });
 
-it('removes the price and bookmark tables on rollback', function () {
-    $this->artisan('migrate:rollback')->assertSuccessful();
+it('rolls back the price and bookmark tables on their own', function () {
+    $this->artisan('migrate:rollback', ['--step' => 2])->assertSuccessful();
 
     expect(Schema::hasTable('trail_prices'))->toBeFalse()
-        ->and(Schema::hasTable('trail_bookmarks'))->toBeFalse();
+        ->and(Schema::hasTable('trail_bookmarks'))->toBeFalse()
+        ->and(Schema::hasTable('trail_traces'))->toBeTrue()
+        ->and(Schema::hasTable('trail_spans'))->toBeTrue();
 });
 
 it('enforces uniqueness with unique indexes', function (string $table, array $columns) {
