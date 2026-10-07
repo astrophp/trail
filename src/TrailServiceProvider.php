@@ -4,6 +4,7 @@ namespace Astro\Trail;
 
 use Astro\Trail\Capture\FlushPoints;
 use Astro\Trail\Capture\Listeners;
+use Astro\Trail\Capture\Payload;
 use Astro\Trail\Capture\Recorder;
 use Astro\Trail\Console\ClearCommand;
 use Astro\Trail\Console\InstallCommand;
@@ -36,6 +37,8 @@ class TrailServiceProvider extends ServiceProvider
         });
 
         $this->app->singleton(CostCalculator::class);
+
+        $this->app->singleton(Payload::class, fn (Application $app) => Payload::fromConfig($app->make(Repository::class)));
 
         $this->app->singleton(Recorder::class, fn (Application $app) => new Recorder($app, $app->make(CostCalculator::class)));
 

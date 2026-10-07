@@ -23,6 +23,8 @@ it('stores a run without tools as one trace with an agent span and one step', fu
 
     // The SDK fake reports no usage, so nothing is priced and no token column holds a zero.
     expect($run->trace())->toBe(Captured::expectedTrace([
+        'prompt_excerpt' => 'Hi',
+        'response_excerpt' => 'Hello there',
         'agent_class' => AssistantAgent::class,
         'model' => FakeAnthropic::MODEL,
         'span_count' => 2,
@@ -70,6 +72,8 @@ it('stores a tool as a child of the agent span, with its arguments and result', 
         ->and($run->spanId(1))->not->toBe($run->spanId(3));
 
     expect($run->trace())->toBe(Captured::expectedTrace([
+        'prompt_excerpt' => 'Hi',
+        'response_excerpt' => 'Done',
         'agent_class' => AssistantAgent::class,
         'model' => FakeAnthropic::MODEL,
         'span_count' => 4,
@@ -188,6 +192,8 @@ describe('structured output', function () {
         $run = Captured::read($response->invocationId)->assertVolatileColumns();
 
         expect($run->trace())->toBe(Captured::expectedTrace([
+            'prompt_excerpt' => 'Hi',
+            'response_excerpt' => '{"answer":"42"}',
             'name' => 'StructuredAgent',
             'agent_class' => StructuredAgent::class,
             'model' => FakeAnthropic::MODEL,
@@ -251,6 +257,8 @@ describe('with provider usage', function () {
         // Step 0: 100 uncached x 3 + 20 x 15 + 40 read x 0.30 + 8 written x 3.75, per million tokens.
         // Step 1 answered as claude-test-responding: 7 x 10 + 3 x 50, per million tokens (at the requested model's rates it would be 0.000066).
         expect($run->trace())->toBe(Captured::expectedTrace([
+            'prompt_excerpt' => 'Hi',
+            'response_excerpt' => 'Done',
             'agent_class' => AssistantAgent::class,
             'model' => FakeAnthropic::MODEL,
             'input_tokens' => 155,

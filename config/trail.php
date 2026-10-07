@@ -49,6 +49,118 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Payload Capture
+    |--------------------------------------------------------------------------
+    |
+    | What Trail stores of the prompts, messages, tool arguments and results and
+    | model output of each run. "enabled" turns payload storage off entirely: runs,
+    | steps, timings, usage, cost and error classes are still recorded, but no
+    | input, output or excerpt is, and neither are the arguments of a pending
+    | approval. Exception messages are diagnostic rather than content, so they are
+    | kept, redacted and truncated like any other text.
+    |
+    | "system_prompt" controls whether the agent's instructions are read and
+    | stored. "max_length" is the longest any single string is kept, in
+    | characters; longer ones are cut and the span is marked truncated. Use null
+    | for no limit. Zero and negative values are not limits and use the default.
+    | A number read from an environment variable as text is accepted. Together
+    | the strings of one captured field are kept to 100 times this length; what
+    | is past that is dropped.
+    |
+    */
+
+    'capture' => [
+        'enabled' => true,
+        'system_prompt' => true,
+        'max_length' => 10000,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Redaction
+    |--------------------------------------------------------------------------
+    |
+    | Secrets are removed before anything is stored, and before text is cut to
+    | its maximum length, so a secret cut in half cannot slip past a pattern.
+    |
+    | A value under one of the "keys" is replaced as a whole, at any depth. Keys
+    | match ignoring case, dashes, underscores and spaces. An entry matches the
+    | key exactly, so "token" does not match "input_tokens", unless it starts
+    | with "*", which matches any key that ends in the rest: "*password" covers
+    | "password", "db_password" and "DB-PASSWORD". A "*" is only allowed as the
+    | first character. The same keys also redact the value in the quoted forms
+    | inside any text, such as {"password":"hunter2"}, 'password': 'hunter2' and
+    | the same with escaped quotes. Only that value is replaced.
+    |
+    | Every string, and every array key, is also scrubbed with the "patterns"
+    | (regular expressions, each match is replaced). The defaults cover bearer
+    | tokens, HTTP Basic credentials, the password in a URL, common provider API
+    | keys, AWS keys, JSON web tokens and private key blocks, and are kept narrow
+    | so ordinary text is left alone. Keep your own patterns linear: avoid
+    | nested quantifiers and an unbounded lookahead from a repeatable start. A
+    | pattern that is not valid is reported once, with the reason, and skipped.
+    | A string a pattern cannot be run on is replaced as a whole.
+    |
+    | Only the first "max_length" plus a few thousand characters of a string are
+    | scanned, since nothing past that is stored.
+    |
+    | What cannot be found: a secret in free text with no recognisable shape, such
+    | as a password in a sentence, is not redacted.
+    |
+    */
+
+    'redaction' => [
+        'enabled' => true,
+
+        'keys' => [
+            '*password', '*passwd', '*pwd', '*passphrase', '*password_confirmation',
+            '*secret', '*secret_key', '*secret_access_key', '*access_key', '*api_key', '*private_key',
+            '*token', '*authorization', '*cookie', 'credentials',
+        ],
+
+        'patterns' => [
+            // An HTTP bearer token: the word Bearer, then a long run that looks random (a digit, a dot or an underscore in its first 64 characters).
+            '/\b(?:Bearer|bearer|BEARER)\s{1,8}+(?=[A-Za-z0-9\-._~+\/]{0,63}?[0-9._])[A-Za-z0-9\-._~+\/]{16,}+=*+/',
+            // An HTTP Basic credential after its Authorization label; the label stays.
+            '/\b(?:[Aa]uthorization|AUTHORIZATION)\\\\?["\']?\s{0,8}+[:=]\s{0,8}+\\\\?["\']?(?:[Bb]asic|BASIC)\s{1,8}+\K[A-Za-z0-9+\/]{8,}+=*+/',
+            // The password in a URL's userinfo (scheme://user:password@host); the rest of the URL stays.
+            '/\b[A-Za-z][A-Za-z0-9+.\-]{1,15}:\/\/[^\s:\/@"\'\\\\]{1,128}+:\K[^\s@\/"\'\\\\]{1,128}+(?=@)/',
+            // Provider API keys: OpenAI and Anthropic (sk-, sk-ant-, sk-proj-), and the like. Short hyphenated words are left alone: the key must hold an unbroken run of 24 characters or more.
+            '/\b(?:sk|pk|rk)-(?:[A-Za-z0-9_]{1,32}-){0,5}[A-Za-z0-9_]{24,}+[A-Za-z0-9_\-]*+/',
+            // Stripe keys.
+            '/\b(?:sk|rk|pk)_(?:live|test)_[A-Za-z0-9]{16,}+/',
+            // GitHub and GitLab tokens.
+            '/\bgh[pousr]_[A-Za-z0-9]{36,255}+\b/',
+            '/\bgithub_pat_[A-Za-z0-9_]{22,255}+/',
+            '/\bglpat-[A-Za-z0-9_\-]{20,}+/',
+            // Slack tokens and incoming-webhook URLs.
+            '/\bxox[abposr]-[A-Za-z0-9\-]{10,}+/',
+            '/\bxapp-\d-[A-Za-z0-9\-]{10,}+/',
+            '/\bhttps:\/\/hooks\.slack\.com\/(?:services|triggers)\/[A-Za-z0-9]{8,}+\/[A-Za-z0-9]{8,}+\/[A-Za-z0-9]{20,}+/',
+            // SendGrid, npm, Hugging Face and Twilio API key SIDs.
+            '/\bSG\.[A-Za-z0-9_\-]{22}\.[A-Za-z0-9_\-]{43}(?![A-Za-z0-9_\-])/',
+            '/\bnpm_[A-Za-z0-9]{36}(?![A-Za-z0-9])/',
+            '/\bhf_[A-Za-z0-9]{30,}+/',
+            '/\bSK[0-9a-f]{32}(?![0-9A-Za-z])/',
+            // Google API keys.
+            '/\bAIza[0-9A-Za-z_\-]{35}\b/',
+            // AWS access key ids, and secret access keys when they are introduced by their label.
+            '/\b(?:AKIA|ASIA)[0-9A-Z]{16}\b/',
+            '/\b(?:aws|AWS|Aws)[_\- ]?(?:secret|SECRET|Secret)[_\- ]?(?:(?:access|ACCESS|Access)[_\- ]?)?(?:key|KEY|Key)\b\\\\?["\']?\s{0,8}+[:=]\s{0,8}+\\\\?["\']?[A-Za-z0-9\/+=]{40}(?![A-Za-z0-9\/+=])/',
+            // An Azure storage account key in a connection string.
+            '/\bAccountKey=[A-Za-z0-9+\/]{40,}+={0,2}/',
+            // JSON web tokens. They may only start where a token's characters do not continue from the left.
+            '/(?<![A-Za-z0-9_\-])eyJ[A-Za-z0-9_\-]{10,}+\.eyJ[A-Za-z0-9_\-]{10,}+\.[A-Za-z0-9_\-]{10,}+/',
+            // Private key blocks, complete or cut short, also with their line breaks escaped as \n. The body of a
+            // block ends at the first "--", so a scan never reaches past the next block. The patterns that
+            // ignore case are spelled out, since the caseless flag makes a scan far slower on hostile text.
+            '/-----BEGIN (?:[A-Z0-9]{1,16} ){0,4}PRIVATE KEY(?: BLOCK)?-----(?:[^-]++|-(?!-)){0,64}+-----END (?:[A-Z0-9]{1,16} ){0,4}PRIVATE KEY(?: BLOCK)?-----/',
+            '/-----BEGIN (?:[A-Z0-9]{1,16} ){0,4}PRIVATE KEY(?: BLOCK)?-----[A-Za-z0-9+\/=\s\\\\]*+/',
+        ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Stale Runs
     |--------------------------------------------------------------------------
     |
