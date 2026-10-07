@@ -84,8 +84,10 @@ class Trail
 
     /**
      * Run the callback without recording the runs that start inside it, and return what it returns.
-     * A run that starts inside is not recorded for its whole life, even if it ends after the callback.
-     * Calls nest.
+     * Nothing that starts inside is recorded, for its whole life even if it ends after the callback:
+     * not a run, and not a sub-agent or an embeddings call made under a run that is being recorded
+     * (the tool that made the call is recorded, as it started outside). Runs already in progress
+     * are not affected. Calls nest.
      *
      * @param  Closure(): mixed  $callback
      */

@@ -7,6 +7,7 @@ use Astro\Trail\Facades\Trail;
 use Astro\Trail\Pricing\CostCalculator;
 use Astro\Trail\RecordingCandidate;
 use Astro\Trail\Tests\Fixtures\Agents\AssistantAgent;
+use Astro\Trail\Tests\Fixtures\Agents\CountingParticipantAgent;
 use Astro\Trail\Tests\Fixtures\Agents\RememberingAgent;
 use Astro\Trail\Tests\Fixtures\Agents\ResearcherAgent;
 use Astro\Trail\Tests\Fixtures\Agents\SummarizerAgent;
@@ -203,6 +204,75 @@ it('decides once for a recorded run, so its sub-agent and embeddings call follow
         ->and(DB::table('trail_spans')->orderBy('sequence')->pluck('type')->all())->toBe(['agent', 'step', 'tool', 'agent', 'step', 'tool', 'embedding', 'step', 'step']);
 });
 
+describe('a filter that starts runs of its own', function () {
+    beforeEach(function () {
+        Http::fake(['api.openai.com/*' => Http::response(['data' => [['embedding' => [0.1]]], 'usage' => ['prompt_tokens' => 3]])]);
+        $this->calls = 0;
+
+        /** A filter that does something with the SDK, counting its own calls. */
+        $this->filtering = fn (Closure $inside, mixed $answer = true) => Trail::filter(function () use ($inside, $answer) {
+            // Past a few calls the filter stops doing anything, so a missing guard fails the count below instead of recursing.
+            if (++$this->calls <= 3) {
+                $inside();
+            }
+
+            return $answer;
+        });
+    });
+
+    it('is not asked again for the agent run it starts, and leaves no rows for it', function () {
+        AssistantAgent::fake(['outer']);
+        ResearcherAgent::fake(['inner']);
+        ($this->filtering)(fn () => (new ResearcherAgent)->prompt('inner'));
+
+        (new AssistantAgent)->prompt('outer');
+        Trail::flush();
+
+        expect($this->calls)->toBe(1)
+            ->and(DB::table('trail_traces')->pluck('agent_class')->all())->toBe([AssistantAgent::class]);
+    });
+
+    it('is not asked again for the embeddings call it makes', function () {
+        AssistantAgent::fake(['outer']);
+        ($this->filtering)(fn () => Embeddings::for(['a'])->generate());
+
+        (new AssistantAgent)->prompt('outer');
+        Trail::flush();
+
+        expect($this->calls)->toBe(1)->and(DB::table('trail_traces')->pluck('type')->all())->toBe(['agent']);
+    });
+
+    it('decides the outer run by its answer, and leaves nothing behind when it says no', function () {
+        AssistantAgent::fake(['outer']);
+        ResearcherAgent::fake(['inner']);
+        ($this->filtering)(fn () => (new ResearcherAgent)->prompt('inner'), false);
+
+        (new AssistantAgent)->prompt('outer');
+        Trail::flush();
+
+        expect(($this->rows)())->toBe([0, 0]);
+    });
+
+    it('gives recording back afterwards, even when the filter throws', function () {
+        Exceptions::fake();
+        AssistantAgent::fake(['one', 'two']);
+        Trail::filter(function () {
+            if (++$this->calls <= 3) {
+                (new AssistantAgent)->prompt('inner');
+            }
+
+            throw new RuntimeException('Filter broke');
+        });
+
+        (new AssistantAgent)->prompt('outer');
+        Trail::filter(null);
+        (new AssistantAgent)->prompt('later');
+        Trail::flush();
+
+        expect(DB::table('trail_spans')->where('type', 'agent')->pluck('input')->map(fn ($input) => json_decode($input, true)['prompt'])->sort()->values()->all())->toBe(['later', 'outer']);
+    });
+});
+
 describe('embeddings on their own', function () {
     beforeEach(function () {
         Http::fake(['api.openai.com/*' => Http::response(['data' => [['embedding' => [0.1]]], 'usage' => ['prompt_tokens' => 3]])]);
@@ -391,6 +461,70 @@ describe('withoutRecording', function () {
     });
 });
 
+describe('withoutRecording inside a recorded run', function () {
+    it('leaves out a sub-agent started inside it, but keeps the tool that started it', function () {
+        config(['trail.pricing.anthropic' => [FakeAnthropic::MODEL => ['input' => 3.0, 'output' => 15.0], 'claude-sonnet-5-5' => ['input' => 4.0, 'output' => 20.0]]]);
+        FakeAnthropic::script([
+            FakeAnthropic::toolUse([['id' => 'toolu_1', 'name' => 'ask', 'input' => []]], usage: ['input_tokens' => 100, 'output_tokens' => 20]),
+            FakeAnthropic::text('found it', usage: ['input_tokens' => 50, 'output_tokens' => 10]),
+            FakeAnthropic::text('Done', usage: ['input_tokens' => 7, 'output_tokens' => 3]),
+        ]);
+
+        $ask = new CallbackTool('ask', fn () => Trail::withoutRecording(fn () => (new ResearcherAgent)->prompt('Dig')->text));
+
+        (new AssistantAgent([$ask]))->prompt('Hi', model: FakeAnthropic::MODEL);
+        Trail::flush();
+
+        $spans = DB::table('trail_spans')->orderBy('sequence')->get();
+
+        expect($spans->pluck('type')->all())->toBe(['agent', 'step', 'tool', 'step'])
+            ->and(json_decode($spans[2]->output, true))->toBe(['result' => 'found it'])
+            ->and($spans[2]->status)->toBe('completed')
+            ->and(DB::table('trail_traces')->first()->input_tokens)->toBe(107);
+    });
+
+    it('leaves out an embeddings call made inside it', function () {
+        Http::fake(['api.openai.com/*' => Http::response(['data' => [['embedding' => [0.1]]], 'usage' => ['prompt_tokens' => 9]])]);
+        FakeAnthropic::script([
+            FakeAnthropic::toolUse([['id' => 'toolu_1', 'name' => 'embed', 'input' => []]], usage: ['input_tokens' => 100, 'output_tokens' => 20]),
+            FakeAnthropic::text('Done', usage: ['input_tokens' => 7, 'output_tokens' => 3]),
+        ]);
+
+        $embed = new CallbackTool('embed', fn () => Trail::withoutRecording(fn () => (string) count(Embeddings::for(['a'])->generate())));
+
+        (new AssistantAgent([$embed]))->prompt('Hi', model: FakeAnthropic::MODEL);
+        Trail::flush();
+
+        expect(DB::table('trail_spans')->orderBy('sequence')->pluck('type')->all())->toBe(['agent', 'step', 'tool', 'step'])
+            ->and(DB::table('trail_traces')->first()->input_tokens)->toBe(107);
+    });
+
+    it('keeps a skipped sub-agent skipped when its stream is iterated outside, and its own children with it', function () {
+        FakeAnthropic::script([
+            FakeAnthropic::toolUse([['id' => 'toolu_1', 'name' => 'ask', 'input' => []]]),
+            FakeAnthropic::text('first try'),
+            FakeAnthropic::text('Done'),
+            FakeAnthropic::text('second try'),
+        ]);
+
+        $child = null;
+        $ask = new CallbackTool('ask', function () use (&$child) {
+            Trail::withoutRecording(function () use (&$child) {
+                $child = (new ResearcherAgent)->stream('Dig');
+                Streams::drain($child, 3);
+            });
+
+            return 'abandoned';
+        });
+
+        (new AssistantAgent([$ask]))->prompt('Hi');
+        Streams::drain($child);
+        Trail::flush();
+
+        expect(DB::table('trail_spans')->pluck('type')->sort()->values()->all())->toBe(['agent', 'step', 'step', 'tool']);
+    });
+});
+
 describe('pausing', function () {
     it('skips new runs while paused and records them again once resumed and flushed', function () {
         Artisan::call('trail:pause');
@@ -455,6 +589,36 @@ describe('pausing', function () {
 
         Exceptions::assertReportedCount(1);
         expect(($this->rows)()[0])->toBe(1);
+    });
+});
+
+describe('reading who a run belongs to', function () {
+    beforeEach(function () {
+        $this->asked = function (Closure $setup) {
+            CountingParticipantAgent::$asked = 0;
+            $setup();
+            FakeAnthropic::script([FakeAnthropic::text('ok')]);
+
+            (new CountingParticipantAgent)->forUser(new ConversationParticipant)->prompt('Hi');
+            Trail::flush();
+
+            return CountingParticipantAgent::$asked;
+        };
+    });
+
+    it('asks the agent nothing for a run that is skipped with no filter, and no more with a filter than without', function () {
+        $skipped = ($this->asked)(fn () => ($this->sampler)(0));
+        $baseline = $skipped;
+
+        $recorded = ($this->asked)(fn () => ($this->sampler)(1));
+        $filtered = ($this->asked)(function () {
+            ($this->sampler)(1);
+            Trail::filter(fn () => true);
+        });
+
+        // Trail reads at the start of a run and at its end; the rest is the SDK's own.
+        expect($recorded - $baseline)->toBe(2)
+            ->and($filtered)->toBeLessThanOrEqual($recorded);
     });
 });
 
@@ -539,4 +703,20 @@ it('records the run and reports the failure when the decision itself breaks', fu
 
     Exceptions::assertReported(fn (RuntimeException $e) => $e->getMessage() === 'The decision failed.');
     expect($response->text)->toBe('Hello')->and(($this->rows)()[0])->toBe(1);
+});
+
+describe('the pause and resume commands', function () {
+    it('warn that the flag stays in this process when the cache store cannot share it', function (string $store) {
+        config(['cache.stores.null' => ['driver' => 'null'], 'cache.default' => $store]);
+
+        $this->artisan('trail:pause')->expectsOutputToContain('only affects the current process')->assertSuccessful();
+        $this->artisan('trail:resume')->expectsOutputToContain('only affects the current process')->assertSuccessful();
+    })->with(['array', 'null']);
+
+    it('do not warn for a store that processes share', function () {
+        config(['cache.default' => 'file']);
+
+        $this->artisan('trail:pause')->doesntExpectOutputToContain('only affects')->assertSuccessful();
+        $this->artisan('trail:resume')->assertSuccessful();
+    });
 });

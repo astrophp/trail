@@ -4,6 +4,7 @@ namespace Astro\Trail\Tests\Fixtures\Capture;
 
 use Astro\Trail\Capture\Sampler;
 use Astro\Trail\RecordingCandidate;
+use Closure;
 use RuntimeException;
 
 /**
@@ -11,7 +12,7 @@ use RuntimeException;
  */
 class ThrowingSampler extends Sampler
 {
-    public function records(RecordingCandidate $candidate): bool
+    public function records(RecordingCandidate|Closure $candidate): bool
     {
         throw new RuntimeException('The decision failed.');
     }

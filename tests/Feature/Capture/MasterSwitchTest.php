@@ -1,5 +1,6 @@
 <?php
 
+use Astro\Trail\Capture\FlushPoints;
 use Astro\Trail\Capture\Listeners;
 use Astro\Trail\Facades\Trail;
 use Astro\Trail\Tests\Fixtures\Agents\AssistantAgent;
@@ -79,4 +80,16 @@ it('lets the pause and resume commands run', function () {
 
     $this->artisan('trail:pause')->assertSuccessful();
     $this->artisan('trail:resume')->assertSuccessful();
+});
+
+it('registers no terminating callback of its own', function () {
+    $callbacks = new ReflectionProperty($this->app, 'terminatingCallbacks');
+    $fromTrail = fn () => array_filter($callbacks->getValue($this->app), fn ($callback) => $callback instanceof Closure && str_contains((string) (new ReflectionFunction($callback))->getFileName(), '/src/Capture/'));
+
+    expect($fromTrail())->toBe([]);
+
+    // The same measure finds the callback once the flush points are registered, so the check above can fail.
+    FlushPoints::register($this->app, $this->app->make(Dispatcher::class));
+
+    expect($fromTrail())->not->toBe([]);
 });

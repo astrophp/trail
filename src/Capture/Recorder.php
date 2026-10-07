@@ -81,7 +81,7 @@ class Recorder
         $isRoot = $prompt->parentInvocationId === null;
 
         // A run decided against stays decided against: a failover or a stream iterated again starts it again.
-        if ($isRoot && isset($this->skipped[$event->invocationId])) {
+        if (isset($this->skipped[$event->invocationId])) {
             return;
         }
 
@@ -105,15 +105,27 @@ class Recorder
         $class = $anonymous ? null : $agent::class;
         $name = $class === null ? self::ANONYMOUS_AGENT : class_basename($class);
 
-        // The one decision about a top-level run. A sub-agent never asks: it follows a parent the recorder knows.
-        if ($isRoot) {
-            $identity = Identity::of($agent);
+        // The one decision about a top-level run. A sub-agent never asks: it follows a parent the
+        // recorder knows, unless it starts where recording is off.
+        $identity = null;
 
-            if (! $this->shouldRecord(new RecordingCandidate(SpanType::Agent, $class, $agent, $prompt->prompt, $identity->userId, $identity->userType, $provider, $prompt->model))) {
+        if ($isRoot) {
+            $candidate = function () use (&$identity, $class, $agent, $prompt, $provider): RecordingCandidate {
+                $identity = Identity::of($agent);
+
+                return new RecordingCandidate(SpanType::Agent, $class, $agent, $prompt->prompt, $identity->userId, $identity->userType, $provider, $prompt->model);
+            };
+
+            if (! $this->shouldRecord($candidate)) {
                 $this->skip($event->invocationId);
 
                 return;
             }
+        } elseif (isset($this->runs[$prompt->parentInvocationId]) && $this->suppressed()) {
+            // Started inside withoutRecording: left out, with everything under it and any later attempt.
+            $this->skip($event->invocationId);
+
+            return;
         }
 
         $span = new SpanDraft(
@@ -149,7 +161,7 @@ class Recorder
         if ($isRoot) {
             $buffer->streamed = $streamed;
             $buffer->promptExcerpt = $this->excerpt(is_array($input->value) ? ($input->value['prompt'] ?? null) : null);
-            $this->learnIdentity($buffer, Identity::of($agent));
+            $this->learnIdentity($buffer, $identity ?? Identity::of($agent));
             $this->recordResolvedApprovals($buffer, $prompt);
         }
 
@@ -166,7 +178,10 @@ class Recorder
      * Whether a top-level run is recorded. Any failure of the decision itself means record: Trail's
      * own code breaking is not a reason to lose data.
      */
-    private function shouldRecord(RecordingCandidate $candidate): bool
+    /**
+     * @param  RecordingCandidate|Closure(): RecordingCandidate  $candidate
+     */
+    private function shouldRecord(RecordingCandidate|Closure $candidate): bool
     {
         $record = true;
 
@@ -175,6 +190,21 @@ class Recorder
         });
 
         return $record;
+    }
+
+    /**
+     * Whether recording is switched off where a sub-agent or an embeddings call starts. If that
+     * cannot be told, it is recorded.
+     */
+    private function suppressed(): bool
+    {
+        $suppressed = false;
+
+        Guard::run(function () use (&$suppressed): void {
+            $suppressed = $this->container->make(Sampler::class)->suppressed();
+        });
+
+        return $suppressed;
     }
 
     private function skip(string $invocationId): void
@@ -763,7 +793,7 @@ class Recorder
         if ($runId !== null) {
             $run = $this->runs[$runId] ?? null;
 
-            if ($run === null) {
+            if ($run === null || $this->suppressed()) {
                 return;
             }
 
@@ -775,9 +805,7 @@ class Recorder
             return;
         }
 
-        $candidate = new RecordingCandidate(SpanType::Embedding, null, null, null, null, null, $span->provider, $span->model);
-
-        if (! $this->shouldRecord($candidate)) {
+        if (! $this->shouldRecord(new RecordingCandidate(SpanType::Embedding, null, null, null, null, null, $span->provider, $span->model))) {
             return;
         }
 

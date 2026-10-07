@@ -42,20 +42,23 @@ class Sampler
      * @param  (Closure(): float)|null  $draw  a uniform random number in [0, 1); replaceable in tests
      * @param  (Closure(): int)|null  $clock  a monotonic time in nanoseconds; replaceable in tests
      */
-    public function __construct(Repository $config, private readonly Cache $cache, ?Closure $draw = null, ?Closure $clock = null)
+    public function __construct(private readonly Repository $config, private readonly Cache $cache, ?Closure $draw = null, ?Closure $clock = null)
     {
-        $this->rate = self::rateFrom($config->get('trail.sampling', 1.0));
-        $this->draw = $draw ?? fn (): float => mt_rand() / (mt_getrandmax() + 1);
+        $this->rate = self::rateFrom($this->config->get('trail.sampling', 1.0));
+        $this->draw = $draw ?? fn (): float => random_int(0, (1 << 53) - 1) / (1 << 53);
         $this->clock = $clock ?? fn (): int => hrtime(true);
     }
 
-    public function records(RecordingCandidate $candidate): bool
+    /**
+     * @param  RecordingCandidate|Closure(): RecordingCandidate  $candidate  a closure is only called when there is a filter to show it to
+     */
+    public function records(RecordingCandidate|Closure $candidate): bool
     {
         if ($this->withoutRecording > 0 || $this->isPaused()) {
             return false;
         }
 
-        if ($this->filter !== null && $this->filtered($candidate) === false) {
+        if ($this->filter !== null && $this->filtered($candidate instanceof Closure ? $candidate() : $candidate) === false) {
             return false;
         }
 
@@ -75,6 +78,24 @@ class Sampler
     }
 
     /**
+     * Whether runs that start now are not recorded, because a withoutRecording callback or the
+     * filter is running. A sub-agent or an embeddings call that starts now is left out too, even
+     * under a run that is being recorded.
+     */
+    public function suppressed(): bool
+    {
+        return $this->withoutRecording > 0;
+    }
+
+    /**
+     * Whether a filter is set, so a caller can avoid building what only a filter looks at.
+     */
+    public function hasFilter(): bool
+    {
+        return $this->filter !== null;
+    }
+
+    /**
      * Run the callback with recording off for every run that starts inside it.
      *
      * @param  Closure(): mixed  $callback
@@ -88,6 +109,21 @@ class Sampler
         } finally {
             $this->withoutRecording--;
         }
+    }
+
+    /**
+     * A warning for when the default cache store cannot carry the pause flag to other processes.
+     */
+    public function localFlagWarning(): ?string
+    {
+        $store = $this->config->get('cache.default');
+        $driver = is_string($store) ? $this->config->get("cache.stores.{$store}.driver") : null;
+
+        if (! is_string($store) || ! in_array($driver, ['array', 'null'], true)) {
+            return null;
+        }
+
+        return "The default cache store [{$store}] uses the [{$driver}] driver, so this only affects the current process. Use a store that processes share, such as redis, memcached, database or file.";
     }
 
     public function pause(): void
@@ -109,8 +145,10 @@ class Sampler
     }
 
     /**
-     * Whether recording is paused. The flag is read at most once per flush cycle and, in a process
-     * that never flushes, at most once every few seconds, so a run does not cost a cache read.
+     * Whether recording is paused. The flag is read at the first run after a flush, and again at the
+     * next run once five seconds have passed since the last read, so a long request or job still
+     * notices a pause without a cache read for every run. With the database cache driver each read
+     * is a query, issued before the run starts.
      */
     private function isPaused(): bool
     {
@@ -147,6 +185,9 @@ class Sampler
             return true;
         }
 
+        // Runs the filter itself starts are not recorded and not shown to the filter again.
+        $this->withoutRecording++;
+
         try {
             return $filter($candidate);
         } catch (Throwable $e) {
@@ -155,6 +196,8 @@ class Sampler
             });
 
             return true;
+        } finally {
+            $this->withoutRecording--;
         }
     }
 

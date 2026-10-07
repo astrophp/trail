@@ -174,3 +174,71 @@ it('records on anything but false from the filter, and when the filter throws', 
     $sampler->filter(fn () => throw new RuntimeException('Filter broke'));
     expect($sampler->records(candidate()))->toBeTrue();
 });
+
+it('is suppressed inside withoutRecording and while the filter runs, and not after', function () {
+    [$sampler] = samplerWith();
+    $during = [];
+    $sampler->filter(function () use ($sampler, &$during) {
+        $during[] = $sampler->suppressed();
+
+        return true;
+    });
+
+    $sampler->records(candidate());
+
+    expect($during)->toBe([true])->and($sampler->suppressed())->toBeFalse()
+        ->and($sampler->without(fn () => $sampler->suppressed()))->toBeTrue();
+});
+
+it('restores recording after a filter that throws', function () {
+    [$sampler] = samplerWith();
+    $sampler->filter(fn () => throw new RuntimeException('Filter broke'));
+
+    $sampler->records(candidate());
+
+    expect($sampler->suppressed())->toBeFalse();
+});
+
+it('only builds the candidate when there is a filter to show it to', function () {
+    [$sampler] = samplerWith();
+    $built = 0;
+    $make = function () use (&$built) {
+        $built++;
+
+        return candidate();
+    };
+
+    $sampler->records($make);
+    $sampler->filter(fn () => true);
+    $sampler->records($make);
+
+    expect($built)->toBe(1)->and($sampler->hasFilter())->toBeTrue();
+});
+
+it('draws a number from zero up to but not including one, whatever mt_srand was given', function () {
+    mt_srand(1);
+    $config = new Repository(['trail' => ['sampling' => 0.5]]);
+    $factory = new class implements Factory
+    {
+        public function store($name = null): CacheContract
+        {
+            return new CacheRepository(new ArrayStore);
+        }
+    };
+
+    $draws = [];
+    $reflection = new ReflectionClass(Sampler::class);
+    $sampler = new Sampler($config, $factory);
+    $draw = $reflection->getProperty('draw')->getValue($sampler);
+
+    foreach (range(1, 200) as $i) {
+        $draws[] = $draw();
+    }
+
+    mt_srand(1);
+    $again = $reflection->getProperty('draw')->getValue(new Sampler($config, $factory));
+    $second = array_map(fn () => $again(), range(1, 200));
+
+    expect(min($draws))->toBeGreaterThanOrEqual(0.0)->and(max($draws))->toBeLessThan(1.0)
+        ->and($draws)->not->toBe($second);
+});

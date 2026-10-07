@@ -62,17 +62,24 @@ return [
     |
     |   Trail::filter(fn (RecordingCandidate $run) => ...) decides per run, from
     |   its agent class, prompt, user, provider and model: return false to skip
-    |   it, anything else to record it. Trail::withoutRecording(fn () => ...)
-    |   records nothing for the runs that start inside it, and returns what the
-    |   callback returns. A run that starts inside stays unrecorded even if it
-    |   ends later.
+    |   it, anything else to record it; runs the filter itself starts are not
+    |   recorded. Trail::withoutRecording(fn () => ...) records nothing that
+    |   starts inside it and returns what the callback returns: not a run, and
+    |   not a sub-agent or embeddings call made under a run that is being
+    |   recorded (the tool that made the call is recorded, as it started
+    |   outside). What starts inside stays unrecorded even if it ends later; runs
+    |   already in progress are not affected.
     |
     | "php artisan trail:pause" stops recording in every process, without a
     | deploy, until "php artisan trail:resume". It keeps its flag in your default
-    | cache store; with the database cache driver, each process reads it with one
-    | query before a run starts, at most once per request or job. Runs already in
-    | progress finish recording. "enabled" above turns Trail off completely
-    | instead: nothing is registered and nothing is recorded.
+    | cache store, so that store must be shared between processes: with the
+    | "array" or "null" driver the flag only reaches the process that set it. A
+    | process reads the flag at its first run after a flush (the end of a request
+    | or job) and again at the next run once five seconds have passed, so a long
+    | job still notices a pause. With the database cache driver each read is a
+    | query, issued before the run starts. Runs already in progress finish
+    | recording. "enabled" above turns Trail off completely instead: nothing is
+    | registered and nothing is recorded.
     |
     */
 

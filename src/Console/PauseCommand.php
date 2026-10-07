@@ -16,6 +16,9 @@ class PauseCommand extends Command
     public function handle(Sampler $sampler): int
     {
         $sampler->pause();
+        if (($warning = $sampler->localFlagWarning()) !== null) {
+            $this->components->warn($warning);
+        }
 
         $this->components->info('Recording paused. Runs already in progress will finish recording; new runs are not recorded until "trail:resume".');
 

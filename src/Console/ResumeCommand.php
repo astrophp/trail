@@ -16,6 +16,9 @@ class ResumeCommand extends Command
     public function handle(Sampler $sampler): int
     {
         $sampler->resume();
+        if (($warning = $sampler->localFlagWarning()) !== null) {
+            $this->components->warn($warning);
+        }
 
         $this->components->info('Recording resumed.');
 
