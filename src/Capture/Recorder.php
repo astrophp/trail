@@ -3,6 +3,7 @@
 namespace Astro\Trail\Capture;
 
 use Astro\Trail\Enums\ErrorSource;
+use Astro\Trail\Enums\IssueKind;
 use Astro\Trail\Enums\SpanType;
 use Astro\Trail\Enums\Status;
 use Astro\Trail\Pricing\CostCalculator;
@@ -54,24 +55,14 @@ class Recorder
         private readonly int $maxBufferedTraces = self::MAX_BUFFERED_TRACES,
     ) {}
 
-    public function agentStarting(PromptingAgent $event): void
+    public function agentStarting(PromptingAgent $event, bool $streamed = false): void
     {
         $prompt = $event->prompt;
         $provider = $this->driver($prompt->provider);
-        $run = $this->runs[$event->invocationId] ?? null;
+        $run = $this->runs[$event->invocationId] ?? $this->revivable($event->invocationId, $streamed);
 
         if ($run !== null) {
-            $run->attempt++;
-            $run->step = null;
-            $run->forgetFailure();
-            $run->span->attempt = $run->attempt;
-            $run->span->provider = $provider;
-            $run->span->model = $prompt->model;
-
-            if ($run->isRoot()) {
-                $run->buffer->provider = $provider;
-                $run->buffer->model = $prompt->model;
-            }
+            $this->startAttempt($run, $provider, $prompt->model);
 
             return;
         }
@@ -98,12 +89,81 @@ class Recorder
         $buffer = $this->bufferFor($event, $span);
         $buffer->open($span);
 
-        $run = new Run($event->invocationId, $buffer, $span);
+        $buffer->streamed = $streamed;
+
+        $run = new Run($event->invocationId, $buffer, $span, streamed: $streamed);
         $this->runs[$event->invocationId] = $run;
 
         if ($run->isRoot()) {
             // The only query issued while a run is in flight: it makes the run visible as it starts.
             Guard::run(fn () => $this->container->make(TraceStore::class)->start($buffer->trace()));
+        }
+    }
+
+    /**
+     * A run that failed and whose consumer iterated its stream again starts a new attempt under the
+     * same invocation id, after the terminal event removed the run. Its trace is still buffered, so
+     * the run is revived on it instead of starting a second trace over it. Once a flush has written
+     * and dropped the buffer, a new run is all that is possible.
+     */
+    private function revivable(string $invocationId, bool $streamed): ?Run
+    {
+        $buffer = $this->buffers[$invocationId] ?? null;
+        $span = $buffer?->span($invocationId);
+
+        // Only a streamed trace is continued, and only by a streamed start: a plain run that happens
+        // to reuse the id is not another attempt of it.
+        if ($buffer === null || $span === null || ! $buffer->streamed || ! $streamed) {
+            return null;
+        }
+
+        // Back to running, as when the first attempt started. The earlier attempt's error stays on
+        // the step or tool span that failed.
+        $span->status = Status::Running;
+        $span->endedAt = null;
+        $span->durationMs = null;
+        $span->output = null;
+        $span->clearFailure();
+
+        $buffer->status = Status::Running;
+        $buffer->recovered = false;
+        $buffer->endedAt = null;
+        $buffer->durationMs = null;
+        $buffer->clearFailure();
+
+        // The manual retry is not a failover, so the trace is not marked recovered; the terminal event decides.
+        return $this->runs[$invocationId] = new Run($invocationId, $buffer, $span, attempt: $span->attempt, streamed: $streamed);
+    }
+
+    private function startAttempt(Run $run, string $provider, string $model): void
+    {
+        $this->abandonOpenSpans($run);
+
+        $run->attempt++;
+        $run->step = null;
+        $run->lastText = null;
+        $run->forgetFailure();
+        $run->span->attempt = $run->attempt;
+        $run->span->provider = $provider;
+        $run->span->model = $model;
+
+        if ($run->isRoot()) {
+            $run->buffer->provider = $provider;
+            $run->buffer->model = $model;
+        }
+    }
+
+    /**
+     * A step or tool still running when a new attempt starts belongs to an attempt that was walked
+     * away from and will never close. It is closed as the sweep would close it.
+     */
+    private function abandonOpenSpans(Run $run): void
+    {
+        foreach ($run->buffer->drafts() as $span) {
+            if ($span->parentId === $run->span->id && $span->status === Status::Running) {
+                $span->status = Status::Incomplete;
+                $span->issueKind = IssueKind::Abandoned;
+            }
         }
     }
 
@@ -153,6 +213,9 @@ class Recorder
         $response = $event->response;
         $usage = $response->usage;
 
+        // Remembered before anything that can fail, so the run's final answer never falls back to an earlier step's text.
+        $run->lastText = $response->text;
+
         // Everything that can fail is built first, so a step is never completed with its output or usage missing.
         $output = $this->captured(fn (): array => [
             'text' => Payload::value($response->text),
@@ -170,7 +233,8 @@ class Recorder
         $step->status = Status::Completed;
         $step->durationMs = $event->time;
         $step->endedAt = $now;
-        $step->respondingModel = $response->meta->model;
+        // A streamed step only knows the model it was requested against.
+        $step->respondingModel = $run->streamed ? null : $response->meta->model;
         $step->output = $output;
         $step->inputTokens = $reported ? $usage->inputTokens : null;
         $step->outputTokens = $reported ? $usage->outputTokens : null;
@@ -346,7 +410,8 @@ class Recorder
         $status = $response->hasPendingApprovals() ? Status::AwaitingApproval : Status::Completed;
 
         $output = $this->captured(fn (): array => [
-            'text' => Payload::value($response->text),
+            // A plain response's text is its last step's; a streamed response joins every step's.
+            'text' => Payload::value($run->streamed ? ($run->lastText ?? $response->text) : $response->text),
             ...($response instanceof StructuredAgentResponse ? ['structured' => Payload::value($response->structured)] : []),
         ]);
 

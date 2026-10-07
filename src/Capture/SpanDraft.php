@@ -56,6 +56,15 @@ final class SpanDraft
         public ?float $openedAt = null,
     ) {}
 
+    public function clearFailure(): void
+    {
+        $this->issueKind = null;
+        $this->errorClass = null;
+        $this->errorMessage = null;
+        $this->errorSource = null;
+        $this->errorHttpStatus = null;
+    }
+
     public function fail(Failure $failure): void
     {
         $this->issueKind = $failure->issueKind;
