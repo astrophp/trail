@@ -2,11 +2,14 @@
 
 namespace Astro\Trail;
 
+use Astro\Trail\Capture\Listeners;
+use Astro\Trail\Capture\Recorder;
 use Astro\Trail\Pricing\CostCalculator;
 use Astro\Trail\Pricing\PriceBook;
 use Astro\Trail\Storage\Contracts\TraceStore;
 use Astro\Trail\Storage\DatabaseTraceStore;
 use Illuminate\Contracts\Config\Repository;
+use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Database\ConnectionResolverInterface;
 use Illuminate\Support\ServiceProvider;
@@ -29,6 +32,8 @@ class TrailServiceProvider extends ServiceProvider
 
         $this->app->singleton(CostCalculator::class);
 
+        $this->app->singleton(Recorder::class, fn (Application $app) => new Recorder($app, $app->make(CostCalculator::class)));
+
         $this->app->singleton(Trail::class, fn (Application $app) => new Trail($app));
 
         $this->app->singleton(TraceStore::class, function (Application $app) {
@@ -44,5 +49,9 @@ class TrailServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
+
+        if (config('trail.enabled')) {
+            Listeners::register($this->app->make(Dispatcher::class), $this->app);
+        }
     }
 }
