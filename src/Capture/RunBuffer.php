@@ -67,6 +67,15 @@ final class RunBuffer
         return $this->spans[$id] ?? null;
     }
 
+    public function fail(Failure $failure): void
+    {
+        $this->issueKind = $failure->issueKind;
+        $this->errorClass = $failure->errorClass;
+        $this->errorMessage = $failure->errorMessage;
+        $this->errorSource = $failure->source;
+        $this->errorHttpStatus = $failure->httpStatus;
+    }
+
     public function finished(): bool
     {
         return $this->status->isFinal();

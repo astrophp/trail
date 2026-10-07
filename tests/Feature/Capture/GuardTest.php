@@ -7,16 +7,21 @@ use Astro\Trail\Pricing\CostCalculator;
 use Astro\Trail\Storage\Contracts\TraceStore;
 use Astro\Trail\Tests\Fixtures\Agents\AssistantAgent;
 use Astro\Trail\Tests\Fixtures\Capture\FailsFirstStore;
+use Astro\Trail\Tests\Fixtures\Capture\Failures;
 use Astro\Trail\Tests\Fixtures\Capture\ThrowingRecorder;
 use Astro\Trail\Tests\Fixtures\Capture\ThrowingStore;
+use Astro\Trail\Tests\Fixtures\Sdk\FakeAnthropic;
 use Astro\Trail\Tests\Fixtures\Storage\DatabaseStoreProbe;
 use Astro\Trail\Tests\Fixtures\Tools\CallbackTool;
 use Astro\Trail\Tests\Fixtures\Tools\LookupTool;
 use Illuminate\Contracts\Debug\ExceptionHandler;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Exceptions;
+use Laravel\Ai\Events\AgentFailed;
 use Laravel\Ai\Events\StepCompleted;
+use Laravel\Ai\Events\StepFailed;
 use Laravel\Ai\Events\ToolInvoked;
+use Laravel\Ai\Exceptions\RateLimitedException;
 use Laravel\Ai\Responses\Data\ToolCall;
 
 describe('Guard', function () {
@@ -80,6 +85,53 @@ it('lets a run succeed when every Trail listener throws, and reports each failur
     Exceptions::assertReported(fn (TypeError $e) => $e->getMessage() === 'stepStarting failed');
     Exceptions::assertReported(fn (RuntimeException $e) => $e->getMessage() === 'agentStarting failed');
     Exceptions::assertReported(fn (TypeError $e) => $e->getMessage() === 'agentCompleted failed');
+});
+
+it('leaves a failing run\'s own exception untouched when every Trail listener throws', function () {
+    Exceptions::fake();
+    $this->app->instance(Recorder::class, new ThrowingRecorder($this->app, $this->app->make(CostCalculator::class)));
+
+    FakeAnthropic::script([FakeAnthropic::error(429, 'Slow down')]);
+
+    $thrown = Failures::thrown(fn () => (new AssistantAgent)->prompt('Hi'));
+
+    // A throwing listener on StepFailed or AgentFailed would replace this exception if it were not guarded.
+    expect($thrown)->toBeInstanceOf(RateLimitedException::class)
+        ->and($this->sdk->sole(StepFailed::class)->event->exception)->toBe($thrown)
+        ->and($this->sdk->sole(AgentFailed::class)->event->exception)->toBe($thrown);
+
+    // PromptingAgent, StartingStep, StepFailed and AgentFailed.
+    Exceptions::assertReportedCount(4);
+    Exceptions::assertReported(fn (RuntimeException $e) => $e->getMessage() === 'agentFailed failed');
+    Exceptions::assertReported(fn (TypeError $e) => $e->getMessage() === 'stepFailed failed');
+});
+
+it('leaves a failing tool\'s own exception untouched when every Trail listener throws', function () {
+    Exceptions::fake();
+    $this->app->instance(Recorder::class, new ThrowingRecorder($this->app, $this->app->make(CostCalculator::class)));
+
+    FakeAnthropic::script([FakeAnthropic::toolUse([['id' => 'toolu_1', 'name' => 'explode', 'input' => []]])]);
+
+    $tool = new CallbackTool('explode', fn () => throw new LogicException('Tool broke'));
+    $thrown = Failures::thrown(fn () => (new AssistantAgent([$tool]))->prompt('Hi'));
+
+    expect($thrown)->toBeInstanceOf(LogicException::class)
+        ->and($thrown->getMessage())->toBe('Tool broke');
+
+    Exceptions::assertReported(fn (RuntimeException $e) => $e->getMessage() === 'toolFailed failed');
+});
+
+it('leaves the failover untouched when the listener on it throws', function () {
+    Exceptions::fake();
+    $this->app->instance(Recorder::class, new ThrowingRecorder($this->app, $this->app->make(CostCalculator::class)));
+
+    FakeAnthropic::script([FakeAnthropic::error(429), FakeAnthropic::text('ok')]);
+
+    $response = (new AssistantAgent)->prompt('Hi', provider: ['anthropic' => 'model-a', 'backup' => 'model-b']);
+
+    expect($response->text)->toBe('ok');
+
+    Exceptions::assertReported(fn (TypeError $e) => $e->getMessage() === 'agentFailedOver failed');
 });
 
 it('lets a run succeed when the recorder cannot be resolved', function () {

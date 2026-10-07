@@ -68,6 +68,44 @@ final class Captured
     }
 
     /**
+     * Only the given columns of each row, in the order given.
+     *
+     * @param  list<array<string, mixed>>  $rows
+     * @param  list<string>  $columns
+     * @return list<array<string, mixed>>
+     */
+    public static function pick(array $rows, array $columns): array
+    {
+        return array_map(fn (array $row): array => array_intersect_key(array_replace(array_flip($columns), $row), array_flip($columns)), $rows);
+    }
+
+    /**
+     * The five error columns, as stored.
+     *
+     * @return array<string, mixed>
+     */
+    public static function failure(string $kind, string $class, string $message, string $source, ?int $status = null): array
+    {
+        return [
+            'issue_kind' => $kind,
+            'error_class' => $class,
+            'error_message' => $message,
+            'error_source' => $source,
+            'error_http_status' => $status,
+        ];
+    }
+
+    /**
+     * The five error columns of something that did not fail.
+     *
+     * @return array<string, mixed>
+     */
+    public static function noFailure(): array
+    {
+        return ['issue_kind' => null, 'error_class' => null, 'error_message' => null, 'error_source' => null, 'error_http_status' => null];
+    }
+
+    /**
      * The stored id of the span at the given 0-based position in sequence order.
      */
     public function spanId(int $position): string
@@ -93,9 +131,12 @@ final class Captured
 
     /**
      * Check the columns that cannot be stated exactly: the trace id, generated span ids, and that
-     * timing was captured and is consistent.
+     * timing was captured and is consistent. Spans at the given positions were closed without a
+     * measurement, so they have an end time but no duration.
+     *
+     * @param  list<int>  $untimed
      */
-    public function assertVolatileColumns(): self
+    public function assertVolatileColumns(array $untimed = []): self
     {
         $trace = $this->trace;
 
@@ -109,7 +150,7 @@ final class Captured
         $ids = [];
         $sequence = 0;
 
-        foreach ($this->spans as $span) {
+        foreach ($this->spans as $position => $span) {
             $id = $span['id'];
 
             Assert::assertIsString($id);
@@ -123,6 +164,13 @@ final class Captured
             Assert::assertGreaterThanOrEqual($trace['started_at'], $span['started_at']);
             Assert::assertIsString($span['ended_at'], "Span [{$span['name']}] has no end time.");
             Assert::assertGreaterThanOrEqual($span['started_at'], $span['ended_at']);
+
+            if (in_array($position, $untimed, true)) {
+                Assert::assertNull($span['duration_ms'], "Span [{$span['name']}] was not measured, so it has no duration.");
+
+                continue;
+            }
+
             Assert::assertIsFloat($span['duration_ms'], "Span [{$span['name']}] has no duration.");
             Assert::assertGreaterThanOrEqual(0.0, $span['duration_ms']);
         }

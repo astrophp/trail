@@ -8,6 +8,7 @@ use Astro\Trail\Tests\Fixtures\Agents\AssistantAgent;
 use Astro\Trail\Tests\Fixtures\Capture\Captured;
 use Astro\Trail\Tests\Fixtures\Sdk\FakeAnthropic;
 use Astro\Trail\Tests\Fixtures\Storage\DatabaseStoreProbe;
+use Laravel\Ai\Exceptions\RateLimitedException;
 
 it('records into the fake store and touches no table once faked', function () {
     $fake = Trail::fake();
@@ -46,6 +47,14 @@ it('stores a failover as one trace whose agent span moves to the second attempt'
             ['agent', 1, 2, null, 'model-b'],
             ['step', 2, 1, 0, 'model-a'],
             ['step', 3, 2, 0, 'model-b'],
+        ])->and(Captured::pick([$spans[1]], ['status', 'issue_kind', 'error_class', 'error_source', 'error_http_status', 'input_tokens', 'cost'])[0])->toBe([
+            'status' => 'failed',
+            'issue_kind' => 'rate_limited',
+            'error_class' => RateLimitedException::class,
+            'error_source' => 'step',
+            'error_http_status' => 429,
+            'input_tokens' => null,
+            'cost' => null,
         ])->and($spans[0]['status'])->toBe('completed')
         ->and($spans[2]['status'])->toBe('completed')
         ->and($spans[2]['output']['text'])->toBe('ok');

@@ -162,6 +162,35 @@ it('flushes when a request ends', function () {
         ->and(array_column($run->spans(), 'sequence'))->toBe([1, 2]);
 });
 
+describe('a run that fails', function () {
+    it('is written when the request ends in a 500', function () {
+        FakeAnthropic::script([FakeAnthropic::error(500, 'Server error')]);
+        Exceptions::fake();
+
+        $this->get('/agent')->assertStatus(500);
+
+        $run = Captured::read(($this->traceIds)()[0])->assertVolatileColumns();
+
+        expect($run->trace()['status'])->toBe('failed')
+            ->and($run->trace()['error_http_status'])->toBe(500)
+            ->and(array_column($run->spans(), 'status'))->toBe(['failed', 'failed']);
+    });
+
+    it('is written by the job events when the job fails with an agent failure', function () {
+        FakeAnthropic::script([FakeAnthropic::error(500, 'Server error')]);
+        Exceptions::fake();
+        dispatch((new AgentJob('succeed'))->onConnection('memory'));
+
+        ($this->work)();
+
+        $run = Captured::read(($this->traceIds)()[0])->assertVolatileColumns();
+
+        expect($run->trace()['status'])->toBe('failed')
+            ->and($run->trace()['error_source'])->toBe('step')
+            ->and(array_column($run->spans(), 'status'))->toBe(['failed', 'failed']);
+    });
+});
+
 describe('after the response', function () {
     it('flushes a run that a job dispatched after the response started', function () {
         AssistantAgent::fake(['Hello']);

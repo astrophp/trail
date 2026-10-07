@@ -56,6 +56,15 @@ final class SpanDraft
         public ?float $openedAt = null,
     ) {}
 
+    public function fail(Failure $failure): void
+    {
+        $this->issueKind = $failure->issueKind;
+        $this->errorClass = $failure->errorClass;
+        $this->errorMessage = $failure->errorMessage;
+        $this->errorSource = $failure->source;
+        $this->errorHttpStatus = $failure->httpStatus;
+    }
+
     public function toRecord(): SpanRecord
     {
         return new SpanRecord(

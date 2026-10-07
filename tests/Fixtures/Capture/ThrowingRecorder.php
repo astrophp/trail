@@ -3,11 +3,15 @@
 namespace Astro\Trail\Tests\Fixtures\Capture;
 
 use Astro\Trail\Capture\Recorder;
+use Laravel\Ai\Events\AgentFailed;
+use Laravel\Ai\Events\AgentFailedOver;
 use Laravel\Ai\Events\AgentPrompted;
 use Laravel\Ai\Events\InvokingTool;
 use Laravel\Ai\Events\PromptingAgent;
 use Laravel\Ai\Events\StartingStep;
 use Laravel\Ai\Events\StepCompleted;
+use Laravel\Ai\Events\StepFailed;
+use Laravel\Ai\Events\ToolFailed;
 use Laravel\Ai\Events\ToolInvoked;
 use RuntimeException;
 use TypeError;
@@ -45,6 +49,26 @@ class ThrowingRecorder extends Recorder
     public function agentCompleted(AgentPrompted $event): void
     {
         throw new TypeError('agentCompleted failed');
+    }
+
+    public function stepFailed(StepFailed $event): void
+    {
+        throw new TypeError('stepFailed failed');
+    }
+
+    public function toolFailed(ToolFailed $event): void
+    {
+        throw new RuntimeException('toolFailed failed');
+    }
+
+    public function agentFailedOver(AgentFailedOver $event): void
+    {
+        throw new TypeError('agentFailedOver failed');
+    }
+
+    public function agentFailed(AgentFailed $event): void
+    {
+        throw new RuntimeException('agentFailed failed');
     }
 
     public function flush(): void
