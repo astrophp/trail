@@ -9,12 +9,16 @@ use Astro\Trail\Tests\Fixtures\Conversations\ConversationParticipant;
 use Astro\Trail\Tests\Fixtures\Sdk\FakeAnthropic;
 use Astro\Trail\Tests\Fixtures\Tools\ApprovalTool;
 use Astro\Trail\Tests\Fixtures\Tools\LookupTool;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Exceptions;
 use Laravel\Ai\Approvals\Decision;
 use Laravel\Ai\Approvals\Decisions;
 use Laravel\Ai\Events\StartingStep;
+use Laravel\Ai\Events\ToolApprovalResolved;
 use Laravel\Ai\Exceptions\ApprovalNotResumableException;
 use Laravel\Ai\Responses\AgentResponse;
+use Laravel\Ai\Responses\Data\ToolResult;
 
 /*
 |--------------------------------------------------------------------------
@@ -228,7 +232,7 @@ describe('a run that resumes', function () {
         'a named call and the rest' => [fn () => Decisions::from(['toolu_1' => true])->rejectRemaining('x'), ['toolu_1']],
     ]);
 
-    it('has only the named ids when a wildcard run fails before the response can say what it settled', function () {
+    it('has only the named ids, and still the approved tool, when a wildcard run fails after it ran', function () {
         FakeAnthropic::script([FakeAnthropic::error(500, 'Provider down')]);
 
         try {
@@ -239,7 +243,23 @@ describe('a run that resumes', function () {
 
         $run = ($this->read)($this->sdk->invocationIds()[0]);
 
-        expect($run->rawTrace()['metadata'])->toBe(['resolved_tool_call_ids' => []]);
+        // The SDK reports what a wildcard settled only when the resumed run ends well.
+        expect($run->rawTrace()['status'])->toBe('failed')
+            ->and($run->rawTrace()['metadata'])->toBe(['resolved_tool_call_ids' => []])
+            ->and(Captured::pick($run->spans(), ['type', 'name', 'status']))->toBe([
+                ['type' => 'agent', 'name' => 'RememberingAgent', 'status' => 'failed'],
+                ['type' => 'tool', 'name' => 'delete_records', 'status' => 'completed'],
+                ['type' => 'step', 'name' => 'step', 'status' => 'failed'],
+            ]);
+    });
+
+    it('stores a named id once when the SDK reports it as well', function () {
+        FakeAnthropic::script([FakeAnthropic::text('Done')]);
+
+        $resumed = ($this->resumer)($this->paused)->prompt(Decisions::from(['toolu_1' => true]), model: FakeAnthropic::MODEL);
+
+        expect($this->sdk->sole(ToolApprovalResolved::class)->event->toolResults->pluck('id')->all())->toBe(['toolu_1'])
+            ->and(($this->read)($resumed->invocationId)->rawTrace()['metadata'])->toBe(['resolved_tool_call_ids' => ['toolu_1']]);
     });
 
     it('is recorded the same way when the resume is streamed', function () {
@@ -254,4 +274,100 @@ describe('a run that resumes', function () {
             ->and($run->rawTrace()['metadata'])->toBe(['resolved_tool_call_ids' => ['toolu_1']])
             ->and(array_column($run->rawSpans(), 'type'))->toBe(['agent', 'tool', 'step']);
     });
+});
+
+describe('a wildcard resume', function () {
+    /** Pause one step that ran an ordinary tool and holds back a gated one. */
+    beforeEach(function () {
+        FakeAnthropic::script([FakeAnthropic::toolUse([
+            ['id' => 'toolu_1', 'name' => 'delete_records', 'input' => ['table' => 'users']],
+            ['id' => 'toolu_2', 'name' => 'lookup', 'input' => ['query' => 'laravel']],
+        ])]);
+
+        $this->paused = Approvals::agent([new ApprovalTool, new LookupTool], $this->user)->prompt('Do both', model: FakeAnthropic::MODEL);
+        Trail::flush();
+        $this->sdk->clear();
+
+        $this->resume = fn () => Approvals::agent([new ApprovalTool, new LookupTool], $this->user, $this->paused->conversationId);
+    });
+
+    it('names only the call the decision settled, not the ordinary tool the paused step already ran', function () {
+        FakeAnthropic::script([FakeAnthropic::text('Done')]);
+
+        $resumed = ($this->resume)()->prompt(Decision::approveAll(), model: FakeAnthropic::MODEL);
+        $run = ($this->read)($resumed->invocationId);
+
+        // The SDK merges the paused step's ordinary result into the resumed run's results; the event does not.
+        expect($resumed->toolResults->pluck('id')->sort()->values()->all())->toBe(['toolu_1', 'toolu_2'])
+            ->and($this->sdk->sole(ToolApprovalResolved::class)->event->toolResults->pluck('id')->all())->toBe(['toolu_1'])
+            ->and($run->rawTrace()['metadata'])->toBe(['resolved_tool_call_ids' => ['toolu_1']]);
+    });
+
+    it('names the call a wildcard rejection settled', function () {
+        FakeAnthropic::script([FakeAnthropic::text('Understood')]);
+
+        $resumed = ($this->resume)()->prompt(Decision::rejectAll('Not today'), model: FakeAnthropic::MODEL);
+
+        expect(($this->read)($resumed->invocationId)->rawTrace()['metadata'])->toBe(['resolved_tool_call_ids' => ['toolu_1']]);
+    });
+
+    it('names the call a streamed wildcard resume settled', function () {
+        FakeAnthropic::script([FakeAnthropic::text('Done')]);
+
+        $stream = ($this->resume)()->stream(Decision::approveAll(), model: FakeAnthropic::MODEL);
+        Streams::drain($stream);
+        $run = ($this->read)($stream->invocationId);
+
+        expect($run->rawTrace()['streamed'])->toBeTrue()
+            ->and($run->rawTrace()['metadata'])->toBe(['resolved_tool_call_ids' => ['toolu_1']])
+            ->and(array_column($run->rawSpans(), 'type'))->toBe(['agent', 'tool', 'step']);
+    });
+
+    it('is awaiting approval again with both the resolved and the new pending calls when it pauses a second time', function () {
+        FakeAnthropic::script([Approvals::turn('toolu_3', 'orders')]);
+
+        $resumed = ($this->resume)()->prompt(Decision::approveAll(), model: FakeAnthropic::MODEL);
+        $run = ($this->read)($resumed->invocationId);
+
+        expect($run->rawTrace()['status'])->toBe('awaiting_approval')
+            ->and($run->rawTrace()['metadata'])->toBe([
+                'resolved_tool_call_ids' => ['toolu_1'],
+                'pending_approvals' => [
+                    ['tool_call_id' => 'toolu_3', 'tool' => 'delete_records', 'arguments' => ['table' => 'orders'], 'reason' => null],
+                ],
+            ]);
+    });
+});
+
+it('stores each named id once when several decisions are explicit', function () {
+    FakeAnthropic::script([FakeAnthropic::toolUse([
+        ['id' => 'toolu_1', 'name' => 'delete_records', 'input' => ['table' => 'users']],
+        ['id' => 'toolu_3', 'name' => 'delete_records', 'input' => ['table' => 'orders']],
+    ])]);
+
+    $paused = Approvals::agent([new ApprovalTool], $this->user)->prompt('Delete both', model: FakeAnthropic::MODEL);
+    Trail::flush();
+    $this->sdk->clear();
+
+    FakeAnthropic::script([FakeAnthropic::text('Done')]);
+
+    $resumed = Approvals::agent([new ApprovalTool], $this->user, $paused->conversationId)
+        ->prompt(Decisions::from(['toolu_1' => true, 'toolu_3' => false]), model: FakeAnthropic::MODEL);
+
+    expect(($this->read)($resumed->invocationId)->rawTrace()['metadata'])->toBe(['resolved_tool_call_ids' => ['toolu_1', 'toolu_3']]);
+});
+
+it('ignores a resolution for a run it does not know, without reporting anything', function () {
+    Exceptions::fake();
+
+    $paused = ($this->pause)();
+
+    event(new ToolApprovalResolved('not-a-run', new AssistantAgent, collect([new ToolResult('toolu_9', 'delete_records', [], 'ok')])));
+
+    $run = ($this->read)($paused->invocationId);
+
+    Exceptions::assertNothingReported();
+    expect($run->rawTrace()['metadata'])->toBe(['pending_approvals' => [
+        ['tool_call_id' => 'toolu_1', 'tool' => 'delete_records', 'arguments' => ['table' => 'users'], 'reason' => 'Deletes data'],
+    ]])->and(DB::table('trail_traces')->count())->toBe(1);
 });

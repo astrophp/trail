@@ -6,6 +6,7 @@ use Astro\Trail\Tests\Fixtures\Agents\BrokenParticipantAgent;
 use Astro\Trail\Tests\Fixtures\Agents\RememberingAgent;
 use Astro\Trail\Tests\Fixtures\Capture\Captured;
 use Astro\Trail\Tests\Fixtures\Conversations\ConversationParticipant;
+use Astro\Trail\Tests\Fixtures\Conversations\UuidParticipant;
 use Astro\Trail\Tests\Fixtures\Sdk\FakeAnthropic;
 use Astro\Trail\Tests\Fixtures\Tools\CallbackTool;
 use Astro\Trail\Tests\Fixtures\Tools\LookupTool;
@@ -223,4 +224,85 @@ it('never replaces a known conversation id with an unknown one at the end of the
     event(new AgentPrompted($id, $end, $prompted->response));
 
     expect(($this->identity)(($this->read)($id))['conversation_id'])->toBe('conversation-1');
+});
+
+describe('identity read from hand-built events', function () {
+    beforeEach(function () {
+        AssistantAgent::fake(['Hello']);
+        (new AssistantAgent)->prompt('Hi');
+
+        $this->original = $this->sdk->sole(PromptingAgent::class)->event->prompt;
+        $this->response = $this->sdk->sole(AgentPrompted::class)->event->response;
+
+        /** An agent whose conversation and participant are the given ones. */
+        $this->agentOf = fn (?string $conversation, ?object $participant) => new class($conversation, $participant) extends AssistantAgent
+        {
+            public function __construct(private ?string $conversation, private ?object $participant)
+            {
+                parent::__construct();
+            }
+
+            public function currentConversation(): ?string
+            {
+                return $this->conversation;
+            }
+
+            public function conversationParticipant(): ?object
+            {
+                return $this->participant;
+            }
+        };
+
+        /** Start and end a run with the given agents, using the real response of the earlier run. */
+        $this->handBuilt = function (string $id, object $start, object $end): array {
+            event(new PromptingAgent($id, new AgentPrompt($start, 'Hi', [], $this->original->provider, $this->original->model)));
+            event(new AgentPrompted($id, new AgentPrompt($end, 'Hi', [], $this->original->provider, $this->original->model), $this->response));
+
+            return ($this->identity)(($this->read)($id));
+        };
+    });
+
+    it('keeps a known user when the end of the run reports none', function () {
+        $identity = ($this->handBuilt)('known-user', ($this->agentOf)(null, $this->user), ($this->agentOf)(null, null));
+
+        expect($identity)->toBe(['conversation_id' => null, 'user_id' => '42', 'user_type' => ConversationParticipant::class]);
+    });
+
+    it('stores an integer key and a string key as strings', function (Closure $make, string $expected) {
+        $participant = $make();
+        $agent = ($this->agentOf)(null, $participant);
+
+        expect(($this->handBuilt)('key-'.$expected, $agent, $agent))->toBe(['conversation_id' => null, 'user_id' => $expected, 'user_type' => $participant::class]);
+    })->with([
+        'an integer' => [fn () => new ConversationParticipant(7), '7'],
+        'a uuid' => [fn () => new UuidParticipant, '0198c2a4-7b1e-7c3a-9d52-3f6a1e8b4c70'],
+    ]);
+
+    it('has neither a user id nor a user type for a participant without a key, and the run is unaffected', function () {
+        $agent = ($this->agentOf)(null, new stdClass);
+
+        $identity = ($this->handBuilt)('keyless', $agent, $agent);
+
+        expect($identity)->toBe(['conversation_id' => null, 'user_id' => null, 'user_type' => null])
+            ->and(Captured::read('keyless')->rawTrace()['status'])->toBe('completed');
+    });
+});
+
+it('describes the root, not a sub-agent with a participant of its own', function () {
+    FakeAnthropic::script([
+        FakeAnthropic::toolUse([['id' => 'toolu_1', 'name' => 'ask', 'input' => []]]),
+        FakeAnthropic::text('found it'),
+        FakeAnthropic::text('Done'),
+    ]);
+
+    $ask = new CallbackTool('ask', fn () => (new RememberingAgent)->forUser(new ConversationParticipant(7))->prompt('Dig')->text);
+
+    $response = (new RememberingAgent([$ask]))->forUser($this->user)->prompt('Hi');
+    $run = ($this->read)($response->invocationId);
+
+    expect(($this->identity)($run))->toBe([
+        'conversation_id' => $response->conversationId,
+        'user_id' => '42',
+        'user_type' => ConversationParticipant::class,
+    ])->and(Conversation::query()->count())->toBe(2);
 });
