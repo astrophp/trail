@@ -11,6 +11,7 @@ import {
 import { ArrowDownIcon, ArrowUpDownIcon, ArrowUpIcon } from 'lucide-react'
 import { useMemo, type ReactNode } from 'react'
 import { Button } from '@/components/ui/button'
+import { Skeleton } from '@/components/ui/skeleton'
 import {
     Table,
     TableBody,
@@ -33,6 +34,12 @@ export type DataTableColumnMeta = {
     hideBelow?: 'xs' | 'md' | 'wide' | 'roomy'
     /** The cell names its row: it is a row header for screen readers. */
     rowHeader?: boolean
+    /**
+     * What stands in for this column's cell while the first load is on. One short line when
+     * left out; give a few stacked lines when the real cell is taller than one, so the rows
+     * do not change height when they arrive. Hidden from assistive technology by the table.
+     */
+    skeleton?: ReactNode
 }
 
 // Written out in full, so the stylesheet can see every class.
@@ -47,6 +54,27 @@ const align = {
     start: 'text-left',
     end: 'text-right tabular-nums',
 } as const
+
+/**
+ * The classes every cell of a column shares, in the header, the rows and the skeleton rows:
+ * alignment, the breakpoint it is dropped at, and the first column staying in view.
+ */
+function columnClasses(
+    meta: DataTableColumnMeta | undefined,
+    index: number,
+): string {
+    return cn(
+        align[meta?.align ?? 'start'],
+        meta?.hideBelow && hideBelow[meta.hideBelow],
+        index === 0 && 'max-md:sticky max-md:left-0 max-md:z-1',
+    )
+}
+
+/**
+ * The look of a skeleton bar drawn for a column (`meta.skeleton`): visible against the card in
+ * both themes, and still for people who prefer reduced motion. Add the size to it.
+ */
+export const skeletonBarClass = 'bg-border motion-reduce:animate-none'
 
 const features = tableFeatures({
     rowSortingFeature,
@@ -81,6 +109,26 @@ type DataTableProps<TData extends RowData> = {
     footer?: ReactNode
     /** The table's accessible name. Visually hidden. */
     caption: string
+    /**
+     * The first load: the header stays and the body is `skeletonRows` placeholder rows shaped
+     * like the columns. `data` is ignored. The table is `aria-busy` and says "Loading" once.
+     */
+    loading?: boolean
+    /** How many placeholder rows `loading` draws. Defaults to 8. */
+    skeletonRows?: number
+    /** What assistive technology is told while `loading` or `busy` is on. Defaults to "Loading". */
+    loadingLabel?: string
+    /**
+     * A refresh in place (the next page, another sort): the rows stay, dimmed, and the table is
+     * `aria-busy`. Use it for rows that answer for the previous view. Only the rows are dimmed,
+     * never the `empty` slot.
+     */
+    busy?: boolean
+    /**
+     * Shown inside the card, below the header, when `data` is empty and the table is not
+     * loading. The footer is not shown then.
+     */
+    empty?: ReactNode
     className?: string
 }
 
@@ -88,6 +136,9 @@ type DataTableProps<TData extends RowData> = {
  * A table of rows the server has already sorted and paged. It owns no data, no sort state and no
  * navigation: a row that leads somewhere has a `RowLink` in one of its cells. On narrow screens
  * the table scrolls sideways inside its card and the first column stays in view.
+ *
+ * It also draws what is not the happy path: `loading` (skeleton rows), `busy` (rows kept while a
+ * refresh runs) and `empty` (a slot for when there is nothing to show).
  */
 export function DataTable<TData extends RowData>({
     columns,
@@ -97,6 +148,11 @@ export function DataTable<TData extends RowData>({
     onSortChange,
     footer,
     caption,
+    loading = false,
+    skeletonRows = 8,
+    loadingLabel = 'Loading',
+    busy = false,
+    empty,
     className,
 }: DataTableProps<TData>) {
     const sorting = useMemo<SortingState>(
@@ -125,6 +181,14 @@ export function DataTable<TData extends RowData>({
         sortDescFirst: false,
     })
 
+    const rows = table.getRowModel().rows
+    const showEmpty = !loading && rows.length === 0 && empty !== undefined
+    // The rows and the footer that describes them, never the empty slot.
+    const dimmed = cn(
+        'motion-safe:transition-opacity',
+        busy && !loading && 'opacity-60',
+    )
+
     return (
         <div
             data-slot="data-table"
@@ -133,7 +197,14 @@ export function DataTable<TData extends RowData>({
                 className,
             )}
         >
-            <Table className="border-separate border-spacing-0">
+            {/* Always mounted, so a change of its text is announced. */}
+            <span role="status" className="sr-only">
+                {loading || busy ? loadingLabel : ''}
+            </span>
+            <Table
+                aria-busy={loading || busy || undefined}
+                className="border-separate border-spacing-0"
+            >
                 <TableCaption className="sr-only">{caption}</TableCaption>
                 <TableHeader>
                     {table.getHeaderGroups().map((group) => (
@@ -162,11 +233,7 @@ export function DataTable<TData extends RowData>({
                                         className={cn(
                                             'h-auto border-b bg-muted text-caption text-muted-foreground',
                                             sortable ? 'p-0' : 'px-4 py-2.75',
-                                            align[meta?.align ?? 'start'],
-                                            meta?.hideBelow &&
-                                                hideBelow[meta.hideBelow],
-                                            index === 0 &&
-                                                'max-md:sticky max-md:left-0 max-md:z-1',
+                                            columnClasses(meta, index),
                                         )}
                                     >
                                         {header.isPlaceholder ? null : sortable ? (
@@ -214,43 +281,95 @@ export function DataTable<TData extends RowData>({
                         </TableRow>
                     ))}
                 </TableHeader>
-                <TableBody>
-                    {table.getRowModel().rows.map((row) => (
-                        <TableRow
-                            key={row.id}
-                            className="group/row relative border-b-0 hover:bg-transparent"
-                        >
-                            {row.getAllCells().map((cell, index) => {
-                                const meta = cell.column.columnDef.meta
-                                const Cell = meta?.rowHeader
-                                    ? TableHead
-                                    : TableCell
+                {loading ? (
+                    <TableBody aria-hidden="true">
+                        {Array.from({ length: skeletonRows }, (_, rowIndex) => (
+                            <TableRow
+                                key={rowIndex}
+                                className="border-b-0 hover:bg-transparent"
+                            >
+                                {table
+                                    .getAllLeafColumns()
+                                    .map((column, index) => {
+                                        const meta = column.columnDef.meta
 
-                                return (
-                                    <Cell
-                                        key={cell.id}
-                                        scope={
-                                            meta?.rowHeader ? 'row' : undefined
-                                        }
-                                        className={cn(
-                                            // Controls other than the row link sit above its stretched hit area.
-                                            'h-auto border-b bg-card px-4 py-3 text-ui font-normal group-last/row:border-b-0 group-hover/row:bg-accent [&_a:not([data-slot=row-link])]:relative [&_a:not([data-slot=row-link])]:z-1 [&_button]:relative [&_button]:z-1',
-                                            align[meta?.align ?? 'start'],
-                                            meta?.hideBelow &&
-                                                hideBelow[meta.hideBelow],
-                                            index === 0 &&
-                                                'max-md:sticky max-md:left-0 max-md:z-1',
-                                        )}
-                                    >
-                                        <table.FlexRender cell={cell} />
-                                    </Cell>
-                                )
-                            })}
-                        </TableRow>
-                    ))}
-                </TableBody>
+                                        return (
+                                            <TableCell
+                                                key={column.id}
+                                                className={cn(
+                                                    'h-auto border-b bg-card px-4 py-3 text-ui',
+                                                    rowIndex ===
+                                                        skeletonRows - 1 &&
+                                                        'border-b-0',
+                                                    columnClasses(meta, index),
+                                                )}
+                                            >
+                                                <div
+                                                    className={cn(
+                                                        'flex',
+                                                        meta?.align === 'end'
+                                                            ? 'justify-end'
+                                                            : 'justify-start',
+                                                    )}
+                                                >
+                                                    {meta?.skeleton ?? (
+                                                        // One line of text is 1.3 times the text size: this bar sits in one.
+                                                        <div className="flex h-4.25 items-center">
+                                                            <Skeleton
+                                                                className={cn(
+                                                                    skeletonBarClass,
+                                                                    'h-3 w-20',
+                                                                )}
+                                                            />
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </TableCell>
+                                        )
+                                    })}
+                            </TableRow>
+                        ))}
+                    </TableBody>
+                ) : (
+                    <TableBody className={dimmed}>
+                        {rows.map((row) => (
+                            <TableRow
+                                key={row.id}
+                                className="group/row relative border-b-0 hover:bg-transparent"
+                            >
+                                {row.getAllCells().map((cell, index) => {
+                                    const meta = cell.column.columnDef.meta
+                                    const Cell = meta?.rowHeader
+                                        ? TableHead
+                                        : TableCell
+
+                                    return (
+                                        <Cell
+                                            key={cell.id}
+                                            scope={
+                                                meta?.rowHeader
+                                                    ? 'row'
+                                                    : undefined
+                                            }
+                                            className={cn(
+                                                // Controls other than the row link sit above its stretched hit area.
+                                                'h-auto border-b bg-card px-4 py-3 text-ui font-normal group-last/row:border-b-0 group-hover/row:bg-accent [&_a:not([data-slot=row-link])]:relative [&_a:not([data-slot=row-link])]:z-1 [&_button]:relative [&_button]:z-1',
+                                                columnClasses(meta, index),
+                                            )}
+                                        >
+                                            <table.FlexRender cell={cell} />
+                                        </Cell>
+                                    )
+                                })}
+                            </TableRow>
+                        ))}
+                    </TableBody>
+                )}
             </Table>
-            {footer ? <div className="border-t px-4 py-3">{footer}</div> : null}
+            {showEmpty ? empty : null}
+            {footer && !showEmpty ? (
+                <div className={cn('border-t px-4 py-3', dimmed)}>{footer}</div>
+            ) : null}
         </div>
     )
 }

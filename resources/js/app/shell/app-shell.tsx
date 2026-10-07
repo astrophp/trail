@@ -8,8 +8,11 @@ import {
 import { AppSidebar } from '@/app/shell/app-sidebar'
 import { TopBar } from '@/app/shell/top-bar'
 import { documentTitle, resolveRoute } from '@/app/routes'
+import { ErrorBoundary } from '@/components/patterns/error-boundary'
+import { ErrorState } from '@/components/patterns/error-state'
 import { SidebarProvider, useSidebar } from '@/components/ui/sidebar'
 import { useDocumentTitle } from '@/hooks/use-document-title'
+import { focusPageHeading } from '@/lib/focus-page-heading'
 
 /**
  * After a client-side page change the new page's heading gets focus (the main
@@ -38,9 +41,7 @@ function useFocusPageHeading(main: React.RefObject<HTMLElement | null>) {
             }
 
             // Scrolling is decided above, so focusing never scrolls on its own.
-            const target = main.current?.querySelector('h1') ?? main.current
-
-            target?.focus({ preventScroll: true })
+            focusPageHeading(main.current)
         }
     }, [pathname, navigationType, openMobile, main])
 }
@@ -115,7 +116,22 @@ function Frame() {
                     tabIndex={-1}
                     className="mx-auto w-full max-w-450 flex-1 scroll-mt-13.5 px-3.75 py-5 outline-none xs:px-4.75 xs:py-5.5 md:scroll-mt-14.25 md:px-5.75 md:py-5.75 wide:px-6.5 wide:py-6.5 roomy:p-8"
                 >
-                    <Outlet />
+                    {/* A page that throws leaves the sidebar and top bar usable; navigating away recovers. */}
+                    <ErrorBoundary
+                        resetKey={pathname}
+                        // Once the page is back, its heading takes focus (not the main region).
+                        onReset={() => focusPageHeading(main.current)}
+                        // A crash's own message is for developers and the console, not the page.
+                        fallback={(_error, reset) => (
+                            <ErrorState
+                                error={null}
+                                title="This page could not be shown"
+                                onRetry={reset}
+                            />
+                        )}
+                    >
+                        <Outlet />
+                    </ErrorBoundary>
                 </main>
             </div>
         </>

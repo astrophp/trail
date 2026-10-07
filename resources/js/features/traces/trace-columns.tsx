@@ -1,10 +1,15 @@
 import type { Trace } from '@/api/types'
-import type { DataTableColumn } from '@/components/patterns/data-table'
+import {
+    skeletonBarClass,
+    type DataTableColumn,
+} from '@/components/patterns/data-table'
 import { CostValue } from '@/components/telemetry/cost-value'
 import { DurationValue } from '@/components/telemetry/duration-value'
 import { ModelLabel } from '@/components/telemetry/model-label'
 import { Timestamp } from '@/components/telemetry/timestamp'
 import { TokenValue } from '@/components/telemetry/token-value'
+import { Skeleton } from '@/components/ui/skeleton'
+import { cn } from '@/lib/utils'
 import { OutcomeCell } from '@/features/traces/outcome-cell'
 import { RunCell } from '@/features/traces/run-cell'
 
@@ -16,12 +21,29 @@ export const traceColumns: DataTableColumn<Trace>[] = [
         accessorFn: (trace) => trace.name,
         header: 'Run',
         enableSorting: true,
-        meta: { rowHeader: true },
+        meta: {
+            rowHeader: true,
+            // The cell is three lines: the name, the prompt and the id.
+            skeleton: (
+                <div className="flex w-40 flex-col gap-2 py-1.5 md:w-60">
+                    <Skeleton className={cn(skeletonBarClass, 'h-3.5 w-3/4')} />
+                    <Skeleton className={cn(skeletonBarClass, 'h-3 w-full')} />
+                    <Skeleton className={cn(skeletonBarClass, 'h-3 w-1/2')} />
+                </div>
+            ),
+        },
         cell: ({ row }) => <RunCell trace={row.original} />,
     },
     {
         id: 'outcome',
         header: 'Outcome',
+        meta: {
+            skeleton: (
+                <Skeleton
+                    className={cn(skeletonBarClass, 'h-5 w-20 rounded-full')}
+                />
+            ),
+        },
         cell: ({ row }) => <OutcomeCell trace={row.original} />,
     },
     {

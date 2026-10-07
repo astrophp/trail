@@ -3,6 +3,7 @@ import { QueryProvider } from '@/app/providers/query-provider'
 import { AppShell } from '@/app/shell/app-shell'
 import { ThemeProvider } from '@/app/providers/theme-provider'
 import { notFoundRoute, routeTable } from '@/app/routes'
+import { Toaster } from '@/components/ui/sonner'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { BootContext } from '@/hooks/use-boot'
 import { routerBasename } from '@/lib/base-path'
@@ -22,6 +23,12 @@ export function App({
             <QueryProvider client={queryClient}>
                 <ThemeProvider>
                     <TooltipProvider>
+                        {/* At the top, so a toast never covers the pagination at the foot of a page. */}
+                        <Toaster
+                            position="top-center"
+                            offset="4rem"
+                            mobileOffset="4rem"
+                        />
                         <BrowserRouter basename={routerBasename(boot.path)}>
                             <Routes>
                                 <Route element={<AppShell />}>

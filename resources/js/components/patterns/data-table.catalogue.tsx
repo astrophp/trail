@@ -1,10 +1,12 @@
-import { useMemo, useState } from 'react'
+import { SearchXIcon } from 'lucide-react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { MemoryRouter } from 'react-router'
 import {
     DataTable,
     type DataTableColumn,
     type DataTableSort,
 } from '@/components/patterns/data-table'
+import { EmptyState } from '@/components/patterns/empty-state'
 import { Pagination } from '@/components/patterns/pagination'
 import { RowLink } from '@/components/patterns/row-link'
 import { Button } from '@/components/ui/button'
@@ -153,7 +155,17 @@ function sorted(sort: DataTableSort) {
     })
 }
 
-function Specimen({ withFooter = false }: { withFooter?: boolean }) {
+function Specimen({
+    withFooter = false,
+    loading = false,
+    busy = false,
+    empty,
+}: {
+    withFooter?: boolean
+    loading?: boolean
+    busy?: boolean
+    empty?: ReactNode
+}) {
     const [sort, setSort] = useState<DataTableSort>({ id: 'total', desc: true })
     const [page, setPage] = useState(1)
     const rows = useMemo(() => sorted(sort), [sort])
@@ -162,7 +174,10 @@ function Specimen({ withFooter = false }: { withFooter?: boolean }) {
         <MemoryRouter>
             <DataTable
                 columns={columns}
-                data={rows}
+                data={empty ? [] : rows}
+                loading={loading}
+                busy={busy}
+                empty={empty}
                 getRowId={(row) => row.id}
                 sort={sort}
                 onSortChange={setSort}
@@ -194,6 +209,33 @@ export const catalogue: CatalogueEntry = {
         {
             name: 'With a pagination footer',
             Component: () => <Specimen withFooter />,
+        },
+        {
+            name: 'Loading: the header stays, the body is skeleton rows',
+            Component: () => <Specimen loading />,
+        },
+        {
+            name: 'Busy: the rows stay, dimmed, while a refresh runs',
+            Component: () => <Specimen busy withFooter />,
+        },
+        {
+            name: 'Empty: the slot sits below the header, and the footer is gone',
+            Component: () => (
+                <Specimen
+                    withFooter
+                    empty={
+                        <EmptyState
+                            icon={SearchXIcon}
+                            title="No invoices in this period"
+                            description="Invoices appear here as they are sent."
+                        >
+                            <Button variant="outline" size="sm">
+                                Show the last year
+                            </Button>
+                        </EmptyState>
+                    }
+                />
+            ),
         },
     ],
 }
