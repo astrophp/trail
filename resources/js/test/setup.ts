@@ -19,6 +19,12 @@ beforeEach(() => {
     window.scrollTo = vi.fn()
 })
 
+// jsdom lacks what Radix Select calls on open: pointer capture and scrolling an item into view.
+Element.prototype.hasPointerCapture = () => false
+Element.prototype.setPointerCapture = () => {}
+Element.prototype.releasePointerCapture = () => {}
+Element.prototype.scrollIntoView = () => {}
+
 afterEach(() => {
     vi.unstubAllGlobals()
     window.history.replaceState({}, '', '/')

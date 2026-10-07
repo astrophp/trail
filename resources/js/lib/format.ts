@@ -71,8 +71,8 @@ export function formatTokens(count: number): string {
     return `${decimal.format(value)}${unit.suffix}`
 }
 
-/** The whole count with thousands separators: `9,432`. */
-export function formatTokensExact(count: number): string {
+/** A whole count with thousands separators: `9,432`, `1,284`. */
+export function formatCount(count: number): string {
     return whole.format(count)
 }
 
