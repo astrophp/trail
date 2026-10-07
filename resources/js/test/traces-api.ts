@@ -46,11 +46,29 @@ export function deferred() {
     return { promise, resolve }
 }
 
+/** The meta answer with some of its fields replaced (`any`, `running`, `recording`). */
+export function metaWith({
+    any = true,
+    recording = 'enabled',
+}: {
+    any?: boolean
+    recording?: MetaResponse['data']['recording']
+}): MetaResponse {
+    return {
+        ...metaFixture,
+        data: {
+            ...metaFixture.data,
+            recording,
+            traces: { ...metaFixture.data.traces, any },
+        },
+    }
+}
+
 const isBookmark = (url: string) => /\/api\/traces\/[^?]+\/bookmark$/.test(url)
 
 /**
- * Answers `/meta` with its fixture, the bookmark endpoints with `bookmark` (by default what the
- * method means) and the list with `respond`.
+ * Answers `/meta` with `meta` (by default its fixture), the bookmark endpoints with `bookmark`
+ * (by default what the method means) and the list with `respond`.
  */
 export function mockApi(
     respond: Handler = (url) => json(listFor(url)),
@@ -61,10 +79,11 @@ export function mockApi(
                 bookmarked: init?.method === 'PUT',
             },
         }),
+    meta: Handler = () => json(metaFixture),
 ) {
     const fetchMock = vi.fn<Handler>((url, init) =>
         url.includes('/api/meta')
-            ? json(metaFixture)
+            ? meta(url, init)
             : isBookmark(url)
               ? bookmark(url, init)
               : respond(url, init),

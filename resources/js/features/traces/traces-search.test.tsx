@@ -1,7 +1,7 @@
 import { act, fireEvent, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { renderApp } from '@/test/render-app'
+import { renderApp, appReady } from '@/test/render-app'
 import {
     expectSearch,
     lastTraceUrl,
@@ -81,8 +81,9 @@ describe('writing to the URL', () => {
         expect(window.location.search).toBe('?status=failed&search=refund')
     })
 
-    it('does not let the box hold more than the API reads', () => {
+    it('does not let the box hold more than the API reads', async () => {
         renderApp('/traces')
+        await appReady()
 
         expect(searchBox()).toHaveAttribute('maxlength', '200')
     })

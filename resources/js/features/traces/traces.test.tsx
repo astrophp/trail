@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TraceListResponse } from '@/api/types'
 import { contractFixture } from '@/test/contract-fixture'
-import { renderApp } from '@/test/render-app'
+import { renderApp, appReady } from '@/test/render-app'
 
 const fixture = contractFixture('traces') as TraceListResponse
 const meta = contractFixture('meta')
@@ -397,11 +397,12 @@ describe('a page past the end', () => {
         expect(dataRows()).toHaveLength(fixture.data.length)
     })
 
-    it('does not show an empty table while it moves', () => {
+    it('does not show an empty table while it moves', async () => {
         mockApi((url) =>
             url.includes('page=99') ? json(listFor(url)) : never(),
         )
         renderApp('/traces?page=99')
+        await appReady()
 
         expect(screen.getByRole('table')).toHaveAttribute('aria-busy', 'true')
         expect(screen.queryByText('No runs found')).not.toBeInTheDocument()
@@ -417,9 +418,10 @@ const pickRange = async (name: string) => {
 }
 
 describe('while the runs load', () => {
-    it('shows a table-shaped skeleton on the first load, with no count and no zero', () => {
+    it('shows a table-shaped skeleton on the first load, with no count and no zero', async () => {
         mockApi(never)
         renderApp('/traces')
+        await appReady()
 
         const table = skeletonTable()
 
@@ -444,6 +446,7 @@ describe('while the runs load', () => {
         const first = deferred()
         mockApi(() => first.promise)
         renderApp('/traces')
+        await appReady()
 
         expect(skeletonRowCount()).toBe(8)
 

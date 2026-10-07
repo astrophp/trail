@@ -94,6 +94,39 @@ describe('ErrorState', () => {
         ).toBeVisible()
     })
 
+    it('says what the caller says instead of the failure, and labels the button', async () => {
+        const onRetry = vi.fn()
+        render(
+            <ErrorState
+                error={{ message: 'Unauthenticated.', status: 401 }}
+                description="Reload to sign in again."
+                retryLabel="Reload"
+                onRetry={onRetry}
+            />,
+        )
+
+        expect(screen.getByText('Reload to sign in again.')).toBeVisible()
+        expect(screen.queryByText('Unauthenticated.')).not.toBeInTheDocument()
+
+        await userEvent.click(screen.getByRole('button', { name: 'Reload' }))
+
+        expect(onRetry).toHaveBeenCalledOnce()
+    })
+
+    it('is a level 2 heading by default, and level 1 when it is the whole page', () => {
+        const { rerender } = render(<ErrorState />)
+
+        expect(screen.getByRole('heading', { level: 2 })).toBeVisible()
+
+        rerender(<ErrorState headingLevel={1} />)
+
+        const title = screen.getByRole('heading', { level: 1 })
+
+        expect(screen.queryByRole('heading', { level: 2 })).toBeNull()
+        title.focus()
+        expect(title).toHaveFocus()
+    })
+
     it('offers no retry without a callback', () => {
         render(<ErrorState error={null} />)
 

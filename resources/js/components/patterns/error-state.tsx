@@ -13,14 +13,20 @@ import { cn } from '@/lib/utils'
 type ErrorStateProps = {
     title?: string
     /**
-     * Whatever was thrown, read by its shape. An object with a `status` of `null` is a request
+     * Whatever was thrown, read by its shape; may be left out when `description` says it all. An object with a `status` of `null` is a request
      * that got no response (the shape of the dashboard's `ApiError`). Otherwise a non-empty string
      * `message` is shown, and an integer `status` from 400 to 599 is shown as "Error 503".
      * Anything else gets a generic sentence. Never a stack trace.
      */
-    error: unknown
+    error?: unknown
+    /** Says this instead of what `error` yields, for a failure the caller can explain better. */
+    description?: string
     /** Shows a "Try again" button that calls it, with no arguments. */
     onRetry?: () => void
+    /** The level of the title: 1 when this is all a page has to say, 2 (the default) inside a page. */
+    headingLevel?: 1 | 2
+    /** What the retry button says; "Try again" by default ("Reload" when reloading is the way out). */
+    retryLabel?: string
     /**
      * The retry is running. The button stays where it is and keeps focus, says so, and does
      * nothing when pressed.
@@ -66,7 +72,10 @@ function readFailure(error: unknown): { text: string; code: string | null } {
 export function ErrorState({
     title = 'Something went wrong',
     error,
+    description,
+    headingLevel = 2,
     onRetry,
+    retryLabel = 'Try again',
     retrying = false,
     className,
 }: ErrorStateProps) {
@@ -87,12 +96,16 @@ export function ErrorState({
                 </EmptyMedia>
                 <EmptyTitle
                     role="heading"
-                    aria-level={2}
-                    className="text-heading"
+                    aria-level={headingLevel}
+                    // A page's own heading takes focus by script, as a page's `h1` does.
+                    tabIndex={headingLevel === 1 ? -1 : undefined}
+                    className="rounded-sm text-heading outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
                 >
                     {title}
                 </EmptyTitle>
-                <EmptyDescription className="text-ui">{text}</EmptyDescription>
+                <EmptyDescription className="text-ui">
+                    {description ?? text}
+                </EmptyDescription>
                 {code ? (
                     <p className="text-caption text-muted-foreground tabular-nums">
                         {code}
@@ -121,7 +134,7 @@ export function ErrorState({
                                     : undefined
                             }
                         />
-                        {retrying ? 'Trying again…' : 'Try again'}
+                        {retrying ? 'Trying again…' : retryLabel}
                     </Button>
                 </EmptyContent>
             ) : null}

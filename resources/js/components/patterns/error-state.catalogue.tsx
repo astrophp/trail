@@ -30,6 +30,18 @@ export const catalogue: CatalogueEntry = {
             ),
         },
         {
+            name: 'Explained by the caller, with its own button label',
+            Component: () => (
+                <ErrorState
+                    title="Your session has ended"
+                    error={null}
+                    description="Reload the page to sign in again."
+                    retryLabel="Reload"
+                    onRetry={() => {}}
+                />
+            ),
+        },
+        {
             name: 'Anything else that was thrown, without a retry',
             Component: () => <ErrorState error={new Error('boom')} />,
         },

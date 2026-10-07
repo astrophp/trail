@@ -1,10 +1,6 @@
 import { useEffect, useRef } from 'react'
-import {
-    NavigationType,
-    Outlet,
-    useLocation,
-    useNavigationType,
-} from 'react-router'
+import { NavigationType, useLocation, useNavigationType } from 'react-router'
+import { AppContent } from '@/app/shell/app-content'
 import { AppSidebar } from '@/app/shell/app-sidebar'
 import { TopBar } from '@/app/shell/top-bar'
 import { documentTitle, resolveRoute } from '@/app/routes'
@@ -130,7 +126,7 @@ function Frame() {
                             />
                         )}
                     >
-                        <Outlet />
+                        <AppContent />
                     </ErrorBoundary>
                 </main>
             </div>
