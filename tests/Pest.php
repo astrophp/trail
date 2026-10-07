@@ -18,3 +18,11 @@ uses(DisablesTrail::class)->in('Feature/Capture/MasterSwitchTest.php');
 uses(MigratesLaravelTables::class)->in('Feature/Users');
 uses(RefreshDatabase::class)->in('Feature/Users');
 uses(BootsWorkbench::class, RefreshDatabase::class)->in('Feature/Workbench');
+
+/** The window.Trail object of a page, decoded the way the browser decodes it. */
+function bootObject(string $html): array
+{
+    expect(preg_match("/window\\.Trail = JSON\\.parse\\('(.*?)'\\);\n/s", $html, $match))->toBe(1);
+
+    return json_decode(json_decode('"'.$match[1].'"', flags: JSON_THROW_ON_ERROR), true, flags: JSON_THROW_ON_ERROR);
+}

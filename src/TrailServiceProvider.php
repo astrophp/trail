@@ -49,6 +49,8 @@ class TrailServiceProvider extends ServiceProvider
 
         $this->app->singleton(Recorder::class, fn (Application $app) => new Recorder($app, $app->make(CostCalculator::class)));
 
+        $this->app->singleton(Assets::class);
+
         $this->app->singleton(Trail::class, fn (Application $app) => new Trail($app));
 
         $this->app->singleton(TraceStore::class, function (Application $app) {
@@ -66,6 +68,7 @@ class TrailServiceProvider extends ServiceProvider
         $this->registerRoutes();
 
         $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
+        $this->loadViewsFrom(__DIR__.'/../resources/views', 'trail');
 
         if ($this->app->runningInConsole()) {
             $this->commands([
@@ -100,13 +103,9 @@ class TrailServiceProvider extends ServiceProvider
         }
 
         $domain = config('trail.domain');
-        $path = config('trail.path');
-        $path = is_string($path) ? trim($path, '/') : '';
-
         Route::group([
             'domain' => is_string($domain) && $domain !== '' ? $domain : null,
-            // Never the root: the dashboard answers every path under its prefix, and would take the application's.
-            'prefix' => $path === '' ? 'trail' : $path,
+            'prefix' => DashboardPath::prefix(),
             'middleware' => config('trail.middleware'),
         ], function (): void {
             $this->loadRoutesFrom(__DIR__.'/../routes/web.php');

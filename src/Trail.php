@@ -7,13 +7,20 @@ use Astro\Trail\Capture\Recorder;
 use Astro\Trail\Capture\Sampler;
 use Astro\Trail\Storage\ArrayTraceStore;
 use Astro\Trail\Storage\Contracts\TraceStore;
+use Astro\Trail\Storage\StaleRuns;
 use Astro\Trail\Users\UserResolver;
 use Closure;
+use Composer\InstalledVersions;
+use Illuminate\Contracts\Cache\Factory as CacheFactory;
 use Illuminate\Contracts\Config\Repository;
 use Illuminate\Contracts\Container\Container;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Vite;
+use Illuminate\Support\HtmlString;
+use Illuminate\Support\Js;
+use Throwable;
 
 class Trail
 {
@@ -134,5 +141,102 @@ class Trail
         $guard = $this->container->make(Repository::class)->get('trail.guard');
 
         return Gate::forUser($request->user(is_string($guard) ? $guard : null))->check('viewTrail');
+    }
+
+    /**
+     * The dashboard's stylesheet, inlined in a style tag.
+     */
+    public function css(): HtmlString
+    {
+        $css = $this->keepInsideTag($this->container->make(Assets::class)->read('app.css'), 'style');
+
+        return new HtmlString('<style'.$this->nonceAttribute().'>'.$css.'</style>');
+    }
+
+    /**
+     * The dashboard's script as a module, inlined, after the window.Trail object the page boots from.
+     */
+    public function js(): HtmlString
+    {
+        $js = $this->keepInsideTag($this->container->make(Assets::class)->read('app.js'), 'script');
+
+        // Inside a script, "<!--" followed later by "<script" makes the HTML parser ignore the real closing tag.
+        // Like the tag rewrite, this only changes how a sequence is spelled inside string and regex literals.
+        $js = str_replace('<!--', '<\\!--', $js);
+
+        return new HtmlString('<script type="module"'.$this->nonceAttribute().'>window.Trail = '.Js::from($this->scriptVariables()).";\n".$js.'</script>');
+    }
+
+    /**
+     * Keep a bundle from closing its own tag. The rewrites in here are safe because they only change
+     * how a sequence is spelled inside the bundle's string and regex literals, not what it means.
+     */
+    private function keepInsideTag(string $code, string $tag): string
+    {
+        return preg_replace('#</(?='.$tag.')#i', '<\\/', $code) ?? $code;
+    }
+
+    /**
+     * What the dashboard needs to start, written into the page as window.Trail.
+     *
+     * @return array{path: string, apiPath: string, csrfToken: ?string, appName: mixed, environment: string, timezone: mixed, version: ?string, staleAfter: int, recording: ?string}
+     */
+    public function scriptVariables(): array
+    {
+        $path = '/'.DashboardPath::prefix();
+        $config = $this->container->make(Repository::class);
+
+        return [
+            'path' => $path,
+            'apiPath' => $path.'/api',
+            'csrfToken' => csrf_token(),
+            'appName' => $config->get('app.name'),
+            'environment' => App::environment(),
+            'timezone' => $config->get('app.timezone'),
+            'version' => $this->version(),
+            'staleAfter' => StaleRuns::timeout(),
+            'recording' => $this->recording(),
+        ];
+    }
+
+    /**
+     * The installed version of Trail, or null when Composer cannot say.
+     */
+    private function version(): ?string
+    {
+        try {
+            return InstalledVersions::getPrettyVersion('astrophp/trail');
+        } catch (Throwable) {
+            return null;
+        }
+    }
+
+    /**
+     * Whether Trail is recording: enabled, paused, or disabled. Null when the pause flag cannot be
+     * read, as then neither enabled nor paused would be known to be true.
+     */
+    private function recording(): ?string
+    {
+        if (! $this->container->make(Repository::class)->get('trail.enabled')) {
+            return 'disabled';
+        }
+
+        $paused = rescue(fn () => (bool) $this->container->make(CacheFactory::class)->store()->get(Sampler::PAUSE_KEY, false), null);
+
+        if ($paused === null) {
+            return null;
+        }
+
+        return $paused ? 'paused' : 'enabled';
+    }
+
+    /**
+     * The nonce attribute for an inline tag, from Vite::useCspNonce(), or nothing without one.
+     */
+    public function nonceAttribute(): string
+    {
+        $nonce = Vite::cspNonce();
+
+        return is_string($nonce) && $nonce !== '' ? ' nonce="'.e($nonce).'"' : '';
     }
 }
