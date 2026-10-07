@@ -156,8 +156,11 @@ return [
     | kept, redacted and truncated like any other text.
     |
     | "system_prompt" controls whether the agent's instructions are read and
-    | stored. "max_length" is the longest any single string is kept, in
-    | characters; longer ones are cut and the span is marked truncated. Use null
+    | stored. Trail calls instructions() once per run for this, in addition to the
+    | SDK's own calls; set it to false to stop that.
+    |
+    | "max_length" is the longest any single string is kept, in characters;
+    | longer ones are cut and the span is marked truncated. Use null
     | for no limit. Zero and negative values are not limits and use the default.
     | A number read from an environment variable as text is accepted. Together
     | the strings of one captured field are kept to 100 times this length; what
