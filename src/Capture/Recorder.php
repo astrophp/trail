@@ -26,9 +26,12 @@ use Laravel\Ai\Events\ProviderFailedOver;
 use Laravel\Ai\Events\StartingStep;
 use Laravel\Ai\Events\StepCompleted;
 use Laravel\Ai\Events\StepFailed;
+use Laravel\Ai\Events\ToolApprovalResolved;
 use Laravel\Ai\Events\ToolFailed;
 use Laravel\Ai\Events\ToolInvoked;
 use Laravel\Ai\Gateway\ParentInvocation;
+use Laravel\Ai\Prompts\AgentPrompt;
+use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\StructuredAgentResponse;
 use Laravel\Ai\Tools\ToolNameResolver;
 use ReflectionClass;
@@ -112,6 +115,8 @@ class Recorder
 
         if ($isRoot) {
             $buffer->streamed = $streamed;
+            $this->learnIdentity($buffer, Identity::of($agent));
+            $this->recordResolvedApprovals($buffer, $prompt);
         }
 
         $run = new Run($event->invocationId, $buffer, $span, streamed: $streamed);
@@ -121,6 +126,105 @@ class Recorder
             // The only query issued while a run is in flight: it makes the run visible as it starts.
             Guard::run(fn () => $this->container->make(TraceStore::class)->start($buffer->trace()));
         }
+    }
+
+    private function learnIdentity(RunBuffer $buffer, Identity $identity): void
+    {
+        $buffer->learn($identity->conversationId, $identity->userId, $identity->userType);
+    }
+
+    /**
+     * A run that resumes a pause is its own trace. The tool calls its decisions name are stored
+     * when it starts, so they survive a resumed run that fails. A wildcard names no call: the SDK
+     * reports the calls it settled afterwards, in approvalsResolved().
+     */
+    private function recordResolvedApprovals(RunBuffer $buffer, AgentPrompt $prompt): void
+    {
+        if (! $prompt->hasApprovalDecisions() || $prompt->approvalDecisions === null) {
+            return;
+        }
+
+        $ids = [];
+
+        foreach (array_keys($prompt->approvalDecisions->all()) as $id) {
+            if ($id !== '*') {
+                $ids[] = (string) $id;
+            }
+        }
+
+        $buffer->setMetadata('resolved_tool_call_ids', $ids);
+    }
+
+    /**
+     * The SDK's own statement of which tool calls a resume settled. It fires after the terminal
+     * event, so the trace is found by its buffer and not by a run, and it is lost when the resumed
+     * run fails: what the decisions named at the start is all that is known then. Only the ids are
+     * taken from it; the tool spans come from the tool events.
+     */
+    public function approvalsResolved(ToolApprovalResolved $event): void
+    {
+        $ids = [];
+
+        foreach ($event->toolResults as $result) {
+            $ids[] = (string) $result->id;
+        }
+
+        $buffer = $this->buffers[$event->invocationId] ?? null;
+
+        if ($buffer !== null) {
+            $buffer->setMetadata('resolved_tool_call_ids', $this->united($buffer->metadata['resolved_tool_call_ids'] ?? null, $ids));
+
+            return;
+        }
+
+        // A sub-agent that resumed a pause: its span is still in the buffer of the trace it ran in.
+        foreach ($this->buffers as $buffer) {
+            $span = $buffer->span($event->invocationId);
+
+            if ($span !== null && $span->type === SpanType::Agent) {
+                $span->setMetadata('resolved_tool_call_ids', $this->united($span->metadata['resolved_tool_call_ids'] ?? null, $ids));
+
+                return;
+            }
+        }
+    }
+
+    /**
+     * @param  list<string>  $ids
+     * @return list<string>
+     */
+    private function united(mixed $known, array $ids): array
+    {
+        $union = is_array($known) ? array_values(array_filter($known, is_string(...))) : [];
+
+        foreach ($ids as $id) {
+            if (! in_array($id, $union, true)) {
+                $union[] = $id;
+            }
+        }
+
+        return $union;
+    }
+
+    /**
+     * What a paused response is waiting for, read from the response of the terminal event.
+     *
+     * @return list<array{tool_call_id: string, tool: string, arguments: mixed, reason: ?string}>
+     */
+    private function pendingApprovals(AgentResponse $response): array
+    {
+        $pending = [];
+
+        foreach ($response->pendingApprovals as $approval) {
+            $pending[] = [
+                'tool_call_id' => $approval->id,
+                'tool' => $approval->tool,
+                'arguments' => Payload::value($approval->arguments),
+                'reason' => $approval->reason,
+            ];
+        }
+
+        return $pending;
     }
 
     /**
@@ -495,6 +599,9 @@ class Recorder
 
         $this->releaseChildren($run);
 
+        // A new conversation has an id here only if a step completed before the failure.
+        $this->learnIdentity($run->buffer, Identity::of($event->prompt->agent));
+
         $run->buffer->status = Status::Failed;
         $run->buffer->endedAt = $now;
         $run->buffer->durationMs = $duration;
@@ -526,16 +633,34 @@ class Recorder
             ...($response instanceof StructuredAgentResponse ? ['structured' => Payload::value($response->structured)] : []),
         ]);
 
+        $pending = $response->hasPendingApprovals() ? $this->captured(fn (): array => $this->pendingApprovals($response)) : null;
+        $identity = $run->isRoot() ? Identity::of($event->prompt->agent) : null;
+
         $run->span->status = $status;
         $run->span->endedAt = $now;
         $run->span->durationMs = $duration;
         $run->span->output = $output;
 
         if (! $run->isRoot()) {
+            if ($pending !== null) {
+                $run->span->setMetadata('pending_approvals', $pending);
+            }
+
             return;
         }
 
         $this->releaseChildren($run);
+
+        if ($pending !== null) {
+            $run->buffer->setMetadata('pending_approvals', $pending);
+        }
+
+        // The conversation of a new run only exists by now; the response and the agent both report it.
+        if ($identity !== null) {
+            $this->learnIdentity($run->buffer, $identity);
+        }
+
+        $this->learnIdentity($run->buffer, Identity::ofResponse($response));
 
         $run->buffer->status = $status;
         $run->buffer->recovered = $run->failovers > 0;
