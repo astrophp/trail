@@ -46,7 +46,13 @@ class DatabaseTraceStore implements TraceStore
         $db = $this->db();
 
         try {
-            $db->transaction(fn () => $this->insertTrace($db, $trace), 3);
+            if ($db->transactionLevel() === 0) {
+                // A single insert needs no transaction of its own: that would cost a round trip each way.
+                $this->insertTrace($db, $trace);
+            } else {
+                // Inside the application's transaction this is a savepoint, so a duplicate does not poison it.
+                $db->transaction(fn () => $this->insertTrace($db, $trace), 3);
+            }
         } catch (UniqueConstraintViolationException) {
             // Already stored by an earlier or concurrent write; never overwritten here.
         }

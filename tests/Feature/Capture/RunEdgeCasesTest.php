@@ -45,6 +45,7 @@ it('stores the run as completed and leaves nothing behind when a tool result fai
     AssistantAgent::fake([new ToolCall('call_1', 'lookup', ['query' => 'x']), 'Done']);
 
     $response = (new AssistantAgent([new CallbackTool('lookup', fn (Request $request) => $result)]))->prompt('Hi', model: FakeAnthropic::MODEL);
+    Trail::flush();
     $run = Captured::read($response->invocationId);
 
     $queries = 0;
@@ -52,7 +53,7 @@ it('stores the run as completed and leaves nothing behind when a tool result fai
         $queries++;
     });
 
-    // The run was written at its terminal event, so a flush finds nothing left to write.
+    // The first flush wrote and dropped the run, so a second finds nothing left to write.
     Trail::flush();
 
     $invoked = $this->sdk->sole(ToolInvoked::class)->event;
@@ -205,18 +206,19 @@ it('completes the run and the tool span when a tool result throws on __toString,
     event(new ToolInvoked($id, 'tool-1', $invoking->agent, $invoking->tool, ['query' => 'x'], $result, 12.5));
     event(new AgentPrompted($id, $prompting->prompt, $response));
 
+    Trail::flush();
+    $run = Captured::read($id);
+
     $queries = 0;
     DB::listen(function () use (&$queries) {
         $queries++;
     });
 
-    $run = Captured::read($id);
-    $before = $queries;
     Trail::flush();
 
     expect($run->trace()['status'])->toBe('completed')
         ->and($run->spans()[1]['status'])->toBe('completed')
         ->and($run->spans()[1]['output']['result']['class'])->toEndWith('@anonymous')
         ->and($run->duration(1))->toBe(12.5)
-        ->and($queries - $before)->toBe(0);
+        ->and($queries)->toBe(0);
 });

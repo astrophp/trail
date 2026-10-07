@@ -2,6 +2,7 @@
 
 namespace Astro\Trail;
 
+use Astro\Trail\Capture\FlushPoints;
 use Astro\Trail\Capture\Listeners;
 use Astro\Trail\Capture\Recorder;
 use Astro\Trail\Console\ClearCommand;
@@ -67,7 +68,10 @@ class TrailServiceProvider extends ServiceProvider
         }
 
         if (config('trail.enabled')) {
-            Listeners::register($this->app->make(Dispatcher::class), $this->app);
+            $events = $this->app->make(Dispatcher::class);
+
+            Listeners::register($events, $this->app);
+            FlushPoints::register($this->app, $events);
         }
     }
 }
