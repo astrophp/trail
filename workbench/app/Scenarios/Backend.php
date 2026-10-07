@@ -63,7 +63,8 @@ final class Backend
     }
 
     /**
-     * Run the callback with this backend's configuration and, offline, its own HTTP client.
+     * Run the callback with this backend's configuration and, offline, its own HTTP client, and put
+     * both back afterwards.
      *
      * @template T
      *
@@ -71,6 +72,24 @@ final class Backend
      * @return T
      */
     public function scoped(Closure $callback): mixed
+    {
+        $configuration = config('ai');
+
+        try {
+            return $this->run($callback);
+        } finally {
+            // What one scenario configures must not be what makes the next one pass.
+            config(['ai' => $configuration]);
+        }
+    }
+
+    /**
+     * @template T
+     *
+     * @param  Closure(): T  $callback
+     * @return T
+     */
+    private function run(Closure $callback): mixed
     {
         $this->configure();
 

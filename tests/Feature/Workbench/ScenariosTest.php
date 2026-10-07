@@ -243,3 +243,10 @@ describe('the landing page', function () {
         expect(Trace::query()->count())->toBe(0);
     });
 });
+
+it('only answers requests from the machine it runs on', function () {
+    $this->withServerVariables(['REMOTE_ADDR' => '203.0.113.7'])->get('/')->assertForbidden();
+    $this->withServerVariables(['REMOTE_ADDR' => '203.0.113.7'])->post('/run')->assertForbidden();
+
+    expect(Trace::query()->count())->toBe(0);
+});

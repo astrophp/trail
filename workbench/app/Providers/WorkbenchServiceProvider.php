@@ -22,8 +22,9 @@ class WorkbenchServiceProvider extends ServiceProvider
             config(['app.key' => $this->localKey()]);
         }
 
-        // The skeleton lives in vendor/, so without this the database would too. A DB_DATABASE of its own wins.
-        if (env('DB_DATABASE') === null && env('DB_CONNECTION', 'sqlite') === 'sqlite') {
+        // The skeleton lives in vendor/, so without this the database would too. A DB_DATABASE of its own wins,
+        // and a test run never gets the file: refreshing the database there would wipe what was recorded.
+        if (! $this->app->runningUnitTests() && env('DB_DATABASE') === null && env('DB_CONNECTION', 'sqlite') === 'sqlite') {
             $this->app->useDatabasePath(workbench_path('database'));
 
             // Testbench falls back to an in-memory database while the skeleton's own file is missing.

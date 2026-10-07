@@ -25,6 +25,14 @@ class ThrowingTool extends Base
         return 'The carrier tracking tool throws, so the whole run fails.';
     }
 
+    /**
+     * A real model decides for itself whether to call the tool, so the failure cannot be counted on.
+     */
+    public function supportsLive(): bool
+    {
+        return false;
+    }
+
     public function expectedFailure(): ?string
     {
         return CarrierUnavailable::class;
