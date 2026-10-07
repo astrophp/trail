@@ -2,12 +2,12 @@ import { describe, expect, it } from 'vitest'
 import {
     formatClockTime,
     formatCost,
+    formatCount,
     formatDateTime,
     formatDuration,
     formatRelativeTime,
     formatShortDate,
     formatTokens,
-    formatTokensExact,
     isSameDay,
     resolveTimeZone,
     shortId,
@@ -53,14 +53,14 @@ describe('formatTokens', () => {
     })
 })
 
-describe('formatTokensExact', () => {
+describe('formatCount', () => {
     it.each([
         [0, '0'],
-        [842, '842'],
+        [12, '12'],
         [9_432, '9,432'],
         [1_234_567, '1,234,567'],
     ])('formats %s as %s', (count, text) => {
-        expect(formatTokensExact(count)).toBe(text)
+        expect(formatCount(count)).toBe(text)
     })
 })
 

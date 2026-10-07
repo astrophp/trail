@@ -5,7 +5,7 @@ import { gzipSync } from 'node:zlib'
 
 const budgets = {
     'dist/app.js': 145_000,
-    'dist/app.css': 12_500,
+    'dist/app.css': 16_000,
 }
 
 const kb = (bytes) => `${(bytes / 1000).toFixed(1)} kB`
