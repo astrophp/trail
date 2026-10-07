@@ -56,6 +56,14 @@ final class SpanDraft
         public ?float $openedAt = null,
     ) {}
 
+    /**
+     * Set one metadata key, leaving the others as they are.
+     */
+    public function setMetadata(string $key, mixed $value): void
+    {
+        $this->metadata = [...($this->metadata ?? []), $key => $value];
+    }
+
     public function clearFailure(): void
     {
         $this->issueKind = null;

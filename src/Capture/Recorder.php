@@ -28,6 +28,8 @@ use Laravel\Ai\Events\StepFailed;
 use Laravel\Ai\Events\ToolFailed;
 use Laravel\Ai\Events\ToolInvoked;
 use Laravel\Ai\Gateway\ParentInvocation;
+use Laravel\Ai\Prompts\AgentPrompt;
+use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\StructuredAgentResponse;
 use Laravel\Ai\Tools\ToolNameResolver;
 use ReflectionClass;
@@ -109,17 +111,99 @@ class Recorder
 
         $isRoot = $prompt->parentInvocationId === null;
 
+        $resolved = [];
+        $resolvesRemaining = false;
+
         if ($isRoot) {
             $buffer->streamed = $streamed;
+            $this->learnIdentity($buffer, Identity::of($agent));
+            [$resolved, $resolvesRemaining] = $this->recordResolvedApprovals($buffer, $prompt);
         }
 
-        $run = new Run($event->invocationId, $buffer, $span, streamed: $streamed);
+        $run = new Run($event->invocationId, $buffer, $span, streamed: $streamed, resolvedIds: $resolved, resolvesRemaining: $resolvesRemaining);
         $this->runs[$event->invocationId] = $run;
 
         if ($isRoot) {
             // The only query issued while a run is in flight: it makes the run visible as it starts.
             Guard::run(fn () => $this->container->make(TraceStore::class)->start($buffer->trace()));
         }
+    }
+
+    private function learnIdentity(RunBuffer $buffer, Identity $identity): void
+    {
+        $buffer->learn($identity->conversationId, $identity->userId, $identity->userType);
+    }
+
+    /**
+     * A run that resumes a pause is its own trace. The tool calls its decisions name are stored
+     * when it starts, so they survive a resumed run that fails. A wildcard names no call: it is
+     * resolved from the response at the end, when the response reports which calls it settled.
+     *
+     * @return array{list<string>, bool} the calls named, and whether a wildcard decision covers the rest
+     */
+    private function recordResolvedApprovals(RunBuffer $buffer, AgentPrompt $prompt): array
+    {
+        if (! $prompt->hasApprovalDecisions() || $prompt->approvalDecisions === null) {
+            return [[], false];
+        }
+
+        $ids = [];
+        $wildcard = false;
+
+        foreach (array_keys($prompt->approvalDecisions->all()) as $id) {
+            if ($id === '*') {
+                $wildcard = true;
+
+                continue;
+            }
+
+            $ids[] = (string) $id;
+        }
+
+        $buffer->setMetadata('resolved_tool_call_ids', $ids);
+
+        return [$ids, $wildcard];
+    }
+
+    /**
+     * What a paused response is waiting for, read from the response of the terminal event.
+     *
+     * @return list<array{tool_call_id: string, tool: string, arguments: mixed, reason: ?string}>
+     */
+    private function pendingApprovals(AgentResponse $response): array
+    {
+        $pending = [];
+
+        foreach ($response->pendingApprovals as $approval) {
+            $pending[] = [
+                'tool_call_id' => $approval->id,
+                'tool' => $approval->tool,
+                'arguments' => Payload::value($approval->arguments),
+                'reason' => $approval->reason,
+            ];
+        }
+
+        return $pending;
+    }
+
+    /**
+     * The calls a wildcard decision settled: results the response holds for calls that this run did
+     * not make itself, since the paused run made them.
+     *
+     * @return list<string>
+     */
+    private function resolvedWithWildcard(Run $run, AgentResponse $response): array
+    {
+        $ids = $run->resolvedIds;
+        $own = $response->toolCalls->pluck('id')->all();
+
+        foreach ($response->toolResults as $result) {
+            if (! in_array($result->id, $own, true) && ! in_array($result->id, $ids, true)) {
+                $ids[] = $result->id;
+            }
+        }
+
+        return $ids;
     }
 
     /**
@@ -474,6 +558,9 @@ class Recorder
 
         $this->releaseChildren($run);
 
+        // A new conversation has an id here only if a step completed before the failure.
+        $this->learnIdentity($run->buffer, Identity::of($event->prompt->agent));
+
         $run->buffer->status = Status::Failed;
         $run->buffer->endedAt = $now;
         $run->buffer->durationMs = $duration;
@@ -505,16 +592,39 @@ class Recorder
             ...($response instanceof StructuredAgentResponse ? ['structured' => Payload::value($response->structured)] : []),
         ]);
 
+        $pending = $response->hasPendingApprovals() ? $this->captured(fn (): array => $this->pendingApprovals($response)) : null;
+        $resolved = $run->resolvesRemaining ? $this->captured(fn (): array => $this->resolvedWithWildcard($run, $response)) : null;
+        $identity = $run->isRoot() ? Identity::of($event->prompt->agent) : null;
+
         $run->span->status = $status;
         $run->span->endedAt = $now;
         $run->span->durationMs = $duration;
         $run->span->output = $output;
 
         if (! $run->isRoot()) {
+            if ($pending !== null) {
+                $run->span->setMetadata('pending_approvals', $pending);
+            }
+
             return;
         }
 
         $this->releaseChildren($run);
+
+        if ($pending !== null) {
+            $run->buffer->setMetadata('pending_approvals', $pending);
+        }
+
+        if ($resolved !== null) {
+            $run->buffer->setMetadata('resolved_tool_call_ids', $resolved);
+        }
+
+        // The conversation of a new run only exists by now; the response and the agent both report it.
+        if ($identity !== null) {
+            $this->learnIdentity($run->buffer, $identity);
+        }
+
+        $this->learnIdentity($run->buffer, Identity::ofResponse($response));
 
         $run->buffer->status = $status;
         $run->buffer->recovered = $run->failovers > 0;

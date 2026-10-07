@@ -67,6 +67,14 @@ final class RunBuffer
         return $this->spans[$id] ?? null;
     }
 
+    /**
+     * Set one metadata key, leaving the others as they are.
+     */
+    public function setMetadata(string $key, mixed $value): void
+    {
+        $this->metadata = [...($this->metadata ?? []), $key => $value];
+    }
+
     public function clearFailure(): void
     {
         $this->issueKind = null;
@@ -83,6 +91,20 @@ final class RunBuffer
         $this->errorMessage = $failure->errorMessage;
         $this->errorSource = $failure->source;
         $this->errorHttpStatus = $failure->httpStatus;
+    }
+
+    /**
+     * Fill in who the run belongs to. A value that is already known is never replaced, and an
+     * unknown one never wipes a known one.
+     */
+    public function learn(?string $conversationId, ?string $userId, ?string $userType): void
+    {
+        $this->conversationId ??= $conversationId;
+
+        if ($this->userId === null && $userId !== null && $userType !== null) {
+            $this->userId = $userId;
+            $this->userType = $userType;
+        }
     }
 
     public function finished(): bool

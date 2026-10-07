@@ -22,6 +22,16 @@ application's own database, and serves a dashboard from your application.
 - Laravel 12 or 13
 - `laravel/ai` 1.1+
 
+## Known limits
+
+Trail records what the SDK reports through its events, so a few things cannot be recorded:
+
+- When an agent remembers conversations and generates a title for a new one, the SDK makes an extra
+  model call that no event reports. It is neither recorded nor priced.
+- Embeddings served from the SDK's embeddings cache fire no events, so they do not appear.
+- A run that resumes an approval pause is a separate trace from the run that paused. The two are
+  not linked.
+
 ## Testing
 
 `Trail::fake()` swaps Trail's storage for an in-memory store, so your tests never touch Trail's tables.
