@@ -2,6 +2,8 @@
 
 namespace Astro\Trail\Capture;
 
+use Laravel\Ai\Concerns\RemembersConversations;
+use Laravel\Ai\Contracts\RemembersConversations as RemembersConversationsContract;
 use Laravel\Ai\Models\Conversation;
 use Throwable;
 
@@ -10,17 +12,31 @@ use Throwable;
  * when it uses the SDK's conversation trait, through methods an application can override, so
  * every read is guarded and a failure means "unknown".
  */
-final readonly class Identity
+final class Identity
 {
     public function __construct(
-        public ?string $conversationId = null,
-        public ?string $userId = null,
-        public ?string $userType = null,
+        public readonly ?string $conversationId = null,
+        public readonly ?string $userId = null,
+        public readonly ?string $userType = null,
     ) {}
+
+    /** @var array<class-string, bool> */
+    private static array $remembers = [];
 
     public static function of(object $agent): self
     {
+        // The SDK asks for these only of an agent that implements its contract or uses its trait, so Trail does too.
+        if (! self::remembers($agent)) {
+            return new self;
+        }
+
         return self::from(self::conversationOf($agent), self::participantOf($agent));
+    }
+
+    private static function remembers(object $agent): bool
+    {
+        return self::$remembers[$agent::class] ??= $agent instanceof RemembersConversationsContract
+            || in_array(RemembersConversations::class, class_uses_recursive($agent), true);
     }
 
     /**

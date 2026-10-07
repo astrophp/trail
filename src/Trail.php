@@ -10,6 +10,7 @@ use Astro\Trail\Storage\Contracts\TraceStore;
 use Astro\Trail\Users\UserResolver;
 use Closure;
 use Illuminate\Contracts\Container\Container;
+use Throwable;
 
 class Trail
 {
@@ -40,6 +41,8 @@ class Trail
 
     /**
      * Write every trace Trail is still holding, finished or not, and forget it. Never throws.
+     * Call it between runs: a run that is still going when it is called is written as running,
+     * and Trail does not follow it after that.
      */
     public function flush(): void
     {
@@ -79,7 +82,13 @@ class Trail
      */
     public function filter(?Closure $callback): void
     {
-        $this->container->make(Sampler::class)->filter($callback);
+        try {
+            $this->container->make(Sampler::class)->filter($callback);
+        } catch (Throwable $e) {
+            Guard::run(function () use ($e): void {
+                throw $e;
+            });
+        }
     }
 
     /**
@@ -89,10 +98,24 @@ class Trail
      * (the tool that made the call is recorded, as it started outside). Runs already in progress
      * are not affected. Calls nest.
      *
+     * The setting is kept for the whole process, not for one call stack, so a Fiber that is suspended
+     * inside the callback leaves recording off for other code until it resumes.
+     *
      * @param  Closure(): mixed  $callback
      */
     public function withoutRecording(Closure $callback): mixed
     {
-        return $this->container->make(Sampler::class)->without($callback);
+        try {
+            $sampler = $this->container->make(Sampler::class);
+        } catch (Throwable $e) {
+            // Trail not being healthy does not stop the application's own code from running.
+            Guard::run(function () use ($e): void {
+                throw $e;
+            });
+
+            return $callback();
+        }
+
+        return $sampler->without($callback);
     }
 }
