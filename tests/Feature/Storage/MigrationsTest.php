@@ -1,5 +1,6 @@
 <?php
 
+use Astro\Trail\Tests\Fixtures\Storage\Rows;
 use Illuminate\Foundation\Testing\RefreshDatabaseState;
 use Illuminate\Support\Facades\Schema;
 
@@ -14,7 +15,7 @@ afterEach(function () {
     RefreshDatabaseState::$migrated = false;
 });
 
-function traceColumns(): array
+function trailTraceColumns(): array
 {
     return [
         'id', 'type', 'name', 'agent_class', 'status', 'streamed', 'recovered', 'child_failed',
@@ -26,7 +27,7 @@ function traceColumns(): array
     ];
 }
 
-function spanColumns(): array
+function trailSpanColumns(): array
 {
     return [
         'id', 'trace_id', 'parent_id', 'type', 'name', 'agent_class', 'status',
@@ -38,35 +39,13 @@ function spanColumns(): array
     ];
 }
 
-/**
- * @return array<string, array{name: string, nullable: bool, default: mixed}>
- */
-function columnsOf(string $table): array
-{
-    $columns = [];
-
-    foreach (Schema::getColumns($table) as $column) {
-        $columns[$column['name']] = $column;
-    }
-
-    return $columns;
-}
-
-/**
- * @return list<list<string>>
- */
-function indexColumnsOf(string $table): array
-{
-    return array_map(fn (array $index) => $index['columns'], Schema::getIndexes($table));
-}
-
 it('creates both tables with every column', function () {
     expect(Schema::hasTable('trail_traces'))->toBeTrue()
         ->and(Schema::hasTable('trail_spans'))->toBeTrue()
-        ->and(Schema::hasColumns('trail_traces', traceColumns()))->toBeTrue()
-        ->and(Schema::hasColumns('trail_spans', spanColumns()))->toBeTrue()
-        ->and(array_keys(columnsOf('trail_traces')))->toEqual(traceColumns())
-        ->and(array_keys(columnsOf('trail_spans')))->toEqual(spanColumns());
+        ->and(Schema::hasColumns('trail_traces', trailTraceColumns()))->toBeTrue()
+        ->and(Schema::hasColumns('trail_spans', trailSpanColumns()))->toBeTrue()
+        ->and(array_keys(Rows::columnsOf('trail_traces')))->toEqual(trailTraceColumns())
+        ->and(array_keys(Rows::columnsOf('trail_spans')))->toEqual(trailSpanColumns());
 });
 
 it('removes both tables on rollback', function () {
@@ -77,7 +56,7 @@ it('removes both tables on rollback', function () {
 });
 
 it('creates the expected indexes', function (string $table, array $columns) {
-    expect(indexColumnsOf($table))->toContain($columns);
+    expect(Rows::indexColumnsOf($table))->toContain($columns);
 })->with([
     'traces started_at' => ['trail_traces', ['started_at']],
     'traces status' => ['trail_traces', ['status', 'started_at']],
@@ -90,9 +69,9 @@ it('creates the expected indexes', function (string $table, array $columns) {
     'spans status' => ['trail_spans', ['status', 'created_at']],
 ]);
 
-it('keeps index names within the MySQL identifier limit', function (string $table) {
+it('keeps index names within the shortest identifier limit', function (string $table) {
     foreach (Schema::getIndexes($table) as $index) {
-        expect(strlen($index['name']))->toBeLessThanOrEqual(64);
+        expect(strlen($index['name']))->toBeLessThanOrEqual(63);
     }
 })->with(['trail_traces', 'trail_spans']);
 
@@ -114,7 +93,7 @@ it('marks optional columns nullable and required columns not nullable', function
     ];
 
     foreach ($nullable as $table => $names) {
-        $columns = columnsOf($table);
+        $columns = Rows::columnsOf($table);
 
         foreach ($columns as $name => $column) {
             expect($column['nullable'])->toBe(in_array($name, $names, true), "{$table}.{$name}");
@@ -123,7 +102,7 @@ it('marks optional columns nullable and required columns not nullable', function
 });
 
 it('gives token, cost and duration columns no default', function (string $table) {
-    $columns = columnsOf($table);
+    $columns = Rows::columnsOf($table);
 
     foreach (['input_tokens', 'output_tokens', 'cache_read_tokens', 'cache_write_tokens', 'reasoning_tokens', 'cost', 'duration_ms'] as $name) {
         expect($columns[$name]['default'])->toBeNull($name);
