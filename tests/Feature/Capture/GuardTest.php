@@ -8,6 +8,7 @@ use Astro\Trail\Storage\Contracts\TraceStore;
 use Astro\Trail\Tests\Fixtures\Agents\AssistantAgent;
 use Astro\Trail\Tests\Fixtures\Capture\FailsFirstStore;
 use Astro\Trail\Tests\Fixtures\Capture\Failures;
+use Astro\Trail\Tests\Fixtures\Capture\Streams;
 use Astro\Trail\Tests\Fixtures\Capture\ThrowingRecorder;
 use Astro\Trail\Tests\Fixtures\Capture\ThrowingStore;
 use Astro\Trail\Tests\Fixtures\Sdk\FakeAnthropic;
@@ -15,7 +16,6 @@ use Astro\Trail\Tests\Fixtures\Storage\DatabaseStoreProbe;
 use Astro\Trail\Tests\Fixtures\Tools\CallbackTool;
 use Astro\Trail\Tests\Fixtures\Tools\LookupTool;
 use Illuminate\Contracts\Debug\ExceptionHandler;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Exceptions;
 use Laravel\Ai\Events\AgentFailed;
 use Laravel\Ai\Events\StepCompleted;
@@ -171,31 +171,22 @@ it('loses only the trace that fails to store when several are flushed together',
     $real = $this->app->make(TraceStore::class);
     $this->app->instance(TraceStore::class, new FailsFirstStore($real));
 
-    // Run "A" is still in its tool when run "B" flushes from inside its own tool, so both are in flight.
-    $inner = new CallbackTool('lookup', function () {
-        Trail::flush();
+    // Run "A" is a stream its consumer abandoned, so it is still in flight when run "B" finishes.
+    $open = Streams::abandonedAfter(2);
+    AssistantAgent::fake(['B done']);
+    $finished = (new AssistantAgent)->prompt('B')->invocationId;
 
-        return 'flushed';
-    });
-    $outer = new CallbackTool('lookup', fn () => (new AssistantAgent([$inner]))->prompt('B')->text);
+    Trail::flush();
 
-    AssistantAgent::fake([
-        new ToolCall('call_a', 'lookup', ['query' => 'a']),
-        new ToolCall('call_b', 'lookup', ['query' => 'b']),
-        'B done',
-        'A done',
-    ]);
-
-    expect((new AssistantAgent([$outer]))->prompt('A')->text)->toBe('A done');
-
-    // Both runs inserted their start row. Run "A" failed to store its spans and stays a running trace
-    // with none; run "B" is complete.
-    $traces = DB::table('trail_traces')->orderBy('started_at')->pluck('status')->all();
-    $spans = DB::table('trail_spans')->where('type', 'agent')->pluck('input');
+    // Both runs inserted their start row. Run "A" is flushed first and fails to store: it stays a
+    // running trace with no spans. Run "B" is stored complete.
+    $probe = new DatabaseStoreProbe;
 
     Exceptions::assertReportedCount(1);
-    expect($traces)->toBe(['running', 'running'])->and($spans)->toHaveCount(1)
-        ->and(json_decode((string) $spans[0], true)['prompt'])->toBe('B');
+    expect($probe->trace($open)['status'])->toBe('running')
+        ->and($probe->spans($open))->toBe([])
+        ->and($probe->trace($finished)['status'])->toBe('completed')
+        ->and(count($probe->spans($finished)))->toBe(2);
 });
 
 it('ignores events for an invocation it never saw start', function () {

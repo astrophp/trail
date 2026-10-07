@@ -3,6 +3,7 @@
 namespace Astro\Trail\Storage;
 
 use Astro\Trail\Enums\IssueKind;
+use Astro\Trail\Enums\SpanType;
 use Astro\Trail\Enums\Status;
 use Astro\Trail\Storage\Contracts\TraceStore;
 use Carbon\CarbonImmutable;
@@ -243,6 +244,42 @@ class ArrayTraceStore implements TraceStore
         return $this;
     }
 
+    /**
+     * Assert an agent span of the given class was recorded in any trace, which is where a sub-agent
+     * is recorded: under the run that delegated to it, not as a trace of its own.
+     *
+     * @param  (Closure(SpanRecord, TraceRecord): bool)|null  $callback
+     */
+    public function assertSpanRecorded(string $agentClass, ?Closure $callback = null): static
+    {
+        $matching = $this->agentSpansOf($agentClass);
+
+        Assert::assertNotSame([], $matching, "No agent span was recorded for [{$agentClass}].");
+
+        if ($callback !== null) {
+            $matched = false;
+
+            foreach ($matching as [$span, $trace]) {
+                if ($callback($span, $trace)) {
+                    $matched = true;
+
+                    break;
+                }
+            }
+
+            Assert::assertTrue($matched, "No agent span recorded for [{$agentClass}] matched the callback.");
+        }
+
+        return $this;
+    }
+
+    public function assertSpanNotRecorded(string $agentClass): static
+    {
+        Assert::assertSame([], $this->agentSpansOf($agentClass), "An agent span was recorded for [{$agentClass}].");
+
+        return $this;
+    }
+
     public function assertRecordedCount(int $count, ?string $agentClass = null): static
     {
         $actual = count($agentClass === null ? $this->traces : $this->tracesOf($agentClass));
@@ -258,6 +295,25 @@ class ArrayTraceStore implements TraceStore
         Assert::assertSame([], $this->traces, count($this->traces).' trace(s) were recorded, but none were expected.');
 
         return $this;
+    }
+
+    /**
+     * @return list<array{SpanRecord, TraceRecord}>
+     */
+    private function agentSpansOf(string $agentClass): array
+    {
+        $agentClass = ltrim($agentClass, '\\');
+        $matching = [];
+
+        foreach ($this->spans() as $span) {
+            $trace = $this->traces[$span->traceId] ?? null;
+
+            if ($trace !== null && $span->type === SpanType::Agent && $span->agentClass === $agentClass) {
+                $matching[] = [$span, $trace];
+            }
+        }
+
+        return $matching;
     }
 
     /**

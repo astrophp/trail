@@ -6,8 +6,11 @@ use Astro\Trail\Capture\Recorder;
 use Laravel\Ai\Events\AgentFailed;
 use Laravel\Ai\Events\AgentFailedOver;
 use Laravel\Ai\Events\AgentPrompted;
+use Laravel\Ai\Events\EmbeddingsGenerated;
+use Laravel\Ai\Events\GeneratingEmbeddings;
 use Laravel\Ai\Events\InvokingTool;
 use Laravel\Ai\Events\PromptingAgent;
+use Laravel\Ai\Events\ProviderFailedOver;
 use Laravel\Ai\Events\StartingStep;
 use Laravel\Ai\Events\StepCompleted;
 use Laravel\Ai\Events\StepFailed;
@@ -71,8 +74,23 @@ class ThrowingRecorder extends Recorder
         throw new RuntimeException('agentFailed failed');
     }
 
+    public function embeddingsGenerating(GeneratingEmbeddings $event): void
+    {
+        throw new RuntimeException('embeddingsGenerating failed');
+    }
+
+    public function embeddingsGenerated(EmbeddingsGenerated $event): void
+    {
+        throw new TypeError('embeddingsGenerated failed');
+    }
+
     public function flush(): void
     {
         throw new RuntimeException('flush failed');
+    }
+
+    public function providerFailedOver(ProviderFailedOver $event): void
+    {
+        throw new RuntimeException('providerFailedOver failed');
     }
 }

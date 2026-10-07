@@ -18,13 +18,17 @@ use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Events\AgentFailed;
 use Laravel\Ai\Events\AgentFailedOver;
 use Laravel\Ai\Events\AgentPrompted;
+use Laravel\Ai\Events\EmbeddingsGenerated;
+use Laravel\Ai\Events\GeneratingEmbeddings;
 use Laravel\Ai\Events\InvokingTool;
 use Laravel\Ai\Events\PromptingAgent;
+use Laravel\Ai\Events\ProviderFailedOver;
 use Laravel\Ai\Events\StartingStep;
 use Laravel\Ai\Events\StepCompleted;
 use Laravel\Ai\Events\StepFailed;
 use Laravel\Ai\Events\ToolFailed;
 use Laravel\Ai\Events\ToolInvoked;
+use Laravel\Ai\Gateway\ParentInvocation;
 use Laravel\Ai\Responses\StructuredAgentResponse;
 use Laravel\Ai\Tools\ToolNameResolver;
 use ReflectionClass;
@@ -46,6 +50,9 @@ class Recorder
     /** @var array<string, RunBuffer> */
     private array $buffers = [];
 
+    /** @var array<string, EmbeddingCall> keyed by the embeddings invocation id */
+    private array $embeddings = [];
+
     /** How many traces a process with no flush point may hold before it writes the finished ones. */
     private const MAX_BUFFERED_TRACES = 100;
 
@@ -59,9 +66,16 @@ class Recorder
     {
         $prompt = $event->prompt;
         $provider = $this->driver($prompt->provider);
-        $run = $this->runs[$event->invocationId] ?? $this->revivable($event->invocationId, $streamed);
+        $run = $this->runs[$event->invocationId] ?? null;
 
         if ($run !== null) {
+            $this->startAttempt($run, $provider, $prompt->model);
+
+            return;
+        }
+
+        // Only a root can be revived: it is keyed on its own trace.
+        if ($prompt->parentInvocationId === null && ($run = $this->revivable($event->invocationId, $streamed)) !== null) {
             $this->startAttempt($run, $provider, $prompt->model);
 
             return;
@@ -71,14 +85,13 @@ class Recorder
         $anonymous = (new ReflectionClass($agent))->isAnonymous();
         $class = $anonymous ? null : $agent::class;
         $name = $class === null ? self::ANONYMOUS_AGENT : class_basename($class);
-        $now = Carbon::now();
 
         $span = new SpanDraft(
             id: $event->invocationId,
             type: SpanType::Agent,
             name: $name,
             status: Status::Running,
-            startedAt: $now,
+            startedAt: Carbon::now(),
             agentClass: $class,
             provider: $provider,
             model: $prompt->model,
@@ -87,14 +100,24 @@ class Recorder
         );
 
         $buffer = $this->bufferFor($event, $span);
+
+        if ($buffer === null) {
+            return;
+        }
+
+        $span->parentId = $this->parentSpanId($buffer, $prompt->parentInvocationId, $prompt->parentToolInvocationId);
         $buffer->open($span);
 
-        $buffer->streamed = $streamed;
+        $isRoot = $prompt->parentInvocationId === null;
+
+        if ($isRoot) {
+            $buffer->streamed = $streamed;
+        }
 
         $run = new Run($event->invocationId, $buffer, $span, streamed: $streamed);
         $this->runs[$event->invocationId] = $run;
 
-        if ($run->isRoot()) {
+        if ($isRoot) {
             // The only query issued while a run is in flight: it makes the run visible as it starts.
             Guard::run(fn () => $this->container->make(TraceStore::class)->start($buffer->trace()));
         }
@@ -159,12 +182,68 @@ class Recorder
      */
     private function abandonOpenSpans(Run $run): void
     {
+        $abandoned = [];
+
         foreach ($run->buffer->drafts() as $span) {
-            if ($span->parentId === $run->span->id && $span->status === Status::Running) {
-                $span->status = Status::Incomplete;
-                $span->issueKind = IssueKind::Abandoned;
+            if ($span->status !== Status::Running) {
+                continue;
+            }
+
+            // A sub-agent hangs directly under the run when its tool's span was missing. It is not the
+            // run's own span, but it belongs to the attempt that was walked away from all the same.
+            $directChild = $span->type === SpanType::Agent && $span->parentId === $run->span->id;
+
+            if ($this->owns($run, $span) || $directChild) {
+                $this->abandon($span);
+                $abandoned[$span->id] = true;
+
+                if ($directChild) {
+                    unset($this->runs[$span->id]);
+                }
             }
         }
+
+        // Whatever a sub-agent or an embeddings call left running underneath those spans died with them,
+        // at any depth. Spans open in sequence order, so a parent is always met before its children.
+        foreach ($run->buffer->drafts() as $span) {
+            if ($span->status === Status::Running && $span->parentId !== null && isset($abandoned[$span->parentId])) {
+                $this->abandon($span);
+                $abandoned[$span->id] = true;
+
+                // A sub-agent from an abandoned attempt gets no more events.
+                unset($this->runs[$span->id]);
+            }
+        }
+    }
+
+    private function abandon(SpanDraft $span): void
+    {
+        unset($this->embeddings[$span->id]);
+
+        $span->status = Status::Incomplete;
+        $span->issueKind = IssueKind::Abandoned;
+    }
+
+    /**
+     * Whether a span belongs to the run itself: its steps and tools, and the embeddings its tools
+     * made. A sub-agent's spans, its agent span included, belong to the sub-agent's own run.
+     */
+    private function owns(Run $run, SpanDraft $span): bool
+    {
+        if ($span->type === SpanType::Agent) {
+            return false;
+        }
+
+        if ($span->parentId === $run->span->id) {
+            return true;
+        }
+
+        $parent = $span->parentId === null ? null : $run->buffer->span($span->parentId);
+
+        return $span->type === SpanType::Embedding
+            && $parent !== null
+            && $parent->type === SpanType::Tool
+            && $parent->parentId === $run->span->id;
     }
 
     public function stepStarting(StartingStep $event): void
@@ -277,6 +356,10 @@ class Recorder
         $span->durationMs = $event->time;
         $span->endedAt = $now;
         $span->output = $output;
+
+        // The tool returned while an embeddings call under it never ended: the tool caught its error.
+        // Trail never saw the exception, so only the status is recorded.
+        $this->closeEmbeddingsOf($run, $span, $now, null);
     }
 
     public function stepFailed(StepFailed $event): void
@@ -334,7 +417,29 @@ class Recorder
         $span->endedAt = $now;
         $span->fail($failure);
 
+        $this->closeEmbeddingsOf($run, $span, $now, $failure);
+
         $run->remember($event->exception, ErrorSource::Tool);
+    }
+
+    /**
+     * Close the embeddings calls of a tool that are still running. A failed embeddings call fires
+     * no event of its own, so this is the first Trail learns of it.
+     */
+    private function closeEmbeddingsOf(Run $run, SpanDraft $tool, Carbon $now, ?Failure $failure): void
+    {
+        foreach ($run->buffer->drafts() as $span) {
+            if ($span->type === SpanType::Embedding && $span->parentId === $tool->id && $span->status === Status::Running) {
+                $span->status = Status::Failed;
+                $span->endedAt = $now;
+                $span->durationMs = null;
+                unset($this->embeddings[$span->id]);
+
+                if ($failure !== null) {
+                    $span->fail($failure);
+                }
+            }
+        }
     }
 
     public function agentFailedOver(AgentFailedOver $event): void
@@ -367,11 +472,12 @@ class Recorder
 
         // Whatever this run still had open died with it, and is never left running.
         foreach ($run->buffer->drafts() as $span) {
-            if ($span->parentId === $run->span->id && $span->status === Status::Running) {
+            if ($span->status === Status::Running && $this->owns($run, $span)) {
                 $span->status = Status::Failed;
                 $span->endedAt = $now;
                 $span->durationMs = null;
                 $span->fail($runFailure);
+                unset($this->embeddings[$span->id]);
             }
         }
 
@@ -381,8 +487,13 @@ class Recorder
         $run->span->fail($failure);
 
         if (! $run->isRoot()) {
+            // However the parent ends, one of its sub-agents failed.
+            $run->buffer->childFailed = true;
+
             return;
         }
+
+        $this->releaseChildren($run);
 
         $run->buffer->status = Status::Failed;
         $run->buffer->endedAt = $now;
@@ -424,12 +535,150 @@ class Recorder
             return;
         }
 
+        $this->releaseChildren($run);
+
         $run->buffer->status = $status;
         $run->buffer->recovered = $run->failovers > 0;
         $run->buffer->endedAt = $now;
         $run->buffer->durationMs = $duration;
 
         Guard::run(fn () => $this->writeFinishedBeyondLimit());
+    }
+
+    public function embeddingsGenerating(GeneratingEmbeddings $event): void
+    {
+        // The one place the SDK's own ambient parent ids are used: an embeddings call names no run.
+        [$runId, $toolId] = ParentInvocation::current();
+
+        $span = new SpanDraft(
+            id: $event->invocationId,
+            type: SpanType::Embedding,
+            name: 'embeddings',
+            status: Status::Running,
+            startedAt: Carbon::now(),
+            provider: $event->provider->driver(),
+            model: $event->model,
+            // How many inputs, never the texts themselves. Zero dimensions is the SDK's way of saying the model's native size.
+            input: ['count' => count($event->prompt->inputs), 'dimensions' => $event->prompt->dimensions > 0 ? $event->prompt->dimensions : null],
+            openedAt: (float) hrtime(true),
+        );
+
+        if ($runId !== null) {
+            $run = $this->runs[$runId] ?? null;
+
+            if ($run === null) {
+                return;
+            }
+
+            $span->parentId = $this->parentSpanId($run->buffer, $runId, $toolId);
+            $span->attempt = $run->attempt;
+            $run->buffer->open($span);
+            $this->embeddings[$event->invocationId] = new EmbeddingCall($run->buffer, $span, false);
+
+            return;
+        }
+
+        $span->name = 'Embeddings';
+
+        $buffer = $this->buffers[$event->invocationId] = new RunBuffer(
+            id: $event->invocationId,
+            type: SpanType::Embedding,
+            name: 'Embeddings',
+            startedAt: $span->startedAt,
+            provider: $span->provider,
+            model: $span->model,
+        );
+        $buffer->open($span);
+        $this->embeddings[$event->invocationId] = new EmbeddingCall($buffer, $span, true);
+
+        Guard::run(fn () => $this->container->make(TraceStore::class)->start($buffer->trace()));
+    }
+
+    public function embeddingsGenerated(EmbeddingsGenerated $event): void
+    {
+        $call = $this->embeddings[$event->invocationId] ?? null;
+
+        if ($call === null) {
+            return;
+        }
+
+        unset($this->embeddings[$event->invocationId]);
+
+        $now = Carbon::now();
+        $span = $call->span;
+        $duration = $span->openedAt === null ? null : (hrtime(true) - $span->openedAt) / 1e6;
+        $tokens = $event->response->usage->inputTokens;
+        $output = $this->captured(fn (): array => ['count' => count($event->response->embeddings)]);
+
+        $span->status = Status::Completed;
+        $span->endedAt = $now;
+        $span->durationMs = $duration;
+        // A provider that sends no usage is read as zero, and a real call never uses none.
+        $span->inputTokens = $tokens === 0 ? null : $tokens;
+        $span->output = $output;
+
+        if (! $call->standalone) {
+            return;
+        }
+
+        $call->buffer->status = Status::Completed;
+        $call->buffer->endedAt = $now;
+        $call->buffer->durationMs = $duration;
+
+        Guard::run(fn () => $this->writeFinishedBeyondLimit());
+    }
+
+    /**
+     * An embeddings call that failed with an error the SDK can fail over on fires only this event,
+     * which names no invocation: the next provider is tried as a new call with its own id. Calls are
+     * synchronous, so the failed one is the most recently opened call still running against that
+     * provider and model. The event also serves other SDK features; without such a call it is ignored.
+     */
+    public function providerFailedOver(ProviderFailedOver $event): void
+    {
+        $driver = $event->provider->driver();
+
+        foreach (array_reverse($this->embeddings, true) as $id => $call) {
+            if ($call->span->status !== Status::Running || $call->span->provider !== $driver || $call->span->model !== $event->model) {
+                continue;
+            }
+
+            unset($this->embeddings[$id]);
+
+            $now = Carbon::now();
+            $span = $call->span;
+            $duration = $span->openedAt === null ? null : (hrtime(true) - $span->openedAt) / 1e6;
+            $failure = Failure::from($event->exception, ErrorSource::Run);
+
+            $span->status = Status::Failed;
+            $span->endedAt = $now;
+            $span->durationMs = $duration;
+            $span->fail($failure);
+
+            if ($call->standalone) {
+                $call->buffer->status = Status::Failed;
+                $call->buffer->endedAt = $now;
+                $call->buffer->durationMs = $duration;
+                $call->buffer->fail($failure);
+
+                Guard::run(fn () => $this->writeFinishedBeyondLimit());
+            }
+
+            return;
+        }
+    }
+
+    /**
+     * A finished root leaves no run behind in its trace: a sub-agent that never reached its terminal
+     * event will never get one. Its spans stay as they are.
+     */
+    private function releaseChildren(Run $root): void
+    {
+        foreach ($this->runs as $id => $run) {
+            if ($run->buffer === $root->buffer) {
+                unset($this->runs[$id]);
+            }
+        }
     }
 
     /**
@@ -441,6 +690,7 @@ class Recorder
 
         $this->runs = [];
         $this->buffers = [];
+        $this->embeddings = [];
 
         foreach ($buffers as $buffer) {
             $this->write($buffer);
@@ -469,10 +719,21 @@ class Recorder
     }
 
     /**
-     * The buffer the run's spans go into. Every run is a root for now, so it gets its own trace.
+     * The buffer the run's spans go into: a new trace for a root run, the parent's trace for a
+     * sub-agent. A sub-agent whose parent Trail does not know is not recorded at all, so it never
+     * becomes a trace of its own.
      */
-    private function bufferFor(PromptingAgent $event, SpanDraft $span): RunBuffer
+    private function bufferFor(PromptingAgent $event, SpanDraft $span): ?RunBuffer
     {
+        $parentId = $event->prompt->parentInvocationId;
+
+        if ($parentId !== null) {
+            $parent = $this->runs[$parentId] ?? null;
+
+            // A span with this id already exists when a sub-agent's stream is iterated again; it is left as it was.
+            return $parent === null || $parent->buffer->span($event->invocationId) !== null ? null : $parent->buffer;
+        }
+
         return $this->buffers[$event->invocationId] = new RunBuffer(
             id: $event->invocationId,
             type: SpanType::Agent,
@@ -482,6 +743,21 @@ class Recorder
             provider: $span->provider,
             model: $span->model,
         );
+    }
+
+    /**
+     * The span a sub-agent or an embeddings call hangs under: the tool call that started it when
+     * that tool's span exists, otherwise the run that started it.
+     */
+    private function parentSpanId(RunBuffer $buffer, ?string $runId, ?string $toolId): ?string
+    {
+        if ($runId === null) {
+            return null;
+        }
+
+        $tool = $toolId === null ? null : $buffer->span($toolId);
+
+        return $tool !== null && $tool->type === SpanType::Tool ? $tool->id : $runId;
     }
 
     /**
@@ -599,7 +875,7 @@ class Recorder
     private function price(RunBuffer $buffer): void
     {
         foreach ($buffer->drafts() as $span) {
-            if ($span->type !== SpanType::Step || $span->inputTokens === null || $span->cost !== null) {
+            if (($span->type !== SpanType::Step && $span->type !== SpanType::Embedding) || $span->inputTokens === null || $span->cost !== null) {
                 continue;
             }
 

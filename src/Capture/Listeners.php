@@ -9,8 +9,11 @@ use Laravel\Ai\Events\AgentFailed;
 use Laravel\Ai\Events\AgentFailedOver;
 use Laravel\Ai\Events\AgentPrompted;
 use Laravel\Ai\Events\AgentStreamed;
+use Laravel\Ai\Events\EmbeddingsGenerated;
+use Laravel\Ai\Events\GeneratingEmbeddings;
 use Laravel\Ai\Events\InvokingTool;
 use Laravel\Ai\Events\PromptingAgent;
+use Laravel\Ai\Events\ProviderFailedOver;
 use Laravel\Ai\Events\StartingStep;
 use Laravel\Ai\Events\StepCompleted;
 use Laravel\Ai\Events\StepFailed;
@@ -39,6 +42,10 @@ final class Listeners
         $events->listen(ToolFailed::class, static fn (ToolFailed $event) => self::handle($container, static fn (Recorder $recorder) => $recorder->toolFailed($event)));
         $events->listen(AgentFailedOver::class, static fn (AgentFailedOver $event) => self::handle($container, static fn (Recorder $recorder) => $recorder->agentFailedOver($event)));
         $events->listen(AgentFailed::class, static fn (AgentFailed $event) => self::handle($container, static fn (Recorder $recorder) => $recorder->agentFailed($event)));
+        $events->listen(GeneratingEmbeddings::class, static fn (GeneratingEmbeddings $event) => self::handle($container, static fn (Recorder $recorder) => $recorder->embeddingsGenerating($event)));
+        $events->listen(EmbeddingsGenerated::class, static fn (EmbeddingsGenerated $event) => self::handle($container, static fn (Recorder $recorder) => $recorder->embeddingsGenerated($event)));
+        // AgentFailedOver extends this class and never reaches it: the dispatcher delivers an event to its own class's listeners only.
+        $events->listen(ProviderFailedOver::class, static fn (ProviderFailedOver $event) => self::handle($container, static fn (Recorder $recorder) => $recorder->providerFailedOver($event)));
         $events->listen(AgentPrompted::class, static fn (AgentPrompted $event) => self::handle($container, static fn (Recorder $recorder) => $recorder->agentCompleted($event)));
     }
 
