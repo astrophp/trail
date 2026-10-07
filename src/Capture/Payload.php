@@ -120,6 +120,9 @@ final class Payload
     /** @var list<string> */
     private array $patterns = [];
 
+    /** @var array<string, true> patterns that have failed on a string, which is reported once each */
+    private array $failing = [];
+
     /** Matches a configured key and its value inside a string, such as {"password":"hunter2"}. */
     private ?string $keyPattern = null;
 
@@ -152,13 +155,34 @@ final class Payload
                 continue;
             }
 
+            // A pattern that matches nothing at all would rewrite every string.
+            if (preg_match($pattern, '') === 1) {
+                self::report("Trail skipped the redaction pattern [{$pattern}]: it matches the empty string.");
+
+                continue;
+            }
+
             $this->patterns[] = $pattern;
         }
     }
 
     public static function fromConfig(Repository $config): self
     {
-        $limit = $config->get('trail.capture.max_length', self::DEFAULT_MAX_LENGTH);
+        $capture = $config->get('trail.capture', []);
+        $limit = self::DEFAULT_MAX_LENGTH;
+        $on = true;
+        $systemPrompt = true;
+
+        if (is_array($capture)) {
+            $on = (bool) ($capture['enabled'] ?? true);
+            $systemPrompt = (bool) ($capture['system_prompt'] ?? true);
+            $limit = array_key_exists('max_length', $capture) ? $capture['max_length'] : self::DEFAULT_MAX_LENGTH;
+        } elseif ($capture === false || $capture === 0 || $capture === null) {
+            // Switching capture off the short way is taken at its word.
+            $on = false;
+        } else {
+            self::report('Trail ignored trail.capture: it must be an array. Payloads are captured with the defaults.');
+        }
 
         // A limit read from an environment variable arrives as text.
         if (is_string($limit) && filter_var($limit, FILTER_VALIDATE_INT) !== false) {
@@ -167,24 +191,61 @@ final class Payload
 
         if ($limit !== null && (! is_int($limit) || $limit < 1)) {
             // A limit of zero would store nothing and a negative one means nothing, so the safe default applies.
-            Guard::run(function (): void {
-                throw new InvalidArgumentException('Trail ignored trail.capture.max_length: it must be a positive integer or null.');
-            });
+            self::report('Trail ignored trail.capture.max_length: it must be a positive integer or null.');
 
             $limit = self::DEFAULT_MAX_LENGTH;
         }
 
-        $keys = $config->get('trail.redaction.keys', self::DEFAULT_KEYS);
-        $patterns = $config->get('trail.redaction.patterns', self::DEFAULT_PATTERNS);
+        $redaction = $config->get('trail.redaction', []);
+
+        // Redaction protects secrets, so a setting that is not a list of settings never turns it off.
+        if (! is_array($redaction)) {
+            self::report('Trail ignored trail.redaction: it must be an array. The default redaction applies; turn it off with trail.redaction.enabled.');
+
+            $redaction = [];
+        }
 
         return new self(
-            capture: (bool) $config->get('trail.capture.enabled', true),
-            systemPrompt: (bool) $config->get('trail.capture.system_prompt', true),
+            capture: $on,
+            systemPrompt: $systemPrompt,
             maxLength: $limit,
-            redaction: (bool) $config->get('trail.redaction.enabled', true),
-            keys: is_array($keys) ? array_values(array_filter($keys, is_string(...))) : self::DEFAULT_KEYS,
-            patterns: is_array($patterns) ? array_values(array_filter($patterns, is_string(...))) : self::DEFAULT_PATTERNS,
+            redaction: (bool) ($redaction['enabled'] ?? true),
+            keys: self::list($redaction, 'keys', self::DEFAULT_KEYS),
+            patterns: self::list($redaction, 'patterns', self::DEFAULT_PATTERNS),
         );
+    }
+
+    /**
+     * A list of strings from the redaction settings. A setting that is not a list, or that holds
+     * nothing usable although it was not empty, gives the defaults; an empty list means none.
+     *
+     * @param  array<array-key, mixed>  $section
+     * @param  list<string>  $defaults
+     * @return list<string>
+     */
+    private static function list(array $section, string $name, array $defaults): array
+    {
+        if (! array_key_exists($name, $section)) {
+            return $defaults;
+        }
+
+        $configured = $section[$name];
+
+        if (! is_array($configured)) {
+            self::report("Trail ignored trail.redaction.{$name}: it must be a list of strings. The defaults apply.");
+
+            return $defaults;
+        }
+
+        $strings = array_values(array_filter($configured, is_string(...)));
+
+        if (count($strings) === count($configured)) {
+            return $strings;
+        }
+
+        self::report("Trail skipped entries of trail.redaction.{$name} that are not strings.");
+
+        return $strings === [] ? $defaults : $strings;
     }
 
     /**
@@ -403,6 +464,11 @@ final class Payload
             if ($redacted === null) {
                 // The scan failed part way, so nothing about this string can be vouched for.
                 $state->redacted = true;
+
+                if (! isset($this->failing[$pattern])) {
+                    $this->failing[$pattern] = true;
+                    self::report("Trail's redaction pattern [{$pattern}] failed on a string (".preg_last_error_msg().'), so that string was replaced as a whole. This is reported once.');
+                }
 
                 return self::REDACTED;
             }
@@ -735,6 +801,13 @@ final class Payload
         $captured = [];
 
         foreach ($items as $key => $item) {
+            // Past the budget nothing is kept, so nothing past it is converted or scanned.
+            if ($context->budget <= 0) {
+                $context->dropped = true;
+
+                break;
+            }
+
             $captured[$key] = self::safe($item, $depth + 1, $context);
         }
 

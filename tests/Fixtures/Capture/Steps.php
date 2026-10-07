@@ -14,11 +14,13 @@ final class Steps
      */
     public static function promptOnly(string $prompt = 'Hi'): array
     {
-        return ['messages' => [['role' => 'user', 'content' => $prompt]], 'options' => Captured::NO_OPTIONS];
+        return ['messages' => [['role' => 'user', 'content' => $prompt]], 'messages_offset' => 0, 'options' => Captured::NO_OPTIONS];
     }
 
     /**
-     * The input of the step that follows one call of the lookup tool.
+     * The input of the step that follows one call of the lookup tool. A step stores only the
+     * messages the previous step did not send: here the model's tool call and its result, after
+     * the one message (the prompt) that the first step sent.
      *
      * @return array<string, mixed>
      */
@@ -26,10 +28,10 @@ final class Steps
     {
         return [
             'messages' => [
-                ['role' => 'user', 'content' => 'Hi'],
                 ['role' => 'assistant', 'content' => '', 'tool_calls' => [['id' => $callId, 'name' => 'lookup', 'arguments' => ['query' => $query]]]],
                 ['role' => 'tool_result', 'content' => null, 'tool_results' => [['id' => $callId, 'name' => 'lookup', 'result' => 'Result for '.$query]]],
             ],
+            'messages_offset' => 1,
             'options' => Captured::NO_OPTIONS,
         ];
     }

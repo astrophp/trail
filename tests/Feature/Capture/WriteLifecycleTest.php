@@ -1,6 +1,7 @@
 <?php
 
 use Astro\Trail\Capture\Recorder;
+use Astro\Trail\Exceptions\RecordingFailed;
 use Astro\Trail\Facades\Trail;
 use Astro\Trail\Pricing\CostCalculator;
 use Astro\Trail\Storage\Contracts\TraceStore;
@@ -426,7 +427,7 @@ describe('when the store fails', function () {
 
         $this->get('/agent')->assertOk()->assertSee('Hello');
 
-        Exceptions::assertReported(fn (RuntimeException $e) => $e->getMessage() === 'The first write fails.');
+        Exceptions::assertReported(fn (RecordingFailed $e) => str_contains($e->getMessage(), 'The first write fails.'));
     });
 
     it('still runs, reports it and writes the trace at the flush when the start insert fails', function () {
@@ -440,7 +441,7 @@ describe('when the store fails', function () {
 
         Trail::flush();
 
-        Exceptions::assertReported(fn (RuntimeException $e) => $e->getMessage() === 'The start insert fails.');
+        Exceptions::assertReported(fn (RecordingFailed $e) => str_contains($e->getMessage(), 'The start insert fails.'));
         expect(Captured::read($response->invocationId)->trace()['status'])->toBe('completed');
     });
 });
@@ -512,7 +513,7 @@ describe('a late write', function () {
     });
 });
 
-it('writes finished traces without a flush once a process holds more than its limit, and keeps open ones', function () {
+it('writes the oldest finished trace without a flush once a process holds more than its limit, and keeps open ones', function () {
     $this->app->instance(Recorder::class, new Recorder($this->app, $this->app->make(CostCalculator::class), maxBufferedTraces: 2));
 
     // Run "A" is a stream its consumer abandoned, so it stays open while two runs finish: three
@@ -528,7 +529,8 @@ it('writes finished traces without a flush once a process holds more than its li
 
     $probe = new DatabaseStoreProbe;
 
-    expect($probe->spanCount())->toBe(4)
+    // The terminal event of C writes the oldest finished trace, B, and nothing else; A is still being captured.
+    expect($probe->spanCount())->toBe(2)
         ->and($probe->traceCount())->toBe(3)
         ->and($probe->spans($open))->toBe([]);
 
@@ -537,6 +539,29 @@ it('writes finished traces without a flush once a process holds more than its li
     expect($probe->trace($open)['status'])->toBe('running')
         ->and(count($probe->spans($open)))->toBe(2)
         ->and($probe->spanCount())->toBe(4 + 2);
+});
+
+it('keeps an open trace that was written to make room from being started over', function () {
+    $this->app->instance(Recorder::class, new Recorder($this->app, $this->app->make(CostCalculator::class), maxBufferedTraces: 1));
+    FakeAnthropic::script([FakeAnthropic::text('first try'), FakeAnthropic::text('another run'), FakeAnthropic::text('second try')]);
+
+    $first = (new AssistantAgent)->stream('First');
+    Streams::drain($first, 3);
+
+    // A second run in a process over its limit writes the oldest open trace as it stands and drops it.
+    $second = (new AssistantAgent)->stream('Second');
+    Streams::drain($second, 3);
+
+    $probe = new DatabaseStoreProbe;
+    $before = $probe->spans($first->invocationId);
+
+    // The first stream is iterated again: a new attempt under the same id, which the recorder must ignore.
+    Streams::drain($first);
+    Trail::flush();
+
+    expect($probe->trace($first->invocationId)['status'])->toBe('running')
+        ->and($probe->spans($first->invocationId))->toBe($before)
+        ->and(array_column($before, 'attempt'))->toBe([1, 1]);
 });
 
 describe('flush points', function () {
