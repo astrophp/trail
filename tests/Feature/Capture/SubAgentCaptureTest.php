@@ -13,6 +13,8 @@ use Astro\Trail\Tests\Fixtures\Tools\CallbackTool;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Embeddings;
 use Laravel\Ai\Events\AgentFailed;
 use Laravel\Ai\Events\AgentPrompted;
 use Laravel\Ai\Events\InvokingTool;
@@ -353,13 +355,12 @@ describe('a sub-agent the recorder cannot attach', function () {
             ['step', 'step', 'parent', 1, 6, 'completed'],
         ]);
 
-        $queries = 0;
-        DB::listen(function () use (&$queries) {
-            $queries++;
-        });
-        Trail::flush();
+        // The second iteration started the child again and ran a step; none of it reached the spans.
+        $child = Captured::pick($run->rawSpans(), ['type', 'attempt', 'status', 'issue_kind', 'ended_at', 'duration_ms', 'output', 'input_tokens', 'sequence']);
 
-        expect($queries)->toBe(0);
+        expect($child[3])->toBe(['type' => 'agent', 'attempt' => 1, 'status' => 'running', 'issue_kind' => null, 'ended_at' => null, 'duration_ms' => null, 'output' => null, 'input_tokens' => null, 'sequence' => 4])
+            ->and($child[4])->toBe(['type' => 'step', 'attempt' => 1, 'status' => 'running', 'issue_kind' => null, 'ended_at' => null, 'duration_ms' => null, 'output' => null, 'input_tokens' => null, 'sequence' => 5])
+            ->and($run->trace()['span_count'])->toBe(6);
     });
 });
 
@@ -445,5 +446,279 @@ describe('a streamed parent abandoned while its sub-agent is running', function 
             ])->and(array_column($run->rawSpans(), 'duration_ms')[2])->toBeNull()
             ->and($run->rawSpans()[3]['parent_id'])->toBe($run->spanId(2))
             ->and($run->rawSpans()[7]['parent_id'])->toBe($run->spanId(6));
+    });
+});
+
+describe('a sub-agent whose tool span is missing', function () {
+    // Hand-built events: a root, and a child that names the root but a tool call Trail never saw, so the
+    // child's agent span hangs directly under the root's agent span.
+    beforeEach(function () {
+        AssistantAgent::fake(['Hello']);
+        (new AssistantAgent)->prompt('Hi');
+        Trail::flush();
+
+        $original = $this->sdk->sole(PromptingAgent::class)->event->prompt;
+        $starting = $this->sdk->sole(StartingStep::class)->event;
+        $completed = $this->sdk->sole(StepCompleted::class)->event;
+        $response = $this->sdk->sole(AgentPrompted::class)->event->response;
+
+        $this->rootPrompt = new AgentPrompt($original->agent, 'Root', [], $original->provider, $original->model);
+        $this->childPrompt = new AgentPrompt($original->agent, 'Child', [], $original->provider, $original->model, parentInvocationId: 'root-run', parentToolInvocationId: 'missing-tool');
+
+        $this->startRoot = fn () => event(new PromptingAgent('root-run', $this->rootPrompt));
+        $this->startChild = fn () => event(new PromptingAgent('child-run', $this->childPrompt));
+        $this->childStep = function () use ($starting, $completed, $response) {
+            event(new StartingStep('child-run', 0, $starting->agent, $starting->provider, $starting->model, true, $starting->messages, $starting->options));
+            event(new StepCompleted('child-run', 0, $completed->agent, $completed->provider, $completed->model, true, $completed->response, 1.0));
+            event(new AgentPrompted('child-run', $this->childPrompt, $response));
+        };
+        $this->read = function (): Captured {
+            Trail::flush();
+
+            return Captured::read('root-run');
+        };
+    });
+
+    it('hangs the child under the run itself', function () {
+        ($this->startRoot)();
+        ($this->startChild)();
+        $run = ($this->read)();
+
+        expect($run->outline(['root-run' => 'parent']))->toBe([
+            ['agent', 'AssistantAgent', null, 1, 1, 'running'],
+            ['agent', 'AssistantAgent', 'parent', 1, 2, 'running'],
+        ]);
+    });
+
+    it('does not close the child as the parent\'s own span when the parent fails', function () {
+        ($this->startRoot)();
+        ($this->startChild)();
+        event(new AgentFailed('root-run', $this->rootPrompt, new RuntimeException('boom')));
+        $run = ($this->read)();
+
+        expect($run->rawTrace()['status'])->toBe('failed')
+            ->and(Captured::pick($run->spans(), ['type', 'status', 'issue_kind', 'error_class']))->toBe([
+                ['type' => 'agent', 'status' => 'failed', 'issue_kind' => 'exception', 'error_class' => RuntimeException::class],
+                ['type' => 'agent', 'status' => 'running', 'issue_kind' => null, 'error_class' => null],
+            ]);
+    });
+
+    it('abandons the child, and drops its run, when the parent starts a new attempt', function () {
+        ($this->startRoot)();
+        ($this->startChild)();
+        ($this->startRoot)();
+
+        // Everything the abandoned child does from here on is ignored.
+        ($this->childStep)();
+        $run = ($this->read)();
+
+        expect(Captured::pick($run->spans(), ['type', 'attempt', 'status', 'issue_kind']))->toBe([
+            ['type' => 'agent', 'attempt' => 2, 'status' => 'running', 'issue_kind' => null],
+            ['type' => 'agent', 'attempt' => 1, 'status' => 'incomplete', 'issue_kind' => 'abandoned'],
+        ])->and($run->rawSpans()[1]['ended_at'])->toBeNull()
+            ->and($run->rawSpans()[1]['output'])->toBeNull();
+    });
+
+    it('lets the child finish normally while the parent is still on its attempt', function () {
+        ($this->startRoot)();
+        ($this->startChild)();
+        ($this->childStep)();
+        $run = ($this->read)();
+
+        expect(Captured::pick($run->spans(), ['type', 'status']))->toBe([
+            ['type' => 'agent', 'status' => 'running'],
+            ['type' => 'agent', 'status' => 'completed'],
+            ['type' => 'step', 'status' => 'completed'],
+        ]);
+    });
+});
+
+describe('embeddings inside a sub-agent', function () {
+    // Http::fake keeps the first stub that matches, so each test fakes the embeddings API itself.
+    beforeEach(function () {
+        config(['trail.pricing.openai' => ['text-embedding-3-small' => ['input' => 2.0]]]);
+
+        $this->embedded = fn () => Http::fake(['api.openai.com/*' => Http::response([
+            'data' => [['embedding' => [0.1, 0.2]]],
+            'usage' => ['prompt_tokens' => 7, 'total_tokens' => 7],
+        ])]);
+    });
+
+    it('nests an embeddings call made in the child\'s tool under that tool, not under the parent\'s', function () {
+        ($this->embedded)();
+        FakeAnthropic::script([
+            ($this->delegating)('ResearcherAgent'),
+            FakeAnthropic::toolUse([['id' => 'toolu_2', 'name' => 'embed', 'input' => ['query' => 'x']]]),
+            FakeAnthropic::text('found it'),
+            FakeAnthropic::text('Done'),
+        ]);
+
+        $embed = new CallbackTool('embed', fn () => (string) count(Embeddings::for(['a'])->generate()));
+
+        (new AssistantAgent([new ResearcherAgent([$embed])]))->prompt('Hi');
+        $run = ($this->stored)()->assertVolatileColumns();
+
+        expect($run->outline(($this->labels)()))->toBe([
+            ['agent', 'AssistantAgent', null, 1, 1, 'completed'],
+            ['step', 'step', 'parent', 1, 2, 'completed'],
+            ['tool', 'ResearcherAgent', 'parent', 1, 3, 'completed'],
+            ['agent', 'ResearcherAgent', 'tool1', 1, 4, 'completed'],
+            ['step', 'step', 'child', 1, 5, 'completed'],
+            ['tool', 'embed', 'child', 1, 6, 'completed'],
+            ['embedding', 'embeddings', 'tool2', 1, 7, 'completed'],
+            ['step', 'step', 'child', 1, 8, 'completed'],
+            ['step', 'step', 'parent', 1, 9, 'completed'],
+        ])->and($run->rawSpans()[6]['input_tokens'])->toBe(7);
+    });
+
+    it('closes an embedding the child\'s tool failed on with the child, leaving the parent\'s run alone', function () {
+        Http::fake(['api.openai.com/*' => Http::response(['error' => ['message' => 'bad']], 500)]);
+        FakeAnthropic::script([
+            ($this->delegating)('ResearcherAgent'),
+            FakeAnthropic::toolUse([['id' => 'toolu_2', 'name' => 'embed', 'input' => ['query' => 'x']]]),
+            FakeAnthropic::text('Done'),
+        ]);
+
+        $embed = new CallbackTool('embed', fn () => (string) count(Embeddings::for(['a'])->generate()));
+
+        (new AssistantAgent([new ResearcherAgent([$embed])]))->prompt('Hi');
+        $run = ($this->stored)()->assertVolatileColumns(untimed: [6]);
+
+        expect(Captured::pick($run->spans(), ['type', 'status', 'error_source']))->toBe([
+            ['type' => 'agent', 'status' => 'completed', 'error_source' => null],
+            ['type' => 'step', 'status' => 'completed', 'error_source' => null],
+            ['type' => 'tool', 'status' => 'completed', 'error_source' => null],
+            ['type' => 'agent', 'status' => 'failed', 'error_source' => 'tool'],
+            ['type' => 'step', 'status' => 'completed', 'error_source' => null],
+            ['type' => 'tool', 'status' => 'failed', 'error_source' => 'tool'],
+            ['type' => 'embedding', 'status' => 'failed', 'error_source' => 'tool'],
+            ['type' => 'step', 'status' => 'completed', 'error_source' => null],
+        ])->and($run->rawSpans()[6]['parent_id'])->toBe($run->spanId(5))
+            ->and(Captured::pick([$run->trace()], ['status', 'child_failed'])[0])->toBe(['status' => 'completed', 'child_failed' => true]);
+    });
+
+    it('nests an embeddings call made after an inner tool returned under the outer tool that is still running', function () {
+        ($this->embedded)();
+        FakeAnthropic::script([
+            ($this->delegating)('outer'),
+            FakeAnthropic::toolUse([['id' => 'toolu_2', 'name' => 'inner', 'input' => ['query' => 'x']]]),
+            FakeAnthropic::text('found it'),
+            FakeAnthropic::text('Done'),
+        ]);
+
+        $inner = new CallbackTool('inner', fn () => 'inner result');
+        $outer = new CallbackTool('outer', function () use ($inner) {
+            $found = (new ResearcherAgent([$inner]))->prompt('Dig')->text;
+            Embeddings::for(['a'])->generate();
+
+            return $found;
+        });
+
+        (new AssistantAgent([$outer]))->prompt('Hi');
+        $run = ($this->stored)()->assertVolatileColumns();
+
+        expect($run->outline(($this->labels)()))->toBe([
+            ['agent', 'AssistantAgent', null, 1, 1, 'completed'],
+            ['step', 'step', 'parent', 1, 2, 'completed'],
+            ['tool', 'outer', 'parent', 1, 3, 'completed'],
+            ['agent', 'ResearcherAgent', 'tool1', 1, 4, 'completed'],
+            ['step', 'step', 'child', 1, 5, 'completed'],
+            ['tool', 'inner', 'child', 1, 6, 'completed'],
+            ['step', 'step', 'child', 1, 7, 'completed'],
+            ['embedding', 'embeddings', 'tool1', 1, 8, 'completed'],
+            ['step', 'step', 'parent', 1, 9, 'completed'],
+        ]);
+    });
+});
+
+describe('sub-agents in more shapes', function () {
+    it('records the same sub-agent run by two sibling tool calls in one step as two agent spans, each under its own tool call', function () {
+        FakeAnthropic::script([
+            FakeAnthropic::toolUse([
+                ['id' => 'toolu_1', 'name' => 'ResearcherAgent', 'input' => ['task' => 'First']],
+                ['id' => 'toolu_2', 'name' => 'ResearcherAgent', 'input' => ['task' => 'Second']],
+            ]),
+            FakeAnthropic::text('first answer'),
+            FakeAnthropic::text('second answer'),
+            FakeAnthropic::text('Done'),
+        ]);
+
+        (new AssistantAgent([new ResearcherAgent]))->prompt('Hi');
+        $run = ($this->stored)()->assertVolatileColumns();
+
+        [$parentId, $firstChildId, $secondChildId] = $this->sdk->invocationIds();
+        $tools = array_map(fn ($entry) => $entry->event->toolInvocationId, $this->sdk->of(InvokingTool::class));
+
+        $spans = Captured::pick($run->rawSpans(), ['id', 'type', 'name', 'parent_id', 'status']);
+        $agents = array_values(array_filter($spans, fn (array $span) => $span['type'] === 'agent' && $span['id'] !== $parentId));
+
+        expect($agents)->toHaveCount(2)
+            ->and(array_column($agents, 'id'))->toBe([$firstChildId, $secondChildId])
+            ->and(array_column($agents, 'parent_id'))->toBe($tools)
+            ->and(array_column($agents, 'status'))->toBe(['completed', 'completed'])
+            ->and(array_column(array_filter($spans, fn (array $span) => $span['type'] === 'tool'), 'id'))->toBe($tools)
+            ->and(count(array_unique($tools)))->toBe(2)
+            ->and($run->trace()['span_count'])->toBe(count($spans));
+    });
+
+    it('marks the trace child_failed when a grandchild fails', function () {
+        FakeAnthropic::script([
+            FakeAnthropic::toolUse([['id' => 'toolu_1', 'name' => 'ResearcherAgent', 'input' => ['task' => 'Dig']]]),
+            FakeAnthropic::toolUse([['id' => 'toolu_2', 'name' => 'SummarizerAgent', 'input' => ['task' => 'Condense']]]),
+            FakeAnthropic::error(500, 'Server error'),
+            FakeAnthropic::text('found it'),
+            FakeAnthropic::text('Done'),
+        ]);
+
+        (new AssistantAgent([new ResearcherAgent([new SummarizerAgent])]))->prompt('Hi');
+        $run = ($this->stored)()->assertVolatileColumns();
+
+        expect(Captured::pick([$run->trace()], ['status', 'child_failed'])[0])->toBe(['status' => 'completed', 'child_failed' => true])
+            ->and(Captured::pick($run->spans(), ['type', 'agent_class', 'status']))->toBe([
+                ['type' => 'agent', 'agent_class' => AssistantAgent::class, 'status' => 'completed'],
+                ['type' => 'step', 'agent_class' => null, 'status' => 'completed'],
+                ['type' => 'tool', 'agent_class' => null, 'status' => 'completed'],
+                ['type' => 'agent', 'agent_class' => ResearcherAgent::class, 'status' => 'completed'],
+                ['type' => 'step', 'agent_class' => null, 'status' => 'completed'],
+                ['type' => 'tool', 'agent_class' => null, 'status' => 'completed'],
+                ['type' => 'agent', 'agent_class' => SummarizerAgent::class, 'status' => 'failed'],
+                ['type' => 'step', 'agent_class' => null, 'status' => 'failed'],
+                ['type' => 'step', 'agent_class' => null, 'status' => 'completed'],
+                ['type' => 'step', 'agent_class' => null, 'status' => 'completed'],
+            ]);
+    });
+
+    it('marks the trace of a streamed parent child_failed when its streamed child fails', function () {
+        FakeAnthropic::script([($this->delegating)('ResearcherAgent'), FakeAnthropic::error(500, 'Server error'), FakeAnthropic::text('Done')]);
+
+        Streams::drain((new AssistantAgent([new ResearcherAgent]))->stream('Hi', model: FakeAnthropic::MODEL));
+        $run = ($this->stored)()->assertVolatileColumns();
+
+        expect(Captured::pick([$run->trace()], ['status', 'streamed', 'child_failed'])[0])->toBe(['status' => 'completed', 'streamed' => true, 'child_failed' => true])
+            ->and(Captured::pick($run->spans(), ['type', 'status']))->toBe([
+                ['type' => 'agent', 'status' => 'completed'],
+                ['type' => 'step', 'status' => 'completed'],
+                ['type' => 'tool', 'status' => 'completed'],
+                ['type' => 'agent', 'status' => 'failed'],
+                ['type' => 'step', 'status' => 'failed'],
+                ['type' => 'step', 'status' => 'completed'],
+            ]);
+    });
+
+    it('leaves the trace of a plain parent unstreamed when a child inside its tool is streamed', function () {
+        FakeAnthropic::script([($this->delegating)('ask'), FakeAnthropic::text('found it'), FakeAnthropic::text('Done')]);
+
+        $ask = new CallbackTool('ask', function () {
+            $child = (new ResearcherAgent)->stream('Dig');
+            Streams::drain($child);
+
+            return (string) $child->text;
+        });
+
+        (new AssistantAgent([$ask]))->prompt('Hi', model: FakeAnthropic::MODEL);
+        $run = ($this->stored)()->assertVolatileColumns();
+
+        expect($run->outline(($this->labels)()))->toBe(oneLevelTree('ask'))
+            ->and(Captured::pick([$run->trace()], ['status', 'streamed'])[0])->toBe(['status' => 'completed', 'streamed' => false]);
     });
 });
