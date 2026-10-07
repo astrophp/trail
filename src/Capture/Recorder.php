@@ -133,7 +133,9 @@ class Recorder
         $buffer = $this->buffers[$invocationId] ?? null;
         $span = $buffer?->span($invocationId);
 
-        if ($buffer === null || $span === null) {
+        // Only a streamed trace is continued, and only by a streamed start: a plain run that happens
+        // to reuse the id is not another attempt of it.
+        if ($buffer === null || $span === null || ! $buffer->streamed || ! $streamed) {
             return null;
         }
 
@@ -146,11 +148,12 @@ class Recorder
         $span->clearFailure();
 
         $buffer->status = Status::Running;
+        $buffer->recovered = false;
         $buffer->endedAt = null;
         $buffer->durationMs = null;
         $buffer->clearFailure();
 
-        // The manual retry is not a failover, so the trace is not marked recovered.
+        // The manual retry is not a failover, so the trace is not marked recovered; the terminal event decides.
         return $this->runs[$invocationId] = new Run($invocationId, $buffer, $span, attempt: $span->attempt, streamed: $streamed);
     }
 
@@ -270,6 +273,9 @@ class Recorder
         $response = $event->response;
         $usage = $response->usage;
 
+        // Remembered before anything that can fail, so the run's final answer never falls back to an earlier step's text.
+        $run->lastText = $response->text;
+
         // Everything that can fail is built first, so a step is never completed with its output or usage missing.
         $output = $this->captured(fn (): array => [
             'text' => Payload::value($response->text),
@@ -297,7 +303,6 @@ class Recorder
         $step->reasoningTokens = $reported ? $usage->reasoningTokens : null;
 
         $run->step = null;
-        $run->lastText = $response->text;
     }
 
     public function toolInvoking(InvokingTool $event): void

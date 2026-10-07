@@ -14,8 +14,14 @@ use Astro\Trail\Tests\Fixtures\Tools\ApprovalTool;
 use Astro\Trail\Tests\Fixtures\Tools\LookupTool;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Exceptions;
+use Laravel\Ai\Events\AgentPrompted;
+use Laravel\Ai\Events\PromptingAgent;
+use Laravel\Ai\Events\StreamingAgent;
 use Laravel\Ai\Exceptions\RateLimitedException;
 use Laravel\Ai\Exceptions\StreamErrorException;
+use Laravel\Ai\Responses\AgentResponse;
+use Laravel\Ai\Responses\Data\Meta;
+use Laravel\Ai\Responses\Data\TextUsage;
 
 /*
 |--------------------------------------------------------------------------
@@ -232,7 +238,7 @@ describe('a streamed run that fails', function () {
 
 describe('a stream the consumer abandons', function () {
     // The stop points of the SDK's own abandoned-stream test: events handed to the consumer before it stopped.
-    it('is flushed as running with exactly the spans seen so far', function (int $stopAfter, array $statuses) {
+    it('is flushed as running with exactly the spans seen so far', function (int $stopAfter, array $spans) {
         $id = Streams::abandonedAfter($stopAfter);
         gc_collect_cycles();
 
@@ -241,7 +247,7 @@ describe('a stream the consumer abandons', function () {
 
         expect($run->trace()['status'])->toBe('running')
             ->and([$run->rawTrace()['ended_at'], $run->rawTrace()['duration_ms'], $run->rawTrace()['error_class']])->toBe([null, null, null])
-            ->and(Captured::pick($run->spans(), ['status']))->toBe(array_map(fn (string $status) => ['status' => $status], $statuses))
+            ->and(Captured::pick($run->spans(), ['type', 'status']))->toBe(array_map(fn (array $span) => ['type' => $span[0], 'status' => $span[1]], $spans))
             ->and($run->rawSpans()[0]['ended_at'])->toBeNull();
 
         $queries = 0;
@@ -252,12 +258,12 @@ describe('a stream the consumer abandons', function () {
 
         expect($queries)->toBe(0);
     })->with([
-        'before the first step completes' => [2, ['running', 'running']],
-        'in the middle of the first step text' => [4, ['running', 'running']],
-        'right after the tool ran' => [8, ['running', 'completed', 'completed']],
-        'as the second step starts' => [9, ['running', 'completed', 'completed', 'running']],
-        'after the last text of the final step' => [13, ['running', 'completed', 'completed', 'running']],
-        'on the final StreamEnd' => [14, ['running', 'completed', 'completed', 'completed']],
+        'before the first step completes' => [2, [['agent', 'running'], ['step', 'running']]],
+        'in the middle of the first step text' => [4, [['agent', 'running'], ['step', 'running']]],
+        'right after the tool ran' => [8, [['agent', 'running'], ['step', 'completed'], ['tool', 'completed']]],
+        'as the second step starts' => [9, [['agent', 'running'], ['step', 'completed'], ['tool', 'completed'], ['step', 'running']]],
+        'after the last text of the final step' => [13, [['agent', 'running'], ['step', 'completed'], ['tool', 'completed'], ['step', 'running']]],
+        'on the final StreamEnd' => [14, [['agent', 'running'], ['step', 'completed'], ['tool', 'completed'], ['step', 'completed']]],
     ]);
 
     it('closes the abandoned attempt\'s open spans as incomplete when the same stream is iterated again', function () {
@@ -344,16 +350,137 @@ describe('a failed stream that is iterated again', function () {
 });
 
 it('lets a streamed run finish and yields the same events to the consumer when every Trail listener throws', function () {
-    FakeAnthropic::script([FakeAnthropic::text('one'), FakeAnthropic::text('one')]);
+    ($this->toolScript)();
 
-    [$normal] = Streams::drain((new AssistantAgent)->stream('Hi'));
+    [$normal] = Streams::drain((new AssistantAgent([new LookupTool]))->stream('Hi', model: FakeAnthropic::MODEL));
+
+    ($this->toolScript)();
 
     Exceptions::fake();
     $this->app->instance(Recorder::class, new ThrowingRecorder($this->app, $this->app->make(CostCalculator::class)));
 
-    [$guarded, $failure] = Streams::drain((new AssistantAgent)->stream('Hi'));
+    [$guarded, $failure] = Streams::drain((new AssistantAgent([new LookupTool]))->stream('Hi', model: FakeAnthropic::MODEL));
 
     expect($failure)->toBeNull()->and($guarded)->toBe($normal);
 
-    Exceptions::assertReported(fn (RuntimeException $e) => $e->getMessage() === 'agentStarting failed');
+    // A stream that fails runs the failure handlers too.
+    FakeAnthropic::script([FakeAnthropic::streamError('partial text')]);
+    [, $failed] = Streams::drain((new AssistantAgent)->stream('Hi', model: FakeAnthropic::MODEL));
+
+    expect($failed)->toBeInstanceOf(StreamErrorException::class);
+
+    foreach (['agentStarting', 'stepCompleted', 'toolInvoked', 'agentFailed'] as $handler) {
+        Exceptions::assertReported(fn (RuntimeException $e) => $e->getMessage() === "{$handler} failed");
+    }
+
+    foreach (['stepStarting', 'toolInvoking', 'agentCompleted', 'stepFailed'] as $handler) {
+        Exceptions::assertReported(fn (TypeError $e) => $e->getMessage() === "{$handler} failed");
+    }
+});
+
+describe('a streamed run\'s final answer', function () {
+    it('is the last step\'s empty text, not an earlier step\'s', function () {
+        FakeAnthropic::script([
+            FakeAnthropic::toolUse([['id' => 'toolu_1', 'name' => 'lookup', 'input' => ['query' => 'x']]], text: 'Let me look'),
+            FakeAnthropic::text(''),
+        ]);
+
+        Streams::drain((new AssistantAgent([new LookupTool]))->stream('Hi', model: FakeAnthropic::MODEL));
+        $run = ($this->stored)();
+
+        expect($run->spans()[0]['output']['text'])->toBe('');
+    });
+
+    it('is the last step\'s text when the run pauses for approval', function () {
+        FakeAnthropic::script([FakeAnthropic::toolUse([['id' => 'toolu_1', 'name' => 'delete_records', 'input' => ['table' => 'users']]], text: 'I will delete them')]);
+
+        $stream = (new AssistantAgent([new ApprovalTool]))->withMessages([])->stream('Delete the users', model: FakeAnthropic::MODEL);
+        Streams::drain($stream);
+        $run = ($this->stored)();
+
+        expect($run->trace()['status'])->toBe('awaiting_approval')
+            ->and($run->spans()[0]['output']['text'])->toBe('I will delete them');
+    });
+
+    // A streamed run only fails over before anything was yielded, so a failed attempt never
+    // completes a step: an earlier attempt's text cannot reach the answer through a failover.
+    it('is the second provider\'s text after a failover', function () {
+        FakeAnthropic::script([FakeAnthropic::error(429, 'Slow down'), FakeAnthropic::text('second provider')]);
+
+        Streams::drain((new AssistantAgent)->stream('Hi', provider: $this->providers));
+        $run = ($this->stored)();
+
+        expect($run->spans()[0]['output']['text'])->toBe('second provider');
+    });
+});
+
+describe('a streamed trace whose invocation id is started again', function () {
+    it('is not revived by a plain run, which replaces it', function () {
+        FakeAnthropic::script([FakeAnthropic::text('streamed answer')]);
+
+        $stream = (new AssistantAgent)->stream('Hi', model: FakeAnthropic::MODEL);
+        Streams::drain($stream);
+
+        $streaming = $this->sdk->sole(StreamingAgent::class)->event;
+        $id = $stream->invocationId;
+
+        // The streamed trace is finished and still buffered when a plain start reuses its id.
+        event(new PromptingAgent($id, $streaming->prompt));
+        event(new AgentPrompted($id, $streaming->prompt, new AgentResponse($id, 'plain answer', new TextUsage(0, 0), new Meta)));
+        Trail::flush();
+
+        $run = Captured::read($id);
+
+        // The streamed run is not continued, so it is not turned back into a running one. A new
+        // plain trace takes its place in the buffer and is the only one written; the row the streamed
+        // run inserted as it started is updated to it, and the streamed run's own spans were never written.
+        expect($this->inserts)->toBe(1)
+            ->and((new DatabaseStoreProbe)->traceCount())->toBe(1)
+            ->and($run->rawTrace()['streamed'])->toBeFalse()
+            ->and($run->trace()['status'])->toBe('completed')
+            ->and(array_column($run->spans(), 'type'))->toBe(['agent'])
+            ->and($run->spans()[0]['output']['text'])->toBe('plain answer');
+    });
+
+    it('is left running on its second attempt when the consumer abandons it, keeping the first attempt\'s failed step', function () {
+        FakeAnthropic::script([FakeAnthropic::streamError('partial text', message: 'First overload'), FakeAnthropic::text('again')]);
+
+        $stream = (new AssistantAgent)->stream('Hi', model: FakeAnthropic::MODEL);
+        Streams::drain($stream);
+        // Stopped as the second attempt's first step starts.
+        Streams::drain($stream, 2);
+
+        $run = ($this->stored)();
+        $failure = Captured::failure('exception', StreamErrorException::class, 'First overload', 'step', null);
+
+        expect($this->inserts)->toBe(1)
+            ->and($run->trace()['status'])->toBe('running')
+            ->and($run->trace()['recovered'])->toBeFalse()
+            ->and([$run->rawTrace()['ended_at'], $run->rawTrace()['error_class']])->toBe([null, null])
+            ->and(Captured::pick($run->spans(), Failures::SPAN))->toBe([
+                Failures::span('agent', 2, null, 'running'),
+                Failures::span('step', 1, 0, 'failed', $failure),
+                Failures::span('step', 2, 0, 'running'),
+            ]);
+    });
+
+    // The SDK replays a finished stream without firing events, so it never revives a recovered
+    // trace; a hand-built start stands in for it.
+    it('is no longer recovered once revived', function () {
+        FakeAnthropic::script([FakeAnthropic::error(429, 'Slow down'), FakeAnthropic::text('ok')]);
+
+        $stream = (new AssistantAgent)->stream('Hi', provider: $this->providers);
+        Streams::drain($stream);
+
+        $streaming = $this->sdk->of(StreamingAgent::class)[0]->event;
+
+        event(new StreamingAgent($stream->invocationId, $streaming->prompt));
+
+        $run = ($this->stored)();
+
+        expect($this->inserts)->toBe(1)
+            ->and($run->trace()['recovered'])->toBeFalse()
+            ->and($run->trace()['status'])->toBe('running')
+            ->and($run->rawTrace()['ended_at'])->toBeNull();
+    });
 });
