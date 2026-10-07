@@ -82,6 +82,7 @@ npm run format      # prettier --write + eslint --fix
 npm run typecheck
 npm test
 npm run build       # also checks the bundle size budget
+npm run catalogue   # component catalogue (dev only), http://localhost:5175
 npm run size
 ```
 

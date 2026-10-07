@@ -1,5 +1,8 @@
-/* Classes are collected from this directory only, so the build is the same on every machine. */
+/* Classes are collected from this directory only, so the build is the same on every machine.
+   The dev-only catalogue is left out; its own stylesheet adds it back. */
 @import 'tailwindcss' source('.');
+@source not './catalogue';
+@source not './**/*.catalogue.tsx';
 @import 'tw-animate-css';
 @import 'shadcn/tailwind.css';
 
