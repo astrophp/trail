@@ -6,11 +6,13 @@ use Astro\Trail\Enums\SpanType;
 use Astro\Trail\Enums\Status;
 use Astro\Trail\Pricing\CostCalculator;
 use Astro\Trail\Storage\Contracts\TraceStore;
+use Closure;
 use Illuminate\Contracts\Container\Container;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Providers\TextProvider;
+use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Events\AgentPrompted;
 use Laravel\Ai\Events\InvokingTool;
 use Laravel\Ai\Events\PromptingAgent;
@@ -29,6 +31,8 @@ use Throwable;
 class Recorder
 {
     private const ANONYMOUS_AGENT = 'Anonymous agent';
+
+    private const ANONYMOUS_TOOL = 'Anonymous tool';
 
     /** @var array<string, Run> */
     private array $runs = [];
@@ -133,16 +137,13 @@ class Recorder
         $response = $event->response;
         $usage = $response->usage;
 
-        $step->status = Status::Completed;
-        $step->durationMs = $event->time;
-        $step->endedAt = $now;
-        $step->respondingModel = $response->meta->model;
-        $step->output = [
+        // Everything that can fail is built first, so a step is never completed with its output or usage missing.
+        $output = $this->captured(fn (): array => [
             'text' => Payload::value($response->text),
             'tool_calls' => Payload::toolCalls($response->toolCalls),
             'finish_reason' => $response->finishReason->value,
             ...($response->structured === null ? [] : ['structured' => Payload::value($response->structured)]),
-        ];
+        ]);
 
         // A provider that sent no usage block shows up as zero tokens and no cache counts; that is not "free".
         $reported = $usage->inputTokens !== 0
@@ -150,13 +151,16 @@ class Recorder
             || $usage->cacheReadInputTokens !== null
             || $usage->cacheWriteInputTokens !== null;
 
-        if ($reported) {
-            $step->inputTokens = $usage->inputTokens;
-            $step->outputTokens = $usage->outputTokens;
-            $step->cacheReadTokens = $usage->cacheReadInputTokens;
-            $step->cacheWriteTokens = $usage->cacheWriteInputTokens;
-            $step->reasoningTokens = $usage->reasoningTokens;
-        }
+        $step->status = Status::Completed;
+        $step->durationMs = $event->time;
+        $step->endedAt = $now;
+        $step->respondingModel = $response->meta->model;
+        $step->output = $output;
+        $step->inputTokens = $reported ? $usage->inputTokens : null;
+        $step->outputTokens = $reported ? $usage->outputTokens : null;
+        $step->cacheReadTokens = $reported ? $usage->cacheReadInputTokens : null;
+        $step->cacheWriteTokens = $reported ? $usage->cacheWriteInputTokens : null;
+        $step->reasoningTokens = $reported ? $usage->reasoningTokens : null;
 
         $run->step = null;
     }
@@ -187,10 +191,12 @@ class Recorder
             $span = $this->openTool($run, $event, $now->copy()->subMicroseconds($this->microseconds($event->time)));
         }
 
+        $output = $this->captured(fn (): array => ['result' => Payload::value($event->result)]);
+
         $span->status = Status::Completed;
         $span->durationMs = $event->time;
         $span->endedAt = $now;
-        $span->output = ['result' => Payload::value($event->result)];
+        $span->output = $output;
     }
 
     public function agentCompleted(AgentPrompted $event): void
@@ -201,29 +207,35 @@ class Recorder
             return;
         }
 
+        // The run is finished whatever happens next, so it leaves the recorder before anything can fail.
+        unset($this->runs[$event->invocationId]);
+
+        if ($run->isRoot()) {
+            unset($this->buffers[$run->buffer->id]);
+        }
+
         $now = Carbon::now();
         $response = $event->response;
         $duration = $run->span->openedAt === null ? null : (hrtime(true) - $run->span->openedAt) / 1e6;
+        $status = $response->hasPendingApprovals() ? Status::AwaitingApproval : Status::Completed;
 
-        $run->span->status = Status::Completed;
-        $run->span->endedAt = $now;
-        $run->span->durationMs = $duration;
-        $run->span->output = [
+        $output = $this->captured(fn (): array => [
             'text' => Payload::value($response->text),
             ...($response instanceof StructuredAgentResponse ? ['structured' => Payload::value($response->structured)] : []),
-        ];
+        ]);
 
-        unset($this->runs[$event->invocationId]);
+        $run->span->status = $status;
+        $run->span->endedAt = $now;
+        $run->span->durationMs = $duration;
+        $run->span->output = $output;
 
         if (! $run->isRoot()) {
             return;
         }
 
-        $run->buffer->status = Status::Completed;
+        $run->buffer->status = $status;
         $run->buffer->endedAt = $now;
         $run->buffer->durationMs = $duration;
-
-        unset($this->buffers[$run->buffer->id]);
 
         $this->write($run->buffer);
     }
@@ -281,11 +293,7 @@ class Recorder
 
     private function openTool(Run $run, InvokingTool|ToolInvoked $event, Carbon $startedAt): SpanDraft
     {
-        try {
-            $name = ToolNameResolver::resolve($event->tool);
-        } catch (Throwable) {
-            $name = class_basename($event->tool);
-        }
+        $name = $this->toolName($event->tool);
 
         return $run->buffer->open(new SpanDraft(
             id: $event->toolInvocationId,
@@ -297,6 +305,43 @@ class Recorder
             attempt: $run->attempt,
             input: ['arguments' => Payload::value($event->arguments)],
         ));
+    }
+
+    /**
+     * The tool's own name, which is user code. A tool that is an anonymous class and names itself
+     * nothing is not called by its class name, which carries a file path.
+     */
+    private function toolName(Tool $tool): string
+    {
+        $anonymous = (new ReflectionClass($tool))->isAnonymous();
+
+        if ($anonymous && ! is_callable([$tool, 'name'])) {
+            return self::ANONYMOUS_TOOL;
+        }
+
+        try {
+            return ToolNameResolver::resolve($tool);
+        } catch (Throwable) {
+            return $anonymous ? self::ANONYMOUS_TOOL : class_basename($tool);
+        }
+    }
+
+    /**
+     * Build a captured value, or null when that fails. The failure is reported, and the span it
+     * belongs to is still recorded.
+     *
+     * @param  Closure(): array<array-key, mixed>  $build
+     * @return array<array-key, mixed>|null
+     */
+    private function captured(Closure $build): ?array
+    {
+        $captured = null;
+
+        Guard::run(function () use ($build, &$captured): void {
+            $captured = $build();
+        });
+
+        return $captured;
     }
 
     /**

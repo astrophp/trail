@@ -4,37 +4,19 @@ use Astro\Trail\Facades\Trail;
 use Astro\Trail\Tests\Fixtures\Agents\AssistantAgent;
 use Astro\Trail\Tests\Fixtures\Agents\StructuredAgent;
 use Astro\Trail\Tests\Fixtures\Capture\Captured;
+use Astro\Trail\Tests\Fixtures\Capture\Steps;
 use Astro\Trail\Tests\Fixtures\Sdk\FakeAnthropic;
 use Astro\Trail\Tests\Fixtures\Storage\DatabaseStoreProbe;
 use Astro\Trail\Tests\Fixtures\Tools\CallbackTool;
 use Astro\Trail\Tests\Fixtures\Tools\LookupTool;
+use Laravel\Ai\Events\StepCompleted;
+use Laravel\Ai\Events\ToolInvoked;
 use Laravel\Ai\Responses\Data\ToolCall;
-
-const REQUESTED = FakeAnthropic::MODEL;
-
-/** The step input for a first step that sent only the prompt. */
-function promptOnly(string $prompt = 'Hi'): array
-{
-    return ['messages' => [['role' => 'user', 'content' => $prompt]], 'options' => Captured::NO_OPTIONS];
-}
-
-/** The messages of a second step after one lookup tool call. */
-function afterLookup(string $callId, string $query): array
-{
-    return [
-        'messages' => [
-            ['role' => 'user', 'content' => 'Hi'],
-            ['role' => 'assistant', 'content' => '', 'tool_calls' => [['id' => $callId, 'name' => 'lookup', 'arguments' => ['query' => $query]]]],
-            ['role' => 'tool_result', 'content' => null, 'tool_results' => [['id' => $callId, 'name' => 'lookup', 'result' => 'Result for '.$query]]],
-        ],
-        'options' => Captured::NO_OPTIONS,
-    ];
-}
 
 it('stores a run without tools as one trace with an agent span and one step', function () {
     AssistantAgent::fake(['Hello there']);
 
-    $response = (new AssistantAgent)->prompt('Hi', model: REQUESTED);
+    $response = (new AssistantAgent)->prompt('Hi', model: FakeAnthropic::MODEL);
     Trail::flush();
 
     $run = Captured::read($response->invocationId)->assertVolatileColumns();
@@ -42,7 +24,7 @@ it('stores a run without tools as one trace with an agent span and one step', fu
     // The SDK fake reports no usage, so nothing is priced and no token column holds a zero.
     expect($run->trace())->toBe(Captured::expectedTrace([
         'agent_class' => AssistantAgent::class,
-        'model' => REQUESTED,
+        'model' => FakeAnthropic::MODEL,
         'span_count' => 2,
     ]))->and($run->spans())->toBe([
         Captured::expectedSpan([
@@ -51,16 +33,16 @@ it('stores a run without tools as one trace with an agent span and one step', fu
             'name' => 'AssistantAgent',
             'agent_class' => AssistantAgent::class,
             'sequence' => 1,
-            'model' => REQUESTED,
+            'model' => FakeAnthropic::MODEL,
             'input' => ['prompt' => 'Hi', 'system' => 'You are a test assistant.'],
             'output' => ['text' => 'Hello there'],
         ]),
         Captured::expectedSpan([
             'sequence' => 2,
             'step_number' => 0,
-            'model' => REQUESTED,
-            'responding_model' => REQUESTED,
-            'input' => promptOnly(),
+            'model' => FakeAnthropic::MODEL,
+            'responding_model' => FakeAnthropic::MODEL,
+            'input' => Steps::promptOnly(),
             'output' => ['text' => 'Hello there', 'tool_calls' => [], 'finish_reason' => 'stop'],
         ]),
     ]);
@@ -69,14 +51,27 @@ it('stores a run without tools as one trace with an agent span and one step', fu
 it('stores a tool as a child of the agent span, with its arguments and result', function () {
     AssistantAgent::fake([new ToolCall('call_1', 'lookup', ['query' => 'laravel']), 'Done']);
 
-    $response = (new AssistantAgent([new LookupTool]))->prompt('Hi', model: REQUESTED);
+    $response = (new AssistantAgent([new LookupTool]))->prompt('Hi', model: FakeAnthropic::MODEL);
     Trail::flush();
 
     $run = Captured::read($response->invocationId)->assertVolatileColumns();
 
+    // Ids and timings are the SDK's own: Trail neither mints tool span ids nor re-measures steps and tools.
+    $invoked = $this->sdk->sole(ToolInvoked::class)->event;
+    $steps = array_map(fn ($entry) => $entry->event, $this->sdk->of(StepCompleted::class));
+    $sdkIds = [$response->invocationId, $invoked->toolInvocationId, 'call_1'];
+
+    expect($run->spanId(0))->toBe($response->invocationId)
+        ->and($run->spanId(2))->toBe($invoked->toolInvocationId)
+        ->and($run->duration(1))->toEqualWithDelta($steps[0]->time, 1e-6)
+        ->and($run->duration(3))->toEqualWithDelta($steps[1]->time, 1e-6)
+        ->and($run->duration(2))->toEqualWithDelta($invoked->time, 1e-6)
+        ->and(array_intersect([$run->spanId(1), $run->spanId(3)], $sdkIds))->toBe([])
+        ->and($run->spanId(1))->not->toBe($run->spanId(3));
+
     expect($run->trace())->toBe(Captured::expectedTrace([
         'agent_class' => AssistantAgent::class,
-        'model' => REQUESTED,
+        'model' => FakeAnthropic::MODEL,
         'span_count' => 4,
     ]))->and($run->spans())->toBe([
         Captured::expectedSpan([
@@ -85,16 +80,16 @@ it('stores a tool as a child of the agent span, with its arguments and result', 
             'name' => 'AssistantAgent',
             'agent_class' => AssistantAgent::class,
             'sequence' => 1,
-            'model' => REQUESTED,
+            'model' => FakeAnthropic::MODEL,
             'input' => ['prompt' => 'Hi', 'system' => 'You are a test assistant.'],
             'output' => ['text' => 'Done'],
         ]),
         Captured::expectedSpan([
             'sequence' => 2,
             'step_number' => 0,
-            'model' => REQUESTED,
-            'responding_model' => REQUESTED,
-            'input' => promptOnly(),
+            'model' => FakeAnthropic::MODEL,
+            'responding_model' => FakeAnthropic::MODEL,
+            'input' => Steps::promptOnly(),
             'output' => [
                 'text' => '',
                 'tool_calls' => [['id' => 'call_1', 'name' => 'lookup', 'arguments' => ['query' => 'laravel']]],
@@ -112,9 +107,9 @@ it('stores a tool as a child of the agent span, with its arguments and result', 
         Captured::expectedSpan([
             'sequence' => 4,
             'step_number' => 1,
-            'model' => REQUESTED,
-            'responding_model' => REQUESTED,
-            'input' => afterLookup('call_1', 'laravel'),
+            'model' => FakeAnthropic::MODEL,
+            'responding_model' => FakeAnthropic::MODEL,
+            'input' => Steps::afterLookup('call_1', 'laravel'),
             'output' => ['text' => 'Done', 'tool_calls' => [], 'finish_reason' => 'stop'],
         ]),
     ]);
@@ -129,7 +124,7 @@ it('stores every tool call of one step in the order they ran', function () {
         FakeAnthropic::text('Done'),
     ]);
 
-    $response = (new AssistantAgent([new LookupTool]))->prompt('Hi', model: REQUESTED);
+    $response = (new AssistantAgent([new LookupTool]))->prompt('Hi', model: FakeAnthropic::MODEL);
     Trail::flush();
 
     $run = Captured::read($response->invocationId)->assertVolatileColumns();
@@ -160,7 +155,7 @@ it('numbers steps from zero across several tool rounds, all on attempt one', fun
         'Done',
     ]);
 
-    $response = (new AssistantAgent([new LookupTool, new LookupTool, new LookupTool]))->prompt('Hi', model: REQUESTED);
+    $response = (new AssistantAgent([new LookupTool, new LookupTool, new LookupTool]))->prompt('Hi', model: FakeAnthropic::MODEL);
     Trail::flush();
 
     $run = Captured::read($response->invocationId)->assertVolatileColumns();
@@ -187,7 +182,7 @@ describe('structured output', function () {
     it('stores the structured data on the agent span for native structured output', function () {
         FakeAnthropic::script([FakeAnthropic::text('{"answer":"42"}')]);
 
-        $response = (new StructuredAgent)->prompt('Hi', model: REQUESTED);
+        $response = (new StructuredAgent)->prompt('Hi', model: FakeAnthropic::MODEL);
         Trail::flush();
 
         $run = Captured::read($response->invocationId)->assertVolatileColumns();
@@ -195,7 +190,7 @@ describe('structured output', function () {
         expect($run->trace())->toBe(Captured::expectedTrace([
             'name' => 'StructuredAgent',
             'agent_class' => StructuredAgent::class,
-            'model' => REQUESTED,
+            'model' => FakeAnthropic::MODEL,
             'span_count' => 2,
             'input_tokens' => 10,
             'output_tokens' => 5,
@@ -216,7 +211,7 @@ describe('structured output', function () {
             FakeAnthropic::toolUse([['id' => 'toolu_1', 'name' => 'output_structured_data', 'input' => ['answer' => '42']]]),
         ]);
 
-        $response = (new StructuredAgent)->prompt('Hi', model: REQUESTED);
+        $response = (new StructuredAgent)->prompt('Hi', model: FakeAnthropic::MODEL);
         Trail::flush();
 
         $run = Captured::read($response->invocationId)->assertVolatileColumns();
@@ -247,7 +242,7 @@ describe('with provider usage', function () {
     });
 
     it('stores usage as reported and prices each step at the model that answered', function () {
-        $response = (new AssistantAgent([new LookupTool]))->prompt('Hi', model: REQUESTED);
+        $response = (new AssistantAgent([new LookupTool]))->prompt('Hi', model: FakeAnthropic::MODEL);
         Trail::flush();
 
         $run = Captured::read($response->invocationId)->assertVolatileColumns();
@@ -257,7 +252,7 @@ describe('with provider usage', function () {
         // Step 1 answered as claude-test-responding: 7 x 10 + 3 x 50, per million tokens (at the requested model's rates it would be 0.000066).
         expect($run->trace())->toBe(Captured::expectedTrace([
             'agent_class' => AssistantAgent::class,
-            'model' => REQUESTED,
+            'model' => FakeAnthropic::MODEL,
             'input_tokens' => 155,
             'output_tokens' => 23,
             'cache_read_tokens' => 40,
@@ -269,15 +264,15 @@ describe('with provider usage', function () {
         ]))->and($spans[1])->toBe(Captured::expectedSpan([
             'sequence' => 2,
             'step_number' => 0,
-            'model' => REQUESTED,
-            'responding_model' => REQUESTED,
+            'model' => FakeAnthropic::MODEL,
+            'responding_model' => FakeAnthropic::MODEL,
             'input_tokens' => 148,
             'output_tokens' => 20,
             'cache_read_tokens' => 40,
             'cache_write_tokens' => 8,
             'reasoning_tokens' => null,
             'cost' => 0.000642,
-            'input' => promptOnly(),
+            'input' => Steps::promptOnly(),
             'output' => [
                 'text' => '',
                 'tool_calls' => [['id' => 'toolu_1', 'name' => 'lookup', 'arguments' => ['query' => 'laravel']]],
@@ -286,7 +281,7 @@ describe('with provider usage', function () {
         ]))->and($spans[3])->toBe(Captured::expectedSpan([
             'sequence' => 4,
             'step_number' => 1,
-            'model' => REQUESTED,
+            'model' => FakeAnthropic::MODEL,
             'responding_model' => 'claude-test-responding',
             'input_tokens' => 7,
             'output_tokens' => 3,
@@ -294,7 +289,7 @@ describe('with provider usage', function () {
             'cache_write_tokens' => null,
             'reasoning_tokens' => null,
             'cost' => 0.00022,
-            'input' => afterLookup('toolu_1', 'laravel'),
+            'input' => Steps::afterLookup('toolu_1', 'laravel'),
             'output' => ['text' => 'Done', 'tool_calls' => [], 'finish_reason' => 'stop'],
         ]))->and([$spans[0]['cost'], $spans[2]['cost']])->toBe([null, null]);
     });
@@ -302,7 +297,7 @@ describe('with provider usage', function () {
     it('leaves a step unpriced, not free, when its model has no price', function () {
         config(['trail.pricing.anthropic' => ['claude-test-requested' => ['input' => 3.0, 'output' => 15.0, 'cache_read' => 0.30, 'cache_write' => 3.75]]]);
 
-        $response = (new AssistantAgent([new LookupTool]))->prompt('Hi', model: REQUESTED);
+        $response = (new AssistantAgent([new LookupTool]))->prompt('Hi', model: FakeAnthropic::MODEL);
         Trail::flush();
 
         $run = Captured::read($response->invocationId);
@@ -319,7 +314,7 @@ describe('with provider usage', function () {
     it('reports a step as unpriced when no price is configured for its model', function () {
         config(['trail.pricing.anthropic' => ['some-other-model' => ['input' => 1.0, 'output' => 1.0]]]);
 
-        $response = (new AssistantAgent([new LookupTool]))->prompt('Hi', model: REQUESTED);
+        $response = (new AssistantAgent([new LookupTool]))->prompt('Hi', model: FakeAnthropic::MODEL);
         Trail::flush();
 
         $run = Captured::read($response->invocationId);
@@ -334,7 +329,7 @@ describe('with provider usage', function () {
 it('stores an anonymous agent without its class name', function () {
     FakeAnthropic::script([FakeAnthropic::text('Hello')]);
 
-    $response = (new class extends AssistantAgent {})->prompt('Hi', model: REQUESTED);
+    $response = (new class extends AssistantAgent {})->prompt('Hi', model: FakeAnthropic::MODEL);
     Trail::flush();
 
     $run = Captured::read($response->invocationId)->assertVolatileColumns();
@@ -349,8 +344,8 @@ it('stores an anonymous agent without its class name', function () {
 it('keeps two runs in one process apart and holds nothing after a flush', function () {
     AssistantAgent::fake(['one', 'two']);
 
-    $first = (new AssistantAgent)->prompt('First', model: REQUESTED);
-    $second = (new AssistantAgent)->prompt('Second', model: REQUESTED);
+    $first = (new AssistantAgent)->prompt('First', model: FakeAnthropic::MODEL);
+    $second = (new AssistantAgent)->prompt('Second', model: FakeAnthropic::MODEL);
 
     Trail::flush();
 
@@ -384,7 +379,7 @@ it('writes a trace that is still running when flushed, and ignores what the run 
 
     AssistantAgent::fake([new ToolCall('call_1', 'lookup', ['query' => 'x']), 'Done']);
 
-    $response = (new AssistantAgent([$tool]))->prompt('Hi', model: REQUESTED);
+    $response = (new AssistantAgent([$tool]))->prompt('Hi', model: FakeAnthropic::MODEL);
 
     $run = Captured::read($response->invocationId);
     $spans = $run->spans();

@@ -80,6 +80,18 @@ final class Captured
     }
 
     /**
+     * The stored duration of the span at the given 0-based position in sequence order.
+     */
+    public function duration(int $position): float
+    {
+        $duration = $this->spans[$position]['duration_ms'] ?? null;
+
+        Assert::assertIsFloat($duration);
+
+        return $duration;
+    }
+
+    /**
      * Check the columns that cannot be stated exactly: the trace id, generated span ids, and that
      * timing was captured and is consistent.
      */

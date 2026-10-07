@@ -1,6 +1,8 @@
 <?php
 
 use Astro\Trail\Capture\Payload;
+use Astro\Trail\Tests\Fixtures\Capture\PayloadPlain;
+use Astro\Trail\Tests\Fixtures\Capture\PayloadSuit;
 use Illuminate\Contracts\Support\Arrayable;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Messages\AssistantMessage;
@@ -10,16 +12,6 @@ use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\ToolResult;
 use Laravel\Ai\ToolChoice;
-
-enum PayloadSuit: string
-{
-    case Hearts = 'hearts';
-}
-
-enum PayloadPlain
-{
-    case One;
-}
 
 it('keeps scalars and null as they are', function () {
     expect(Payload::value('text'))->toBe('text')
@@ -94,9 +86,6 @@ it('stops at 32 levels instead of recursing forever', function () {
         $deep = [$deep];
     }
 
-    $self = new ArrayObject;
-    $self['me'] = $self;
-
     $captured = Payload::value($deep);
     $levels = 0;
 
@@ -105,9 +94,102 @@ it('stops at 32 levels instead of recursing forever', function () {
         $levels++;
     }
 
-    expect($captured)->toBeNull()
-        ->and($levels)->toBe(32)
-        ->and(json_encode(Payload::value($self)))->toBeString();
+    expect($captured)->toBeNull()->and($levels)->toBe(32);
+});
+
+it('cuts a cycle where it closes', function () {
+    $cycle = new class implements JsonSerializable
+    {
+        public function jsonSerialize(): mixed
+        {
+            return [$this];
+        }
+    };
+
+    expect(Payload::value($cycle))->toBe([['class' => 'JsonSerializable@anonymous']]);
+});
+
+it('does not fan out exponentially through an object that returns itself twice', function () {
+    $fan = new class implements JsonSerializable
+    {
+        public function jsonSerialize(): mixed
+        {
+            return [$this, $this];
+        }
+    };
+
+    $started = hrtime(true);
+    $captured = Payload::value($fan);
+
+    expect($captured)->toBe([['class' => 'JsonSerializable@anonymous'], ['class' => 'JsonSerializable@anonymous']])
+        ->and((hrtime(true) - $started) / 1e9)->toBeLessThan(1.0);
+});
+
+it('stops at a node budget on a very wide value', function () {
+    $captured = Payload::value(array_fill(0, 25_000, 'x'));
+
+    $kept = count(array_filter($captured, fn ($item) => $item === 'x'));
+
+    expect($captured)->toHaveCount(25_000)
+        ->and($kept)->toBeGreaterThan(9_000)->toBeLessThanOrEqual(10_000)
+        ->and($captured[24_999])->toBeNull();
+});
+
+it('does not share a budget between calls', function () {
+    Payload::value(array_fill(0, 25_000, 'x'));
+
+    expect(Payload::value(['a', 'b']))->toBe(['a', 'b']);
+});
+
+it('stores the class of an object whose own methods throw', function () {
+    $json = new class implements JsonSerializable
+    {
+        public function jsonSerialize(): mixed
+        {
+            throw new RuntimeException('boom');
+        }
+    };
+
+    $arrayable = new class implements Arrayable
+    {
+        public function toArray(): array
+        {
+            throw new RuntimeException('boom');
+        }
+    };
+
+    $stringable = new class implements Stringable
+    {
+        public function __toString(): string
+        {
+            throw new RuntimeException('boom');
+        }
+    };
+
+    expect(Payload::value([$json, $arrayable, $stringable]))->toBe([['class' => 'JsonSerializable@anonymous'], ['class' => 'Illuminate\\Contracts\\Support\\Arrayable@anonymous'], ['class' => 'Stringable@anonymous']]);
+});
+
+it('stores a model-like object as a structure, not as its JSON string', function () {
+    $model = new class implements Arrayable, JsonSerializable, Stringable
+    {
+        public function toArray(): array
+        {
+            return ['id' => 1];
+        }
+
+        public function jsonSerialize(): mixed
+        {
+            return $this->toArray();
+        }
+
+        public function __toString(): string
+        {
+            return '{"id":1}';
+        }
+    };
+
+    expect(Payload::value($model))->toBe(['id' => 1])
+        ->and(Payload::value(collect(['a' => 1])))->toBe(['a' => 1]);
 });
 
 it('captures messages with their tool calls and results, and attachments as a count', function () {
