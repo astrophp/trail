@@ -1,0 +1,4 @@
+/* The app's stylesheet leaves out the catalogue's sources; the catalogue adds them back. */
+@import '../index.css';
+@source '.';
+@source '../**/*.catalogue.tsx';

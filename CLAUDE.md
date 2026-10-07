@@ -37,6 +37,7 @@ The public roadmap is `ROADMAP.md`. Read it before starting any work.
 - ID columns are `string` (SDK ids are 36-char uuid7), never `char`/`ulid`.
 - Use shadcn primitives and theme tokens; never hand-roll a primitive shadcn provides and never
   hardcode hex/px values in components.
+- Frontend structure and rules: `docs/frontend.md`. Read it before touching `resources/js`.
 
 ## Workflow
 
