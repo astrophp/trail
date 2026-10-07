@@ -14,18 +14,23 @@ use Astro\Trail\Tests\Fixtures\Capture\Queue\MemoryQueue;
 use Astro\Trail\Tests\Fixtures\Capture\Queue\NoopJob;
 use Astro\Trail\Tests\Fixtures\Sdk\FakeAnthropic;
 use Astro\Trail\Tests\Fixtures\Storage\DatabaseStoreProbe;
+use Astro\Trail\Tests\Fixtures\Storage\Transactions;
 use Astro\Trail\Tests\Fixtures\Tools\CallbackTool;
 use Astro\Trail\Tests\Fixtures\Tools\LookupTool;
 use Astro\Trail\TrailServiceProvider;
 use Illuminate\Contracts\Events\Dispatcher;
+use Illuminate\Database\Events\TransactionBeginning;
+use Illuminate\Queue\Events\JobFailed;
 use Illuminate\Queue\Events\JobProcessed;
 use Illuminate\Queue\Events\Looping;
 use Illuminate\Queue\WorkerOptions;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Route;
 use Laravel\Ai\Responses\Data\ToolCall;
+use Laravel\Octane\Contracts\OperationTerminated;
 
 /*
 |--------------------------------------------------------------------------
@@ -108,7 +113,7 @@ it('writes nothing but the start row until a flush', function () {
         ->and(array_column($run->spans(), 'type'))->toBe(['agent', 'step']);
 });
 
-it('issues exactly one query while a run is in flight, and writes the rest at the flush', function () {
+it('issues exactly one query and begins no transaction while a run is in flight, and writes the rest at the flush', function () {
     config(['trail.pricing.anthropic' => [FakeAnthropic::MODEL => ['input' => 3.0, 'output' => 15.0]]]);
 
     FakeAnthropic::script([
@@ -117,24 +122,33 @@ it('issues exactly one query while a run is in flight, and writes the rest at th
         FakeAnthropic::text('Done', usage: ['input_tokens' => 140, 'output_tokens' => 5]),
     ]);
 
-    $queries = [];
-    DB::listen(function ($query) use (&$queries) {
-        $queries[] = $query->sql;
+    // With no application transaction open, which is how a request or job really runs.
+    Transactions::outside(function () {
+        $queries = [];
+        $began = 0;
+
+        DB::listen(function ($query) use (&$queries) {
+            $queries[] = $query->sql;
+        });
+        Event::listen(TransactionBeginning::class, function () use (&$began) {
+            $began++;
+        });
+
+        (new AssistantAgent([new LookupTool, new LookupTool]))->prompt('Hi', model: FakeAnthropic::MODEL);
+
+        expect($queries)->toHaveCount(1)
+            ->and($queries[0])->toMatch('/^insert into ["`]?trail_traces/i')
+            ->and($began)->toBe(0);
+
+        $queries = [];
+        Trail::flush();
+
+        $run = Captured::read(DB::table('trail_traces')->value('id'));
+
+        expect(implode("\n", $queries))->toContain('trail_spans')
+            ->and($run->trace()['span_count'])->toBe(6)
+            ->and($run->trace()['cost'])->not->toBeNull();
     });
-
-    (new AssistantAgent([new LookupTool, new LookupTool]))->prompt('Hi', model: FakeAnthropic::MODEL);
-
-    expect($queries)->toHaveCount(1)
-        ->and($queries[0])->toMatch('/^insert into ["`]?trail_traces/i');
-
-    $queries = [];
-    Trail::flush();
-
-    $run = Captured::read(DB::table('trail_traces')->value('id'));
-
-    expect(implode("\n", $queries))->toContain('trail_spans')
-        ->and($run->trace()['span_count'])->toBe(6)
-        ->and($run->trace()['cost'])->not->toBeNull();
 });
 
 it('flushes when a request ends', function () {
@@ -146,6 +160,38 @@ it('flushes when a request ends', function () {
 
     expect($run->trace()['status'])->toBe('completed')
         ->and(array_column($run->spans(), 'sequence'))->toBe([1, 2]);
+});
+
+describe('after the response', function () {
+    it('flushes a run that a job dispatched after the response started', function () {
+        AssistantAgent::fake(['Hello']);
+        Route::get('/later', function () {
+            dispatch(new AgentJob('succeed'))->afterResponse();
+
+            return 'sent';
+        });
+
+        $this->get('/later')->assertOk()->assertSee('sent');
+
+        $run = Captured::read(($this->traceIds)()[0])->assertVolatileColumns();
+
+        expect($run->trace()['status'])->toBe('completed')->and($run->trace()['span_count'])->toBe(2);
+    });
+
+    it('flushes a run that a closure dispatched after the response started', function () {
+        AssistantAgent::fake(['Hello']);
+        Route::get('/later', function () {
+            dispatch(fn () => (new AssistantAgent)->prompt('Hi'))->afterResponse();
+
+            return 'sent';
+        });
+
+        $this->get('/later')->assertOk();
+
+        $run = Captured::read(($this->traceIds)()[0])->assertVolatileColumns();
+
+        expect($run->trace()['status'])->toBe('completed')->and($run->trace()['span_count'])->toBe(2);
+    });
 });
 
 describe('queued jobs', function () {
@@ -184,6 +230,35 @@ describe('queued jobs', function () {
 
         expect($run->trace()['status'])->toBe('completed')
             ->and($this->queue->size())->toBe(1);
+    });
+
+    it('write a run started by the failed hook of a job that fails for good', function () {
+        AssistantAgent::fake(['Hello']);
+        Exceptions::fake();
+        dispatch((new AgentJob('fail-hook'))->onConnection('memory'));
+
+        ($this->work)();
+
+        $run = Captured::read(($this->traceIds)()[0])->assertVolatileColumns();
+
+        expect($run->trace()['status'])->toBe('completed')->and($run->trace()['span_count'])->toBe(2);
+    });
+
+    it('flush when a job-failed event is raised by itself', function () {
+        // In a worker the exception event follows this one, so only an event raised on its own
+        // (a failure recorded outside the worker's own handling) shows that this listener flushes.
+        // The event is built by hand around a real, non-sync job.
+        dispatch((new AgentJob('succeed'))->onConnection('memory'));
+        $job = $this->queue->pop();
+
+        AssistantAgent::fake(['Hello']);
+        (new AssistantAgent)->prompt('Hi');
+
+        expect($this->probe->spanCount())->toBe(0);
+
+        event(new JobFailed('memory', $job, new RuntimeException('failed elsewhere')));
+
+        expect($this->probe->spanCount())->toBe(2);
     });
 
     it('write a queued prompt from the worker, with no explicit flush', function () {
@@ -450,6 +525,20 @@ describe('flush points', function () {
         expect($this->probe->spanCount())->toBe(0);
 
         event($name);
+
+        expect($this->probe->spanCount())->toBe(2);
+    });
+
+    it('delivers an event object that implements the Octane interface to the listener', function () {
+        // The real interface is not installed, so a stand-in declares it for this test only.
+        require_once __DIR__.'/../../Fixtures/Capture/Octane/OperationTerminated.php';
+
+        AssistantAgent::fake(['Hello']);
+        (new AssistantAgent)->prompt('Hi');
+
+        expect($this->probe->spanCount())->toBe(0);
+
+        event(new class implements OperationTerminated {});
 
         expect($this->probe->spanCount())->toBe(2);
     });

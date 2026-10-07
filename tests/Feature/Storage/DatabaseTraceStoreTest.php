@@ -6,10 +6,13 @@ use Astro\Trail\Storage\Contracts\TraceStore;
 use Astro\Trail\Storage\DatabaseTraceStore;
 use Astro\Trail\Tests\Fixtures\Storage\Records;
 use Astro\Trail\Tests\Fixtures\Storage\Rows;
+use Astro\Trail\Tests\Fixtures\Storage\Transactions;
+use Illuminate\Database\Events\TransactionBeginning;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 
 uses(RefreshDatabase::class);
 
@@ -275,6 +278,42 @@ it('does not fail or change anything when starting a trace that already exists',
 
     expect((array) DB::table('trail_traces')->where('id', 'trace-1')->first())->toBe($before)
         ->and(DB::table('trail_traces')->count())->toBe(1);
+});
+
+it('starts a trace with a plain insert when no transaction is open', function () {
+    Transactions::outside(function () {
+        $began = 0;
+        Event::listen(TransactionBeginning::class, function () use (&$began) {
+            $began++;
+        });
+
+        app(TraceStore::class)->start(Records::trace(['id' => 'trace-1', 'name' => 'Started']));
+
+        expect($began)->toBe(0)
+            ->and(DB::table('trail_traces')->where('id', 'trace-1')->value('name'))->toBe('Started')
+            ->and(DB::connection()->transactionLevel())->toBe(0);
+    });
+});
+
+it('does not throw or overwrite when a second start finds the trace with no transaction open', function () {
+    Transactions::outside(function () {
+        app(TraceStore::class)->start(Records::trace(['id' => 'trace-1', 'name' => 'First']));
+        app(TraceStore::class)->start(Records::trace(['id' => 'trace-1', 'name' => 'Second']));
+
+        expect(DB::table('trail_traces')->count())->toBe(1)
+            ->and(DB::table('trail_traces')->value('name'))->toBe('First');
+    });
+});
+
+it('keeps the application transaction usable when a start inside it finds a duplicate', function () {
+    DB::transaction(function () {
+        app(TraceStore::class)->start(Records::trace(['id' => 'trace-1', 'name' => 'First']));
+        app(TraceStore::class)->start(Records::trace(['id' => 'trace-1', 'name' => 'Second']));
+
+        // On Postgres a failed statement aborts the transaction unless it ran in a savepoint.
+        expect(DB::table('trail_traces')->count())->toBe(1)
+            ->and(DB::table('trail_traces')->value('name'))->toBe('First');
+    });
 });
 
 it('updates a trace row that was inserted by someone else', function () {

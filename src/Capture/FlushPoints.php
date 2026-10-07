@@ -25,6 +25,15 @@ final class FlushPoints
     {
         $app->terminating(static function () use ($app): void {
             self::flush($app);
+
+            // Terminating callbacks run in the order they were added, and a job dispatched after the
+            // response adds its own while the request is still running. This one is added during
+            // termination, so it runs after all of them. It adds nothing further.
+            Guard::run(function () use ($app): void {
+                $app->terminating(static function () use ($app): void {
+                    self::flush($app);
+                });
+            });
         });
 
         $events->listen(JobProcessed::class, static function (JobProcessed $event) use ($app): void {

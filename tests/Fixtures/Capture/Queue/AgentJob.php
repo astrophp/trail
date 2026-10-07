@@ -7,6 +7,7 @@ use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use RuntimeException;
+use Throwable;
 
 /**
  * A queued job that prompts an agent and then succeeds, fails for good or fails and is retried.
@@ -25,10 +26,22 @@ class AgentJob implements ShouldQueue
 
     public function handle(): void
     {
-        (new AssistantAgent)->prompt('Hi');
+        if ($this->mode !== 'fail-hook') {
+            (new AssistantAgent)->prompt('Hi');
+        }
 
         if ($this->mode !== 'succeed') {
             throw new RuntimeException('The job failed.');
+        }
+    }
+
+    /**
+     * Runs after the exception event and before the job-failed event, when the job fails for good.
+     */
+    public function failed(Throwable $exception): void
+    {
+        if ($this->mode === 'fail-hook') {
+            (new AssistantAgent)->prompt('Hi');
         }
     }
 }
