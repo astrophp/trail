@@ -38,7 +38,8 @@
     },
     "autoload-dev": {
         "psr-4": {
-            "Astro\\Trail\\Tests\\": "tests/"
+            "Astro\\Trail\\Tests\\": "tests/",
+            "Workbench\\App\\": "workbench/app/"
         }
     },
     "extra": {
@@ -60,6 +61,16 @@
     "minimum-stability": "stable",
     "prefer-stable": true,
     "scripts": {
+        "build": [
+            "@php vendor/bin/testbench package:create-sqlite-db --ansi",
+            "@php vendor/bin/testbench migrate --ansi"
+        ],
+        "serve": [
+            "Composer\\Config::disableProcessTimeout",
+            "@php -r \"@unlink('vendor/orchestra/testbench-core/laravel/.env');\"",
+            "@build",
+            "@php vendor/bin/testbench serve --ansi"
+        ],
         "lint": "pint",
         "test:lint": "pint --test",
         "test:types": "phpstan analyse --memory-limit=-1",

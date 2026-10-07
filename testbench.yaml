@@ -1,0 +1,11 @@
+providers:
+  - Laravel\Ai\AiServiceProvider
+  - Astro\Trail\TrailServiceProvider
+  - Workbench\App\Providers\WorkbenchServiceProvider
+
+# Routes, views, commands and the SDK's migrations are registered by WorkbenchServiceProvider.
+# "composer build" creates the database and migrates it, never wipes it: recorded traces survive a
+# restart, and "php vendor/bin/testbench trail:clear" deletes them.
+workbench:
+  start: '/'
+  install: true

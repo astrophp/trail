@@ -71,6 +71,16 @@ npm run build
 
 The compiled dashboard in `dist/` is committed; rebuild it whenever `resources/js` changes.
 
+### Workbench
+
+`composer serve` boots a small Testbench app with Trail installed, at `http://localhost:8000`. Its
+landing page and `php vendor/bin/testbench workbench:run --all` run agent scenarios (tool calls,
+sub-agents, failures, failover, streaming, approvals, embeddings, ...) through the real SDK, so
+everything Trail shows was recorded by Trail. Nothing is seeded, and traces survive restarts; wipe
+them with `php vendor/bin/testbench trail:clear`. With no provider key the scenarios run offline
+against scripted provider responses; copy `workbench/.env.example` to `workbench/.env` and set
+`ANTHROPIC_API_KEY` or `OPENAI_API_KEY` to run those that can against a real provider.
+
 ## Security
 
 Please see [SECURITY.md](SECURITY.md).

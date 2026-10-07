@@ -1,0 +1,46 @@
+<?php
+
+namespace Workbench\App\Scenarios\Catalog;
+
+use Astro\Trail\Tests\Fixtures\Sdk\FakeAnthropic;
+use Workbench\App\Agents\SupportAssistant;
+use Workbench\App\Scenarios\Backend;
+
+class Failover extends Base
+{
+    public function key(): string
+    {
+        return 'failover';
+    }
+
+    public function title(): string
+    {
+        return 'Failover that recovers';
+    }
+
+    public function description(): string
+    {
+        return 'The first provider is overloaded, the backup provider answers, and the run completes.';
+    }
+
+    public function supportsLive(): bool
+    {
+        return false;
+    }
+
+    public function run(Backend $backend): void
+    {
+        $backend->script([
+            FakeAnthropic::error(529, 'Overloaded', 'overloaded_error'),
+            FakeAnthropic::text(
+                'Standard shipping inside the US takes 3 to 5 business days.',
+                ['input_tokens' => 367, 'output_tokens' => 29],
+            ),
+        ]);
+
+        (new SupportAssistant)->prompt(
+            'How long does standard shipping take?',
+            provider: ['anthropic' => 'claude-sonnet-5-5', 'backup' => 'claude-sonnet-5-5'],
+        );
+    }
+}

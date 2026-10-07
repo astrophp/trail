@@ -5,6 +5,7 @@ use Astro\Trail\Tests\Fixtures\Sdk\DisablesTrail;
 use Astro\Trail\Tests\Fixtures\Sdk\MigratesLaravelTables;
 use Astro\Trail\Tests\Fixtures\Sdk\MigratesSdkTables;
 use Astro\Trail\Tests\Fixtures\Sdk\ObservesSdk;
+use Astro\Trail\Tests\Fixtures\Workbench\BootsWorkbench;
 use Astro\Trail\Tests\TestCase;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
@@ -16,3 +17,4 @@ uses(MigratesSdkTables::class)->in('Feature/Capture/ApprovalCaptureTest.php', 'F
 uses(DisablesTrail::class)->in('Feature/Capture/MasterSwitchTest.php');
 uses(MigratesLaravelTables::class)->in('Feature/Users');
 uses(RefreshDatabase::class)->in('Feature/Users');
+uses(BootsWorkbench::class, RefreshDatabase::class)->in('Feature/Workbench');
