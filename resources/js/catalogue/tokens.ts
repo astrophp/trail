@@ -77,15 +77,21 @@ export const textPairs: TextPair[] = [
     ...pairsOn('primary-foreground', ['primary', 'primary-hover']),
     ...pairsOn('primary-ink', [
         'background',
+        'card',
         'sidebar',
         'primary-soft',
         'accent',
     ]),
     ...pairsOn('sidebar-accent-foreground', ['sidebar-accent']),
-    ...pairsOn('success', ['background', 'card', 'success-soft']),
-    ...pairsOn('destructive', ['background', 'card', 'destructive-soft']),
-    ...pairsOn('warning', ['background', 'card', 'warning-soft']),
-    ...pairsOn('info', ['background', 'card', 'info-soft']),
+    ...pairsOn('success', ['background', 'card', 'accent', 'success-soft']),
+    ...pairsOn('destructive', [
+        'background',
+        'card',
+        'accent',
+        'destructive-soft',
+    ]),
+    ...pairsOn('warning', ['background', 'card', 'accent', 'warning-soft']),
+    ...pairsOn('info', ['background', 'card', 'accent', 'info-soft']),
 ]
 
 /** Theme variables of one block of index.css (`:root` or `.dark`), by name without the dashes. */

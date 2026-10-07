@@ -1,0 +1,71 @@
+import type { Cost } from '@/api/types'
+import { formatCost } from '@/lib/format'
+import { cn } from '@/lib/utils'
+
+type CostValueProps = {
+    cost: Cost
+    className?: string
+}
+
+/** What a run cost. A cost that is not known says why, in words; it never shows an amount that is not the answer. */
+export function CostValue({ cost, className }: CostValueProps) {
+    switch (cost.state) {
+        case 'estimated':
+            return (
+                <span
+                    data-slot="cost-value"
+                    className={cn('tabular-nums', className)}
+                >
+                    {formatCost(cost.amount)}
+                </span>
+            )
+        case 'partial':
+            return (
+                <span
+                    data-slot="cost-value"
+                    className={cn('flex flex-col', className)}
+                >
+                    <span className="tabular-nums">
+                        {formatCost(cost.amount)}
+                    </span>
+                    <span
+                        title="Covers only the steps that could be priced"
+                        className="text-caption text-warning"
+                    >
+                        Partial
+                        <span className="sr-only">
+                            , covers only the steps that could be priced
+                        </span>
+                    </span>
+                </span>
+            )
+        case 'unpriced':
+            return (
+                <span
+                    data-slot="cost-value"
+                    className={cn('text-warning', className)}
+                >
+                    Unpriced
+                </span>
+            )
+        case 'pending':
+            // The amount so far is deliberately not shown: it is not what the run cost.
+            return (
+                <span
+                    data-slot="cost-value"
+                    className={cn('text-muted-foreground', className)}
+                >
+                    Pending
+                </span>
+            )
+        case 'not_captured':
+            return (
+                <span
+                    data-slot="cost-value"
+                    className={cn('text-muted-foreground', className)}
+                >
+                    Not captured
+                </span>
+            )
+    }
+}
