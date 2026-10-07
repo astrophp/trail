@@ -40,9 +40,13 @@ class Recorder
     /** @var array<string, RunBuffer> */
     private array $buffers = [];
 
+    /** How many traces a process with no flush point may hold before it writes the finished ones. */
+    private const MAX_BUFFERED_TRACES = 100;
+
     public function __construct(
         private readonly Container $container,
         private readonly CostCalculator $costs,
+        private readonly int $maxBufferedTraces = self::MAX_BUFFERED_TRACES,
     ) {}
 
     public function agentStarting(PromptingAgent $event): void
@@ -88,7 +92,13 @@ class Recorder
         $buffer = $this->bufferFor($event, $span);
         $buffer->open($span);
 
-        $this->runs[$event->invocationId] = new Run($event->invocationId, $buffer, $span);
+        $run = new Run($event->invocationId, $buffer, $span);
+        $this->runs[$event->invocationId] = $run;
+
+        if ($run->isRoot()) {
+            // The only query issued while a run is in flight: it makes the run visible as it starts.
+            Guard::run(fn () => $this->container->make(TraceStore::class)->start($buffer->trace()));
+        }
     }
 
     public function stepStarting(StartingStep $event): void
@@ -208,11 +218,8 @@ class Recorder
         }
 
         // The run is finished whatever happens next, so it leaves the recorder before anything can fail.
+        // Its trace stays buffered until the next flush.
         unset($this->runs[$event->invocationId]);
-
-        if ($run->isRoot()) {
-            unset($this->buffers[$run->buffer->id]);
-        }
 
         $now = Carbon::now();
         $response = $event->response;
@@ -237,7 +244,7 @@ class Recorder
         $run->buffer->endedAt = $now;
         $run->buffer->durationMs = $duration;
 
-        $this->write($run->buffer);
+        Guard::run(fn () => $this->writeFinishedBeyondLimit());
     }
 
     /**
@@ -251,6 +258,27 @@ class Recorder
         $this->buffers = [];
 
         foreach ($buffers as $buffer) {
+            $this->write($buffer);
+        }
+    }
+
+    /**
+     * A process that never reaches a flush point would hold finished traces forever. Past the limit
+     * the finished ones are written and dropped; traces still being captured stay.
+     */
+    private function writeFinishedBeyondLimit(): void
+    {
+        if (count($this->buffers) <= $this->maxBufferedTraces) {
+            return;
+        }
+
+        foreach ($this->buffers as $id => $buffer) {
+            if (! $buffer->finished()) {
+                continue;
+            }
+
+            unset($this->buffers[$id]);
+
             $this->write($buffer);
         }
     }

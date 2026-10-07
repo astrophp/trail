@@ -136,13 +136,14 @@ it('loses only the trace that fails to store when several are flushed together',
 
     expect((new AssistantAgent([$outer]))->prompt('A')->text)->toBe('A done');
 
-    $probe = new DatabaseStoreProbe;
-    $stored = DB::table('trail_spans')->where('type', 'agent')->pluck('input');
+    // Both runs inserted their start row. Run "A" failed to store its spans and stays a running trace
+    // with none; run "B" is complete.
+    $traces = DB::table('trail_traces')->orderBy('started_at')->pluck('status')->all();
+    $spans = DB::table('trail_spans')->where('type', 'agent')->pluck('input');
 
     Exceptions::assertReportedCount(1);
-    expect($probe->traceCount())->toBe(1)
-        ->and($stored)->toHaveCount(1)
-        ->and(json_decode((string) $stored[0], true)['prompt'])->toBe('B');
+    expect($traces)->toBe(['running', 'running'])->and($spans)->toHaveCount(1)
+        ->and(json_decode((string) $spans[0], true)['prompt'])->toBe('B');
 });
 
 it('ignores events for an invocation it never saw start', function () {
