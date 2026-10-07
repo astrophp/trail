@@ -1,6 +1,7 @@
 import { describe, expect, expectTypeOf, it } from 'vitest'
 import { z } from 'zod'
 import type {
+    BookmarkResponse,
     Cost,
     CostState,
     IssueKind,
@@ -160,6 +161,10 @@ const traceListResponse = z.strictObject({
     slow_threshold_ms: nullable(z.number()),
 })
 
+const bookmarkResponse = z.strictObject({
+    data: z.strictObject({ trace_id: z.string(), bookmarked: z.boolean() }),
+})
+
 // The schemas and the types are the same type, both ways.
 describe('types', () => {
     it('match the schemas', () => {
@@ -180,6 +185,9 @@ describe('types', () => {
         expectTypeOf<
             z.infer<typeof traceListResponse>
         >().toEqualTypeOf<TraceListResponse>()
+        expectTypeOf<
+            z.infer<typeof bookmarkResponse>
+        >().toEqualTypeOf<BookmarkResponse>()
         expectTypeOf<
             NonNullable<z.infer<typeof trace>['issue_kind']>
         >().toEqualTypeOf<IssueKind>()
@@ -205,6 +213,15 @@ describe('tests/Contract/meta.json', () => {
     it('is what the API types describe', () => {
         expect(
             metaResponse.safeParse(contractFixture('meta')).error?.issues,
+        ).toBeUndefined()
+    })
+})
+
+describe('tests/Contract/bookmark.json', () => {
+    it('is what the API types describe', () => {
+        expect(
+            bookmarkResponse.safeParse(contractFixture('bookmark')).error
+                ?.issues,
         ).toBeUndefined()
     })
 })

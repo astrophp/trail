@@ -14,6 +14,8 @@ type CountTabsProps = {
     tabs: CountTab[]
     value: string
     onValueChange: (value: string) => void
+    /** Shown between the tab list and the panel, outside the panel: controls that apply to every tab. */
+    toolbar?: ReactNode
     /** The content the tabs control: shown in the panel of the current tab. */
     children?: ReactNode
     'aria-label': string
@@ -25,6 +27,7 @@ export function CountTabs({
     tabs,
     value,
     onValueChange,
+    toolbar,
     children,
     'aria-label': ariaLabel,
     className,
@@ -55,7 +58,7 @@ export function CountTabs({
                     <TabsTrigger
                         key={tab.value}
                         value={tab.value}
-                        className="h-auto flex-none gap-1.75 rounded-sm border-0 border-b-2 border-b-transparent px-1 py-2.75 text-xs text-muted-foreground after:hidden hover:text-foreground focus-visible:border-b-transparent focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none focus-visible:ring-inset group-data-[input=pointer]/tabs-list:focus-visible:ring-0 dark:text-muted-foreground data-active:border-b-primary data-active:text-primary-ink focus-visible:data-active:border-b-primary dark:data-active:text-primary-ink dark:group-data-[variant=line]/tabs-list:data-active:border-b-primary"
+                        className="h-auto flex-none gap-1.75 rounded-sm border-0 border-b-2 border-b-transparent px-1 pt-2.75 pb-3 text-xs text-muted-foreground after:hidden hover:text-foreground focus-visible:border-b-transparent focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none focus-visible:ring-inset group-data-[input=pointer]/tabs-list:focus-visible:ring-0 dark:text-muted-foreground data-active:border-b-primary data-active:text-primary-ink focus-visible:data-active:border-b-primary dark:data-active:text-primary-ink dark:group-data-[variant=line]/tabs-list:data-active:border-b-primary"
                     >
                         {tab.label}
                         {tab.count === undefined ? null : ' '}
@@ -66,6 +69,7 @@ export function CountTabs({
                     </TabsTrigger>
                 ))}
             </TabsList>
+            {toolbar}
             {/* Not a tab stop: the content has controls of its own, and an unfocusable panel needs no ring. */}
             <TabsContent value={value} tabIndex={-1}>
                 {children}

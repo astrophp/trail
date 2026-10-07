@@ -5,9 +5,11 @@ import type { CatalogueEntry } from '@/catalogue/types'
 function Specimen({
     initial = '',
     shortcutHint,
+    maxLength,
 }: {
     initial?: string
     shortcutHint?: string
+    maxLength?: number
 }) {
     const [value, setValue] = useState(initial)
 
@@ -18,6 +20,7 @@ function Specimen({
             value={value}
             onValueChange={setValue}
             shortcutHint={shortcutHint}
+            maxLength={maxLength}
         />
     )
 }
@@ -29,6 +32,10 @@ export const catalogue: CatalogueEntry = {
         {
             name: 'With a shortcut hint',
             Component: () => <Specimen shortcutHint="/" />,
+        },
+        {
+            name: 'With a maximum length of 12 (an input prop passed through)',
+            Component: () => <Specimen maxLength={12} />,
         },
         {
             name: 'With text (clear button)',

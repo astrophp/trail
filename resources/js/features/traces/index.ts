@@ -1,1 +1,1 @@
-export { TracesTable } from '@/features/traces/traces-table'
+export { TracesView } from '@/features/traces/traces-view'

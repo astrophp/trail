@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { CountTabs, type CountTab } from '@/components/patterns/count-tabs'
 import type { CatalogueEntry } from '@/catalogue/types'
 
@@ -9,7 +9,13 @@ const tabs: CountTab[] = [
     { value: 'unsorted', label: 'Unsorted' },
 ]
 
-function Specimen({ list = tabs }: { list?: CountTab[] }) {
+function Specimen({
+    list = tabs,
+    toolbar,
+}: {
+    list?: CountTab[]
+    toolbar?: ReactNode
+}) {
     const [value, setValue] = useState(list[0].value)
 
     return (
@@ -18,6 +24,7 @@ function Specimen({ list = tabs }: { list?: CountTab[] }) {
             tabs={list}
             value={value}
             onValueChange={setValue}
+            toolbar={toolbar}
         >
             <p className="pt-3 text-ui text-muted-foreground">
                 The {value} view.
@@ -32,6 +39,18 @@ export const catalogue: CatalogueEntry = {
         {
             name: 'Counts, a zero and an unknown count',
             Component: () => <Specimen />,
+        },
+        {
+            name: 'With a toolbar between the tabs and the panel',
+            Component: () => (
+                <Specimen
+                    toolbar={
+                        <p className="py-3 text-ui text-muted-foreground">
+                            Controls for every tab.
+                        </p>
+                    }
+                />
+            ),
         },
         {
             name: 'Overflowing row (scrolls sideways)',

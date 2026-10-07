@@ -19,6 +19,11 @@ const statuses: Record<Status, { label: string; Icon: LucideIcon }> = {
     awaiting_approval: { label: 'Awaiting approval', Icon: CirclePauseIcon },
 }
 
+/** The words for a status, for anything that names one outside a badge: a tab, a filter chip. */
+export function statusLabel(status: Status): string {
+    return statuses[status].label
+}
+
 const badge = cva(
     'inline-flex items-center gap-1.25 text-caption whitespace-nowrap',
     {

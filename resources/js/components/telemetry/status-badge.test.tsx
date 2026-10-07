@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import type { Status } from '@/api/types'
-import { StatusBadge } from '@/components/telemetry/status-badge'
+import { StatusBadge, statusLabel } from '@/components/telemetry/status-badge'
 
 const cases: [Status, string][] = [
     ['completed', 'Completed'],
@@ -17,6 +17,10 @@ describe('StatusBadge', () => {
 
         expect(screen.getByText(label)).toBeInTheDocument()
         expect(container.querySelector('svg')).toBeInTheDocument()
+    })
+
+    it.each(cases)('names %s as %s outside a badge', (status, label) => {
+        expect(statusLabel(status)).toBe(label)
     })
 
     it('gives every status its own label and icon, so colour is never the only difference', () => {

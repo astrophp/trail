@@ -436,7 +436,7 @@ describe('while the runs load', () => {
         expect(
             [...table.querySelectorAll('tbody td')].map((c) => c.textContent),
         ).toEqual(Array(8 * 7).fill(''))
-        expect(screen.queryByText(/traces$/)).not.toBeInTheDocument()
+        expect(screen.queryByText(/\d traces$/)).not.toBeInTheDocument()
         expect(screen.queryByText('Loading runs…')).not.toBeInTheDocument()
     })
 

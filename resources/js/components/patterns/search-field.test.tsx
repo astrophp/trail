@@ -1,6 +1,6 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import { SearchField } from '@/components/patterns/search-field'
 
@@ -30,7 +30,36 @@ function Controlled({
     )
 }
 
+function WithInputRef() {
+    const ref = useRef<HTMLInputElement>(null)
+
+    return (
+        <>
+            <SearchField
+                aria-label="Search traces"
+                value=""
+                onValueChange={() => {}}
+                inputRef={ref}
+            />
+            <button type="button" onClick={() => ref.current?.focus()}>
+                Focus the search
+            </button>
+        </>
+    )
+}
+
 describe('SearchField', () => {
+    it('hands its input to the caller through inputRef', async () => {
+        render(<WithInputRef />)
+        await userEvent.click(
+            screen.getByRole('button', { name: 'Focus the search' }),
+        )
+
+        expect(
+            screen.getByRole('searchbox', { name: 'Search traces' }),
+        ).toHaveFocus()
+    })
+
     it('is a search box with a name and a placeholder', () => {
         render(<Controlled />)
 
@@ -61,6 +90,37 @@ describe('SearchField', () => {
 
         expect(screen.getByRole('searchbox')).toBe(input)
         expect(input).toHaveFocus()
+    })
+
+    it('passes standard input props to the input', async () => {
+        const onBlur = vi.fn()
+        const onKeyDown = vi.fn()
+        const onCompositionStart = vi.fn()
+
+        render(
+            <SearchField
+                aria-label="Search traces"
+                value="abc"
+                onValueChange={() => {}}
+                maxLength={5}
+                onBlur={onBlur}
+                onKeyDown={onKeyDown}
+                onCompositionStart={onCompositionStart}
+            />,
+        )
+
+        const input = screen.getByRole('searchbox')
+
+        expect(input).toHaveAttribute('maxlength', '5')
+
+        await userEvent.click(input)
+        await userEvent.keyboard('{Enter}')
+        fireEvent.compositionStart(input)
+        await userEvent.tab()
+
+        expect(onKeyDown).toHaveBeenCalled()
+        expect(onCompositionStart).toHaveBeenCalled()
+        expect(onBlur).toHaveBeenCalled()
     })
 
     it('shows the clear button only when there is text', async () => {

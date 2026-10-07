@@ -49,6 +49,32 @@ describe('CountTabs', () => {
         )
     })
 
+    it('places a toolbar between the tab list and the panel, outside the panel', () => {
+        render(
+            <CountTabs
+                aria-label="Status"
+                tabs={tabs}
+                value="all"
+                onValueChange={() => {}}
+                toolbar={<p>Filters</p>}
+            >
+                <p>The list</p>
+            </CountTabs>,
+        )
+
+        const filters = screen.getByText('Filters')
+
+        expect(screen.getByRole('tablist')).toBeInTheDocument()
+        expect(
+            screen.getByRole('tablist').compareDocumentPosition(filters) &
+                Node.DOCUMENT_POSITION_FOLLOWING,
+        ).toBeTruthy()
+        expect(screen.getByRole('tabpanel')).not.toContainElement(filters)
+        expect(screen.getByRole('tabpanel')).toContainElement(
+            screen.getByText('The list'),
+        )
+    })
+
     it('shows no chip for an unknown count and 0 for zero', () => {
         render(<Controlled />)
 

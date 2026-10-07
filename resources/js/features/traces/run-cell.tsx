@@ -1,33 +1,49 @@
+import { useContext } from 'react'
 import type { Trace } from '@/api/types'
 import { RowLink } from '@/components/patterns/row-link'
 import { AgentIcon } from '@/components/telemetry/agent-icon'
+import { BookmarkToggle } from '@/components/telemetry/bookmark-toggle'
 import { TraceId } from '@/components/telemetry/trace-id'
+import { TableBusyContext } from '@/features/traces/table-busy'
+import { useBookmark } from '@/features/traces/use-bookmark'
 import { useTimeRangeLink } from '@/hooks/use-time-range'
 
 /** Who ran, what it was asked, and which run it is. The name leads to the run. */
 export function RunCell({ trace }: { trace: Trace }) {
     const linkTo = useTimeRangeLink()
+    const bookmark = useBookmark(trace.id)
+    const busy = useContext(TableBusyContext)
 
     return (
-        <div className="flex max-w-50 min-w-0 flex-col gap-1 leading-normal md:max-w-62.5">
-            <div className="flex min-w-0 items-center gap-2">
-                <AgentIcon type={trace.type} />
-                <RowLink
-                    to={linkTo(`/traces/${trace.id}`)}
-                    className="truncate"
-                >
-                    {trace.name}
-                </RowLink>
+        <div className="flex max-w-50 min-w-0 items-start gap-1 md:max-w-62.5">
+            <BookmarkToggle
+                trace={trace}
+                onPressedChange={bookmark}
+                disabled={busy}
+                // The icon's own edge sits on the cell's padding, like the header label; the 28
+                // pixel hit area overflows the name line (about 20 high) instead of stretching it.
+                className="-my-1 -ml-1.5 group-hover/row:text-foreground"
+            />
+            <div className="flex min-w-0 flex-col gap-1 leading-normal">
+                <div className="flex min-w-0 items-center gap-2">
+                    <AgentIcon type={trace.type} />
+                    <RowLink
+                        to={linkTo(`/traces/${trace.id}`)}
+                        className="truncate"
+                    >
+                        {trace.name}
+                    </RowLink>
+                </div>
+                {trace.prompt_excerpt === null ? null : (
+                    <p
+                        title={trace.prompt_excerpt}
+                        className="mt-1 truncate text-caption leading-normal text-muted-foreground"
+                    >
+                        {trace.prompt_excerpt}
+                    </p>
+                )}
+                <TraceId id={trace.id} className="leading-normal" />
             </div>
-            {trace.prompt_excerpt === null ? null : (
-                <p
-                    title={trace.prompt_excerpt}
-                    className="mt-1 truncate text-caption leading-normal text-muted-foreground"
-                >
-                    {trace.prompt_excerpt}
-                </p>
-            )}
-            <TraceId id={trace.id} className="leading-normal" />
         </div>
     )
 }
