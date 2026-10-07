@@ -67,3 +67,14 @@ it('does not loop on an exception chain that is very long', function () {
 
     expect(Failure::from($exception, ErrorSource::Step)->httpStatus)->toBeNull();
 });
+
+it('survives a request exception that carries no response', function () {
+    $broken = (new ReflectionClass(RequestException::class))->newInstanceWithoutConstructor();
+
+    $failure = Failure::from(new RateLimitedException('limited', 429, $broken), ErrorSource::Step);
+
+    // With no readable response, the mapped exception's own code is all there is.
+    expect($failure->httpStatus)->toBe(429)
+        ->and($failure->issueKind)->toBe(IssueKind::RateLimited)
+        ->and(Failure::from($broken, ErrorSource::Run)->httpStatus)->toBeNull();
+});

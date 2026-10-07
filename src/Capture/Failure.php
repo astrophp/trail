@@ -48,7 +48,11 @@ final readonly class Failure
 
         for ($depth = 0; $current !== null && $depth < self::MAX_CHAIN; $depth++) {
             if ($current instanceof RequestException) {
-                return $current->response->status();
+                $status = self::responseStatus($current);
+
+                if ($status !== null) {
+                    return $status;
+                }
             }
 
             $current = $current->getPrevious();
@@ -59,6 +63,19 @@ final readonly class Failure
         }
 
         return null;
+    }
+
+    /**
+     * Reading the response must never fail: an exception built without one (a subclass, a test
+     * double) would otherwise cost the whole failure, and the run would be left looking unfinished.
+     */
+    private static function responseStatus(RequestException $exception): ?int
+    {
+        try {
+            return $exception->response->status();
+        } catch (Throwable) {
+            return null;
+        }
     }
 
     private static function isMapped(Throwable $exception): bool
