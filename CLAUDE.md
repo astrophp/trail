@@ -49,6 +49,7 @@ The public roadmap is `ROADMAP.md`. Read it before starting any work.
 ```bash
 composer test        # pint --test, phpstan (max), pest
 composer lint        # pint (writes)
+npm run lint         # eslint + prettier --check
 npm run typecheck    # tsc
 npm test             # vitest
 npm run build        # resources/js -> dist/app.js + dist/app.css (commit the result)

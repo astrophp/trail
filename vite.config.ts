@@ -1,10 +1,14 @@
+import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vitest/config'
 
 // The dashboard ships as two committed files that the Blade layout inlines
 // (the Horizon/Telescope method), so the build must never split chunks.
 export default defineConfig({
-    plugins: [react()],
+    plugins: [react(), tailwindcss()],
+    resolve: {
+        tsconfigPaths: true,
+    },
     build: {
         outDir: 'dist',
         emptyOutDir: true,
@@ -19,6 +23,8 @@ export default defineConfig({
         },
     },
     test: {
+        environment: 'jsdom',
+        setupFiles: ['resources/js/setup-tests.ts'],
         include: ['resources/js/**/*.test.{ts,tsx}'],
     },
 })
