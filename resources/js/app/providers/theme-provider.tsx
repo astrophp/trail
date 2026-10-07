@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { ThemeContext, type Theme } from '@/hooks/use-theme'
+import { readStored, writeStored } from '@/lib/storage'
 
 const storageKey = 'trail-theme'
 const darkQuery = '(prefers-color-scheme: dark)'
@@ -7,13 +8,9 @@ const darkQuery = '(prefers-color-scheme: dark)'
 // The layout's inline script reads the same key before first paint and treats
 // anything other than 'light' or 'dark' as the system setting.
 function readStoredTheme(): Theme {
-    try {
-        const stored = localStorage.getItem(storageKey)
+    const stored = readStored(storageKey)
 
-        return stored === 'light' || stored === 'dark' ? stored : 'system'
-    } catch {
-        return 'system'
-    }
+    return stored === 'light' || stored === 'dark' ? stored : 'system'
 }
 
 function systemPrefersDark(): boolean {
@@ -45,11 +42,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     }, [resolvedTheme])
 
     function setTheme(next: Theme) {
-        try {
-            localStorage.setItem(storageKey, next)
-        } catch {
-            // Storage can be unavailable; the choice then lasts for this page only.
-        }
+        writeStored(storageKey, next)
 
         setThemeState(next)
     }

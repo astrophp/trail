@@ -1,5 +1,6 @@
-import { useEffect } from 'react'
+import { useEffect, useId } from 'react'
 import { Link, useLocation } from 'react-router'
+import { InFlightBadge, useInFlightCount } from '@/app/shell/in-flight-badge'
 import { LogoMark, LogoWordmark } from '@/app/shell/logo'
 import { navItems, resolveRoute } from '@/app/routes'
 import { ThemeToggle } from '@/components/patterns/theme-toggle'
@@ -26,6 +27,8 @@ export function AppSidebar() {
     const { pathname, key } = useLocation()
     const { isMobile, setOpenMobile } = useSidebar()
     const current = resolveRoute(pathname).section
+    const inFlight = useInFlightCount()
+    const inFlightId = useId()
 
     // Following a link closes the drawer, even one to the page already open: the
     // location key is new on every navigation, the path is not.
@@ -91,10 +94,17 @@ export function AppSidebar() {
                                                     isActive={
                                                         section === current
                                                     }
-                                                    className="h-9.25 gap-2.5 rounded-lg px-3 py-2.5 text-xs text-muted-foreground hover:bg-accent hover:text-foreground active:bg-accent active:text-foreground wide:text-ui data-active:font-[550] [&_svg]:size-4.25"
+                                                    className="h-9.25 gap-2.5 rounded-lg px-3 py-2.5 text-xs text-muted-foreground hover:bg-accent hover:text-foreground active:bg-accent active:text-foreground wide:text-ui data-active:font-[550] data-active:hover:bg-sidebar-accent data-active:hover:text-sidebar-accent-foreground data-active:active:bg-sidebar-accent data-active:active:text-sidebar-accent-foreground [&_svg]:size-4.25"
                                                 >
                                                     <Link
                                                         to={path}
+                                                        aria-describedby={
+                                                            section ===
+                                                                'traces' &&
+                                                            inFlight > 0
+                                                                ? inFlightId
+                                                                : undefined
+                                                        }
                                                         aria-current={
                                                             section === current
                                                                 ? 'page'
@@ -105,6 +115,12 @@ export function AppSidebar() {
                                                         <span>{title}</span>
                                                     </Link>
                                                 </SidebarMenuButton>
+                                                {section === 'traces' && (
+                                                    <InFlightBadge
+                                                        count={inFlight}
+                                                        id={inFlightId}
+                                                    />
+                                                )}
                                             </SidebarMenuItem>
                                         ),
                                     )}
