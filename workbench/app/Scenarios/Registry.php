@@ -3,12 +3,14 @@
 namespace Workbench\App\Scenarios;
 
 use InvalidArgumentException;
+use Workbench\App\Scenarios\Catalog\AbandonedStream;
 use Workbench\App\Scenarios\Catalog\ApprovalGatedTool;
 use Workbench\App\Scenarios\Catalog\Conversation;
 use Workbench\App\Scenarios\Catalog\Delegation;
 use Workbench\App\Scenarios\Catalog\EmbeddingsInTool;
 use Workbench\App\Scenarios\Catalog\FailingSubAgent;
 use Workbench\App\Scenarios\Catalog\Failover;
+use Workbench\App\Scenarios\Catalog\PartlyPricedRun;
 use Workbench\App\Scenarios\Catalog\PlainAnswer;
 use Workbench\App\Scenarios\Catalog\ProviderFailure;
 use Workbench\App\Scenarios\Catalog\SeveralSteps;
@@ -16,6 +18,7 @@ use Workbench\App\Scenarios\Catalog\StreamedRun;
 use Workbench\App\Scenarios\Catalog\StructuredOutput;
 use Workbench\App\Scenarios\Catalog\ThrowingTool;
 use Workbench\App\Scenarios\Catalog\ToolCalls;
+use Workbench\App\Scenarios\Catalog\UnpricedRun;
 
 /**
  * Every scenario the workbench can run, by key.
@@ -37,6 +40,9 @@ final class Registry
         ApprovalGatedTool::class,
         Conversation::class,
         EmbeddingsInTool::class,
+        PartlyPricedRun::class,
+        UnpricedRun::class,
+        AbandonedStream::class,
     ];
 
     /**

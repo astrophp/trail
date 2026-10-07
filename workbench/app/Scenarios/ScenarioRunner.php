@@ -3,6 +3,7 @@
 namespace Workbench\App\Scenarios;
 
 use Astro\Trail\Facades\Trail;
+use Astro\Trail\Storage\StaleRuns;
 use Throwable;
 
 /**
@@ -50,6 +51,7 @@ final class ScenarioRunner
             $result = match (true) {
                 $scenario->expectedFailure() !== null => new Result($scenario->key(), Outcome::Error, 'Expected a '.class_basename($scenario->expectedFailure()).' but the run completed.', $label),
                 $backend->unusedTurns() > 0 => new Result($scenario->key(), Outcome::Error, $backend->unusedTurns().' scripted responses were never requested.', $label),
+                $scenario->leavesRunUnfinished() => new Result($scenario->key(), Outcome::LeftRunning, 'Left running on purpose; it reads as incomplete once it is '.StaleRuns::timeout().' seconds old.', $label),
                 default => new Result($scenario->key(), Outcome::Ok, 'Recorded.', $label),
             };
         } catch (Throwable $exception) {

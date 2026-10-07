@@ -6,6 +6,7 @@ enum Outcome: string
 {
     case Ok = 'ok';
     case FailedAsExpected = 'failed as expected';
+    case LeftRunning = 'left running';
     case Error = 'error';
 
     public function isGood(): bool

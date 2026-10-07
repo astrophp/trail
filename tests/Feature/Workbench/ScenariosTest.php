@@ -3,12 +3,16 @@
 use Astro\Trail\Enums\IssueKind;
 use Astro\Trail\Enums\SpanType;
 use Astro\Trail\Enums\Status;
+use Astro\Trail\Storage\Contracts\TraceStore;
 use Astro\Trail\Storage\Models\Span;
 use Astro\Trail\Storage\Models\Trace;
+use Astro\Trail\Storage\StaleRuns;
 use Astro\Trail\Tests\Fixtures\Sdk\FakeAnthropic;
 use Illuminate\Http\Client\Factory;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Http;
+use Workbench\App\Agents\LocalPolicyResearcher;
 use Workbench\App\Agents\SupportAssistant;
 use Workbench\App\Models\User;
 use Workbench\App\Scenarios\Backend;
@@ -141,10 +145,58 @@ function expectations(): array
                 ->and($embedding->input_tokens)->toBeGreaterThan(0)
                 ->and($embedding->cost)->not->toBeNull();
         }],
+        'partly-priced-run' => [Outcome::Ok, 1, function (Collection $traces) {
+            $trace = $traces->sole();
+            $steps = $trace->spans()->where('type', SpanType::Step)->orderBy('sequence')->get();
+            $local = $steps->where('model', LocalPolicyResearcher::MODEL)->sole();
+
+            expect($trace->status)->toBe(Status::Completed)
+                ->and($trace->cost)->not->toBeNull()->toBeGreaterThan(0.0)
+                ->and($trace->unpriced_span_count)->toBe(1)
+                ->and($steps)->toHaveCount(3)
+                ->and($steps->where('model', '!=', LocalPolicyResearcher::MODEL)->every(fn (Span $step) => $step->cost !== null))->toBeTrue()
+                ->and($local->cost)->toBeNull()
+                ->and($local->input_tokens)->toBe(233)
+                ->and($local->parent_id)->not->toBeNull();
+        }],
+        'unpriced-run' => [Outcome::Ok, 1, function (Collection $traces) {
+            $trace = $traces->sole();
+            $step = $trace->spans()->where('type', SpanType::Step)->sole();
+
+            expect($trace->status)->toBe(Status::Completed)
+                ->and($trace->cost)->toBeNull()
+                ->and($trace->unpriced_span_count)->toBe(1)
+                ->and([$trace->input_tokens, $trace->output_tokens])->toBe([391, 33])
+                ->and([$step->model, $step->cost, $step->input_tokens])->toBe([LocalPolicyResearcher::MODEL, null, 391]);
+        }],
+        'abandoned-stream' => [Outcome::LeftRunning, 1, function (Collection $traces) {
+            $trace = $traces->sole();
+
+            expect($trace->status)->toBe(Status::Running)
+                ->and($trace->streamed)->toBeTrue()
+                ->and($trace->finished_at)->toBeNull()
+                ->and($trace->effectiveStatus())->toBe(Status::Running)
+                ->and($trace->spans()->where('type', SpanType::Step)->pluck('status')->all())->toBe([Status::Completed, Status::Running]);
+
+            // The workbench's own stale timeout is the store's minimum: a minute later the run reads as abandoned.
+            expect(StaleRuns::timeout())->toBe(TraceStore::MINIMUM_STALE_SECONDS);
+
+            Carbon::setTestNow(Carbon::now()->addSeconds(TraceStore::MINIMUM_STALE_SECONDS + 1));
+
+            try {
+                $trace = Trace::query()->sole();
+
+                expect($trace->status)->toBe(Status::Running)
+                    ->and($trace->effectiveStatus())->toBe(Status::Incomplete)
+                    ->and($trace->effectiveIssueKind())->toBe(IssueKind::Abandoned);
+            } finally {
+                Carbon::setTestNow();
+            }
+        }],
     ];
 }
 
-it('has a scenario for each of the thirteen runs', function () {
+it('has a scenario for each of the sixteen runs', function () {
     expect(array_keys(app(Registry::class)->all()))->toBe(array_keys(expectations()));
 });
 
@@ -165,9 +217,9 @@ it('records the run of the scenario', function (string $key) {
 it('runs every scenario one after the other in one process', function () {
     $results = app(ScenarioRunner::class)->runAll();
 
-    expect($results)->toHaveCount(13)
+    expect($results)->toHaveCount(16)
         ->and(array_filter($results, fn ($result) => $result->outcome === Outcome::Error))->toBe([])
-        ->and(Trace::query()->count())->toBe(14);
+        ->and(Trace::query()->count())->toBe(17);
 });
 
 it('leaves the HTTP client and its script as it found them', function () {
@@ -227,7 +279,7 @@ describe('the landing page', function () {
     it('runs every scenario with Run all', function () {
         $this->post('/run')->assertRedirect('/');
 
-        expect(Trace::query()->count())->toBe(14);
+        expect(Trace::query()->count())->toBe(17);
     });
 
     it('answers 404 for a scenario that does not exist', function () {

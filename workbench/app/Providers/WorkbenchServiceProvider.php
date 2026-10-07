@@ -2,6 +2,7 @@
 
 namespace Workbench\App\Providers;
 
+use Astro\Trail\Storage\Contracts\TraceStore;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 use Laravel\Ai\AiServiceProvider;
@@ -46,6 +47,10 @@ class WorkbenchServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        // A run left running reads as incomplete once it is this old; the least the store allows, so that the
+        // abandoned-stream scenario shows the change within a minute instead of an hour.
+        config(['trail.stale_after' => TraceStore::MINIMUM_STALE_SECONDS]);
+
         // Conversations are stored in the SDK's own tables, which the SDK does not load by itself.
         $this->loadMigrationsFrom(dirname((new ReflectionClass(AiServiceProvider::class))->getFileName(), 2).'/database/migrations');
         $this->loadViewsFrom(workbench_path('resources', 'views'), 'workbench');
