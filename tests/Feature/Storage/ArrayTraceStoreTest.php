@@ -101,3 +101,31 @@ it('does not write a span that belongs to another trace under the same id', func
     expect($store->spans('trace-1')[0]->name)->toBe('Mine')
         ->and($store->spans('trace-2'))->toBe([]);
 });
+
+it('orders spans with the same sequence by id as strings', function () {
+    $store = new ArrayTraceStore;
+    $store->store(Records::trace(['id' => 'trace-1']), [
+        Records::span('trace-1', ['id' => '9']),
+        Records::span('trace-1', ['id' => '10']),
+    ]);
+
+    expect(array_map(fn ($span) => $span->id, $store->spans('trace-1')))->toBe(['10', '9']);
+});
+
+it('rejects a span id that appears twice in one call and stores nothing', function () {
+    $store = new ArrayTraceStore;
+
+    expect(fn () => $store->store(Records::trace(['id' => 'trace-1']), [
+        Records::span('trace-1', ['id' => 'span-1']),
+        Records::span('trace-1', ['id' => 'span-1']),
+    ]))->toThrow(InvalidArgumentException::class);
+
+    expect($store->traces())->toBe([])->and($store->spans())->toBe([]);
+});
+
+it('matches an agent class written with a leading backslash', function () {
+    $store = new ArrayTraceStore;
+    $store->store(Records::trace(['id' => 'trace-1', 'agentClass' => 'App\\Agents\\SupportAgent']), []);
+
+    $store->assertRecorded('\\App\\Agents\\SupportAgent')->assertRecordedCount(1, '\\App\\Agents\\SupportAgent');
+});

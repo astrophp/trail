@@ -50,10 +50,18 @@ class ArrayTraceStore implements TraceStore
     {
         $this->assertId($trace->id);
 
+        $seen = [];
+
         foreach ($spans as $span) {
             if ($span->traceId !== $trace->id) {
                 throw new InvalidArgumentException("Span [{$span->id}] belongs to trace [{$span->traceId}], not [{$trace->id}].");
             }
+
+            if (isset($seen[$span->id])) {
+                throw new InvalidArgumentException("Span [{$span->id}] appears more than once.");
+            }
+
+            $seen[$span->id] = true;
 
             $this->assertId($span->id);
 
@@ -169,7 +177,7 @@ class ArrayTraceStore implements TraceStore
             fn (SpanRecord $span) => $traceId === null || $span->traceId === $traceId,
         ));
 
-        usort($spans, fn (SpanRecord $a, SpanRecord $b) => [$a->sequence, $a->id] <=> [$b->sequence, $b->id]);
+        usort($spans, fn (SpanRecord $a, SpanRecord $b) => $a->sequence <=> $b->sequence ?: strcmp($a->id, $b->id));
 
         return $spans;
     }
@@ -257,6 +265,8 @@ class ArrayTraceStore implements TraceStore
      */
     private function tracesOf(string $agentClass): array
     {
+        $agentClass = ltrim($agentClass, '\\');
+
         return array_values(array_filter($this->traces, fn (TraceRecord $trace) => $trace->agentClass === $agentClass));
     }
 
