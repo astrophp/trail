@@ -9,3 +9,4 @@ package-lock.json
 /workbench
 composer.json
 composer.lock
+/resources/js/lib/cn-tables.ts

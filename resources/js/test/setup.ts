@@ -14,4 +14,12 @@ beforeEach(() => {
     }))
 })
 
-afterEach(() => vi.unstubAllGlobals())
+// jsdom does not implement scrolling.
+beforeEach(() => {
+    window.scrollTo = vi.fn()
+})
+
+afterEach(() => {
+    vi.unstubAllGlobals()
+    window.history.replaceState({}, '', '/')
+})
