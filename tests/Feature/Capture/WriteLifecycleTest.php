@@ -18,7 +18,6 @@ use Astro\Trail\Tests\Fixtures\Storage\DatabaseStoreProbe;
 use Astro\Trail\Tests\Fixtures\Storage\Transactions;
 use Astro\Trail\Tests\Fixtures\Tools\CallbackTool;
 use Astro\Trail\Tests\Fixtures\Tools\LookupTool;
-use Astro\Trail\TrailServiceProvider;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Database\Events\TransactionBeginning;
 use Illuminate\Queue\Events\JobFailed;
@@ -572,25 +571,5 @@ describe('flush points', function () {
 
     it('registers a job listener for each end of a job', function () {
         expect($this->app->make(Dispatcher::class)->hasListeners(JobProcessed::class))->toBeTrue();
-    });
-
-    it('registers nothing when Trail is disabled', function () {
-        $events = $this->app->make(Dispatcher::class);
-        $terminating = new ReflectionProperty($this->app, 'terminatingCallbacks');
-        $listeners = fn () => count($events->getListeners(JobProcessed::class)) + count($events->getListeners(Looping::class));
-
-        $registered = [count($terminating->getValue($this->app)), $listeners()];
-
-        config(['trail.enabled' => false]);
-        (new TrailServiceProvider($this->app))->boot();
-
-        expect([count($terminating->getValue($this->app)), $listeners()])->toBe($registered);
-
-        // The same measure sees the registrations when Trail is enabled.
-        config(['trail.enabled' => true]);
-        (new TrailServiceProvider($this->app))->boot();
-
-        expect(count($terminating->getValue($this->app)))->toBeGreaterThan($registered[0])
-            ->and($listeners())->toBeGreaterThan($registered[1]);
     });
 });

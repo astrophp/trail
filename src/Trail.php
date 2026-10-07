@@ -4,6 +4,7 @@ namespace Astro\Trail;
 
 use Astro\Trail\Capture\Guard;
 use Astro\Trail\Capture\Recorder;
+use Astro\Trail\Capture\Sampler;
 use Astro\Trail\Storage\ArrayTraceStore;
 use Astro\Trail\Storage\Contracts\TraceStore;
 use Astro\Trail\Users\UserResolver;
@@ -67,5 +68,29 @@ class Trail
     public function users(): UserResolver
     {
         return new UserResolver($this->userResolver);
+    }
+
+    /**
+     * Decide which runs are recorded. The callback receives a RecordingCandidate when a top-level
+     * run starts; returning false skips the run and everything under it, anything else records it.
+     * Passing null removes the filter.
+     *
+     * @param  (Closure(RecordingCandidate): mixed)|null  $callback
+     */
+    public function filter(?Closure $callback): void
+    {
+        $this->container->make(Sampler::class)->filter($callback);
+    }
+
+    /**
+     * Run the callback without recording the runs that start inside it, and return what it returns.
+     * A run that starts inside is not recorded for its whole life, even if it ends after the callback.
+     * Calls nest.
+     *
+     * @param  Closure(): mixed  $callback
+     */
+    public function withoutRecording(Closure $callback): mixed
+    {
+        return $this->container->make(Sampler::class)->without($callback);
     }
 }

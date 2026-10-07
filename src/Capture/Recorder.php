@@ -7,6 +7,7 @@ use Astro\Trail\Enums\IssueKind;
 use Astro\Trail\Enums\SpanType;
 use Astro\Trail\Enums\Status;
 use Astro\Trail\Pricing\CostCalculator;
+use Astro\Trail\RecordingCandidate;
 use Astro\Trail\Storage\Contracts\TraceStore;
 use Closure;
 use Illuminate\Contracts\Container\Container;
@@ -56,6 +57,12 @@ class Recorder
     /** @var array<string, EmbeddingCall> keyed by the embeddings invocation id */
     private array $embeddings = [];
 
+    /** How many skipped invocation ids a process with no flush point remembers. */
+    private const MAX_SKIPPED_IDS = 1000;
+
+    /** @var array<string, true> invocation ids of runs that were decided against, in the order they were */
+    private array $skipped = [];
+
     /** How many traces a process with no flush point may hold before it writes the finished ones. */
     private const MAX_BUFFERED_TRACES = 100;
 
@@ -64,12 +71,20 @@ class Recorder
         private readonly CostCalculator $costs,
         private ?Payload $payload = null,
         private readonly int $maxBufferedTraces = self::MAX_BUFFERED_TRACES,
+        private readonly int $maxSkippedIds = self::MAX_SKIPPED_IDS,
     ) {}
 
     public function agentStarting(PromptingAgent $event, bool $streamed = false): void
     {
         $prompt = $event->prompt;
         $provider = $this->driver($prompt->provider);
+        $isRoot = $prompt->parentInvocationId === null;
+
+        // A run decided against stays decided against: a failover or a stream iterated again starts it again.
+        if ($isRoot && isset($this->skipped[$event->invocationId])) {
+            return;
+        }
+
         $run = $this->runs[$event->invocationId] ?? null;
 
         if ($run !== null) {
@@ -89,6 +104,17 @@ class Recorder
         $anonymous = (new ReflectionClass($agent))->isAnonymous();
         $class = $anonymous ? null : $agent::class;
         $name = $class === null ? self::ANONYMOUS_AGENT : class_basename($class);
+
+        // The one decision about a top-level run. A sub-agent never asks: it follows a parent the recorder knows.
+        if ($isRoot) {
+            $identity = Identity::of($agent);
+
+            if (! $this->shouldRecord(new RecordingCandidate(SpanType::Agent, $class, $agent, $prompt->prompt, $identity->userId, $identity->userType, $provider, $prompt->model))) {
+                $this->skip($event->invocationId);
+
+                return;
+            }
+        }
 
         $span = new SpanDraft(
             id: $event->invocationId,
@@ -133,6 +159,30 @@ class Recorder
         if ($isRoot) {
             // The only query issued while a run is in flight: it makes the run visible as it starts.
             Guard::run(fn () => $this->container->make(TraceStore::class)->start($buffer->trace()));
+        }
+    }
+
+    /**
+     * Whether a top-level run is recorded. Any failure of the decision itself means record: Trail's
+     * own code breaking is not a reason to lose data.
+     */
+    private function shouldRecord(RecordingCandidate $candidate): bool
+    {
+        $record = true;
+
+        Guard::run(function () use (&$record, $candidate): void {
+            $record = $this->container->make(Sampler::class)->records($candidate);
+        });
+
+        return $record;
+    }
+
+    private function skip(string $invocationId): void
+    {
+        $this->skipped[$invocationId] = true;
+
+        while (count($this->skipped) > $this->maxSkippedIds) {
+            unset($this->skipped[array_key_first($this->skipped)]);
         }
     }
 
@@ -725,6 +775,12 @@ class Recorder
             return;
         }
 
+        $candidate = new RecordingCandidate(SpanType::Embedding, null, null, null, null, null, $span->provider, $span->model);
+
+        if (! $this->shouldRecord($candidate)) {
+            return;
+        }
+
         $span->name = 'Embeddings';
 
         $buffer = $this->buffers[$event->invocationId] = new RunBuffer(
@@ -838,6 +894,9 @@ class Recorder
         $this->runs = [];
         $this->buffers = [];
         $this->embeddings = [];
+        $this->skipped = [];
+
+        Guard::run(fn () => $this->container->make(Sampler::class)->flushed());
 
         foreach ($buffers as $buffer) {
             $this->write($buffer);
