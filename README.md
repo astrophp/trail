@@ -77,8 +77,12 @@ composer install
 composer test
 
 npm install
+npm run lint        # eslint + prettier --check
+npm run format      # prettier --write + eslint --fix
+npm run typecheck
 npm test
-npm run build
+npm run build       # also checks the bundle size budget
+npm run size
 ```
 
 The compiled dashboard in `dist/` is committed; rebuild it whenever `resources/js` changes.
