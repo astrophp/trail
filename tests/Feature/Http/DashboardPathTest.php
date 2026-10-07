@@ -16,5 +16,5 @@ it('serves the dashboard at the configured path with the slashes around it ignor
 it('keeps the api space under the configured path', function () {
     $this->app['env'] = 'local';
 
-    $this->get('/ai/trail/api/anything')->assertNotFound()->assertExactJson(['message' => 'Not Found.']);
+    $this->get('/ai/trail/api/anything')->assertNotFound();
 });

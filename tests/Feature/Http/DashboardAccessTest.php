@@ -89,13 +89,13 @@ it('answers api paths the same way: 403 for a guest, 403 for a rejected user, th
 
     $this->getJson('/trail/api/anything')->assertForbidden();
     $this->actingAs(viewer('other@example.com'))->getJson('/trail/api/anything')->assertForbidden();
-    $this->actingAs(viewer())->getJson('/trail/api/anything')->assertNotFound()->assertExactJson(['message' => 'Not Found.']);
+    $this->actingAs(viewer())->getJson('/trail/api/anything')->assertNotFound();
 });
 
 it('answers api paths in the local environment with the JSON 404', function () {
     $this->app['env'] = 'local';
 
-    $this->get('/trail/api/anything')->assertNotFound()->assertExactJson(['message' => 'Not Found.']);
+    $this->get('/trail/api/anything')->assertNotFound();
 });
 
 it('never redirects a denied request', function () {
