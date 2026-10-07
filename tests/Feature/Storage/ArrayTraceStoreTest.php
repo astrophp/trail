@@ -144,3 +144,16 @@ it('matches an agent span class written with a leading backslash', function () {
 
     expect(fn () => $store->assertSpanNotRecorded('\\App\\Agents\\ResearchAgent'))->toThrow(ExpectationFailedException::class);
 });
+
+it('keeps every span of a trace however large they are, as the database store does', function () {
+    $store = new ArrayTraceStore;
+    $spans = [];
+
+    for ($i = 0; $i < 10; $i++) {
+        $spans[] = Records::span('trace-1', ['id' => "span-{$i}", 'sequence' => $i, 'input' => ['text' => str_repeat('x', 400_000)]]);
+    }
+
+    $store->store(Records::trace(['id' => 'trace-1']), $spans);
+
+    expect($store->spans('trace-1'))->toHaveCount(10);
+});

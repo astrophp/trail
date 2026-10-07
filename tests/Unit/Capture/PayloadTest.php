@@ -144,9 +144,10 @@ it('stops at a node budget on a very wide value', function () {
 
     $kept = count(array_filter($captured, fn ($item) => $item === 'x'));
 
-    expect($captured)->toHaveCount(25_000)
-        ->and($kept)->toBeGreaterThan(9_000)->toBeLessThanOrEqual(10_000)
-        ->and($captured[24_999])->toBeNull();
+    // Past the budget nothing is kept, not even a key with no value.
+    expect($kept)->toBeGreaterThan(9_000)->toBeLessThanOrEqual(10_000)
+        ->and(count($captured))->toBe($kept)
+        ->and($captured)->not->toHaveKey(24_999);
 });
 
 it('does not share a budget between calls', function () {

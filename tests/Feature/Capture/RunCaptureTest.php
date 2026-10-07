@@ -145,7 +145,7 @@ it('stores every tool call of one step in the order they ran', function () {
         ->and($spans[1]['output']['tool_calls'])->toBe([
             ['id' => 'toolu_1', 'name' => 'lookup', 'arguments' => ['query' => 'one']],
             ['id' => 'toolu_2', 'name' => 'lookup', 'arguments' => ['query' => 'two']],
-        ])->and($spans[4]['input']['messages'][2]['tool_results'])->toBe([
+        ])->and($spans[4]['input']['messages'][1]['tool_results'])->toBe([
             ['id' => 'toolu_1', 'name' => 'lookup', 'result' => 'Result for one'],
             ['id' => 'toolu_2', 'name' => 'lookup', 'result' => 'Result for two'],
         ])->and($run->trace()['span_count'])->toBe(5);

@@ -203,9 +203,9 @@ class Sampler
 
     private static function rateFrom(mixed $value): float
     {
-        if (! is_numeric($value)) {
+        if (! is_numeric($value) || ! is_finite((float) $value)) {
             Guard::run(function (): void {
-                throw new InvalidArgumentException('Trail ignored trail.sampling: it must be a number from 0 to 1. All runs are recorded.');
+                throw new InvalidArgumentException('Trail ignored trail.sampling: it must be a finite number from 0 to 1. All runs are recorded.');
             });
 
             return 1.0;
