@@ -3,6 +3,7 @@
 use Astro\Trail\Facades\Trail;
 use Astro\Trail\Tests\Fixtures\Sdk\DisablesTrail;
 use Astro\Trail\Tests\Fixtures\Sdk\MigratesApplicationTables;
+use Astro\Trail\Tests\Fixtures\Sdk\MigratesLaravelAndSdkTables;
 use Astro\Trail\Tests\Fixtures\Sdk\MigratesLaravelTables;
 use Astro\Trail\Tests\Fixtures\Sdk\MigratesSdkTables;
 use Astro\Trail\Tests\Fixtures\Sdk\ObservesSdk;
@@ -22,6 +23,7 @@ uses(RefreshDatabase::class)->in('Feature/Users');
 uses(RefreshDatabase::class)->in('Feature/Http/Api', 'Feature/Queries');
 uses(MigratesLaravelTables::class, RefreshDatabase::class)->in('Feature/Http/Resources/ResolvedUsersTest.php');
 uses(MigratesLaravelTables::class)->in('Feature/Http/Api/ContractTest.php', 'Feature/Http/Api/TraceBookmarkTest.php', 'Feature/Http/Api/TraceIndexTest.php', 'Feature/Http/Api/TraceResourceTest.php');
+uses(MigratesLaravelAndSdkTables::class, ObservesSdk::class)->in('Feature/Http/Api/TraceShowTest.php');
 uses(BootsWorkbench::class, RefreshDatabase::class)->in('Feature/Workbench');
 
 /** The window.Trail object of a page, decoded the way the browser decodes it. */

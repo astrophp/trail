@@ -123,3 +123,155 @@ export type TraceListResponse = {
 export type BookmarkResponse = {
     data: { trace_id: string; bookmarked: boolean }
 }
+
+/** JSON as the server decoded it from a stored payload. Its shape is the agent's, not Trail's. */
+export type JsonValue =
+    | string
+    | number
+    | boolean
+    | null
+    | JsonValue[]
+    | { [key: string]: JsonValue }
+
+export type JsonObject = { [key: string]: JsonValue }
+
+export type SpanType = 'agent' | 'step' | 'tool' | 'embedding'
+
+export type ErrorSource = 'step' | 'tool' | 'run'
+
+/**
+ * What one span cost. Never `partial`: a span is priced whole. `null` on the
+ * spans that do not bill (agents and tools), where `Span.cost` is `null`.
+ */
+export type SpanCost =
+    | { state: 'estimated'; amount: number }
+    | { state: 'unpriced' | 'not_captured'; amount: null }
+    | { state: 'pending'; amount: number | null }
+
+/** How a run or a span failed. Each part is `null` when it was not recorded. */
+export type TraceError = {
+    class: string | null
+    message: string | null
+    source: ErrorSource | null
+    http_status: number | null
+}
+
+/**
+ * One span of a run, in one shape for every type. `usage` and `cost` are `null`
+ * on agent and tool spans. `offset_ms` counts from the start of the run and can
+ * be negative. `input`, `output` and `metadata` are as stored, and
+ * `truncated_paths` maps a cut payload path to its original length.
+ */
+export type Span = {
+    id: string
+    parent_id: string | null
+    type: SpanType
+    name: string
+    agent_class: string | null
+    status: Status
+    issue_kind: IssueKind | null
+    attempt: number
+    sequence: number
+    step_number: number | null
+    provider: string | null
+    model: string | null
+    responding_model: string | null
+    duration_ms: number | null
+    offset_ms: number
+    started_at: string
+    ended_at: string | null
+    usage: Usage | null
+    cost: SpanCost | null
+    error: TraceError | null
+    input: JsonValue
+    output: JsonValue
+    metadata: JsonObject | null
+    redacted: boolean
+    truncated: boolean
+    truncated_paths: Record<string, number>
+}
+
+/** A tool call the run is waiting on. `arguments` and `reason` are `null` when not stored. */
+export type PendingApproval = {
+    tool_call_id: string
+    tool: string
+    arguments: JsonValue
+    reason: string | null
+}
+
+/** What the page shows beside the run: the run itself never carries these. */
+export type TraceDetail = {
+    error: TraceError | null
+    pending_approvals: PendingApproval[]
+    resolved_tool_call_ids: string[]
+}
+
+/** One step or embedding that billed, and the agent span it belongs to. */
+export type UsageRow = {
+    span_id: string
+    agent_span_id: string | null
+    type: 'step' | 'embedding'
+    name: string
+    attempt: number
+    step_number: number | null
+    provider: string | null
+    model: string | null
+    usage: Usage
+    cost: SpanCost
+}
+
+/** What one agent span used itself, leaving out the agents it delegated to. */
+export type AgentSubtotal = {
+    span_id: string
+    name: string
+    usage: Usage
+    cost: Cost
+}
+
+/** The totals are the run's; the rows and the subtotals describe the spans returned. */
+export type TraceUsageBreakdown = {
+    totals: { usage: Usage; cost: Cost }
+    rows: UsageRow[]
+    agents: AgentSubtotal[]
+}
+
+export type CoverageState =
+    'captured' | 'partial' | 'not_captured' | 'not_applicable'
+
+export type CoverageReason =
+    'unfinished' | 'not_reported' | 'streamed' | 'no_price' | 'not_stored'
+
+/** `reason` is `null` unless something is missing. */
+export type CoverageItem = {
+    state: CoverageState
+    captured: number
+    expected: number
+    reason: CoverageReason | null
+}
+
+export type Coverage = {
+    timing: CoverageItem
+    responding_model: CoverageItem
+    usage: CoverageItem
+    cost: CoverageItem
+    system_prompt: CoverageItem
+    payloads: CoverageItem
+}
+
+/** `truncated` is whether the run has more spans than `limit`; `total` counts them all. */
+export type SpanLimit = {
+    limit: number
+    total: number
+    truncated: boolean
+}
+
+export type TraceDetailResponse = {
+    data: {
+        trace: Trace
+        detail: TraceDetail
+        spans: Span[]
+        usage: TraceUsageBreakdown
+        coverage: Coverage
+    }
+    span_limit: SpanLimit
+}

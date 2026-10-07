@@ -2,6 +2,7 @@
 
 namespace Astro\Trail\Http\Controllers\Api;
 
+use Astro\Trail\Queries\TraceId;
 use Astro\Trail\Storage\Models\Bookmark;
 use Astro\Trail\Storage\Models\Trace;
 use Illuminate\Http\JsonResponse;
@@ -15,9 +16,6 @@ use Throwable;
  */
 class TraceBookmarkController
 {
-    /** The width of the id column, in characters. */
-    private const MAX_ID_LENGTH = 64;
-
     public function store(Request $request, string $id): JsonResponse
     {
         $this->ensureExists($id);
@@ -42,11 +40,11 @@ class TraceBookmarkController
 
     /**
      * Without a column read, so a run's large columns stay in the database. An id the column could
-     * not hold is no run and is not sent to the database: a NUL byte is rejected outright by Postgres.
+     * not hold is no run and is not sent to the database.
      */
     private function ensureExists(string $id): void
     {
-        abort_unless(mb_strlen($id) <= self::MAX_ID_LENGTH && ! str_contains($id, "\0"), 404);
+        abort_unless(TraceId::isPossible($id), 404);
         abort_unless(Trace::query()->whereKey($id)->exists(), 404);
     }
 
