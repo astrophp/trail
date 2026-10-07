@@ -994,6 +994,11 @@ class Recorder
         $captured = new Captured;
 
         Guard::run(function () use (&$captured, $field, $build): void {
+            // With capture off nothing is stored, so nothing is built.
+            if (! $this->payload()->capturing()) {
+                return;
+            }
+
             $captured = $this->payload()->capture($build(), $field);
         });
 

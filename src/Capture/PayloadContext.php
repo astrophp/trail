@@ -11,5 +11,8 @@ final class PayloadContext
     /** @var array<int, true> */
     public array $expanding = [];
 
+    /** Whether a value was cut to null because the depth or the budget ran out. */
+    public bool $dropped = false;
+
     public function __construct(public int $budget) {}
 }
