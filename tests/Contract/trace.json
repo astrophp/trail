@@ -1,0 +1,812 @@
+{
+    "data": {
+        "trace": {
+            "id": "0199c2f4-6a1e-7c3b-9a55-0e8a4c1d2f30",
+            "type": "agent",
+            "name": "SupportAssistant",
+            "agent_class": "App\\Ai\\Agents\\SupportAssistant",
+            "status": "failed",
+            "issue_kind": "rate_limited",
+            "streamed": false,
+            "recovered": false,
+            "child_failed": false,
+            "provider": "anthropic",
+            "model": "claude-sonnet-4-5",
+            "duration_ms": 3000.5,
+            "usage": {
+                "state": "reported",
+                "input_tokens": 1764,
+                "output_tokens": 410,
+                "cache_read_tokens": 5,
+                "cache_write_tokens": 6,
+                "reasoning_tokens": 7,
+                "total_tokens": 2174
+            },
+            "cost": {
+                "state": "partial",
+                "amount": 0.008752
+            },
+            "span_count": 11,
+            "prompt_excerpt": "Where is my order?",
+            "response_excerpt": null,
+            "conversation_id": "conversation-1",
+            "user": {
+                "id": "7",
+                "type": "Astro\\Trail\\Tests\\Fixtures\\Users\\User",
+                "name": "Ada",
+                "email": "ada@example.test"
+            },
+            "bookmarked": true,
+            "started_at": "2026-01-02T11:00:00.000Z",
+            "ended_at": "2026-01-02T11:00:03.000Z"
+        },
+        "detail": {
+            "error": {
+                "class": "Laravel\\Ai\\Exceptions\\RateLimitedException",
+                "message": "Application rate limited by AI provider [anthropic].",
+                "source": "run",
+                "http_status": 429
+            },
+            "pending_approvals": [
+                {
+                    "tool_call_id": "toolu_02",
+                    "tool": "refund_order",
+                    "arguments": {
+                        "order": 1042
+                    },
+                    "reason": "Moves money"
+                }
+            ],
+            "resolved_tool_call_ids": [
+                "toolu_01"
+            ]
+        },
+        "spans": [
+            {
+                "id": "span-01",
+                "parent_id": null,
+                "type": "agent",
+                "name": "SupportAssistant",
+                "agent_class": "App\\Ai\\Agents\\SupportAssistant",
+                "status": "failed",
+                "issue_kind": "rate_limited",
+                "attempt": 1,
+                "sequence": 1,
+                "step_number": null,
+                "provider": "anthropic",
+                "model": "claude-sonnet-4-5",
+                "responding_model": null,
+                "duration_ms": 3000.5,
+                "offset_ms": 0,
+                "started_at": "2026-01-02T11:00:00.000Z",
+                "ended_at": "2026-01-02T11:00:03.000Z",
+                "usage": null,
+                "cost": null,
+                "error": {
+                    "class": "Laravel\\Ai\\Exceptions\\RateLimitedException",
+                    "message": "Application rate limited by AI provider [anthropic].",
+                    "source": "run",
+                    "http_status": 429
+                },
+                "input": {
+                    "prompt": "Where is my order?",
+                    "attachments": [
+                        {
+                            "type": "image",
+                            "name": "receipt.png"
+                        }
+                    ]
+                },
+                "output": null,
+                "metadata": null,
+                "redacted": false,
+                "truncated": false,
+                "truncated_paths": {}
+            },
+            {
+                "id": "span-02",
+                "parent_id": "span-01",
+                "type": "step",
+                "name": "step",
+                "agent_class": null,
+                "status": "completed",
+                "issue_kind": null,
+                "attempt": 1,
+                "sequence": 2,
+                "step_number": 0,
+                "provider": "anthropic",
+                "model": "claude-sonnet-4-5",
+                "responding_model": "claude-sonnet-4-5-20250929",
+                "duration_ms": 840.25,
+                "offset_ms": 100,
+                "started_at": "2026-01-02T11:00:00.100Z",
+                "ended_at": "2026-01-02T11:00:00.940Z",
+                "usage": {
+                    "state": "reported",
+                    "input_tokens": 1200,
+                    "output_tokens": 310,
+                    "cache_read_tokens": 5,
+                    "cache_write_tokens": 6,
+                    "reasoning_tokens": 7,
+                    "total_tokens": 1510
+                },
+                "cost": {
+                    "state": "estimated",
+                    "amount": 0.00825
+                },
+                "error": null,
+                "input": {
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": "Where is my order?"
+                        }
+                    ],
+                    "messages_offset": 0,
+                    "options": {
+                        "max_tokens": null
+                    }
+                },
+                "output": {
+                    "text": "",
+                    "tool_calls": [
+                        {
+                            "id": "toolu_01",
+                            "name": "search",
+                            "arguments": {
+                                "query": "order 1042"
+                            }
+                        }
+                    ],
+                    "finish_reason": "tool_use"
+                },
+                "metadata": null,
+                "redacted": true,
+                "truncated": true,
+                "truncated_paths": {
+                    "input.messages.0.content": 12000
+                }
+            },
+            {
+                "id": "span-03",
+                "parent_id": "span-01",
+                "type": "tool",
+                "name": "search",
+                "agent_class": null,
+                "status": "completed",
+                "issue_kind": null,
+                "attempt": 1,
+                "sequence": 3,
+                "step_number": null,
+                "provider": null,
+                "model": null,
+                "responding_model": null,
+                "duration_ms": 1500,
+                "offset_ms": 1000,
+                "started_at": "2026-01-02T11:00:01.000Z",
+                "ended_at": "2026-01-02T11:00:02.500Z",
+                "usage": null,
+                "cost": null,
+                "error": null,
+                "input": {
+                    "arguments": {
+                        "query": "order 1042"
+                    }
+                },
+                "output": {
+                    "result": "Order 1042 shipped on Monday."
+                },
+                "metadata": null,
+                "redacted": false,
+                "truncated": false,
+                "truncated_paths": {}
+            },
+            {
+                "id": "span-04",
+                "parent_id": "span-03",
+                "type": "agent",
+                "name": "ResearchAgent",
+                "agent_class": "App\\Ai\\Agents\\ResearchAgent",
+                "status": "completed",
+                "issue_kind": null,
+                "attempt": 1,
+                "sequence": 4,
+                "step_number": null,
+                "provider": "anthropic",
+                "model": "claude-sonnet-4-5",
+                "responding_model": null,
+                "duration_ms": 1200,
+                "offset_ms": 1100,
+                "started_at": "2026-01-02T11:00:01.100Z",
+                "ended_at": "2026-01-02T11:00:02.300Z",
+                "usage": null,
+                "cost": null,
+                "error": null,
+                "input": {
+                    "prompt": "Find order 1042",
+                    "system": null
+                },
+                "output": {
+                    "text": "It shipped on Monday."
+                },
+                "metadata": null,
+                "redacted": false,
+                "truncated": false,
+                "truncated_paths": {}
+            },
+            {
+                "id": "span-05",
+                "parent_id": "span-04",
+                "type": "step",
+                "name": "step",
+                "agent_class": null,
+                "status": "completed",
+                "issue_kind": null,
+                "attempt": 1,
+                "sequence": 5,
+                "step_number": 0,
+                "provider": "anthropic",
+                "model": "claude-sonnet-4-5",
+                "responding_model": null,
+                "duration_ms": 700,
+                "offset_ms": 1200,
+                "started_at": "2026-01-02T11:00:01.200Z",
+                "ended_at": "2026-01-02T11:00:01.900Z",
+                "usage": {
+                    "state": "reported",
+                    "input_tokens": 400,
+                    "output_tokens": 90,
+                    "cache_read_tokens": null,
+                    "cache_write_tokens": null,
+                    "reasoning_tokens": null,
+                    "total_tokens": 490
+                },
+                "cost": {
+                    "state": "unpriced",
+                    "amount": null
+                },
+                "error": null,
+                "input": {
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": "Find order 1042"
+                        }
+                    ],
+                    "messages_offset": 0,
+                    "options": null
+                },
+                "output": {
+                    "text": "It shipped on Monday.",
+                    "tool_calls": [],
+                    "finish_reason": "stop"
+                },
+                "metadata": null,
+                "redacted": false,
+                "truncated": false,
+                "truncated_paths": {}
+            },
+            {
+                "id": "span-06",
+                "parent_id": "span-04",
+                "type": "step",
+                "name": "step",
+                "agent_class": null,
+                "status": "completed",
+                "issue_kind": null,
+                "attempt": 1,
+                "sequence": 6,
+                "step_number": 1,
+                "provider": "anthropic",
+                "model": "claude-sonnet-4-5",
+                "responding_model": "claude-sonnet-4-5-20250929",
+                "duration_ms": 300,
+                "offset_ms": 1900,
+                "started_at": "2026-01-02T11:00:01.900Z",
+                "ended_at": "2026-01-02T11:00:02.200Z",
+                "usage": {
+                    "state": "reported",
+                    "input_tokens": 100,
+                    "output_tokens": 10,
+                    "cache_read_tokens": null,
+                    "cache_write_tokens": null,
+                    "reasoning_tokens": null,
+                    "total_tokens": 110
+                },
+                "cost": {
+                    "state": "estimated",
+                    "amount": 0.0005
+                },
+                "error": null,
+                "input": {
+                    "messages": [],
+                    "messages_offset": 2,
+                    "options": null
+                },
+                "output": {
+                    "text": "Done",
+                    "tool_calls": [],
+                    "finish_reason": "stop"
+                },
+                "metadata": null,
+                "redacted": false,
+                "truncated": false,
+                "truncated_paths": {}
+            },
+            {
+                "id": "span-07",
+                "parent_id": "span-03",
+                "type": "embedding",
+                "name": "embeddings",
+                "agent_class": null,
+                "status": "completed",
+                "issue_kind": null,
+                "attempt": 1,
+                "sequence": 7,
+                "step_number": null,
+                "provider": "openai",
+                "model": "text-embedding-3-small",
+                "responding_model": null,
+                "duration_ms": 210.5,
+                "offset_ms": 1050,
+                "started_at": "2026-01-02T11:00:01.050Z",
+                "ended_at": "2026-01-02T11:00:01.260Z",
+                "usage": {
+                    "state": "reported",
+                    "input_tokens": 64,
+                    "output_tokens": null,
+                    "cache_read_tokens": null,
+                    "cache_write_tokens": null,
+                    "reasoning_tokens": null,
+                    "total_tokens": 64
+                },
+                "cost": {
+                    "state": "estimated",
+                    "amount": 2.0e-6
+                },
+                "error": null,
+                "input": {
+                    "count": 2,
+                    "dimensions": 1536
+                },
+                "output": {
+                    "count": 2
+                },
+                "metadata": null,
+                "redacted": false,
+                "truncated": false,
+                "truncated_paths": {}
+            },
+            {
+                "id": "span-08",
+                "parent_id": "span-01",
+                "type": "step",
+                "name": "step",
+                "agent_class": null,
+                "status": "completed",
+                "issue_kind": null,
+                "attempt": 1,
+                "sequence": 8,
+                "step_number": 2,
+                "provider": "anthropic",
+                "model": "claude-sonnet-4-5",
+                "responding_model": "claude-sonnet-4-5-20250929",
+                "duration_ms": 100,
+                "offset_ms": 2500,
+                "started_at": "2026-01-02T11:00:02.500Z",
+                "ended_at": "2026-01-02T11:00:02.600Z",
+                "usage": {
+                    "state": "not_reported",
+                    "input_tokens": null,
+                    "output_tokens": null,
+                    "cache_read_tokens": null,
+                    "cache_write_tokens": null,
+                    "reasoning_tokens": null,
+                    "total_tokens": null
+                },
+                "cost": {
+                    "state": "not_captured",
+                    "amount": null
+                },
+                "error": null,
+                "input": {
+                    "messages": [],
+                    "messages_offset": 4,
+                    "options": null
+                },
+                "output": null,
+                "metadata": null,
+                "redacted": false,
+                "truncated": true,
+                "truncated_paths": {}
+            },
+            {
+                "id": "span-09",
+                "parent_id": "span-01",
+                "type": "step",
+                "name": "step",
+                "agent_class": null,
+                "status": "running",
+                "issue_kind": null,
+                "attempt": 1,
+                "sequence": 9,
+                "step_number": 3,
+                "provider": "anthropic",
+                "model": "claude-sonnet-4-5",
+                "responding_model": null,
+                "duration_ms": null,
+                "offset_ms": 2600,
+                "started_at": "2026-01-02T11:00:02.600Z",
+                "ended_at": null,
+                "usage": {
+                    "state": "pending",
+                    "input_tokens": null,
+                    "output_tokens": null,
+                    "cache_read_tokens": null,
+                    "cache_write_tokens": null,
+                    "reasoning_tokens": null,
+                    "total_tokens": null
+                },
+                "cost": {
+                    "state": "pending",
+                    "amount": null
+                },
+                "error": null,
+                "input": {
+                    "messages": [],
+                    "messages_offset": 5,
+                    "options": null
+                },
+                "output": null,
+                "metadata": null,
+                "redacted": false,
+                "truncated": false,
+                "truncated_paths": {}
+            },
+            {
+                "id": "span-10",
+                "parent_id": "span-01",
+                "type": "step",
+                "name": "step",
+                "agent_class": null,
+                "status": "failed",
+                "issue_kind": "rate_limited",
+                "attempt": 2,
+                "sequence": 10,
+                "step_number": 0,
+                "provider": "anthropic",
+                "model": "claude-sonnet-4-5",
+                "responding_model": null,
+                "duration_ms": null,
+                "offset_ms": 2700,
+                "started_at": "2026-01-02T11:00:02.700Z",
+                "ended_at": "2026-01-02T11:00:02.750Z",
+                "usage": {
+                    "state": "not_reported",
+                    "input_tokens": null,
+                    "output_tokens": null,
+                    "cache_read_tokens": null,
+                    "cache_write_tokens": null,
+                    "reasoning_tokens": null,
+                    "total_tokens": null
+                },
+                "cost": {
+                    "state": "not_captured",
+                    "amount": null
+                },
+                "error": {
+                    "class": "Laravel\\Ai\\Exceptions\\RateLimitedException",
+                    "message": "Application rate limited by AI provider [anthropic].",
+                    "source": "step",
+                    "http_status": 429
+                },
+                "input": {
+                    "messages": [],
+                    "messages_offset": 0,
+                    "options": null
+                },
+                "output": null,
+                "metadata": null,
+                "redacted": false,
+                "truncated": false,
+                "truncated_paths": {}
+            },
+            {
+                "id": "span-11",
+                "parent_id": "span-01",
+                "type": "tool",
+                "name": "lookup",
+                "agent_class": null,
+                "status": "failed",
+                "issue_kind": "tool_error",
+                "attempt": 1,
+                "sequence": 11,
+                "step_number": null,
+                "provider": null,
+                "model": null,
+                "responding_model": null,
+                "duration_ms": 50,
+                "offset_ms": 2800,
+                "started_at": "2026-01-02T11:00:02.800Z",
+                "ended_at": "2026-01-02T11:00:02.850Z",
+                "usage": null,
+                "cost": null,
+                "error": {
+                    "class": "RuntimeException",
+                    "message": "Disk full",
+                    "source": "tool",
+                    "http_status": null
+                },
+                "input": {
+                    "arguments": {
+                        "query": "stock"
+                    }
+                },
+                "output": null,
+                "metadata": null,
+                "redacted": false,
+                "truncated": false,
+                "truncated_paths": {}
+            }
+        ],
+        "usage": {
+            "totals": {
+                "usage": {
+                    "state": "reported",
+                    "input_tokens": 1764,
+                    "output_tokens": 410,
+                    "cache_read_tokens": 5,
+                    "cache_write_tokens": 6,
+                    "reasoning_tokens": 7,
+                    "total_tokens": 2174
+                },
+                "cost": {
+                    "state": "partial",
+                    "amount": 0.008752
+                }
+            },
+            "rows": [
+                {
+                    "span_id": "span-02",
+                    "agent_span_id": "span-01",
+                    "type": "step",
+                    "name": "step",
+                    "attempt": 1,
+                    "step_number": 0,
+                    "provider": "anthropic",
+                    "model": "claude-sonnet-4-5",
+                    "usage": {
+                        "state": "reported",
+                        "input_tokens": 1200,
+                        "output_tokens": 310,
+                        "cache_read_tokens": 5,
+                        "cache_write_tokens": 6,
+                        "reasoning_tokens": 7,
+                        "total_tokens": 1510
+                    },
+                    "cost": {
+                        "state": "estimated",
+                        "amount": 0.00825
+                    }
+                },
+                {
+                    "span_id": "span-05",
+                    "agent_span_id": "span-04",
+                    "type": "step",
+                    "name": "step",
+                    "attempt": 1,
+                    "step_number": 0,
+                    "provider": "anthropic",
+                    "model": "claude-sonnet-4-5",
+                    "usage": {
+                        "state": "reported",
+                        "input_tokens": 400,
+                        "output_tokens": 90,
+                        "cache_read_tokens": null,
+                        "cache_write_tokens": null,
+                        "reasoning_tokens": null,
+                        "total_tokens": 490
+                    },
+                    "cost": {
+                        "state": "unpriced",
+                        "amount": null
+                    }
+                },
+                {
+                    "span_id": "span-06",
+                    "agent_span_id": "span-04",
+                    "type": "step",
+                    "name": "step",
+                    "attempt": 1,
+                    "step_number": 1,
+                    "provider": "anthropic",
+                    "model": "claude-sonnet-4-5",
+                    "usage": {
+                        "state": "reported",
+                        "input_tokens": 100,
+                        "output_tokens": 10,
+                        "cache_read_tokens": null,
+                        "cache_write_tokens": null,
+                        "reasoning_tokens": null,
+                        "total_tokens": 110
+                    },
+                    "cost": {
+                        "state": "estimated",
+                        "amount": 0.0005
+                    }
+                },
+                {
+                    "span_id": "span-07",
+                    "agent_span_id": "span-01",
+                    "type": "embedding",
+                    "name": "embeddings",
+                    "attempt": 1,
+                    "step_number": null,
+                    "provider": "openai",
+                    "model": "text-embedding-3-small",
+                    "usage": {
+                        "state": "reported",
+                        "input_tokens": 64,
+                        "output_tokens": null,
+                        "cache_read_tokens": null,
+                        "cache_write_tokens": null,
+                        "reasoning_tokens": null,
+                        "total_tokens": 64
+                    },
+                    "cost": {
+                        "state": "estimated",
+                        "amount": 2.0e-6
+                    }
+                },
+                {
+                    "span_id": "span-08",
+                    "agent_span_id": "span-01",
+                    "type": "step",
+                    "name": "step",
+                    "attempt": 1,
+                    "step_number": 2,
+                    "provider": "anthropic",
+                    "model": "claude-sonnet-4-5",
+                    "usage": {
+                        "state": "not_reported",
+                        "input_tokens": null,
+                        "output_tokens": null,
+                        "cache_read_tokens": null,
+                        "cache_write_tokens": null,
+                        "reasoning_tokens": null,
+                        "total_tokens": null
+                    },
+                    "cost": {
+                        "state": "not_captured",
+                        "amount": null
+                    }
+                },
+                {
+                    "span_id": "span-09",
+                    "agent_span_id": "span-01",
+                    "type": "step",
+                    "name": "step",
+                    "attempt": 1,
+                    "step_number": 3,
+                    "provider": "anthropic",
+                    "model": "claude-sonnet-4-5",
+                    "usage": {
+                        "state": "pending",
+                        "input_tokens": null,
+                        "output_tokens": null,
+                        "cache_read_tokens": null,
+                        "cache_write_tokens": null,
+                        "reasoning_tokens": null,
+                        "total_tokens": null
+                    },
+                    "cost": {
+                        "state": "pending",
+                        "amount": null
+                    }
+                },
+                {
+                    "span_id": "span-10",
+                    "agent_span_id": "span-01",
+                    "type": "step",
+                    "name": "step",
+                    "attempt": 2,
+                    "step_number": 0,
+                    "provider": "anthropic",
+                    "model": "claude-sonnet-4-5",
+                    "usage": {
+                        "state": "not_reported",
+                        "input_tokens": null,
+                        "output_tokens": null,
+                        "cache_read_tokens": null,
+                        "cache_write_tokens": null,
+                        "reasoning_tokens": null,
+                        "total_tokens": null
+                    },
+                    "cost": {
+                        "state": "not_captured",
+                        "amount": null
+                    }
+                }
+            ],
+            "agents": [
+                {
+                    "span_id": "span-01",
+                    "name": "SupportAssistant",
+                    "usage": {
+                        "state": "reported",
+                        "input_tokens": 1264,
+                        "output_tokens": 310,
+                        "cache_read_tokens": 5,
+                        "cache_write_tokens": 6,
+                        "reasoning_tokens": 7,
+                        "total_tokens": 1574
+                    },
+                    "cost": {
+                        "state": "estimated",
+                        "amount": 0.008252
+                    }
+                },
+                {
+                    "span_id": "span-04",
+                    "name": "ResearchAgent",
+                    "usage": {
+                        "state": "reported",
+                        "input_tokens": 500,
+                        "output_tokens": 100,
+                        "cache_read_tokens": null,
+                        "cache_write_tokens": null,
+                        "reasoning_tokens": null,
+                        "total_tokens": 600
+                    },
+                    "cost": {
+                        "state": "partial",
+                        "amount": 0.0005
+                    }
+                }
+            ]
+        },
+        "coverage": {
+            "timing": {
+                "state": "partial",
+                "captured": 9,
+                "expected": 10,
+                "reason": "not_reported"
+            },
+            "responding_model": {
+                "state": "partial",
+                "captured": 3,
+                "expected": 4,
+                "reason": "not_reported"
+            },
+            "usage": {
+                "state": "partial",
+                "captured": 4,
+                "expected": 5,
+                "reason": "not_reported"
+            },
+            "cost": {
+                "state": "partial",
+                "captured": 3,
+                "expected": 4,
+                "reason": "no_price"
+            },
+            "system_prompt": {
+                "state": "not_captured",
+                "captured": 0,
+                "expected": 2,
+                "reason": "not_stored"
+            },
+            "payloads": {
+                "state": "captured",
+                "captured": 11,
+                "expected": 11,
+                "reason": null
+            }
+        }
+    },
+    "span_limit": {
+        "limit": 2000,
+        "total": 11,
+        "truncated": false
+    }
+}

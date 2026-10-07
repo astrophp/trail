@@ -1,5 +1,6 @@
 <?php
 
+use Astro\Trail\Enums\ErrorSource;
 use Astro\Trail\Enums\IssueKind;
 use Astro\Trail\Enums\SpanType;
 use Astro\Trail\Enums\Status;
@@ -108,9 +109,124 @@ function contractDataset(): void
 }
 
 /**
- * @param  array<string, mixed>  $body
+ * One run that shows every shape of the run's page: all four span types, a sub-agent under a tool,
+ * a span in each cost and usage state, a failed span and a failed tool, cut and redacted payloads,
+ * a step that never learnt which model answered, and the run's error beside approvals. A real run
+ * holds only some of this; the response is built to cover the shapes, not to be one run.
  */
-function assertContract(string $name, array $body): void
+function traceContractDataset(): void
+{
+    DB::table('users')->insert(['id' => 7, 'name' => 'Ada', 'email' => 'ada@example.test', 'password' => 'x']);
+
+    $trace = Rows::trace([
+        'id' => '0199c2f4-6a1e-7c3b-9a55-0e8a4c1d2f30',
+        'name' => 'SupportAssistant',
+        'agent_class' => 'App\\Ai\\Agents\\SupportAssistant',
+        'status' => Status::Failed,
+        'issue_kind' => IssueKind::RateLimited,
+        'error_class' => 'Laravel\\Ai\\Exceptions\\RateLimitedException',
+        'error_message' => 'Application rate limited by AI provider [anthropic].',
+        'error_source' => ErrorSource::Run,
+        'error_http_status' => 429,
+        'child_failed' => false,
+        'provider' => 'anthropic',
+        'model' => 'claude-sonnet-4-5',
+        'duration_ms' => 3000.5,
+        'input_tokens' => 1764,
+        'output_tokens' => 410,
+        'cache_read_tokens' => 5,
+        'cache_write_tokens' => 6,
+        'reasoning_tokens' => 7,
+        'cost' => 0.008752,
+        'span_count' => 11,
+        'unpriced_span_count' => 1,
+        'prompt_excerpt' => 'Where is my order?',
+        'conversation_id' => 'conversation-1',
+        'user_id' => '7',
+        'user_type' => User::class,
+        'metadata' => [
+            'resolved_tool_call_ids' => ['toolu_01'],
+            'pending_approvals' => [['tool_call_id' => 'toolu_02', 'tool' => 'refund_order', 'arguments' => ['order' => 1042], 'reason' => 'Moves money']],
+        ],
+        'started_at' => '2026-01-02 11:00:00',
+        'ended_at' => '2026-01-02 11:00:03.000',
+    ]);
+    Rows::bookmark($trace);
+
+    $span = fn (int $sequence, array $attributes) => Rows::span($trace, [...[
+        'id' => sprintf('span-%02d', $sequence), 'sequence' => $sequence, 'status' => Status::Completed,
+        'started_at' => '2026-01-02 11:00:00', 'ended_at' => '2026-01-02 11:00:01', 'duration_ms' => 1000.0,
+    ], ...$attributes]);
+
+    $span(1, [
+        'type' => SpanType::Agent, 'name' => 'SupportAssistant', 'agent_class' => 'App\\Ai\\Agents\\SupportAssistant', 'status' => Status::Failed,
+        'issue_kind' => IssueKind::RateLimited, 'error_class' => 'Laravel\\Ai\\Exceptions\\RateLimitedException',
+        'error_message' => 'Application rate limited by AI provider [anthropic].', 'error_source' => ErrorSource::Run, 'error_http_status' => 429,
+        'provider' => 'anthropic', 'model' => 'claude-sonnet-4-5', 'duration_ms' => 3000.5, 'ended_at' => '2026-01-02 11:00:03.000',
+        'input' => ['prompt' => 'Where is my order?', 'attachments' => [['type' => 'image', 'name' => 'receipt.png']]],
+    ]);
+    $span(2, [
+        'parent_id' => 'span-01', 'name' => 'step', 'attempt' => 1, 'step_number' => 0, 'provider' => 'anthropic', 'model' => 'claude-sonnet-4-5',
+        'responding_model' => 'claude-sonnet-4-5-20250929', 'input_tokens' => 1200, 'output_tokens' => 310, 'cache_read_tokens' => 5,
+        'cache_write_tokens' => 6, 'reasoning_tokens' => 7, 'cost' => 0.00825, 'started_at' => '2026-01-02 11:00:00.100', 'duration_ms' => 840.25, 'ended_at' => '2026-01-02 11:00:00.940',
+        'input' => ['messages' => [['role' => 'user', 'content' => 'Where is my order?']], 'messages_offset' => 0, 'options' => ['max_tokens' => null]],
+        'output' => ['text' => '', 'tool_calls' => [['id' => 'toolu_01', 'name' => 'search', 'arguments' => ['query' => 'order 1042']]], 'finish_reason' => 'tool_use'],
+        'metadata' => ['truncated' => ['input.messages.0.content' => 12000]], 'redacted' => true, 'truncated' => true,
+    ]);
+    $span(3, [
+        'parent_id' => 'span-01', 'type' => SpanType::Tool, 'name' => 'search', 'started_at' => '2026-01-02 11:00:01', 'duration_ms' => 1500.0,
+        'ended_at' => '2026-01-02 11:00:02.500',
+        'input' => ['arguments' => ['query' => 'order 1042']], 'output' => ['result' => 'Order 1042 shipped on Monday.'],
+    ]);
+    $span(4, [
+        'parent_id' => 'span-03', 'type' => SpanType::Agent, 'name' => 'ResearchAgent', 'agent_class' => 'App\\Ai\\Agents\\ResearchAgent',
+        'provider' => 'anthropic', 'model' => 'claude-sonnet-4-5', 'started_at' => '2026-01-02 11:00:01.100', 'duration_ms' => 1200.0, 'ended_at' => '2026-01-02 11:00:02.300',
+        'input' => ['prompt' => 'Find order 1042', 'system' => null], 'output' => ['text' => 'It shipped on Monday.'],
+    ]);
+    $span(5, [
+        'parent_id' => 'span-04', 'name' => 'step', 'step_number' => 0, 'provider' => 'anthropic', 'model' => 'claude-sonnet-4-5', 'responding_model' => null,
+        'input_tokens' => 400, 'output_tokens' => 90, 'started_at' => '2026-01-02 11:00:01.200', 'duration_ms' => 700.0, 'ended_at' => '2026-01-02 11:00:01.900',
+        'input' => ['messages' => [['role' => 'user', 'content' => 'Find order 1042']], 'messages_offset' => 0, 'options' => null],
+        'output' => ['text' => 'It shipped on Monday.', 'tool_calls' => [], 'finish_reason' => 'stop'],
+    ]);
+    $span(6, [
+        'parent_id' => 'span-04', 'name' => 'step', 'step_number' => 1, 'provider' => 'anthropic', 'model' => 'claude-sonnet-4-5',
+        'responding_model' => 'claude-sonnet-4-5-20250929', 'input_tokens' => 100, 'output_tokens' => 10, 'cost' => 0.0005,
+        'started_at' => '2026-01-02 11:00:01.900', 'duration_ms' => 300.0, 'ended_at' => '2026-01-02 11:00:02.200',
+        'input' => ['messages' => [], 'messages_offset' => 2, 'options' => null], 'output' => ['text' => 'Done', 'tool_calls' => [], 'finish_reason' => 'stop'],
+    ]);
+    $span(7, [
+        'parent_id' => 'span-03', 'type' => SpanType::Embedding, 'name' => 'embeddings', 'provider' => 'openai', 'model' => 'text-embedding-3-small',
+        'input_tokens' => 64, 'cost' => 0.000002, 'started_at' => '2026-01-02 11:00:01.050', 'duration_ms' => 210.5, 'ended_at' => '2026-01-02 11:00:01.260',
+        'input' => ['count' => 2, 'dimensions' => 1536], 'output' => ['count' => 2],
+    ]);
+    // Cut, but with nothing to say where.
+    $span(8, [
+        'parent_id' => 'span-01', 'name' => 'step', 'step_number' => 2, 'provider' => 'anthropic', 'model' => 'claude-sonnet-4-5',
+        'responding_model' => 'claude-sonnet-4-5-20250929', 'started_at' => '2026-01-02 11:00:02.500', 'duration_ms' => 100.0, 'ended_at' => '2026-01-02 11:00:02.600',
+        'input' => ['messages' => [], 'messages_offset' => 4, 'options' => null], 'truncated' => true,
+    ]);
+    $span(9, [
+        'parent_id' => 'span-01', 'status' => Status::Running, 'name' => 'step', 'step_number' => 3, 'provider' => 'anthropic', 'model' => 'claude-sonnet-4-5',
+        'started_at' => '2026-01-02 11:00:02.600', 'ended_at' => null, 'duration_ms' => null, 'input' => ['messages' => [], 'messages_offset' => 5, 'options' => null],
+    ]);
+    $span(10, [
+        'parent_id' => 'span-01', 'status' => Status::Failed, 'name' => 'step', 'attempt' => 2, 'step_number' => 0, 'provider' => 'anthropic', 'model' => 'claude-sonnet-4-5',
+        'issue_kind' => IssueKind::RateLimited, 'error_class' => 'Laravel\\Ai\\Exceptions\\RateLimitedException',
+        'error_message' => 'Application rate limited by AI provider [anthropic].', 'error_source' => ErrorSource::Step, 'error_http_status' => 429,
+        'started_at' => '2026-01-02 11:00:02.700', 'duration_ms' => null, 'ended_at' => '2026-01-02 11:00:02.750', 'input' => ['messages' => [], 'messages_offset' => 0, 'options' => null],
+    ]);
+    $span(11, [
+        'parent_id' => 'span-01', 'status' => Status::Failed, 'type' => SpanType::Tool, 'name' => 'lookup', 'issue_kind' => IssueKind::ToolError,
+        'error_class' => 'RuntimeException', 'error_message' => 'Disk full', 'error_source' => ErrorSource::Tool,
+        'started_at' => '2026-01-02 11:00:02.800', 'duration_ms' => 50.0, 'ended_at' => '2026-01-02 11:00:02.850', 'input' => ['arguments' => ['query' => 'stock']],
+    ]);
+}
+
+/**
+ * @param  array<string, mixed>|object  $body  decoded as objects where an empty object must stay one
+ */
+function assertContract(string $name, array|object $body): void
 {
     $path = __DIR__.'/../../../Contract/'.$name.'.json';
     $json = json_encode($body, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR)."\n";
@@ -142,6 +258,15 @@ it('sends the traces response the dashboard expects', function () {
     assertContract('traces', $this->getJson('/trail/api/traces')->assertOk()->json());
 });
 
+it('sends the trace response the dashboard expects', function () {
+    traceContractDataset();
+
+    $response = $this->getJson('/trail/api/traces/0199c2f4-6a1e-7c3b-9a55-0e8a4c1d2f30')->assertOk();
+
+    // Decoded as objects: the span's truncated paths are an empty object when nothing was cut.
+    assertContract('trace', json_decode($response->getContent(), false, flags: JSON_THROW_ON_ERROR));
+});
+
 it('sends the bookmark response the dashboard expects', function () {
     Rows::trace(['id' => '0199c2f4-6a1e-7c3b-9a55-0e8a4c1d2f30', 'status' => Status::Completed, 'started_at' => '2026-01-02 11:00:00']);
 
@@ -155,5 +280,7 @@ it('lists the values of the enums the dashboard mirrors', function () {
     assertContract('enums', [
         'status' => array_column(Status::cases(), 'value'),
         'issue_kind' => array_column(IssueKind::cases(), 'value'),
+        'span_type' => array_column(SpanType::cases(), 'value'),
+        'error_source' => array_column(ErrorSource::cases(), 'value'),
     ]);
 });

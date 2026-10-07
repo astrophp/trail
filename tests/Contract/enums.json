@@ -14,5 +14,16 @@
         "tool_error",
         "exception",
         "abandoned"
+    ],
+    "span_type": [
+        "agent",
+        "step",
+        "tool",
+        "embedding"
+    ],
+    "error_source": [
+        "step",
+        "tool",
+        "run"
     ]
 }

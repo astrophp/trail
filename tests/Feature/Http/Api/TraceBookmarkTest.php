@@ -11,6 +11,7 @@ use Astro\Trail\Users\UserResolver;
 use Illuminate\Auth\GenericUser;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 
 uses(DefinesOtherGuard::class);
@@ -216,9 +217,16 @@ it('passes an id that needs encoding on as that id', function (string $stored, s
     'a long id' => [str_repeat('x', 64), str_repeat('x', 64)],
 ]);
 
-it('answers an id that is too long or cannot be text with a 404', function (string $sent) {
+it('answers an id that is too long or cannot be text with a 404, without a query', function (string $sent) {
+    $queries = 0;
+    DB::listen(function () use (&$queries) {
+        $queries++;
+    });
+
     $this->putJson("/trail/api/traces/{$sent}/bookmark")->assertNotFound()->assertJsonStructure(['message']);
     $this->deleteJson("/trail/api/traces/{$sent}/bookmark")->assertNotFound()->assertJsonStructure(['message']);
+
+    expect($queries)->toBe(0);
 })->with([
     'too long' => [str_repeat('x', 65)],
     'a null byte' => ['a%00b'],
@@ -253,3 +261,15 @@ it('still reads without a CSRF token', function () {
 
     $this->withSession(['_token' => 'secret'])->getJson('/trail/api/meta')->assertOk();
 });
+
+it('refuses an id that is not UTF-8 before the database is reached', function (string $method) {
+    $queries = 0;
+    DB::listen(function () use (&$queries) {
+        $queries++;
+    });
+
+    // The framework refuses a malformed path itself, with a 400, so no run is looked up.
+    $this->json($method, '/trail/api/traces/%FF/bookmark')->assertStatus(400)->assertJsonStructure(['message']);
+
+    expect($queries)->toBe(0);
+})->with(['PUT', 'DELETE']);
