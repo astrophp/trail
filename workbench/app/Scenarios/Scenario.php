@@ -42,5 +42,11 @@ abstract class Scenario
         return null;
     }
 
+    /** Whether the scenario ends with a run that is deliberately never finished, left for capture to write as running. */
+    public function leavesRunUnfinished(): bool
+    {
+        return false;
+    }
+
     abstract public function run(Backend $backend): void;
 }
