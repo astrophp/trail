@@ -14,6 +14,8 @@ class TrailServiceProvider extends ServiceProvider
     {
         $this->mergeConfigFrom(__DIR__.'/../config/trail.php', 'trail');
 
+        $this->app->singleton(Trail::class, fn (Application $app) => new Trail($app));
+
         $this->app->singleton(TraceStore::class, function (Application $app) {
             $connection = config('trail.storage.connection');
 
