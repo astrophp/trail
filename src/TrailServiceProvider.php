@@ -22,6 +22,7 @@ use Illuminate\Contracts\Config\Repository;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Database\ConnectionResolverInterface;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 
 class TrailServiceProvider extends ServiceProvider
@@ -62,6 +63,8 @@ class TrailServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        $this->registerRoutes();
+
         $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
 
         if ($this->app->runningInConsole()) {
@@ -84,5 +87,29 @@ class TrailServiceProvider extends ServiceProvider
             Listeners::register($events, $this->app);
             FlushPoints::register($this->app, $events);
         }
+    }
+
+    /**
+     * Register the dashboard routes, unless Trail or its dashboard is switched off. Laravel itself
+     * skips the route file when the application's routes are cached.
+     */
+    private function registerRoutes(): void
+    {
+        if (! config('trail.enabled') || ! config('trail.dashboard.enabled')) {
+            return;
+        }
+
+        $domain = config('trail.domain');
+        $path = config('trail.path');
+        $path = is_string($path) ? trim($path, '/') : '';
+
+        Route::group([
+            'domain' => is_string($domain) && $domain !== '' ? $domain : null,
+            // Never the root: the dashboard answers every path under its prefix, and would take the application's.
+            'prefix' => $path === '' ? 'trail' : $path,
+            'middleware' => config('trail.middleware'),
+        ], function (): void {
+            $this->loadRoutesFrom(__DIR__.'/../routes/web.php');
+        });
     }
 }

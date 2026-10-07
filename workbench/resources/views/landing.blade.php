@@ -29,7 +29,9 @@
         @else
             <strong>{{ $traces }}</strong>
         @endif
-        &middot; <a href="/trail">Open the Trail dashboard</a>
+        @if (\Illuminate\Support\Facades\Route::has('trail.dashboard'))
+            &middot; <a href="{{ route('trail.dashboard') }}">Open the Trail dashboard</a>
+        @endif
     </p>
 
     @if ($results !== [])

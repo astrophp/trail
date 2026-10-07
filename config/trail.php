@@ -16,6 +16,64 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Trail Dashboard
+    |--------------------------------------------------------------------------
+    |
+    | When disabled, Trail registers no dashboard routes, so the path below
+    | answers 404, and keeps recording.
+    |
+    */
+
+    'dashboard' => [
+        'enabled' => (bool) env('TRAIL_DASHBOARD_ENABLED', true),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Trail Path and Domain
+    |--------------------------------------------------------------------------
+    |
+    | Where the dashboard is served. Slashes around the path are ignored, and an
+    | empty path means "trail": the dashboard answers every address under its
+    | path, so it is never served from the root. A null domain serves it on
+    | every domain the application answers. With cached routes, both are fixed
+    | when the route cache is built.
+    |
+    */
+
+    'path' => env('TRAIL_PATH', 'trail'),
+
+    'domain' => env('TRAIL_DOMAIN'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Trail Middleware
+    |--------------------------------------------------------------------------
+    |
+    | The middleware every dashboard request passes through. Trail's own access
+    | check is not listed here: it is always added after these, so editing this
+    | list can never remove it. A request that fails the check gets a 403 and is
+    | never redirected to a login page. To send guests to one, add your own
+    | "auth" middleware here.
+    |
+    */
+
+    'middleware' => ['web'],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Trail Guard
+    |--------------------------------------------------------------------------
+    |
+    | The authentication guard whose user is checked against the viewTrail gate.
+    | Null uses the application's default guard.
+    |
+    */
+
+    'guard' => env('TRAIL_GUARD'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Trail Storage
     |--------------------------------------------------------------------------
     |

@@ -22,6 +22,18 @@ application's own database, and serves a dashboard from your application.
 - Laravel 12 or 13
 - `laravel/ai` 1.1+
 
+## Dashboard access
+
+The dashboard is served at `/trail`. In the `local` environment anyone can open it. Anywhere else a
+request must pass the `viewTrail` gate, defined in `App\Providers\TrailServiceProvider` (published by
+`php artisan trail:install`); nobody passes until you list who can. Prefer your own check? Override
+`authorization()` in that provider and call `Trail::auth(fn ($request) => ...)`, which replaces the
+gate everywhere, local included. A request that fails the check gets a 403, never a redirect.
+
+- `trail.path` / `TRAIL_PATH`, `trail.domain` / `TRAIL_DOMAIN`: where the dashboard is served.
+- `trail.middleware` (default `web`) and `trail.guard` / `TRAIL_GUARD`: the middleware and the guard whose user is checked. Trail's own access check is always added after the middleware.
+- `TRAIL_DASHBOARD_ENABLED=false` removes the dashboard routes and keeps recording; `TRAIL_ENABLED=false` stops both.
+
 ## Known limits
 
 Trail records what the SDK reports through its events, so a few things cannot be recorded:

@@ -14,6 +14,15 @@ class TrailApplicationServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        $this->authorization();
+    }
+
+    /**
+     * Decide who can open the dashboard. By default that is the viewTrail gate; override this to
+     * call Trail::auth() with your own check instead.
+     */
+    protected function authorization(): void
+    {
         $this->gate();
     }
 
