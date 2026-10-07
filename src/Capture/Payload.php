@@ -35,39 +35,73 @@ final class Payload
     /** The longest an excerpt on a trace row can be, in characters. */
     public const EXCERPT_LENGTH = 1000;
 
-    /** Keys whose whole value is replaced, compared without case, dashes, underscores and spaces. */
+    /**
+     * Keys whose whole value is replaced, compared without case, dashes, underscores and spaces.
+     * An entry that starts with "*" matches any key that ends in the rest, so "*password" covers
+     * "db_password" and "DB-PASSWORD" as well as "password". Entries without it match exactly:
+     * "token" does not match "input_tokens". A "*" is only allowed as the first character.
+     */
     public const DEFAULT_KEYS = [
-        'password', 'passwd', 'password_confirmation', 'secret', 'secret_key', 'token', 'api_key', 'apikey',
-        'x_api_key', 'authorization', 'proxy_authorization', 'access_token', 'refresh_token', 'id_token',
-        'session_token', 'auth_token', 'x_auth_token', 'bearer_token', 'client_secret', 'private_key',
-        'credentials', 'cookie', 'set_cookie',
+        '*password', '*passwd', '*pwd', '*passphrase', '*password_confirmation',
+        '*secret', '*secret_key', '*secret_access_key', '*access_key', '*api_key', '*private_key',
+        '*token', '*authorization', '*cookie', 'credentials',
     ];
 
-    /** Patterns whose matches are replaced inside any string. */
+    /** Patterns whose matches are replaced inside any string. Every one of them runs in linear time. */
     public const DEFAULT_PATTERNS = [
-        // An HTTP bearer token.
-        '/\bBearer\s+[A-Za-z0-9\-._~+\/]{16,}=*/i',
-        // Provider API keys: OpenAI and Anthropic (sk-, sk-ant-, sk-proj-), and the like. A digit is required, so words such as "sk-learn-pipeline" are left alone.
-        '/\b(?:sk|pk|rk)-(?=[A-Za-z0-9_\-]{20,})(?=[A-Za-z0-9_\-]*\d)[A-Za-z0-9_\-]+/',
+        // An HTTP bearer token: the word Bearer, then a long run that looks random (a digit, a dot or an underscore in its first 64 characters).
+        '/\b(?:Bearer|bearer|BEARER)\s{1,8}+(?=[A-Za-z0-9\-._~+\/]{0,63}?[0-9._])[A-Za-z0-9\-._~+\/]{16,}+=*+/',
+        // An HTTP Basic credential after its Authorization label; the label stays.
+        '/\b(?:[Aa]uthorization|AUTHORIZATION)\\\\?["\']?\s{0,8}+[:=]\s{0,8}+\\\\?["\']?(?:[Bb]asic|BASIC)\s{1,8}+\K[A-Za-z0-9+\/]{8,}+=*+/',
+        // The password in a URL's userinfo (scheme://user:password@host); the rest of the URL stays.
+        '/\b[A-Za-z][A-Za-z0-9+.\-]{1,15}:\/\/[^\s:\/@"\'\\\\]{1,128}+:\K[^\s@\/"\'\\\\]{1,128}+(?=@)/',
+        // Provider API keys: OpenAI and Anthropic (sk-, sk-ant-, sk-proj-), and the like. Short hyphenated words are left alone: the key must hold an unbroken run of 24 characters or more.
+        '/\b(?:sk|pk|rk)-(?:[A-Za-z0-9_]{1,32}-){0,5}[A-Za-z0-9_]{24,}+[A-Za-z0-9_\-]*+/',
         // Stripe keys.
-        '/\b(?:sk|rk|pk)_(?:live|test)_[A-Za-z0-9]{16,}/',
-        // GitHub tokens.
-        '/\bgh[pousr]_[A-Za-z0-9]{36,255}\b/',
-        '/\bgithub_pat_[A-Za-z0-9_]{22,255}/',
-        // Slack tokens.
-        '/\bxox[abposr]-[A-Za-z0-9\-]{10,}/',
-        '/\bxapp-\d-[A-Za-z0-9\-]{10,}/',
+        '/\b(?:sk|rk|pk)_(?:live|test)_[A-Za-z0-9]{16,}+/',
+        // GitHub and GitLab tokens.
+        '/\bgh[pousr]_[A-Za-z0-9]{36,255}+\b/',
+        '/\bgithub_pat_[A-Za-z0-9_]{22,255}+/',
+        '/\bglpat-[A-Za-z0-9_\-]{20,}+/',
+        // Slack tokens and incoming-webhook URLs.
+        '/\bxox[abposr]-[A-Za-z0-9\-]{10,}+/',
+        '/\bxapp-\d-[A-Za-z0-9\-]{10,}+/',
+        '/\bhttps:\/\/hooks\.slack\.com\/(?:services|triggers)\/[A-Za-z0-9]{8,}+\/[A-Za-z0-9]{8,}+\/[A-Za-z0-9]{20,}+/',
+        // SendGrid, npm, Hugging Face and Twilio API key SIDs.
+        '/\bSG\.[A-Za-z0-9_\-]{22}\.[A-Za-z0-9_\-]{43}(?![A-Za-z0-9_\-])/',
+        '/\bnpm_[A-Za-z0-9]{36}(?![A-Za-z0-9])/',
+        '/\bhf_[A-Za-z0-9]{30,}+/',
+        '/\bSK[0-9a-f]{32}(?![0-9A-Za-z])/',
         // Google API keys.
         '/\bAIza[0-9A-Za-z_\-]{35}\b/',
         // AWS access key ids, and secret access keys when they are introduced by their label.
         '/\b(?:AKIA|ASIA)[0-9A-Z]{16}\b/',
-        '/\baws[_\- ]?secret[_\- ]?(?:access[_\- ]?)?key\b["\']?\s*[:=]\s*["\']?[A-Za-z0-9\/+=]{40}(?![A-Za-z0-9\/+=])/i',
-        // JSON web tokens.
-        '/\beyJ[A-Za-z0-9_\-]{10,}\.eyJ[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{10,}/',
-        // Private key blocks, complete or cut short.
-        '/-----BEGIN (?:[A-Z0-9]+ )*PRIVATE KEY-----.*?-----END (?:[A-Z0-9]+ )*PRIVATE KEY-----/s',
-        '/-----BEGIN (?:[A-Z0-9]+ )*PRIVATE KEY-----[A-Za-z0-9+\/=\s]*/',
+        '/\b(?:aws|AWS|Aws)[_\- ]?(?:secret|SECRET|Secret)[_\- ]?(?:(?:access|ACCESS|Access)[_\- ]?)?(?:key|KEY|Key)\b\\\\?["\']?\s{0,8}+[:=]\s{0,8}+\\\\?["\']?[A-Za-z0-9\/+=]{40}(?![A-Za-z0-9\/+=])/',
+        // An Azure storage account key in a connection string.
+        '/\bAccountKey=[A-Za-z0-9+\/]{40,}+={0,2}/',
+        // JSON web tokens. They may only start where a token's characters do not continue from the left.
+        '/(?<![A-Za-z0-9_\-])eyJ[A-Za-z0-9_\-]{10,}+\.eyJ[A-Za-z0-9_\-]{10,}+\.[A-Za-z0-9_\-]{10,}+/',
+        // Private key blocks, complete or cut short, also with their line breaks escaped as \n. The body of a
+        // block ends at the first "--", so a scan never reaches past the next block. The patterns that
+        // ignore case are spelled out, since the caseless flag makes a scan far slower on hostile text.
+        '/-----BEGIN (?:[A-Z0-9]{1,16} ){0,4}PRIVATE KEY(?: BLOCK)?-----(?:[^-]++|-(?!-)){0,64}+-----END (?:[A-Z0-9]{1,16} ){0,4}PRIVATE KEY(?: BLOCK)?-----/',
+        '/-----BEGIN (?:[A-Z0-9]{1,16} ){0,4}PRIVATE KEY(?: BLOCK)?-----[A-Za-z0-9+\/=\s\\\\]*+/',
     ];
+
+    /**
+     * How many characters past the length limit a string is scanned. Only the first max_length
+     * characters of a string can ever be stored, so a secret that starts inside them is found as
+     * long as it ends within this many characters of the cut. It is larger than any default secret
+     * shape; a private key block is longer, and the cut-short pattern for it redacts through to
+     * the end of the window.
+     */
+    private const WINDOW = 4096;
+
+    /** The longest an array key is kept, in characters. */
+    private const KEY_LENGTH = 256;
+
+    /** How many times max_length the string content of one captured field may add up to. */
+    private const FIELD_BUDGET = 100;
 
     private const MAX_DEPTH = 32;
 
@@ -77,8 +111,20 @@ final class Payload
     /** @var array<string, true> */
     private array $keys = [];
 
+    /** @var array<string, true> */
+    private array $suffixes = [];
+
+    /** @var list<int> */
+    private array $suffixLengths = [];
+
     /** @var list<string> */
     private array $patterns = [];
+
+    /** Matches a configured key and its value inside a string, such as {"password":"hunter2"}. */
+    private ?string $keyPattern = null;
+
+    /** The most characters of string content one captured field keeps, or null for no limit. */
+    private readonly ?int $budget;
 
     /**
      * @param  list<string>  $keys
@@ -92,18 +138,16 @@ final class Payload
         array $keys = self::DEFAULT_KEYS,
         array $patterns = self::DEFAULT_PATTERNS,
     ) {
-        foreach ($keys as $key) {
-            $this->keys[self::normalise($key)] = true;
-        }
+        $this->budget = $maxLength === null ? null : $maxLength * self::FIELD_BUDGET;
+
+        $this->addKeys($keys);
 
         // Each pattern is checked once, here. A bad one is reported once and skipped.
         foreach ($patterns as $pattern) {
-            if (@preg_match($pattern, '') === false) {
-                $problem = preg_last_error_msg();
+            $problem = self::problem($pattern);
 
-                Guard::run(function () use ($pattern, $problem): void {
-                    throw new InvalidArgumentException("Trail skipped the redaction pattern [{$pattern}]: {$problem}.");
-                });
+            if ($problem !== null) {
+                self::report("Trail skipped the redaction pattern [{$pattern}]: {$problem}.");
 
                 continue;
             }
@@ -115,6 +159,11 @@ final class Payload
     public static function fromConfig(Repository $config): self
     {
         $limit = $config->get('trail.capture.max_length', self::DEFAULT_MAX_LENGTH);
+
+        // A limit read from an environment variable arrives as text.
+        if (is_string($limit) && filter_var($limit, FILTER_VALIDATE_INT) !== false) {
+            $limit = (int) $limit;
+        }
 
         if ($limit !== null && (! is_int($limit) || $limit < 1)) {
             // A limit of zero would store nothing and a negative one means nothing, so the safe default applies.
@@ -177,9 +226,10 @@ final class Payload
     {
         try {
             $state = new CaptureState;
-            $clean = $this->scrub($this->value($value), $path, $state);
+            $context = new PayloadContext(self::MAX_NODES);
+            $clean = $this->scrub(self::safe($value, 0, $context), $path, $state);
 
-            return new Captured($clean, $state->redacted, $state->truncated);
+            return new Captured($clean, $state->redacted, $state->truncated, $state->dropped || $context->dropped);
         } catch (Throwable $e) {
             // Whatever failed, the value is not stored: it could not be shown to be clean.
             Guard::run(function () use ($e): void {
@@ -201,18 +251,21 @@ final class Payload
         }
 
         $clean = [];
+        $suffixes = [];
 
         foreach ($value as $key => $item) {
-            $child = $path === '' ? (string) $key : $path.'.'.$key;
+            // A key can hold a secret as well as a value can: a map from token to user, say.
+            $name = is_string($key) ? self::unique($this->scrubKey($key, $state), $clean, $suffixes) : $key;
+            $child = $path === '' ? (string) $name : $path.'.'.$name;
 
-            if ($item !== null && is_string($key) && $this->redaction && isset($this->keys[self::normalise($key)])) {
+            if ($item !== null && is_string($key) && $this->redaction && $this->sensitive($key)) {
                 $state->redacted = true;
-                $clean[$key] = self::REDACTED;
+                $clean[$name] = self::REDACTED;
 
                 continue;
             }
 
-            $clean[$key] = $this->scrub($item, $child, $state);
+            $clean[$name] = $this->scrub($item, $child, $state);
         }
 
         return $clean;
@@ -227,30 +280,123 @@ final class Payload
             return $text;
         }
 
+        // Once a field has kept more than its budget, what is left of it is dropped.
+        if ($this->budget !== null && $state->kept > $this->budget) {
+            $state->truncate($path, mb_strlen($text, 'UTF-8'));
+
+            return '';
+        }
+
         // Bytes that are not text are described, never stored.
         if (! mb_check_encoding($text, 'UTF-8')) {
             return ['binary' => true, 'bytes' => strlen($text)];
         }
 
-        if ($this->redaction) {
-            $text = $this->redact($text, $state);
+        [$text, $length] = $this->shape($text, $this->maxLength, true, $state);
+
+        if ($length !== null) {
+            $state->truncate($path, $length);
         }
 
-        if ($this->maxLength !== null) {
-            $length = mb_strlen($text, 'UTF-8');
-
-            if ($length > $this->maxLength) {
-                $text = mb_substr($text, 0, $this->maxLength, 'UTF-8');
-                $state->truncated[$path] = $length;
-            }
-        }
+        $state->kept += mb_strlen($text, 'UTF-8');
 
         return $text;
     }
 
-    private function redact(string $text, CaptureState $state): string
+    /**
+     * An array key as it will be stored: scrubbed with the patterns like any string, and cut if it
+     * is very long. The list of sensitive keys does not apply, since a key is not a value.
+     */
+    private function scrubKey(string $key, CaptureState $state): string
     {
-        foreach ($this->patterns as $pattern) {
+        if ($key === '') {
+            return $key;
+        }
+
+        if (! mb_check_encoding($key, 'UTF-8')) {
+            $state->redacted = true;
+
+            return self::REDACTED;
+        }
+
+        [$key, $length] = $this->shape($key, self::KEY_LENGTH, false, $state);
+
+        if ($length !== null) {
+            $state->dropped = true;
+        }
+
+        return $key;
+    }
+
+    /**
+     * A key that two keys did not already become: when scrubbing makes keys equal, the later ones
+     * get a "#2", "#3" and so on, so none of them is lost.
+     *
+     * @param  array<array-key, mixed>  $taken
+     * @param  array<string, int>  $suffixes
+     */
+    private static function unique(string $name, array $taken, array &$suffixes): string
+    {
+        if (! array_key_exists($name, $taken)) {
+            return $name;
+        }
+
+        $number = $suffixes[$name] ?? 1;
+
+        do {
+            $candidate = $name.'#'.++$number;
+        } while (array_key_exists($candidate, $taken));
+
+        $suffixes[$name] = $number;
+
+        return $candidate;
+    }
+
+    /**
+     * A valid UTF-8 text as it will be stored, with the length it was cut from, or null when it was
+     * not cut. It is redacted first and cut afterwards, so a secret cut in half cannot slip past a
+     * pattern. Only the first limit + WINDOW characters are scanned: the rest could never be
+     * stored, and scanning it would let one huge string cost far more than its share. The length
+     * reported is the whole string's, as it would be after redaction.
+     *
+     * @return array{0: string, 1: ?int}
+     */
+    private function shape(string $text, ?int $limit, bool $scanKeys, CaptureState $state): array
+    {
+        $unread = 0;
+
+        if ($limit !== null && strlen($text) > $limit + self::WINDOW) {
+            $total = mb_strlen($text, 'UTF-8');
+
+            if ($total > $limit + self::WINDOW) {
+                $text = mb_substr($text, 0, $limit + self::WINDOW, 'UTF-8');
+                $unread = $total - ($limit + self::WINDOW);
+            }
+        }
+
+        if ($this->redaction) {
+            $text = $this->redact($text, $scanKeys, $state);
+        }
+
+        // Bytes are never fewer than characters, so a short enough text needs no counting.
+        if ($limit === null || ($unread === 0 && strlen($text) <= $limit)) {
+            return [$text, null];
+        }
+
+        $length = mb_strlen($text, 'UTF-8') + $unread;
+
+        if ($length <= $limit) {
+            return [$text, null];
+        }
+
+        return [mb_substr($text, 0, $limit, 'UTF-8'), $length];
+    }
+
+    private function redact(string $text, bool $scanKeys, CaptureState $state): string
+    {
+        $patterns = $scanKeys && $this->keyPattern !== null ? [...$this->patterns, $this->keyPattern] : $this->patterns;
+
+        foreach ($patterns as $pattern) {
             $count = 0;
             $redacted = preg_replace($pattern, self::REDACTED, $text, -1, $count);
 
@@ -268,6 +414,134 @@ final class Payload
         }
 
         return $text;
+    }
+
+    private function sensitive(string $key): bool
+    {
+        $key = self::normalise($key);
+
+        if (isset($this->keys[$key])) {
+            return true;
+        }
+
+        foreach ($this->suffixLengths as $length) {
+            if ($length <= strlen($key) && isset($this->suffixes[substr($key, -$length)])) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param  list<string>  $keys
+     */
+    private function addKeys(array $keys): void
+    {
+        $exact = [];
+        $suffixes = [];
+
+        foreach ($keys as $key) {
+            $wildcard = str_starts_with($key, '*');
+            $name = self::normalise($wildcard ? substr($key, 1) : $key);
+
+            // A "*" anywhere but the start, or nothing after it, would match everything or nothing useful.
+            if ($name === '' || str_contains($name, '*')) {
+                self::report("Trail skipped the redaction key [{$key}]: a * is only allowed as the first character, in front of a name.");
+
+                continue;
+            }
+
+            if ($wildcard) {
+                $suffixes[$name] = true;
+            } else {
+                $exact[$name] = true;
+            }
+        }
+
+        $this->keys = $exact;
+        $this->suffixes = $suffixes;
+        $this->suffixLengths = array_values(array_unique(array_map(strlen(...), array_map(strval(...), array_keys($suffixes)))));
+
+        $this->keyPattern = $this->keyPattern(array_map(strval(...), array_keys($exact)), array_map(strval(...), array_keys($suffixes)));
+    }
+
+    /**
+     * One expression for every key, built once: the quoted forms "key":"value", 'key':'value' and
+     * \"key\":\"value\", which JSON text and array dumps are made of. Only the value is replaced.
+     * A key matches under the same normalisation as everywhere else, so separators may sit between
+     * any two of its characters. A secret in free text with no recognisable shape is not found.
+     *
+     * @param  list<string>  $exact
+     * @param  list<string>  $suffixes
+     */
+    private function keyPattern(array $exact, array $suffixes): ?string
+    {
+        if ($exact === [] && $suffixes === []) {
+            return null;
+        }
+
+        $spell = fn (string $name): string => implode('[-_ ]*+', array_map(fn (string $character): string => preg_quote($character, '/'), str_split($name)));
+
+        $names = [];
+
+        if ($exact !== []) {
+            $names[] = '[-_ ]*+(?:'.implode('|', array_map($spell, $exact)).')';
+        }
+
+        if ($suffixes !== []) {
+            // The text in front of a suffix is bounded, so no quote can start a long scan.
+            $names[] = '[^"\'\\\\]{0,64}?(?:'.implode('|', array_map($spell, $suffixes)).')';
+        }
+
+        $name = '(?(DEFINE)(?<name>(?:'.implode('|', $names).')[-_ ]*+))';
+        $plain = '(?<q>["\'])(?&name)\k<q>\s{0,8}+:\s{0,8}+\k<q>\K(?:(?:(?!\k<q>)[^\\\\])++|\\\\.)++(?=\k<q>|\z)';
+        $escaped = '\\\\"(?&name)\\\\"\s{0,8}+:\s{0,8}+\\\\"\K(?:[^"\\\\]++|\\\\{3}"|\\\\(?!"))++(?=\\\\"|\z)';
+
+        $pattern = '/'.$name.'(?:'.$plain.'|'.$escaped.')/i';
+        $problem = self::problem($pattern);
+
+        if ($problem !== null) {
+            self::report("Trail cannot redact sensitive keys inside text: {$problem}.");
+
+            return null;
+        }
+
+        return $pattern;
+    }
+
+    /**
+     * Why a pattern does not compile, or null when it does.
+     */
+    private static function problem(string $pattern): ?string
+    {
+        $message = null;
+
+        // A handler of our own sees the warning whatever the host app does with warnings.
+        set_error_handler(function (int $level, string $text) use (&$message): bool {
+            $message = $text;
+
+            return true;
+        });
+
+        try {
+            $compiled = preg_match($pattern, '');
+        } finally {
+            restore_error_handler();
+        }
+
+        if ($compiled !== false) {
+            return null;
+        }
+
+        return trim((string) preg_replace('/^preg_match\(\): /', '', $message ?? preg_last_error_msg()));
+    }
+
+    private static function report(string $message): void
+    {
+        Guard::run(function () use ($message): void {
+            throw new InvalidArgumentException($message);
+        });
     }
 
     private static function normalise(string $key): string
@@ -432,6 +706,9 @@ final class Payload
     private static function safe(mixed $value, int $depth, PayloadContext $context): mixed
     {
         if ($depth >= self::MAX_DEPTH || $context->budget-- <= 0) {
+            // Cutting a null loses nothing; anything else is lost without a length to report.
+            $context->dropped = $context->dropped || $value !== null;
+
             return null;
         }
 

@@ -102,13 +102,20 @@ final class SpanDraft
             $this->redacted = true;
         }
 
-        if ($captured->truncated === []) {
+        if ($captured->truncated === [] && ! $captured->dropped) {
             return;
         }
 
         $this->truncated = true;
+
+        if ($captured->truncated === []) {
+            return;
+        }
+
+        // Only the first paths are kept, so for a span with very many cuts the list is partial.
         $existing = $this->metadata['truncated'] ?? [];
-        $this->setMetadata('truncated', [...(is_array($existing) ? $existing : []), ...$captured->truncated]);
+        $paths = [...(is_array($existing) ? $existing : []), ...$captured->truncated];
+        $this->setMetadata('truncated', array_slice($paths, 0, CaptureState::MAX_PATHS, true));
     }
 
     public function fail(Failure $failure): void

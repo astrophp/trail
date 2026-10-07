@@ -302,11 +302,65 @@ describe('settings', function () {
 
         Exceptions::assertReportedCount(1);
         expect(strlen($captured->value))->toBe(Payload::DEFAULT_MAX_LENGTH);
-    })->with([0, -5, 'ten']);
+    })->with([0, -5, 'ten', '0', '-5', '5000.5', '', true]);
+
+    it('accepts a limit that arrives as text, as it does from an environment variable', function (mixed $limit, int $expected) {
+        Exceptions::fake();
+
+        $payload = Payload::fromConfig(new Repository(['trail' => ['capture' => ['max_length' => $limit]]]));
+
+        Exceptions::assertNothingReported();
+        expect(mb_strlen($payload->capture(str_repeat('x', 12_000))->value))->toBe($expected);
+    })->with([['5000', 5000], [' 42 ', 42], [7, 7]]);
+
+    it('says why a pattern is not valid', function () {
+        Exceptions::fake();
+
+        new Payload(patterns: ['/(unclosed/']);
+
+        Exceptions::assertReported(fn (InvalidArgumentException $e) => str_contains($e->getMessage(), 'missing closing parenthesis') && ! str_contains($e->getMessage(), 'Internal error'));
+    });
+
+    it('reports a key entry that cannot work, and keeps the rest', function () {
+        Exceptions::fake();
+
+        $payload = new Payload(keys: ['*', 'pa*ss', '**x', '*_', '', 'ssn']);
+
+        Exceptions::assertReportedCount(5);
+        expect($payload->capture(['ssn' => '1', 'pa*ss' => '2', 'x' => '3', 'anything' => '4'])->value)
+            ->toBe(['ssn' => '[redacted]', 'pa*ss' => '2', 'x' => '3', 'anything' => '4']);
+    });
 
     it('takes no limit from null', function () {
         $payload = Payload::fromConfig(new Repository(['trail' => ['capture' => ['max_length' => null]]]));
 
         expect(strlen($payload->capture(str_repeat('x', 30_000))->value))->toBe(30_000);
     });
+});
+
+it('builds nothing when capture is off', function () {
+    config(['trail.capture.enabled' => false]);
+    $recorder = app(Recorder::class);
+    $built = 0;
+
+    $captured = (new ReflectionMethod($recorder, 'capturing'))->invoke($recorder, 'input', function () use (&$built): array {
+        $built++;
+
+        return ['messages' => 'x'];
+    });
+
+    expect($built)->toBe(0)->and($captured->value)->toBeNull();
+
+    config(['trail.capture.enabled' => true]);
+    app()->forgetInstance(Payload::class);
+    app()->forgetInstance(Recorder::class);
+    $recorder = app(Recorder::class);
+
+    $captured = (new ReflectionMethod($recorder, 'capturing'))->invoke($recorder, 'input', function () use (&$built): array {
+        $built++;
+
+        return ['messages' => 'x'];
+    });
+
+    expect($built)->toBe(1)->and($captured->value)->toBe(['messages' => 'x']);
 });
