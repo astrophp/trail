@@ -10,21 +10,24 @@ use Throwable;
  */
 final class ScenarioRunner
 {
-    private readonly Mode $mode;
+    private readonly ?string $provider;
 
-    public function __construct(private readonly Registry $registry, ?Mode $mode = null)
+    public function __construct(private readonly Registry $registry)
     {
-        $this->mode = $mode ?? Mode::detect();
+        $this->provider = Backend::detect();
     }
 
-    public function mode(): Mode
+    public function isLive(): bool
     {
-        return $this->mode;
+        return $this->provider !== null;
     }
 
-    public function registry(): Registry
+    /**
+     * Where the real provider's calls go, or "offline".
+     */
+    public function label(): string
     {
-        return $this->registry;
+        return $this->provider === null ? 'offline' : "live ({$this->provider})";
     }
 
     /**
@@ -32,14 +35,14 @@ final class ScenarioRunner
      */
     public function runsLive(Scenario $scenario): bool
     {
-        return $this->mode->provider !== null && $scenario->supportsLive();
+        return $this->provider !== null && $scenario->supportsLive();
     }
 
     public function run(Scenario $scenario): Result
     {
-        $live = $this->runsLive($scenario);
-        $backend = $live && $this->mode->provider !== null ? Backend::live($this->mode->provider) : Backend::offline();
-        $label = $live ? $this->mode->label() : 'offline';
+        $provider = $scenario->supportsLive() ? $this->provider : null;
+        $backend = $provider === null ? Backend::offline() : Backend::live($provider);
+        $label = $provider === null ? 'offline' : $this->label();
 
         try {
             $backend->scoped(fn () => $scenario->run($backend));

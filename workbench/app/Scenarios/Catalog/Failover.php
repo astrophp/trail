@@ -5,23 +5,13 @@ namespace Workbench\App\Scenarios\Catalog;
 use Astro\Trail\Tests\Fixtures\Sdk\FakeAnthropic;
 use Workbench\App\Agents\SupportAssistant;
 use Workbench\App\Scenarios\Backend;
+use Workbench\App\Scenarios\Scenario;
 
-class Failover extends Base
+class Failover extends Scenario
 {
-    public function key(): string
-    {
-        return 'failover';
-    }
+    protected string $title = 'Failover that recovers';
 
-    public function title(): string
-    {
-        return 'Failover that recovers';
-    }
-
-    public function description(): string
-    {
-        return 'The first provider is overloaded, the backup provider answers, and the run completes.';
-    }
+    protected string $description = 'The first provider is overloaded, the backup provider answers, and the run completes.';
 
     public function supportsLive(): bool
     {

@@ -6,23 +6,13 @@ use Astro\Trail\Tests\Fixtures\Sdk\FakeAnthropic;
 use Workbench\App\Agents\AccountAssistant;
 use Workbench\App\Scenarios\Backend;
 use Workbench\App\Scenarios\Customers;
+use Workbench\App\Scenarios\Scenario;
 
-class ApprovalGatedTool extends Base
+class ApprovalGatedTool extends Scenario
 {
-    public function key(): string
-    {
-        return 'approval-gated-tool';
-    }
+    protected string $title = 'An approval-gated tool';
 
-    public function title(): string
-    {
-        return 'An approval-gated tool';
-    }
-
-    public function description(): string
-    {
-        return 'The assistant asks for a refund, which needs a person to approve it, so the run pauses.';
-    }
+    protected string $description = 'The assistant asks for a refund, which needs a person to approve it, so the run pauses.';
 
     public function run(Backend $backend): void
     {

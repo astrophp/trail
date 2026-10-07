@@ -5,23 +5,13 @@ namespace Workbench\App\Scenarios\Catalog;
 use Astro\Trail\Tests\Fixtures\Sdk\FakeAnthropic;
 use Workbench\App\Agents\SupportAssistant;
 use Workbench\App\Scenarios\Backend;
+use Workbench\App\Scenarios\Scenario;
 
-class SeveralSteps extends Base
+class SeveralSteps extends Scenario
 {
-    public function key(): string
-    {
-        return 'several-steps';
-    }
+    protected string $title = 'Several steps';
 
-    public function title(): string
-    {
-        return 'Several steps';
-    }
-
-    public function description(): string
-    {
-        return 'One question takes three model steps: a stock check, an order lookup and the answer.';
-    }
+    protected string $description = 'One question takes three model steps: a stock check, an order lookup and the answer.';
 
     public function run(Backend $backend): void
     {

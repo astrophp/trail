@@ -5,25 +5,15 @@ namespace Workbench\App\Scenarios\Catalog;
 use Astro\Trail\Tests\Fixtures\Sdk\FakeAnthropic;
 use Workbench\App\Agents\SupportAssistant;
 use Workbench\App\Scenarios\Backend;
+use Workbench\App\Scenarios\Scenario;
 use Workbench\App\Tools\CarrierUnavailable;
 use Workbench\App\Tools\TrackShipment;
 
-class ThrowingTool extends Base
+class ThrowingTool extends Scenario
 {
-    public function key(): string
-    {
-        return 'throwing-tool';
-    }
+    protected string $title = 'A throwing tool';
 
-    public function title(): string
-    {
-        return 'A throwing tool';
-    }
-
-    public function description(): string
-    {
-        return 'The carrier tracking tool throws, so the whole run fails.';
-    }
+    protected string $description = 'The carrier tracking tool throws, so the whole run fails.';
 
     /**
      * A real model decides for itself whether to call the tool, so the failure cannot be counted on.

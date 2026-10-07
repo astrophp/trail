@@ -6,23 +6,13 @@ use Astro\Trail\Tests\Fixtures\Sdk\FakeAnthropic;
 use Workbench\App\Agents\PolicyResearcher;
 use Workbench\App\Agents\SupportAssistant;
 use Workbench\App\Scenarios\Backend;
+use Workbench\App\Scenarios\Scenario;
 
-class Delegation extends Base
+class Delegation extends Scenario
 {
-    public function key(): string
-    {
-        return 'delegation';
-    }
+    protected string $title = 'Delegation to a sub-agent';
 
-    public function title(): string
-    {
-        return 'Delegation to a sub-agent';
-    }
-
-    public function description(): string
-    {
-        return 'The assistant hands a policy question to the policy researcher, which answers on its own.';
-    }
+    protected string $description = 'The assistant hands a policy question to the policy researcher, which answers on its own.';
 
     public function run(Backend $backend): void
     {

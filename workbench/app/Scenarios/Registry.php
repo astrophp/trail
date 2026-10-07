@@ -39,24 +39,19 @@ final class Registry
         EmbeddingsInTool::class,
     ];
 
-    /** @var array<string, Scenario>|null */
-    private ?array $scenarios = null;
-
     /**
      * @return array<string, Scenario> keyed by scenario key
      */
     public function all(): array
     {
-        if ($this->scenarios === null) {
-            $this->scenarios = [];
+        $scenarios = [];
 
-            foreach (self::SCENARIOS as $class) {
-                $scenario = new $class;
-                $this->scenarios[$scenario->key()] = $scenario;
-            }
+        foreach (self::SCENARIOS as $class) {
+            $scenario = new $class;
+            $scenarios[$scenario->key()] = $scenario;
         }
 
-        return $this->scenarios;
+        return $scenarios;
     }
 
     public function has(string $key): bool

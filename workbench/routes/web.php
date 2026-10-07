@@ -9,7 +9,7 @@ use Workbench\App\Scenarios\Result;
 use Workbench\App\Scenarios\ScenarioRunner;
 
 Route::middleware(LoopbackOnly::class)->group(function () {
-    Route::get('/', function (ScenarioRunner $runner) {
+    Route::get('/', function (ScenarioRunner $runner, Registry $registry) {
         try {
             $traces = Trace::query()->count();
         } catch (Throwable) {
@@ -19,7 +19,7 @@ Route::middleware(LoopbackOnly::class)->group(function () {
 
         return view('workbench::landing', [
             'runner' => $runner,
-            'scenarios' => $runner->registry()->all(),
+            'scenarios' => $registry->all(),
             'traces' => $traces,
             'results' => session('results', []),
         ]);

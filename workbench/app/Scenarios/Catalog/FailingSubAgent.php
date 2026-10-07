@@ -6,23 +6,13 @@ use Astro\Trail\Tests\Fixtures\Sdk\FakeAnthropic;
 use Workbench\App\Agents\PolicyResearcher;
 use Workbench\App\Agents\SupportAssistant;
 use Workbench\App\Scenarios\Backend;
+use Workbench\App\Scenarios\Scenario;
 
-class FailingSubAgent extends Base
+class FailingSubAgent extends Scenario
 {
-    public function key(): string
-    {
-        return 'failing-sub-agent';
-    }
+    protected string $title = 'A failing sub-agent';
 
-    public function title(): string
-    {
-        return 'A failing sub-agent';
-    }
-
-    public function description(): string
-    {
-        return 'The policy researcher fails with a server error; the assistant carries on and still answers.';
-    }
+    protected string $description = 'The policy researcher fails with a server error; the assistant carries on and still answers.';
 
     public function supportsLive(): bool
     {

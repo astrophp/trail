@@ -5,23 +5,13 @@ namespace Workbench\App\Scenarios\Catalog;
 use Astro\Trail\Tests\Fixtures\Sdk\FakeAnthropic;
 use Workbench\App\Agents\SupportAssistant;
 use Workbench\App\Scenarios\Backend;
+use Workbench\App\Scenarios\Scenario;
 
-class StreamedRun extends Base
+class StreamedRun extends Scenario
 {
-    public function key(): string
-    {
-        return 'streamed-run';
-    }
+    protected string $title = 'A streamed run';
 
-    public function title(): string
-    {
-        return 'A streamed run';
-    }
-
-    public function description(): string
-    {
-        return 'The assistant looks an order up and streams its answer back as it is written.';
-    }
+    protected string $description = 'The assistant looks an order up and streams its answer back as it is written.';
 
     public function run(Backend $backend): void
     {
