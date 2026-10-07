@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { ThemeProvider } from '@/app/providers/theme-provider'
 import { CataloguePage } from '@/catalogue/catalogue-page'
 import { locateEntries } from '@/catalogue/entries'
+import { Toaster } from '@/components/ui/sonner'
 import type { CatalogueEntry } from '@/catalogue/types'
 import './catalogue.css'
 
@@ -20,6 +21,7 @@ if (root) {
         <StrictMode>
             <ThemeProvider>
                 <CataloguePage entries={locateEntries(modules)} />
+                <Toaster position="top-center" />
             </ThemeProvider>
         </StrictMode>,
     )

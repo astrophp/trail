@@ -88,8 +88,9 @@ const nextButton = () => screen.getByRole('button', { name: 'Next page' })
 const expectSearch = (expected: string) =>
     waitFor(() => expect(window.location.search).toBe(expected))
 
+/** The rows are in: the footer only exists once the answer has arrived. */
 async function loaded() {
-    await screen.findByRole('table', { name: 'Recorded runs' })
+    await screen.findByRole('navigation', { name: 'Pagination' })
 }
 
 beforeEach(() => {
@@ -402,57 +403,55 @@ describe('a page past the end', () => {
         )
         renderApp('/traces?page=99')
 
-        expect(screen.queryByRole('table')).not.toBeInTheDocument()
+        expect(screen.getByRole('table')).toHaveAttribute('aria-busy', 'true')
+        expect(screen.queryByText('No runs found')).not.toBeInTheDocument()
     })
 })
 
-describe('while the runs load, fail or are missing', () => {
-    it('says so while the first page loads, with no table and no count', () => {
+const skeletonTable = () => screen.getByRole('table', { name: 'Recorded runs' })
+const skeletonRowCount = () =>
+    skeletonTable().querySelectorAll('tbody tr').length
+const pickRange = async (name: string) => {
+    await userEvent.click(screen.getByRole('combobox', { name: 'Time range' }))
+    await userEvent.click(screen.getByRole('option', { name }))
+}
+
+describe('while the runs load', () => {
+    it('shows a table-shaped skeleton on the first load, with no count and no zero', () => {
         mockApi(never)
         renderApp('/traces')
 
-        expect(screen.getByRole('status')).toHaveTextContent('Loading runs…')
-        expect(screen.queryByRole('table')).not.toBeInTheDocument()
+        const table = skeletonTable()
+
+        expect(table).toHaveAttribute('aria-busy', 'true')
+        expect(
+            within(
+                screen
+                    .getByRole('table')
+                    .closest('[data-slot="data-table"]') as HTMLElement,
+            ).getByRole('status'),
+        ).toHaveTextContent('Loading')
+        expect(within(table).getAllByRole('columnheader')).toHaveLength(7)
+        expect(skeletonRowCount()).toBe(8)
+        expect(
+            [...table.querySelectorAll('tbody td')].map((c) => c.textContent),
+        ).toEqual(Array(8 * 7).fill(''))
         expect(screen.queryByText(/traces$/)).not.toBeInTheDocument()
+        expect(screen.queryByText('Loading runs…')).not.toBeInTheDocument()
     })
 
-    it('says so when the request fails', async () => {
-        mockApi(() => json({ message: 'No.' }, 500))
+    it('replaces the skeleton with the rows', async () => {
+        const first = deferred()
+        mockApi(() => first.promise)
         renderApp('/traces')
 
-        expect(await screen.findByRole('alert')).toHaveTextContent(
-            'The runs could not be loaded.',
-        )
-        expect(screen.queryByRole('table')).not.toBeInTheDocument()
-    })
+        expect(skeletonRowCount()).toBe(8)
 
-    it('says so when the range holds no runs', async () => {
-        mockApi(() => json(emptyList))
-        renderApp('/traces')
+        first.resolve(new Response(JSON.stringify(listFor('?page=1'))))
+        await screen.findByText('Page 1 of 3')
 
-        expect(
-            await screen.findByText('No runs in this time range.'),
-        ).toHaveAttribute('role', 'status')
-        expect(screen.queryByRole('table')).not.toBeInTheDocument()
-    })
-
-    it('does not claim a new range is empty because the previous one was', async () => {
-        const fetchMock = mockApi(() => json(emptyList))
-        renderApp('/traces?range=1h')
-        await screen.findByText('No runs in this time range.')
-
-        answerWith(fetchMock, never)
-        await userEvent.click(
-            screen.getByRole('combobox', { name: 'Time range' }),
-        )
-        await userEvent.click(
-            screen.getByRole('option', { name: 'Last 7 days' }),
-        )
-
-        await screen.findByText('Loading runs…')
-        expect(
-            screen.queryByText('No runs in this time range.'),
-        ).not.toBeInTheDocument()
+        expect(skeletonTable()).not.toHaveAttribute('aria-busy')
+        expect(dataRows()).toHaveLength(fixture.data.length)
     })
 
     it('keeps the rows on screen, marked busy, while the next page loads', async () => {
@@ -467,12 +466,12 @@ describe('while the runs load, fail or are missing', () => {
 
         await waitFor(() => expect(traceUrls(fetchMock)).toHaveLength(2))
         expect(dataRows()).toHaveLength(fixture.data.length)
-        expect(screen.queryByText('Loading runs…')).not.toBeInTheDocument()
+        expect(screen.getByText('Loading')).toHaveAttribute('role', 'status')
 
-        const region = screen.getByRole('table').closest('[aria-busy]')
+        const region = screen.getByRole('table')
 
         expect(region).toHaveAttribute('aria-busy', 'true')
-        expect(region).toHaveClass('opacity-60')
+        expect(region.querySelector('tbody')).toHaveClass('opacity-60')
         // The footer still describes the rows on screen, not the URL that has moved on.
         expect(screen.getByText('Page 1 of 3')).toBeVisible()
         expect(screen.getByText('1–25 of 60 traces')).toBeVisible()
@@ -482,7 +481,114 @@ describe('while the runs load, fail or are missing', () => {
         )
 
         await screen.findByText('Page 2 of 3')
-        expect(screen.getByRole('table').closest('[aria-busy]')).toBeNull()
+        expect(screen.getByRole('table')).not.toHaveAttribute('aria-busy')
+    })
+
+    it('does not claim a new range is empty because the previous one was', async () => {
+        const fetchMock = mockApi(() => json(emptyList))
+        renderApp('/traces?range=1h')
+        await screen.findByText('No runs found')
+
+        answerWith(fetchMock, never)
+        await pickRange('Last 24 hours')
+
+        await waitFor(() =>
+            expect(skeletonTable()).toHaveAttribute('aria-busy', 'true'),
+        )
+        expect(screen.queryByText('No runs found')).not.toBeInTheDocument()
+    })
+})
+
+describe('when the runs cannot be loaded', () => {
+    it('shows the API’s message and status, and no table', async () => {
+        mockApi(() => json({ message: 'The database is down.' }, 500))
+        renderApp('/traces')
+
+        const alert = await screen.findByRole('alert')
+
+        expect(alert).toHaveTextContent('The runs could not be loaded')
+        expect(alert).toHaveTextContent('The database is down.')
+        expect(alert).toHaveTextContent('Error 500')
+        expect(screen.queryByRole('table')).not.toBeInTheDocument()
+    })
+
+    it('keeps the error state and its button while a retry runs, and again after a second failure', async () => {
+        const fetchMock = mockApi(() => json({ message: 'Down.' }, 500))
+        renderApp('/traces')
+        await screen.findByRole('alert')
+
+        const retry = deferred()
+        answerWith(fetchMock, () => retry.promise)
+
+        const button = screen.getByRole('button', { name: 'Try again' })
+        button.focus()
+        await userEvent.click(button)
+
+        await waitFor(() => expect(traceUrls(fetchMock)).toHaveLength(2))
+        const busy = screen.getByRole('button', { name: 'Trying again…' })
+
+        expect(busy).toBe(button)
+        expect(busy).toHaveAttribute('aria-disabled', 'true')
+        expect(busy).toHaveFocus()
+        expect(screen.queryByRole('table')).not.toBeInTheDocument()
+
+        // Pressing it meanwhile asks for nothing more.
+        await userEvent.click(busy)
+        expect(traceUrls(fetchMock)).toHaveLength(2)
+
+        // It fails again: the error is updated, and focus is still on the button.
+        retry.resolve(
+            new Response(JSON.stringify({ message: 'Still down.' }), {
+                status: 503,
+            }),
+        )
+        expect(await screen.findByText('Still down.')).toBeVisible()
+        expect(screen.getByText('Error 503')).toBeVisible()
+        expect(screen.getByRole('button', { name: 'Try again' })).toHaveFocus()
+
+        // And once more, this time it works.
+        answerWith(fetchMock, (url) => json(listFor(url)))
+        await userEvent.click(screen.getByRole('button', { name: 'Try again' }))
+
+        await screen.findByText('Page 1 of 3')
+        expect(dataRows()).toHaveLength(fixture.data.length)
+        expect(traceUrls(fetchMock)).toHaveLength(3)
+        expect(
+            screen.getByRole('heading', { level: 1, name: 'Traces' }),
+        ).toHaveFocus()
+    })
+
+    it('does not carry a failure over to another view', async () => {
+        const fetchMock = mockApi(() => json({ message: 'Down.' }, 500))
+        renderApp('/traces')
+        await screen.findByRole('alert')
+
+        answerWith(fetchMock, never)
+        await pickRange('Last 7 days')
+
+        await waitFor(() =>
+            expect(skeletonTable()).toHaveAttribute('aria-busy', 'true'),
+        )
+        expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    })
+
+    it('says the server could not be reached on a network failure, and recovers', async () => {
+        const fetchMock = mockApi(() =>
+            Promise.reject(new TypeError('Failed to fetch')),
+        )
+        renderApp('/traces')
+
+        const alert = await screen.findByRole('alert')
+
+        expect(alert).toHaveTextContent('The server could not be reached.')
+        expect(alert).not.toHaveTextContent(/Error \d/)
+
+        answerWith(fetchMock, (url) => json(listFor(url)))
+        await userEvent.click(screen.getByRole('button', { name: 'Try again' }))
+        await screen.findByText('Page 1 of 3')
+
+        expect(dataRows()).toHaveLength(fixture.data.length)
+        expect(document.body).not.toHaveFocus()
     })
 
     it('does not leave another page’s rows up when the next page fails', async () => {
@@ -494,9 +600,45 @@ describe('while the runs load, fail or are missing', () => {
 
         await userEvent.click(nextButton())
 
-        expect(await screen.findByRole('alert')).toHaveTextContent(
-            'The runs could not be loaded.',
-        )
+        expect(await screen.findByRole('alert')).toHaveTextContent('No.')
         expect(screen.queryByRole('table')).not.toBeInTheDocument()
+    })
+})
+
+describe('when the range holds no runs', () => {
+    it('says so inside the table card, with the header and no pagination', async () => {
+        mockApi(() => json(emptyList))
+        renderApp('/traces')
+
+        expect(await screen.findByText('No runs found')).toBeVisible()
+        expect(
+            screen.getByText('Runs appear here as your agents run.'),
+        ).toBeVisible()
+        expect(screen.queryByRole('button', { name: /show|range/i })).toBeNull()
+        expect(
+            screen
+                .getByRole('table', { name: 'Recorded runs' })
+                .closest('[data-slot="data-table"]'),
+        ).toContainElement(screen.getByText('No runs found'))
+        expect(dataRows()).toHaveLength(0)
+        expect(
+            screen.queryByRole('navigation', { name: 'Pagination' }),
+        ).not.toBeInTheDocument()
+    })
+
+    it('leaves focus on the range select when the range is changed from it', async () => {
+        const fetchMock = mockApi((url) =>
+            url.includes('range=7d') ? json(listFor(url)) : json(emptyList),
+        )
+        renderApp('/traces')
+        await screen.findByText('No runs found')
+
+        await pickRange('Last 7 days')
+
+        await screen.findByText('Page 1 of 3')
+        expect(lastTraceUrl(fetchMock)).toContain('range=7d')
+        expect(
+            screen.getByRole('combobox', { name: 'Time range' }),
+        ).toHaveFocus()
     })
 })
