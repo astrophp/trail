@@ -142,6 +142,15 @@ it('sends the traces response the dashboard expects', function () {
     assertContract('traces', $this->getJson('/trail/api/traces')->assertOk()->json());
 });
 
+it('sends the bookmark response the dashboard expects', function () {
+    Rows::trace(['id' => '0199c2f4-6a1e-7c3b-9a55-0e8a4c1d2f30', 'status' => Status::Completed, 'started_at' => '2026-01-02 11:00:00']);
+
+    // The environment is "local", where the framework checks CSRF tokens even in tests.
+    $response = $this->withSession(['_token' => 'token'])->putJson('/trail/api/traces/0199c2f4-6a1e-7c3b-9a55-0e8a4c1d2f30/bookmark', [], ['X-CSRF-TOKEN' => 'token']);
+
+    assertContract('bookmark', $response->assertOk()->json());
+});
+
 it('lists the values of the enums the dashboard mirrors', function () {
     assertContract('enums', [
         'status' => array_column(Status::cases(), 'value'),

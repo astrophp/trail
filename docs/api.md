@@ -221,3 +221,28 @@ The recorded runs in a time range, filtered, sorted and paginated.
   the same view as the rows whichever status is selected.
 - `slow_threshold_ms` is the duration `slow` compared against. It is `null` when `slow` is not
   applied, and when no run in the range has a duration, in which case `slow` matches nothing.
+
+### `PUT /api/traces/{id}/bookmark`, `DELETE /api/traces/{id}/bookmark`
+
+Bookmarks the run, or removes its bookmark. These are the API's first writes. Both are
+idempotent and answer `200` with the run's bookmark state:
+
+```json
+{ "data": { "trace_id": "0199c2f4-6a1e-7c3b-9a55-0e8a4c1d2f30", "bookmarked": true } }
+```
+
+`bookmarked` is `true` after a `PUT` and `false` after a `DELETE`, whether or not the bookmark
+was there before.
+
+- An unknown run is a `404` for both methods.
+- Bookmarks are shared: a run has at most one, and every dashboard user sees it. Anyone with
+  access to the dashboard can remove it, not only the user who added it.
+- A bookmark records who added it: the id and type of the authenticated user on the dashboard's
+  guard (`trail.guard`), in the form capture stores a run's user, or nulls when nobody is signed
+  in, as in the `local` environment without a login. Bookmarking a run that is already bookmarked
+  changes nothing: the first bookmark and its user stay.
+- A write passes the same access check as a read, so a denied request is a `403` like any other
+  endpoint's.
+- A write goes through the `web` middleware's request-forgery protection. Send the token in the
+  `X-CSRF-TOKEN` header (`csrfToken` in `window.Trail`). A request that protection refuses is a
+  `419`.

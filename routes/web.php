@@ -1,6 +1,7 @@
 <?php
 
 use Astro\Trail\Http\Controllers\Api\MetaController;
+use Astro\Trail\Http\Controllers\Api\TraceBookmarkController;
 use Astro\Trail\Http\Controllers\Api\TraceIndexController;
 use Astro\Trail\Http\Controllers\DashboardController;
 use Astro\Trail\Http\Middleware\Authorize;
@@ -11,6 +12,8 @@ use Illuminate\Support\Facades\Route;
 Route::prefix('api')->middleware([RespondWithJson::class, Authorize::class])->group(function () {
     Route::get('meta', MetaController::class)->name('trail.api.meta');
     Route::get('traces', TraceIndexController::class)->name('trail.api.traces.index');
+    Route::put('traces/{id}/bookmark', [TraceBookmarkController::class, 'store'])->name('trail.api.traces.bookmark.store');
+    Route::delete('traces/{id}/bookmark', [TraceBookmarkController::class, 'destroy'])->name('trail.api.traces.bookmark.destroy');
 
     // Every API endpoint is registered above this line. It keeps the whole /api space out of the
     // dashboard page, so an unknown API path answers a 404 rather than the page.
