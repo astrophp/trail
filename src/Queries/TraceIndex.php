@@ -1,0 +1,190 @@
+<?php
+
+namespace Astro\Trail\Queries;
+
+use Astro\Trail\Enums\Status;
+use Astro\Trail\Storage\Models\Bookmark;
+use Astro\Trail\Storage\Models\Span;
+use Astro\Trail\Storage\Models\Trace;
+use Astro\Trail\Storage\StaleRuns;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
+
+/**
+ * The reads behind the list of runs.
+ */
+final class TraceIndex
+{
+    /** The share of runs a "slow" run is at or above. */
+    private const SLOW_PERCENTILE = 95;
+
+    /** What the list reads of a run: not its error text or metadata, which can be large and are not listed. */
+    private const COLUMNS = [
+        'id', 'type', 'name', 'agent_class', 'status', 'streamed', 'recovered', 'child_failed', 'issue_kind',
+        'provider', 'model', 'conversation_id', 'user_id', 'user_type',
+        'input_tokens', 'output_tokens', 'cache_read_tokens', 'cache_write_tokens', 'reasoning_tokens',
+        'cost', 'span_count', 'unpriced_span_count', 'duration_ms', 'prompt_excerpt', 'response_excerpt',
+        'started_at', 'ended_at', 'created_at',
+    ];
+
+    /**
+     * Escaped with `!`, which all three databases accept in an ESCAPE clause (a backslash is not an
+     * escape character in SQLite). The columns are listed as SQL so that none is ever user input.
+     */
+    private const SEARCHED = [
+        "lower(id) like ? escape '!'",
+        "lower(name) like ? escape '!'",
+        "lower(provider) like ? escape '!'",
+        "lower(model) like ? escape '!'",
+        "lower(prompt_excerpt) like ? escape '!'",
+        "lower(conversation_id) like ? escape '!'",
+        "lower(user_id) like ? escape '!'",
+    ];
+
+    /**
+     * Postgres sorts nulls first when descending and MySQL and SQLite when ascending, so a run
+     * without the value is put last by a portable expression ahead of the column.
+     *
+     * @var array<string, array{column: string, nulls: ?string}>
+     */
+    private const SORTS = [
+        'started_at' => ['column' => 'started_at', 'nulls' => null],
+        'duration' => ['column' => 'duration_ms', 'nulls' => 'case when duration_ms is null then 1 else 0 end'],
+        'cost' => ['column' => 'cost', 'nulls' => 'case when cost is null then 1 else 0 end'],
+        'agent' => ['column' => 'name', 'nulls' => null],
+    ];
+
+    /**
+     * The duration "slow" compares against: the nearest-rank 95th percentile of the runs in the
+     * range that have a duration, whatever the other filters. Null when none has.
+     */
+    public function slowThreshold(TimeRange $range): ?float
+    {
+        $query = Trace::query()->whereNotNull('duration_ms');
+        $range->apply($query, 'started_at');
+
+        $count = $query->count();
+
+        if ($count === 0) {
+            return null;
+        }
+
+        $rank = intdiv(self::SLOW_PERCENTILE * $count + 99, 100);
+        $duration = $query->orderBy('duration_ms')->offset($rank - 1)->limit(1)->value('duration_ms');
+
+        return is_numeric($duration) ? (float) $duration : null;
+    }
+
+    /**
+     * How many runs pass every filter except the status, by the status they show.
+     *
+     * @return array{all: int, completed: int, failed: int, incomplete: int, running: int, awaiting_approval: int}
+     */
+    public function statusCounts(TimeRange $range, TraceFilters $filters, ?float $slowThreshold): array
+    {
+        // One pass: each stored status, and how many of its runs are past the stale cutoff.
+        $rows = $this->filtered($range, $filters, $slowThreshold, withStatus: false)
+            ->toBase()
+            ->select('status')
+            ->selectRaw('count(*) as total')
+            ->selectRaw('sum(case when created_at < ? then 1 else 0 end) as stale', [StaleRuns::cutoffColumn()])
+            ->groupBy('status')
+            ->get()
+            ->keyBy('status');
+
+        $number = fn (Status $status, string $column): int => is_numeric($value = $rows->get($status->value)?->{$column}) ? (int) $value : 0;
+        $count = fn (Status $status): int => $number($status, 'total');
+        $stale = $number(Status::Running, 'stale');
+
+        $counts = [
+            'completed' => $count(Status::Completed),
+            'failed' => $count(Status::Failed),
+            'incomplete' => $count(Status::Incomplete) + $stale,
+            'running' => max(0, $count(Status::Running) - $stale),
+            'awaiting_approval' => $count(Status::AwaitingApproval),
+        ];
+
+        return ['all' => array_sum($counts)] + $counts;
+    }
+
+    /**
+     * @return Collection<int, Trace>
+     */
+    public function rows(TimeRange $range, TraceFilters $filters, ?float $slowThreshold, Page $page): Collection
+    {
+        $sort = self::SORTS[$filters->sort];
+        $direction = $filters->descending ? 'desc' : 'asc';
+        $query = $this->filtered($range, $filters, $slowThreshold, withStatus: true)->select(self::COLUMNS);
+
+        if ($sort['nulls'] !== null) {
+            $query->orderByRaw($sort['nulls']);
+        }
+
+        return $query->orderBy($sort['column'], $direction)->orderBy('id', $direction)
+            ->offset($page->offset())->limit($page->perPage)->get();
+    }
+
+    /**
+     * @return Builder<Trace>
+     */
+    private function filtered(TimeRange $range, TraceFilters $filters, ?float $slowThreshold, bool $withStatus): Builder
+    {
+        $query = Trace::query();
+        $range->apply($query, 'started_at');
+
+        if ($withStatus && $filters->status !== null) {
+            $query->whereEffectiveStatus($filters->status);
+        }
+
+        if ($filters->issueKind !== null) {
+            $query->whereEffectiveIssueKind($filters->issueKind);
+        }
+
+        $query->when($filters->agent !== null, fn (Builder $query) => $query->where('name', $filters->agent))
+            ->when($filters->conversation !== null, fn (Builder $query) => $query->where('conversation_id', $filters->conversation))
+            ->when($filters->userId !== null, fn (Builder $query) => $query->where('user_id', $filters->userId))
+            ->when($filters->userType !== null, fn (Builder $query) => $query->where('user_type', $filters->userType))
+            ->when($filters->streamed, fn (Builder $query) => $query->where('streamed', true))
+            ->when($filters->recovered, fn (Builder $query) => $query->where('recovered', true))
+            ->when($filters->childFailed, fn (Builder $query) => $query->where('child_failed', true))
+            ->when($filters->unpriced, fn (Builder $query) => $query->where('unpriced_span_count', '>', 0))
+            ->when($filters->bookmarked, fn (Builder $query) => $query->whereIn('id', Bookmark::query()->select('trace_id')));
+
+        if ($filters->provider !== null || $filters->model !== null) {
+            // Any step of the run, and the same step for both. A step never starts before its run,
+            // so the range's start bounds the steps (it has no end: a step can outlast the range).
+            $query->whereIn('id', Span::query()->select('trace_id')
+                ->where('started_at', '>=', StaleRuns::format($range->from))
+                ->when($filters->provider !== null, fn (Builder $spans) => $spans->where('provider', $filters->provider))
+                ->when($filters->model !== null, fn (Builder $spans) => $spans->where('model', $filters->model)));
+        }
+
+        if ($filters->slow) {
+            $slowThreshold === null
+                ? $query->whereRaw('1 = 0')
+                : $query->where('duration_ms', '>=', $slowThreshold);
+        }
+
+        if ($filters->search !== null) {
+            $this->search($query, $filters->search);
+        }
+
+        return $query;
+    }
+
+    /**
+     * Case-insensitive "contains" over the run's text columns, the term taken literally.
+     *
+     * @param  Builder<Trace>  $query
+     */
+    private function search(Builder $query, string $term): void
+    {
+        $pattern = '%'.str_replace(['!', '%', '_'], ['!!', '!%', '!_'], mb_strtolower($term)).'%';
+
+        $query->where(function (Builder $query) use ($pattern) {
+            foreach (self::SEARCHED as $condition) {
+                $query->orWhereRaw($condition, [$pattern]);
+            }
+        });
+    }
+}
