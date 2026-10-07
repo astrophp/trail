@@ -12,10 +12,6 @@ use Astro\Trail\RecordingCandidate;
 use Astro\Trail\Storage\Contracts\TraceStore;
 use Closure;
 use Illuminate\Contracts\Container\Container;
-use Illuminate\Database\DeadlockException;
-use Illuminate\Database\LostConnectionException;
-use Illuminate\Database\QueryException;
-use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 use Laravel\Ai\Contracts\Agent;
@@ -36,11 +32,13 @@ use Laravel\Ai\Events\ToolApprovalResolved;
 use Laravel\Ai\Events\ToolFailed;
 use Laravel\Ai\Events\ToolInvoked;
 use Laravel\Ai\Gateway\ParentInvocation;
+use Laravel\Ai\Messages\AssistantMessage;
+use Laravel\Ai\Messages\Message;
+use Laravel\Ai\Messages\ToolResultMessage;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\StructuredAgentResponse;
 use Laravel\Ai\Tools\ToolNameResolver;
-use PDOException;
 use ReflectionClass;
 use Throwable;
 
@@ -406,6 +404,7 @@ class Recorder
         $run->step = null;
         $run->lastText = null;
         $run->sent = 0;
+        $run->fingerprint = null;
         $run->forgetFailure();
         $run->span->attempt = $run->attempt;
         $run->span->provider = $provider;
@@ -501,7 +500,7 @@ class Recorder
             $this->driver($event->provider),
             $event->model,
             Carbon::now(),
-            $this->capturing('input', fn (): array => $this->stepInput($run, $event)),
+            $this->stepInput($run, $event),
         );
     }
 
@@ -510,22 +509,55 @@ class Recorder
      * the previous step of the same attempt did not send are stored, with the number it did send as
      * "messages_offset". The history of a step is the stored messages of the steps before it in the
      * attempt, in order, followed by its own. The first step of an attempt has offset 0 and holds
-     * everything, ad-hoc history included. A history that is no longer than the previous one was
-     * rewritten or shortened, so it is stored whole, again with offset 0.
-     *
-     * @return array<string, mixed>
+     * everything, ad-hoc history included. A history that is no longer than the previous one, or
+     * that no longer has the same message where the previous one ended, was rewritten or
+     * shortened, so it is stored whole, again with offset 0.
      */
-    private function stepInput(Run $run, StartingStep $event): array
+    private function stepInput(Run $run, StartingStep $event): Captured
     {
         $total = count($event->messages);
-        $offset = $total > $run->sent ? $run->sent : 0;
-        $run->sent = $total;
+        $offset = 0;
 
-        return [
+        // Only a history that still starts with what the previous step sent can be stored as what came after it.
+        if ($run->sent > 0 && $total > $run->sent && $run->fingerprint === $this->fingerprint($event->messages[$run->sent - 1] ?? null)) {
+            $offset = $run->sent;
+        }
+
+        $input = $this->capturing('input', fn (): array => [
             'messages' => $this->payload()->messages($offset === 0 ? $event->messages : array_slice($event->messages, $offset)),
             'messages_offset' => $offset,
             'options' => $this->payload()->options($event->options),
-        ];
+        ]);
+
+        // What the previous step sent is only remembered once it was stored, so a step whose input
+        // could not be built does not make the next one skip the messages it lost.
+        if ($input->value !== null) {
+            $run->sent = $total;
+            $run->fingerprint = $this->fingerprint($event->messages[$total - 1] ?? null);
+        }
+
+        return $input;
+    }
+
+    /**
+     * A cheap mark of a message: its kind, the length of its content, a hash of the start of it and
+     * the ids of the calls and results it holds. Two histories that agree on the mark of the message
+     * at the same place are taken to agree up to it; the whole history is never compared.
+     */
+    private function fingerprint(mixed $message): string
+    {
+        if (! $message instanceof Message) {
+            return get_debug_type($message);
+        }
+
+        $content = $message->content ?? '';
+        $ids = match (true) {
+            $message instanceof AssistantMessage => $message->toolCalls->pluck('id')->implode(','),
+            $message instanceof ToolResultMessage => $message->toolResults->pluck('id')->implode(','),
+            default => '',
+        };
+
+        return $message->role->value.':'.strlen($content).':'.md5(substr($content, 0, 256)).':'.md5($ids);
     }
 
     public function stepCompleted(StepCompleted $event): void
@@ -1094,6 +1126,9 @@ class Recorder
             return;
         }
 
+        // Written as it stands, and then gone: a later start for the same id must not begin it over.
+        $this->skip($id);
+
         foreach (array_keys($buffer->runIds) as $runId) {
             $this->untrack($runId);
         }
@@ -1326,7 +1361,7 @@ class Recorder
                 $this->price($buffer);
             } catch (Throwable $e) {
                 // The prices only add a cost. A store that is down fails the write itself just below.
-                if ($this->storeIsDown($e)) {
+                if (StoreFailure::meansUnavailable($e)) {
                     throw $e;
                 }
 
@@ -1357,7 +1392,7 @@ class Recorder
         try {
             $call();
         } catch (Throwable $e) {
-            if ($this->storeIsDown($e)) {
+            if (StoreFailure::meansUnavailable($e)) {
                 $this->writesPausedUntil = $this->now() + self::OUTAGE_PAUSE;
             }
 
@@ -1379,32 +1414,12 @@ class Recorder
     }
 
     /**
-     * Whether an exception from the store says the database is unavailable, as opposed to the
-     * trace being something it cannot take. A query or connection error counts, except a
-     * constraint violation (SQLSTATE class 23), data that does not fit (class 22) and a deadlock,
-     * which are problems of one record or of the moment. Anything else, such as an
-     * InvalidArgumentException from a malformed record, does not.
-     */
-    private function storeIsDown(Throwable $e): bool
-    {
-        if ($e instanceof DeadlockException || $e instanceof UniqueConstraintViolationException) {
-            return false;
-        }
-
-        if ($e instanceof QueryException) {
-            return ! str_starts_with((string) $e->getCode(), '23') && ! str_starts_with((string) $e->getCode(), '22');
-        }
-
-        return $e instanceof PDOException || $e instanceof LostConnectionException;
-    }
-
-    /**
-     * Report a failed write. A database exception's message carries the values of its statement,
-     * which for Trail are prompts and tool results, so a safe stand-in is reported instead.
+     * Report a failed write. Whatever the store threw is reported as a stand-in that holds no value
+     * from the statement, since for Trail those are prompts and tool results.
      */
     private function reportWrite(Throwable $e): void
     {
-        $report = $e instanceof QueryException ? RecordingFailed::because($e) : $e;
+        $report = RecordingFailed::because($e);
 
         Guard::run(function () use ($report): void {
             throw $report;

@@ -25,6 +25,7 @@ final class Run
         public bool $streamed = false,
         public ?string $lastText = null,
         public int $sent = 0,
+        public ?string $fingerprint = null,
         private ?WeakReference $failure = null,
         private ?ErrorSource $failureSource = null,
     ) {}

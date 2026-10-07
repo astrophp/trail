@@ -137,3 +137,68 @@ it('indexes truncated paths into the stored messages', function () {
         ->and($second['metadata']['truncated'])->toHaveKey('input.messages.1.tool_results.0.result')
         ->and($second['metadata']['truncated']['input.messages.1.tool_results.0.result'])->toBe(50);
 });
+
+it('stores a history rewritten to a longer one whole, when it no longer starts with what the last step sent', function () {
+    AssistantAgent::fake(['Hello']);
+    (new AssistantAgent)->prompt('Hi');
+
+    $prompting = $this->sdk->sole(PromptingAgent::class)->event;
+    $starting = $this->sdk->sole(StartingStep::class)->event;
+    $id = 'compacted-history';
+
+    $step = fn (int $number, array $messages) => event(new StartingStep($id, $number, $starting->agent, $starting->provider, $starting->model, false, $messages, $starting->options));
+
+    event(new PromptingAgent($id, $prompting->prompt));
+    $step(0, [new UserMessage('one'), new UserMessage('two')]);
+    // Appended to: the normal case.
+    $step(1, [new UserMessage('one'), new UserMessage('two'), new UserMessage('three')]);
+    // Compacted into a summary and then grown past the old length: longer, but not an extension.
+    $step(2, [new UserMessage('summary of one and two'), new UserMessage('three'), new UserMessage('four'), new UserMessage('five')]);
+    // Appended to again, after the rewrite.
+    $step(3, [new UserMessage('summary of one and two'), new UserMessage('three'), new UserMessage('four'), new UserMessage('five'), new UserMessage('six')]);
+    Trail::flush();
+
+    $steps = array_values(array_filter(Captured::read($id)->rawSpans(), fn (array $span) => $span['type'] === 'step'));
+
+    expect(array_map(fn (array $step) => [$step['input']['messages_offset'], array_column($step['input']['messages'], 'content')], $steps))->toBe([
+        [0, ['one', 'two']],
+        [2, ['three']],
+        [0, ['summary of one and two', 'three', 'four', 'five']],
+        [4, ['six']],
+    ]);
+});
+
+it('only counts the messages of a step once its input was stored', function () {
+    AssistantAgent::fake(['Hello']);
+    (new AssistantAgent)->prompt('Hi');
+
+    $prompting = $this->sdk->sole(PromptingAgent::class)->event;
+    $starting = $this->sdk->sole(StartingStep::class)->event;
+    $id = 'lost-input';
+
+    // A message whose role cannot be read, so the input of the step that holds it cannot be built.
+    $broken = new class('lost') extends UserMessage
+    {
+        public function __construct(string $content)
+        {
+            parent::__construct($content);
+
+            unset($this->role);
+        }
+    };
+
+    $step = fn (int $number, array $messages) => event(new StartingStep($id, $number, $starting->agent, $starting->provider, $starting->model, false, $messages, $starting->options));
+
+    event(new PromptingAgent($id, $prompting->prompt));
+    $step(0, [new UserMessage('one')]);
+    $step(1, [new UserMessage('one'), $broken]);
+    $step(2, [new UserMessage('one'), new UserMessage('after the lost one'), new UserMessage('two')]);
+    Trail::flush();
+
+    $steps = array_values(array_filter(Captured::read($id)->rawSpans(), fn (array $span) => $span['type'] === 'step'));
+
+    // Step 1 stored nothing. Step 2 starts after what was stored, not after what was lost.
+    expect($steps[1]['input'])->toBeNull()
+        ->and($steps[2]['input']['messages_offset'])->toBe(1)
+        ->and(array_column($steps[2]['input']['messages'], 'content'))->toBe(['after the lost one', 'two']);
+});

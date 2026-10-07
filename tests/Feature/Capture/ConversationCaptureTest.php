@@ -3,6 +3,7 @@
 use Astro\Trail\Facades\Trail;
 use Astro\Trail\Tests\Fixtures\Agents\AssistantAgent;
 use Astro\Trail\Tests\Fixtures\Agents\BrokenParticipantAgent;
+use Astro\Trail\Tests\Fixtures\Agents\ContractOnlyAgent;
 use Astro\Trail\Tests\Fixtures\Agents\RememberingAgent;
 use Astro\Trail\Tests\Fixtures\Capture\Captured;
 use Astro\Trail\Tests\Fixtures\Conversations\ConversationParticipant;
@@ -145,6 +146,16 @@ describe('a failed turn', function () {
             ->and($run->rawTrace()['conversation_id'])->toHaveLength(36)
             ->and($run->rawTrace()['user_id'])->toBe('42');
     });
+});
+
+it('reads the identity of an agent that implements the SDK\'s contract without its trait', function () {
+    FakeAnthropic::script([FakeAnthropic::text('ok')]);
+
+    $response = (new ContractOnlyAgent(new ConversationParticipant, 'conversation-by-contract'))->prompt('Hi');
+
+    expect(($this->identity)(($this->read)($response->invocationId)))->toBe([
+        'conversation_id' => 'conversation-by-contract', 'user_id' => '42', 'user_type' => ConversationParticipant::class,
+    ]);
 });
 
 describe('a run without an identity', function () {

@@ -3,6 +3,7 @@
 namespace Astro\Trail\Capture;
 
 use Laravel\Ai\Concerns\RemembersConversations;
+use Laravel\Ai\Contracts\RemembersConversations as RemembersConversationsContract;
 use Laravel\Ai\Models\Conversation;
 use Throwable;
 
@@ -24,7 +25,7 @@ final class Identity
 
     public static function of(object $agent): self
     {
-        // The SDK asks for these only of an agent that remembers conversations, so Trail does too.
+        // The SDK asks for these only of an agent that implements its contract or uses its trait, so Trail does too.
         if (! self::remembers($agent)) {
             return new self;
         }
@@ -34,7 +35,8 @@ final class Identity
 
     private static function remembers(object $agent): bool
     {
-        return self::$remembers[$agent::class] ??= in_array(RemembersConversations::class, class_uses_recursive($agent), true);
+        return self::$remembers[$agent::class] ??= $agent instanceof RemembersConversationsContract
+            || in_array(RemembersConversations::class, class_uses_recursive($agent), true);
     }
 
     /**
