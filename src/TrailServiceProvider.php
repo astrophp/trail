@@ -13,6 +13,7 @@ use Astro\Trail\Console\PauseCommand;
 use Astro\Trail\Console\PruneCommand;
 use Astro\Trail\Console\ResumeCommand;
 use Astro\Trail\Console\SweepCommand;
+use Astro\Trail\Http\Middleware\Authorize;
 use Astro\Trail\Pricing\CostCalculator;
 use Astro\Trail\Pricing\PriceBook;
 use Astro\Trail\Storage\Contracts\TraceStore;
@@ -21,7 +22,10 @@ use Illuminate\Contracts\Cache\Factory as CacheFactory;
 use Illuminate\Contracts\Config\Repository;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Contracts\Foundation\Application;
+use Illuminate\Contracts\Foundation\CachesRoutes;
 use Illuminate\Database\ConnectionResolverInterface;
+use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 
 class TrailServiceProvider extends ServiceProvider
@@ -62,6 +66,8 @@ class TrailServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        $this->registerRoutes();
+
         $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
 
         if ($this->app->runningInConsole()) {
@@ -84,5 +90,33 @@ class TrailServiceProvider extends ServiceProvider
             Listeners::register($events, $this->app);
             FlushPoints::register($this->app, $events);
         }
+    }
+
+    /**
+     * Register the dashboard routes, unless Trail or its dashboard is switched off, or the
+     * application's routes are cached (a cached route file would not include them).
+     */
+    private function registerRoutes(): void
+    {
+        if (! config('trail.enabled') || ! config('trail.dashboard.enabled')) {
+            return;
+        }
+
+        if ($this->app instanceof CachesRoutes && $this->app->routesAreCached()) {
+            return;
+        }
+
+        $domain = config('trail.domain');
+        $path = config('trail.path');
+        $path = is_string($path) ? trim($path, '/') : '';
+
+        Route::group([
+            'domain' => is_string($domain) && $domain !== '' ? $domain : null,
+            // Never the root: the dashboard answers every path under its prefix, and would take the application's.
+            'prefix' => $path === '' ? 'trail' : $path,
+            'middleware' => [...Arr::wrap(config('trail.middleware')), Authorize::class],
+        ], function (): void {
+            $this->loadRoutesFrom(__DIR__.'/../routes/web.php');
+        });
     }
 }

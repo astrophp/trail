@@ -9,12 +9,19 @@ use Astro\Trail\Storage\ArrayTraceStore;
 use Astro\Trail\Storage\Contracts\TraceStore;
 use Astro\Trail\Users\UserResolver;
 use Closure;
+use Illuminate\Contracts\Config\Repository;
 use Illuminate\Contracts\Container\Container;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\App;
+use Illuminate\Support\Facades\Gate;
 
 class Trail
 {
     /** @var (Closure(array<string, list<string>>): mixed)|null */
     private ?Closure $userResolver = null;
+
+    /** @var (Closure(Request): mixed)|null */
+    private ?Closure $authCallback = null;
 
     public function __construct(private readonly Container $container) {}
 
@@ -94,5 +101,38 @@ class Trail
     public function withoutRecording(Closure $callback): mixed
     {
         return $this->container->make(Sampler::class)->without($callback);
+    }
+
+    /**
+     * Decide who can open the dashboard with your own code instead of the default check. The
+     * callback receives the request and grants access only by returning true. It replaces the
+     * check entirely, so it also applies in the local environment. Passing null goes back to
+     * the default.
+     *
+     * @param  (Closure(Request): mixed)|null  $callback
+     */
+    public function auth(?Closure $callback): void
+    {
+        $this->authCallback = $callback;
+    }
+
+    /**
+     * Whether the request may open the dashboard. Without a callback from auth(), anyone can in
+     * the local environment; elsewhere the user of the configured guard must pass the viewTrail
+     * gate. A guest, or a gate that is not defined, is denied.
+     */
+    public function check(Request $request): bool
+    {
+        if ($this->authCallback !== null) {
+            return ($this->authCallback)($request) === true;
+        }
+
+        if (App::environment('local')) {
+            return true;
+        }
+
+        $guard = $this->container->make(Repository::class)->get('trail.guard');
+
+        return Gate::forUser($request->user(is_string($guard) && $guard !== '' ? $guard : null))->check('viewTrail');
     }
 }

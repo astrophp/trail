@@ -220,7 +220,7 @@ describe('the landing page', function () {
             $response->assertSee($scenario->title())->assertSee($scenario->key());
         }
 
-        $response->assertSee('Recorded traces')->assertSee('Run all')->assertSee('href="/trail"', false);
+        $response->assertSee('Recorded traces')->assertSee('Run all')->assertSee('href="'.route('trail.dashboard').'"', false);
     });
 
     it('runs one scenario when its button is pressed, and shows the result and the trace', function () {

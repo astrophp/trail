@@ -12,6 +12,8 @@ use Illuminate\Support\Facades\Facade;
  * @method static mixed withoutRecording(\Closure $callback)
  * @method static void resolveUsersUsing(?\Closure $callback)
  * @method static \Astro\Trail\Users\UserResolver users()
+ * @method static void auth(?\Closure $callback)
+ * @method static bool check(\Illuminate\Http\Request $request)
  *
  * @see \Astro\Trail\Trail
  */
