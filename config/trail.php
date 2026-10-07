@@ -49,6 +49,44 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Sampling
+    |--------------------------------------------------------------------------
+    |
+    | The share of top-level runs Trail records, from 0 (none) to 1 (all). A
+    | sub-agent or an embeddings call inside a run follows that run. Whether a run
+    | is recorded is decided when it starts, so a sampled-out run that later
+    | fails is not recorded either. A value that is not a number is reported and
+    | treated as 1.
+    |
+    | Other controls, set in code:
+    |
+    |   Trail::filter(fn (RecordingCandidate $run) => ...) decides per run, from
+    |   its agent class, prompt, user, provider and model: return false to skip
+    |   it, anything else to record it; runs the filter itself starts are not
+    |   recorded. Trail::withoutRecording(fn () => ...) records nothing that
+    |   starts inside it and returns what the callback returns: not a run, and
+    |   not a sub-agent or embeddings call made under a run that is being
+    |   recorded (the tool that made the call is recorded, as it started
+    |   outside). What starts inside stays unrecorded even if it ends later; runs
+    |   already in progress are not affected.
+    |
+    | "php artisan trail:pause" stops recording in every process, without a
+    | deploy, until "php artisan trail:resume". It keeps its flag in your default
+    | cache store, so that store must be shared between processes: with the
+    | "array" or "null" driver the flag only reaches the process that set it. A
+    | process reads the flag at its first run after a flush (the end of a request
+    | or job) and again at the next run once five seconds have passed, so a long
+    | job still notices a pause. With the database cache driver each read is a
+    | query, issued before the run starts. Runs already in progress finish
+    | recording. "enabled" above turns Trail off completely instead: nothing is
+    | registered and nothing is recorded.
+    |
+    */
+
+    'sampling' => env('TRAIL_SAMPLING', 1.0),
+
+    /*
+    |--------------------------------------------------------------------------
     | Payload Capture
     |--------------------------------------------------------------------------
     |

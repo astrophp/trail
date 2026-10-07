@@ -6,14 +6,18 @@ use Astro\Trail\Capture\FlushPoints;
 use Astro\Trail\Capture\Listeners;
 use Astro\Trail\Capture\Payload;
 use Astro\Trail\Capture\Recorder;
+use Astro\Trail\Capture\Sampler;
 use Astro\Trail\Console\ClearCommand;
 use Astro\Trail\Console\InstallCommand;
+use Astro\Trail\Console\PauseCommand;
 use Astro\Trail\Console\PruneCommand;
+use Astro\Trail\Console\ResumeCommand;
 use Astro\Trail\Console\SweepCommand;
 use Astro\Trail\Pricing\CostCalculator;
 use Astro\Trail\Pricing\PriceBook;
 use Astro\Trail\Storage\Contracts\TraceStore;
 use Astro\Trail\Storage\DatabaseTraceStore;
+use Illuminate\Contracts\Cache\Factory as CacheFactory;
 use Illuminate\Contracts\Config\Repository;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Contracts\Foundation\Application;
@@ -37,6 +41,8 @@ class TrailServiceProvider extends ServiceProvider
         });
 
         $this->app->singleton(CostCalculator::class);
+
+        $this->app->singleton(Sampler::class, fn (Application $app) => new Sampler($app->make(Repository::class), $app->make(CacheFactory::class)));
 
         $this->app->singleton(Payload::class, fn (Application $app) => Payload::fromConfig($app->make(Repository::class)));
 
@@ -64,6 +70,8 @@ class TrailServiceProvider extends ServiceProvider
                 PruneCommand::class,
                 SweepCommand::class,
                 ClearCommand::class,
+                PauseCommand::class,
+                ResumeCommand::class,
             ]);
 
             $this->publishes([__DIR__.'/../config/trail.php' => config_path('trail.php')], 'trail-config');
