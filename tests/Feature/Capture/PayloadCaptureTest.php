@@ -81,7 +81,7 @@ describe('a secret', function () {
 
         expect(($this->rows)())->not->toContain(Secrets::RESULT)
             ->and($run->rawSpans()[2]['output'])->toBe(['result' => 'the key is [redacted]'])
-            ->and($run->rawSpans()[3]['input']['messages'][2]['tool_results'][0]['result'])->toBe('the key is [redacted]')
+            ->and($run->rawSpans()[3]['input']['messages'][1]['tool_results'][0]['result'])->toBe('the key is [redacted]')
             ->and(($this->flags)($run))->toBe([false, false, true, true]);
     });
 

@@ -25,6 +25,9 @@ class DatabaseTraceStore implements TraceStore
 
     private const MAX_STRING_LENGTH = 255;
 
+    // The bytes of span rows one insert statement may carry before another is started.
+    private const SPAN_INSERT_BYTES = 1_048_576;
+
     // Keeps one insert under SQLite's old limit of 999 bound parameters.
     private const SPAN_INSERT_CHUNK = 25;
 
@@ -235,9 +238,46 @@ class DatabaseTraceStore implements TraceStore
             $update->update(array_diff_key($this->spanColumns($span), ['id' => true, 'trace_id' => true]) + ['updated_at' => $now]);
         }
 
-        foreach (array_chunk($new, self::SPAN_INSERT_CHUNK) as $rows) {
+        foreach ($this->insertChunks($new) as $rows) {
             $db->table('trail_spans')->insert($rows);
         }
+    }
+
+    /**
+     * Rows grouped into statements by count and by size, so that no statement approaches the packet
+     * limit of a server (16 MB by default on MariaDB). A single row larger than the budget goes alone.
+     *
+     * @param  list<array<string, mixed>>  $rows
+     * @return list<list<array<string, mixed>>>
+     */
+    private function insertChunks(array $rows): array
+    {
+        $chunks = [];
+        $chunk = [];
+        $bytes = 0;
+
+        foreach ($rows as $row) {
+            $size = 0;
+
+            foreach ($row as $value) {
+                $size += is_string($value) ? strlen($value) : 16;
+            }
+
+            if ($chunk !== [] && (count($chunk) >= self::SPAN_INSERT_CHUNK || $bytes + $size > self::SPAN_INSERT_BYTES)) {
+                $chunks[] = $chunk;
+                $chunk = [];
+                $bytes = 0;
+            }
+
+            $chunk[] = $row;
+            $bytes += $size;
+        }
+
+        if ($chunk !== []) {
+            $chunks[] = $chunk;
+        }
+
+        return $chunks;
     }
 
     private function writeTotals(ConnectionInterface $db, string $traceId): void

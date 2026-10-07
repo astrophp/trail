@@ -106,6 +106,33 @@ it('stores more spans than one insert chunk', function () {
         ->and((int) DB::table('trail_traces')->value('input_tokens'))->toBe(60);
 });
 
+it('starts a new insert statement when the rows gathered are large, so none nears a server\'s packet limit', function () {
+    $statements = [];
+    DB::listen(function ($query) use (&$statements) {
+        if (str_starts_with($query->sql, 'insert into "trail_spans"') || str_starts_with($query->sql, 'insert into `trail_spans`')) {
+            $statements[] = array_sum(array_map(fn ($binding) => is_string($binding) ? strlen($binding) : 0, $query->bindings));
+        }
+    });
+
+    $spans = [];
+
+    // Eight spans of about 400 KB each, then one of about 2 MB: more than a statement may carry, and a row larger than the budget.
+    for ($i = 0; $i < 8; $i++) {
+        $spans[] = Records::span('trace-1', ['id' => "span-{$i}", 'sequence' => $i, 'input' => ['text' => str_repeat('x', 400_000)]]);
+    }
+
+    $spans[] = Records::span('trace-1', ['id' => 'span-big', 'sequence' => 8, 'input' => ['text' => str_repeat('y', 2_000_000)]]);
+    $spans[] = Records::span('trace-1', ['id' => 'span-last', 'sequence' => 9]);
+
+    app(TraceStore::class)->store(Records::trace(['id' => 'trace-1']), $spans);
+
+    expect(DB::table('trail_spans')->count())->toBe(10)
+        ->and(count($statements))->toBeGreaterThanOrEqual(4)
+        // No statement carries more than the budget plus the one row that tipped it over, except a row that is larger alone.
+        ->and(array_slice($statements, 0, -2))->each->toBeLessThanOrEqual(1_048_576 + 400_100)
+        ->and(max($statements))->toBeLessThan(2_100_000);
+});
+
 it('survives invalid utf-8 and unencodable values in json columns', function () {
     $resource = fopen('php://memory', 'r');
 

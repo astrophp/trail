@@ -2,6 +2,7 @@
 
 use Astro\Trail\Capture\Guard;
 use Astro\Trail\Capture\Recorder;
+use Astro\Trail\Exceptions\RecordingFailed;
 use Astro\Trail\Facades\Trail;
 use Astro\Trail\Pricing\CostCalculator;
 use Astro\Trail\Storage\Contracts\TraceStore;
@@ -153,7 +154,7 @@ it('lets a run succeed when the store throws, and reports it', function () {
 
     expect((new AssistantAgent)->prompt('Hi')->text)->toBe('Hello');
 
-    Exceptions::assertReported(fn (RuntimeException $e) => $e->getMessage() === 'The store is down.');
+    Exceptions::assertReported(fn (RecordingFailed $e) => str_contains($e->getMessage(), 'The store is down.'));
 });
 
 it('does not throw from Trail::flush when the recorder does', function () {
