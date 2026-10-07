@@ -1,7 +1,7 @@
 import { act, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { renderApp } from '@/test/render-app'
+import { renderApp, appReady } from '@/test/render-app'
 import {
     agentSelect,
     bookmarkedToggle,
@@ -338,9 +338,10 @@ describe('the status tabs', () => {
         ])
     })
 
-    it('shows no count, and no zero, until the first response', () => {
+    it('shows no count, and no zero, until the first response', async () => {
         mockApi(() => new Promise<Response>(() => {}))
         renderApp('/traces')
+        await appReady()
 
         expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual([
             'All traces',
@@ -496,11 +497,11 @@ describe('the agent and provider options', () => {
         expect(providerSelect()).toHaveTextContent('elsewhere')
     })
 
-    it('shows the URL’s value and still works while the options load', async () => {
+    it('shows the URL’s value and still works while the options are missing', async () => {
         const fetchMock = mockApi()
         fetchMock.mockImplementation((url) =>
             url.includes('/api/meta')
-                ? new Promise<Response>(() => {})
+                ? json({ message: 'Broken.' }, 500)
                 : json(listFor(url)),
         )
         renderApp('/traces?agent=Ghost')
@@ -570,9 +571,10 @@ describe('the states with filters', () => {
         expect(screen.getAllByRole('tab')).toHaveLength(6)
     })
 
-    it('shows the tabs and the filter row while the first load runs', () => {
+    it('shows the tabs and the filter row while the first load runs', async () => {
         mockApi(() => new Promise<Response>(() => {}))
         renderApp('/traces?agent=Ghost')
+        await appReady()
 
         expect(screen.getByRole('tablist')).toBeVisible()
         expect(searchBox()).toBeVisible()

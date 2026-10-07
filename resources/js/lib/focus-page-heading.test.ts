@@ -15,6 +15,15 @@ describe('focusPageHeading', () => {
         expect(document.querySelector('h1')).toHaveFocus()
     })
 
+    it('focuses a heading that is one by role, such as an app-level state’s title', () => {
+        document.body.innerHTML =
+            '<main id="content" tabindex="-1"><div role="heading" aria-level="1" tabindex="-1">Down</div></main>'
+
+        focusPageHeading()
+
+        expect(document.querySelector('[role="heading"]')).toHaveFocus()
+    })
+
     it('focuses the main region when the page has no heading', () => {
         document.body.innerHTML = '<main id="content" tabindex="-1"></main>'
 

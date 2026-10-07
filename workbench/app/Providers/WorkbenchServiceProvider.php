@@ -34,6 +34,12 @@ class WorkbenchServiceProvider extends ServiceProvider
                 'database.connections.sqlite.database' => workbench_path('database', 'database.sqlite'),
             ]);
         }
+
+        // The skeleton's cache lasts for one process. A cache on disk lets "trail:pause" on the command line
+        // reach the server, so the dashboard can be seen with recording paused.
+        if (! $this->app->runningUnitTests() && env('CACHE_STORE') === null) {
+            config(['cache.default' => 'file']);
+        }
     }
 
     /**

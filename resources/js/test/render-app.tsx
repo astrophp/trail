@@ -1,4 +1,4 @@
-import { render } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
 import { App } from '@/app/app'
 import { createQueryClient } from '@/app/providers/query-provider'
 import { parseBoot, type Boot } from '@/lib/boot'
@@ -39,4 +39,13 @@ export function renderApp(
     window.history.pushState({}, '', `${base}${route}`)
 
     return render(<App boot={boot} queryClient={queryClient} />)
+}
+
+/**
+ * Waits until the app has its first meta answer: until then the content area is empty, so a test
+ * that looks for the page right after `renderApp` waits here first. "Updated …" appears in the
+ * top bar once the answer is in.
+ */
+export async function appReady() {
+    await screen.findByText(/^Updated /)
 }

@@ -2,6 +2,7 @@ import { SearchIcon } from 'lucide-react'
 import { Fragment, type Ref } from 'react'
 import { Link, useLocation } from 'react-router'
 import { breadcrumbTrail, resolveRoute } from '@/app/routes'
+import { RefreshControl } from '@/app/shell/refresh-control'
 import {
     Breadcrumb,
     BreadcrumbItem,
@@ -65,13 +66,16 @@ export function TopBar({ triggerRef }: { triggerRef: Ref<HTMLButtonElement> }) {
                     </BreadcrumbList>
                 </Breadcrumb>
             </div>
-            {/* Not wired up yet, so it is disabled rather than a control that does nothing. */}
-            <Button variant="ghost" disabled aria-label="Search">
-                <SearchIcon className="size-4" />
-                <Kbd className="hidden h-auto min-w-0 rounded-sm border bg-transparent px-1.25 py-px text-micro font-normal wide:inline-flex">
-                    ⌘ K
-                </Kbd>
-            </Button>
+            <div className="flex shrink-0 items-center gap-1">
+                <RefreshControl />
+                {/* Not wired up yet, so it is disabled rather than a control that does nothing. */}
+                <Button variant="ghost" disabled aria-label="Search">
+                    <SearchIcon className="size-4" />
+                    <Kbd className="hidden h-auto min-w-0 rounded-sm border bg-transparent px-1.25 py-px text-micro font-normal wide:inline-flex">
+                        ⌘ K
+                    </Kbd>
+                </Button>
+            </div>
         </header>
     )
 }

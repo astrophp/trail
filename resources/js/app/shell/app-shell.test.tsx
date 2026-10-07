@@ -1,7 +1,7 @@
 import { act, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { renderApp } from '@/test/render-app'
+import { renderApp, appReady } from '@/test/render-app'
 
 let broken = true
 
@@ -28,8 +28,9 @@ afterEach(() => {
 const nav = () => screen.getByRole('navigation', { name: 'Main' })
 
 describe('a page that throws', () => {
-    it('leaves the sidebar and top bar usable and shows an error in the page', () => {
+    it('leaves the sidebar and top bar usable and shows an error in the page', async () => {
         renderApp('/agents')
+        await appReady()
 
         expect(screen.getByRole('alert')).toHaveTextContent(
             'This page could not be shown',
@@ -46,6 +47,7 @@ describe('a page that throws', () => {
 
     it('does not reset when only the search parameters change', async () => {
         renderApp('/agents')
+        await appReady()
 
         act(() => {
             window.history.pushState({}, '', '/trail/agents?x=1')
@@ -75,6 +77,7 @@ describe('a page that throws', () => {
 
     it('tries the page again, and focuses the recovered page’s heading', async () => {
         renderApp('/agents')
+        await appReady()
         broken = false
 
         await userEvent.click(screen.getByRole('button', { name: 'Try again' }))

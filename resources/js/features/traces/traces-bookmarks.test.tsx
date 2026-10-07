@@ -187,9 +187,13 @@ describe('when a write fails', () => {
         await waitFor(() => expect(pressed(failedName)).toBe('false'))
     })
 
-    it.each([419, 403])(
-        'treats a %s like any other failure',
-        async (status) => {
+    it.each([
+        [401, 'Your session has ended'],
+        [419, 'Your session has ended'],
+        [403, 'You no longer have access to this dashboard'],
+    ])(
+        'a %s says so for the whole dashboard, besides the toast',
+        async (status, title) => {
             serve([completed], () => json({ message: 'No.' }, status))
             renderApp('/traces')
             await loaded()
@@ -197,7 +201,10 @@ describe('when a write fails', () => {
             await userEvent.click(toggle(completedName))
 
             await waitFor(() => expect(error).toHaveBeenCalledWith(toastText))
-            await waitFor(() => expect(pressed(completedName)).toBe('true'))
+            expect(
+                await screen.findByRole('heading', { name: title }),
+            ).toBeVisible()
+            expect(screen.getByRole('button', { name: 'Reload' })).toBeVisible()
         },
     )
 

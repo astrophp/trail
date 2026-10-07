@@ -1,7 +1,13 @@
 import { act, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { renderApp } from '@/test/render-app'
+import { renderApp, appReady } from '@/test/render-app'
+import { mockApi } from '@/test/traces-api'
+
+// The Traces page asks for its list when a test navigates to it.
+beforeEach(() => {
+    mockApi()
+})
 
 const nav = () => screen.getByRole('navigation', { name: 'Main' })
 
@@ -69,8 +75,9 @@ describe('navigation', () => {
         ).not.toHaveAttribute('aria-current')
     })
 
-    it('marks nothing current on the not-found page', () => {
+    it('marks nothing current on the not-found page', async () => {
         renderApp('/nowhere')
+        await appReady()
 
         expect(
             screen.getByRole('heading', { level: 1, name: 'Page not found' }),
@@ -198,6 +205,7 @@ describe('focus and scroll', () => {
 
     it('moves focus to the new heading and scrolls up after a page change', async () => {
         renderApp('/')
+        await appReady()
 
         await userEvent.click(screen.getByRole('link', { name: 'Traces' }))
 
@@ -210,6 +218,7 @@ describe('focus and scroll', () => {
 
     it('keeps the scroll position the browser restores on Back, but still focuses the heading', async () => {
         renderApp('/traces')
+        await appReady()
 
         await userEvent.click(screen.getByRole('link', { name: 'Agents' }))
         await screen.findByRole('heading', { level: 1, name: 'Agents' })
@@ -263,8 +272,9 @@ describe('sidebar shortcut', () => {
 })
 
 describe('base path', () => {
-    it('matches a path with characters the browser percent-encodes', () => {
+    it('matches a path with characters the browser percent-encodes', async () => {
         renderApp('/traces', { path: '/my trail/é' })
+        await appReady()
 
         expect(
             screen.getByRole('heading', { level: 1, name: 'Traces' }),
@@ -333,6 +343,7 @@ describe('drawer', () => {
 
     it('closes when the link to the page already open is followed', async () => {
         renderApp('/traces')
+        await appReady()
         await openDrawer()
 
         await userEvent.click(
@@ -357,6 +368,7 @@ describe('drawer', () => {
             removeEventListener: () => {},
         }))
         renderApp('/')
+        await appReady()
         await openDrawer()
 
         act(() => {
