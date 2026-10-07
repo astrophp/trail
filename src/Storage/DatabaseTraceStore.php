@@ -9,6 +9,7 @@ use Astro\Trail\Storage\Contracts\TraceStore;
 use DateTimeInterface;
 use Illuminate\Database\ConnectionInterface;
 use Illuminate\Database\ConnectionResolverInterface;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Carbon;
 use InvalidArgumentException;
 
@@ -31,7 +32,9 @@ class DatabaseTraceStore implements TraceStore
 
     private const SPAN_LOOKUP_CHUNK = 500;
 
-    private const PRUNE_CHUNK = 1000;
+    private const MAX_EXCERPT_LENGTH = 10000;
+
+    private const PRUNE_CHUNK = 500;
 
     public function __construct(
         private readonly ConnectionResolverInterface $resolver,
@@ -44,13 +47,11 @@ class DatabaseTraceStore implements TraceStore
 
         $db = $this->db();
 
-        $db->transaction(function () use ($db, $trace) {
-            if ($db->table('trail_traces')->where('id', $trace->id)->exists()) {
-                return;
-            }
-
-            $this->insertTrace($db, $trace);
-        });
+        try {
+            $db->transaction(fn () => $this->insertTrace($db, $trace), 3);
+        } catch (UniqueConstraintViolationException) {
+            // Already stored by an earlier or concurrent write; never overwritten here.
+        }
     }
 
     public function store(TraceRecord $trace, array $spans): void
@@ -72,17 +73,30 @@ class DatabaseTraceStore implements TraceStore
         $db = $this->db();
 
         $db->transaction(function () use ($db, $trace, $spans) {
-            $stored = $db->table('trail_traces')->where('id', $trace->id)->lockForUpdate()->value('status');
+            $stored = $this->lockedStatus($db, $trace->id);
 
             if ($stored === null) {
-                $this->insertTrace($db, $trace);
-            } elseif (! ($this->isFinal($stored) && $trace->status === Status::Running)) {
-                $db->table('trail_traces')->where('id', $trace->id)->update($this->traceColumns($trace));
+                try {
+                    // A savepoint, so losing a race to another first writer leaves the outer transaction usable.
+                    $db->transaction(fn () => $this->insertTrace($db, $trace));
+                } catch (UniqueConstraintViolationException) {
+                    $stored = $this->lockedStatus($db, $trace->id);
+                }
             }
 
-            $this->storeSpans($db, $spans);
+            if ($stored !== null && ! ($this->isFinal($stored) && $trace->status === Status::Running)) {
+                $update = $db->table('trail_traces')->where('id', $trace->id);
+
+                if ($trace->status === Status::Running) {
+                    $update->where('status', Status::Running->value);
+                }
+
+                $update->update($this->traceColumns($trace));
+            }
+
+            $this->storeSpans($db, $trace->id, $spans);
             $this->writeTotals($db, $trace->id);
-        });
+        }, 3);
     }
 
     public function sweep(int $olderThanSeconds): int
@@ -110,7 +124,7 @@ class DatabaseTraceStore implements TraceStore
                 ->update($changes);
 
             return $traces;
-        });
+        }, 3);
     }
 
     public function prune(DateTimeInterface $before): int
@@ -155,6 +169,11 @@ class DatabaseTraceStore implements TraceStore
         return $this->resolver->connection($this->connection);
     }
 
+    private function lockedStatus(ConnectionInterface $db, string $id): mixed
+    {
+        return $db->table('trail_traces')->where('id', $id)->lockForUpdate()->value('status');
+    }
+
     private function insertTrace(ConnectionInterface $db, TraceRecord $trace): void
     {
         $now = $this->now();
@@ -176,7 +195,7 @@ class DatabaseTraceStore implements TraceStore
     /**
      * @param  list<SpanRecord>  $spans
      */
-    private function storeSpans(ConnectionInterface $db, array $spans): void
+    private function storeSpans(ConnectionInterface $db, string $traceId, array $spans): void
     {
         if ($spans === []) {
             return;
@@ -204,9 +223,13 @@ class DatabaseTraceStore implements TraceStore
                 continue;
             }
 
-            $db->table('trail_spans')
-                ->where('id', $span->id)
-                ->update(array_diff_key($this->spanColumns($span), ['id' => true]) + ['updated_at' => $now]);
+            $update = $db->table('trail_spans')->where('id', $span->id)->where('trace_id', $traceId);
+
+            if ($span->status === Status::Running) {
+                $update->where('status', Status::Running->value);
+            }
+
+            $update->update(array_diff_key($this->spanColumns($span), ['id' => true, 'trace_id' => true]) + ['updated_at' => $now]);
         }
 
         foreach (array_chunk($new, self::SPAN_INSERT_CHUNK) as $rows) {
@@ -221,8 +244,14 @@ class DatabaseTraceStore implements TraceStore
         foreach ($db->table('trail_spans')->where('trace_id', $traceId)->get([
             'type', 'input_tokens', 'output_tokens', 'cache_read_tokens', 'cache_write_tokens', 'reasoning_tokens', 'cost',
         ]) as $row) {
+            $type = SpanType::tryFrom($this->asString($row->type));
+
+            if ($type === null) {
+                continue;
+            }
+
             $usages[] = new SpanUsage(
-                SpanType::from($this->asString($row->type)),
+                $type,
                 $this->asInt($row->input_tokens),
                 $this->asInt($row->output_tokens),
                 $this->asInt($row->cache_read_tokens),
@@ -272,8 +301,8 @@ class DatabaseTraceStore implements TraceStore
             'user_id' => $this->string($trace->userId, self::MAX_STRING_LENGTH),
             'user_type' => $this->string($trace->userType, self::MAX_STRING_LENGTH),
             'duration_ms' => $this->finite($trace->durationMs),
-            'prompt_excerpt' => $this->string($trace->promptExcerpt),
-            'response_excerpt' => $this->string($trace->responseExcerpt),
+            'prompt_excerpt' => $this->string($trace->promptExcerpt, self::MAX_EXCERPT_LENGTH),
+            'response_excerpt' => $this->string($trace->responseExcerpt, self::MAX_EXCERPT_LENGTH),
             'metadata' => $this->json($trace->metadata),
             'started_at' => $this->format($trace->startedAt),
             'ended_at' => $trace->endedAt === null ? null : $this->format($trace->endedAt),
@@ -293,17 +322,17 @@ class DatabaseTraceStore implements TraceStore
             'name' => $this->string($span->name, self::MAX_STRING_LENGTH),
             'agent_class' => $this->string($span->agentClass, self::MAX_STRING_LENGTH),
             'status' => $span->status->value,
-            'attempt' => $span->attempt,
-            'sequence' => $span->sequence,
-            'step_number' => $span->stepNumber,
+            'attempt' => min(32767, max(1, $span->attempt)),
+            'sequence' => $this->clamp($span->sequence, 0, 2147483647),
+            'step_number' => $span->stepNumber === null ? null : $this->clamp($span->stepNumber, 0, 2147483647),
             'provider' => $this->string($span->provider, self::MAX_STRING_LENGTH),
             'model' => $this->string($span->model, self::MAX_STRING_LENGTH),
             'responding_model' => $this->string($span->respondingModel, self::MAX_STRING_LENGTH),
-            'input_tokens' => $span->inputTokens,
-            'output_tokens' => $span->outputTokens,
-            'cache_read_tokens' => $span->cacheReadTokens,
-            'cache_write_tokens' => $span->cacheWriteTokens,
-            'reasoning_tokens' => $span->reasoningTokens,
+            'input_tokens' => $this->tokens($span->inputTokens),
+            'output_tokens' => $this->tokens($span->outputTokens),
+            'cache_read_tokens' => $this->tokens($span->cacheReadTokens),
+            'cache_write_tokens' => $this->tokens($span->cacheWriteTokens),
+            'reasoning_tokens' => $this->tokens($span->reasoningTokens),
             'cost' => $this->decimal($span->cost),
             'input' => $this->json($span->input),
             'output' => $this->json($span->output),
@@ -367,14 +396,37 @@ class DatabaseTraceStore implements TraceStore
             return null;
         }
 
-        $encoded = json_encode($value, self::JSON_FLAGS);
+        $encoded = json_encode($this->finiteOrNull($value), self::JSON_FLAGS);
 
         return $encoded === false ? null : $encoded;
     }
 
     private function decimal(?float $value): ?string
     {
-        return $value === null || ! is_finite($value) ? null : number_format($value, 10, '.', '');
+        if ($value === null || ! is_finite($value) || $value < 0 || $value >= 100000000) {
+            return null;
+        }
+
+        return number_format($value, 10, '.', '');
+    }
+
+    private function tokens(?int $value): ?int
+    {
+        return $value === null || $value < 0 ? null : $value;
+    }
+
+    private function clamp(int $value, int $min, int $max): int
+    {
+        return min($max, max($min, $value));
+    }
+
+    private function finiteOrNull(mixed $value): mixed
+    {
+        if (is_array($value)) {
+            return array_map(fn (mixed $item) => $this->finiteOrNull($item), $value);
+        }
+
+        return is_float($value) && ! is_finite($value) ? null : $value;
     }
 
     private function finite(?float $value): ?float

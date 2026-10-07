@@ -178,6 +178,8 @@ it('ignores a late running write to a final trace and span', function (array $pa
     $trace = $probe->trace('trace-1');
     $span = $probe->spans('trace-1')[0];
 
+    $this->travelTo(Carbon::parse('2026-03-01 10:10:00'));
+
     $store->store(
         Records::trace([
             'id' => 'trace-1',
@@ -196,11 +198,17 @@ it('ignores a late running write to a final trace and span', function (array $pa
 
     $spans = $probe->spans('trace-1');
 
-    expect($probe->trace('trace-1'))->toBe(array_merge($trace ?? [], ['input_tokens' => 15, 'span_count' => 2, 'unpriced_span_count' => 2]))
+    expect($probe->trace('trace-1'))->toBe(array_merge($trace ?? [], [
+        'input_tokens' => 15,
+        'span_count' => 2,
+        'unpriced_span_count' => 2,
+        'updated_at' => '2026-03-01 10:10:00.000',
+    ]))
         ->and($probe->trace('trace-1')['status'] ?? null)->toBe('completed')
         ->and($spans)->toHaveCount(2)
         ->and($spans[0])->toBe($span)
-        ->and($spans[1])->toMatchArray(['id' => 'span-2', 'status' => 'running', 'name' => 'New step']);
+        ->and($spans[0]['updated_at'])->toBe('2026-03-01 10:00:00.000')
+        ->and($spans[1])->toMatchArray(['id' => 'span-2', 'status' => 'running', 'name' => 'New step', 'updated_at' => '2026-03-01 10:10:00.000']);
 })->with('stores');
 
 it('lets a final status overwrite another final status', function (array $pair, Status $first, Status $second) {
@@ -373,6 +381,30 @@ it('honours a longer sweep timeout', function (array $pair) {
     expect($store->sweep(150))->toBe(1)
         ->and($probe->trace('older')['status'] ?? null)->toBe('incomplete')
         ->and($probe->trace('younger')['status'] ?? null)->toBe('running');
+})->with('stores');
+
+it('keeps a swept trace incomplete against later running writes until it completes', function (array $pair) {
+    [$store, $probe] = $pair;
+
+    $this->travelTo(Carbon::parse('2026-03-01 12:00:00'));
+    $store->store(Records::trace(['id' => 'trace-1']), [Records::span('trace-1', ['id' => 'span-1', 'status' => Status::Running])]);
+
+    $this->travelTo(Carbon::parse('2026-03-01 12:10:00'));
+    expect($store->sweep(60))->toBe(1);
+
+    $store->store(Records::trace(['id' => 'trace-1', 'name' => 'Renamed']), [Records::span('trace-1', ['id' => 'span-1', 'status' => Status::Running, 'name' => 'Renamed'])]);
+
+    expect($probe->trace('trace-1'))->toMatchArray(['status' => 'incomplete', 'issue_kind' => 'abandoned', 'name' => 'Support agent'])
+        ->and($probe->spans('trace-1')[0])->toMatchArray(['status' => 'incomplete', 'issue_kind' => 'abandoned', 'name' => 'step']);
+
+    $store->store(Records::trace(['id' => 'trace-1', 'status' => Status::Completed]), [Records::span('trace-1', ['id' => 'span-1', 'status' => Status::Completed])]);
+
+    expect($probe->trace('trace-1'))->toMatchArray(['status' => 'completed', 'issue_kind' => null])
+        ->and($probe->spans('trace-1')[0])->toMatchArray(['status' => 'completed', 'issue_kind' => null]);
+
+    $store->store(Records::trace(['id' => 'trace-1', 'status' => Status::Failed, 'issueKind' => IssueKind::Exception]), []);
+
+    expect($probe->trace('trace-1'))->toMatchArray(['status' => 'failed', 'issue_kind' => 'exception']);
 })->with('stores');
 
 it('prunes traces first stored before the cutoff, with their spans', function (array $pair) {

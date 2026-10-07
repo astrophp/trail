@@ -3,9 +3,9 @@
 namespace Astro\Trail\Tests\Fixtures\Storage;
 
 use Illuminate\Database\Query\Builder;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use stdClass;
+use UnexpectedValueException;
 
 class DatabaseStoreProbe implements StoreProbe
 {
@@ -68,14 +68,34 @@ class DatabaseStoreProbe implements StoreProbe
             $values[$column] = match (true) {
                 $value === null => null,
                 in_array($column, self::BOOLEANS, true) => (bool) $value,
-                in_array($column, self::INTEGERS, true) => (int) (is_numeric($value) ? $value : 0),
-                in_array($column, self::FLOATS, true) => (float) (is_numeric($value) ? $value : 0),
-                in_array($column, self::JSON, true) => json_decode(is_string($value) ? $value : '', true),
-                in_array($column, self::DATES, true) => Carbon::parse(is_string($value) ? $value : '')->format('Y-m-d H:i:s.v'),
+                in_array($column, self::INTEGERS, true) => (int) $this->numeric($column, $value),
+                in_array($column, self::FLOATS, true) => (float) $this->numeric($column, $value),
+                in_array($column, self::JSON, true) => json_decode(is_string($value) ? $value : '', true, 512, JSON_THROW_ON_ERROR),
+                in_array($column, self::DATES, true) => $this->date($column, $value),
                 default => $value,
             };
         }
 
         return $values;
+    }
+
+    private function numeric(string $column, mixed $value): int|float|string
+    {
+        if (! is_numeric($value)) {
+            throw new UnexpectedValueException("Column [{$column}] holds a non-numeric value.");
+        }
+
+        return $value;
+    }
+
+    private function date(string $column, mixed $value): string
+    {
+        if (is_string($value) && preg_match('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:\.(\d{1,3}))?$/', $value, $matches) === 1) {
+            $fraction = $matches[1] ?? '';
+
+            return $fraction === '' ? $value.'.000' : $value.str_pad('', 3 - strlen($fraction), '0');
+        }
+
+        throw new UnexpectedValueException("Column [{$column}] holds an unexpected datetime value.");
     }
 }

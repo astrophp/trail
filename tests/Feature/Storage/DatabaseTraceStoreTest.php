@@ -110,7 +110,7 @@ it('survives invalid utf-8 and unencodable values in json columns', function () 
         Records::trace(['id' => 'trace-1', 'metadata' => ['ok' => 'fine', 'bad' => "broken \xB1\x31 text"]]),
         [Records::span('trace-1', [
             'id' => 'span-1',
-            'input' => ['text' => "caf\xE9 ok", 'number' => NAN],
+            'input' => ['text' => "caf\xE9 ok", 'number' => NAN, 'nested' => ['inf' => -INF, 'fine' => 1.5]],
             'output' => ['kept' => 'yes', 'handle' => $resource],
             'metadata' => ['inf' => INF, 'name' => 'x'],
         ])],
@@ -127,7 +127,9 @@ it('survives invalid utf-8 and unencodable values in json columns', function () 
         ->and($trace['bad'])->toStartWith('broken ')->toEndWith(' text')
         ->and(json_decode((string) $span?->input, true)['text'])->toStartWith('caf')->toEndWith(' ok')
         ->and(json_decode((string) $span?->output, true)['kept'])->toBe('yes')
-        ->and(json_decode((string) $span?->metadata, true)['name'])->toBe('x');
+        ->and(json_decode((string) $span?->metadata, true))->toBe(['inf' => null, 'name' => 'x'])
+        ->and(json_decode((string) $span?->input, true)['number'])->toBeNull()
+        ->and(json_decode((string) $span?->input, true)['nested'])->toBe(['inf' => null, 'fine' => 1.5]);
 });
 
 it('stores unicode unescaped and distinguishes empty arrays from null', function () {
@@ -263,4 +265,79 @@ it('writes a brand new trace atomically', function () {
 
     expect(DB::table('trail_traces')->count())->toBe(0)
         ->and(DB::table('trail_spans')->count())->toBe(0);
+});
+
+it('does not fail or change anything when starting a trace that already exists', function () {
+    $trace = Rows::trace(['id' => 'trace-1', 'name' => 'Existing', 'status' => Status::Completed]);
+    $before = (array) DB::table('trail_traces')->where('id', $trace->id)->first();
+
+    app(TraceStore::class)->start(Records::trace(['id' => 'trace-1', 'name' => 'Started']));
+
+    expect((array) DB::table('trail_traces')->where('id', 'trace-1')->first())->toBe($before)
+        ->and(DB::table('trail_traces')->count())->toBe(1);
+});
+
+it('updates a trace row that was inserted by someone else', function () {
+    Rows::trace(['id' => 'trace-1', 'name' => 'Existing']);
+
+    app(TraceStore::class)->store(
+        Records::trace(['id' => 'trace-1', 'name' => 'Updated']),
+        [Records::span('trace-1', ['id' => 'span-1', 'inputTokens' => 3])],
+    );
+
+    expect(DB::table('trail_traces')->count())->toBe(1)
+        ->and(DB::table('trail_traces')->value('name'))->toBe('Updated')
+        ->and((int) DB::table('trail_traces')->value('input_tokens'))->toBe(3);
+});
+
+it('keeps stored values in range', function (array $span, array $expected) {
+    app(TraceStore::class)->store(
+        Records::trace(['id' => 'trace-1', 'promptExcerpt' => str_repeat('p', 10050), 'responseExcerpt' => str_repeat('é', 10050)]),
+        [Records::span('trace-1', array_merge(['id' => 'span-1'], $span))],
+    );
+
+    $row = (array) DB::table('trail_spans')->first();
+    $actual = [];
+
+    foreach ($expected as $column => $value) {
+        $actual[$column] = $row[$column] === null ? null : (is_numeric($row[$column]) ? $row[$column] + 0 : $row[$column]);
+    }
+
+    expect($actual)->toEqual($expected)
+        ->and(mb_strlen((string) DB::table('trail_traces')->value('prompt_excerpt')))->toBe(10000)
+        ->and(mb_strlen((string) DB::table('trail_traces')->value('response_excerpt')))->toBe(10000);
+})->with([
+    'negative tokens' => [['inputTokens' => -1, 'outputTokens' => -5, 'reasoningTokens' => 0], ['input_tokens' => null, 'output_tokens' => null, 'reasoning_tokens' => 0]],
+    'attempt too low' => [['attempt' => 0], ['attempt' => 1]],
+    'attempt too high' => [['attempt' => 99999], ['attempt' => 32767]],
+    'sequence and step below range' => [['sequence' => -4, 'stepNumber' => -2], ['sequence' => 0, 'step_number' => 0]],
+    'sequence and step above range' => [['sequence' => 3000000000, 'stepNumber' => 3000000000], ['sequence' => 2147483647, 'step_number' => 2147483647]],
+    'valid values kept' => [['attempt' => 3, 'sequence' => 7, 'stepNumber' => 2, 'cost' => 99999999.5], ['attempt' => 3, 'sequence' => 7, 'step_number' => 2, 'cost' => 99999999.5]],
+    'negative cost' => [['inputTokens' => 1, 'cost' => -0.5], ['cost' => null]],
+    'cost too large' => [['inputTokens' => 1, 'cost' => 100000000.0], ['cost' => null]],
+]);
+
+it('survives losing the race to another first writer', function () {
+    $raced = false;
+
+    // Fires after the store has read that no row exists and before it inserts.
+    DB::listen(function ($query) use (&$raced) {
+        if ($raced || ! str_starts_with($query->sql, 'select') || ! str_contains($query->sql, 'trail_traces')) {
+            return;
+        }
+
+        $raced = true;
+        Rows::trace(['id' => 'trace-1', 'name' => 'Rival', 'status' => Status::Running]);
+    });
+
+    app(TraceStore::class)->store(
+        Records::trace(['id' => 'trace-1', 'name' => 'Mine', 'status' => Status::Failed]),
+        [Records::span('trace-1', ['id' => 'span-1'])],
+    );
+
+    expect($raced)->toBeTrue()
+        ->and(DB::table('trail_traces')->count())->toBe(1)
+        ->and(DB::table('trail_traces')->value('name'))->toBe('Mine')
+        ->and(DB::table('trail_traces')->value('status'))->toBe('failed')
+        ->and(DB::table('trail_spans')->count())->toBe(1);
 });
