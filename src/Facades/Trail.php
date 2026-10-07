@@ -14,6 +14,8 @@ use Illuminate\Support\Facades\Facade;
  * @method static \Astro\Trail\Users\UserResolver users()
  * @method static void auth(?\Closure $callback)
  * @method static bool check(\Illuminate\Http\Request $request)
+ * @method static \Illuminate\Support\HtmlString css()
+ * @method static \Illuminate\Support\HtmlString js()
  *
  * @see \Astro\Trail\Trail
  */
