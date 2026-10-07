@@ -30,6 +30,39 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Trail Retention
+    |--------------------------------------------------------------------------
+    |
+    | The number of days to keep recorded traces. "trail:prune" deletes older
+    | traces with their spans and bookmarks; "--hours" overrides this once.
+    |
+    | Trail never schedules its commands. To prune and sweep automatically,
+    | add them to your schedule, for example in routes/console.php:
+    |
+    |     Schedule::command('trail:prune')->daily();
+    |     Schedule::command('trail:sweep')->everyFiveMinutes();
+    |
+    */
+
+    'retention' => 14,
+
+    /*
+    |--------------------------------------------------------------------------
+    | Stale Runs
+    |--------------------------------------------------------------------------
+    |
+    | The number of seconds after which a run that is still "running" is
+    | treated as abandoned and shown as incomplete, because its process died
+    | before it could finish. "trail:sweep" writes that status to the database;
+    | until it runs, the dashboard already shows it. Set this above the
+    | longest run you expect. Values below 60 behave as 60.
+    |
+    */
+
+    'stale_after' => 3600,
+
+    /*
+    |--------------------------------------------------------------------------
     | Model Prices
     |--------------------------------------------------------------------------
     |

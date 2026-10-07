@@ -15,8 +15,6 @@ use InvalidArgumentException;
 
 class DatabaseTraceStore implements TraceStore
 {
-    private const DATE_FORMAT = 'Y-m-d H:i:s.v';
-
     private const JSON_FLAGS = JSON_UNESCAPED_UNICODE
         | JSON_UNESCAPED_SLASHES
         | JSON_PRESERVE_ZERO_FRACTION
@@ -101,8 +99,7 @@ class DatabaseTraceStore implements TraceStore
 
     public function sweep(int $olderThanSeconds): int
     {
-        $seconds = max(self::MINIMUM_STALE_SECONDS, $olderThanSeconds);
-        $cutoff = $this->format(Carbon::now()->subSeconds($seconds));
+        $cutoff = StaleRuns::cutoffColumn($olderThanSeconds);
         $now = $this->now();
         $db = $this->db();
 
@@ -369,11 +366,7 @@ class DatabaseTraceStore implements TraceStore
 
     private function format(DateTimeInterface $moment): string
     {
-        $timezone = config('app.timezone');
-
-        return Carbon::instance($moment)
-            ->setTimezone(is_string($timezone) ? $timezone : 'UTC')
-            ->format(self::DATE_FORMAT);
+        return StaleRuns::format($moment);
     }
 
     private function string(?string $value, ?int $limit = null): ?string
