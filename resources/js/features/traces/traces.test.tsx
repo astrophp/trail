@@ -1,0 +1,502 @@
+import { act, screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { TraceListResponse } from '@/api/types'
+import { contractFixture } from '@/test/contract-fixture'
+import { renderApp } from '@/test/render-app'
+
+const fixture = contractFixture('traces') as TraceListResponse
+const meta = contractFixture('meta')
+
+const lastPage = 3
+
+/** The list endpoint as the API answers it: three pages of the fixture's runs, and none past the end. */
+function listFor(url: string): TraceListResponse {
+    const page = Number(new URL(url, 'http://x').searchParams.get('page') ?? 1)
+
+    return {
+        ...fixture,
+        data: page > lastPage ? [] : fixture.data,
+        pagination: { page, per_page: 25, total: 60, last_page: lastPage },
+    }
+}
+
+type Handler = (url: string) => Promise<Response>
+
+const json = (body: unknown, status = 200) =>
+    Promise.resolve(new Response(JSON.stringify(body), { status }))
+
+const never = () => new Promise<Response>(() => {})
+
+/** A response the test releases by hand. */
+function deferred() {
+    let resolve: (response: Response) => void = () => {}
+    const promise = new Promise<Response>((done) => {
+        resolve = done
+    })
+
+    return { promise, resolve }
+}
+
+/** Answers `/meta` with its fixture and `/traces` with `respond`. */
+function mockApi(respond: Handler = (url) => json(listFor(url))) {
+    const fetchMock = vi.fn<Handler>((url) =>
+        url.includes('/api/meta') ? json(meta) : respond(url),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    return fetchMock
+}
+
+/** From now on the list endpoint answers with `respond`. */
+function answerWith(fetchMock: ReturnType<typeof mockApi>, respond: Handler) {
+    fetchMock.mockImplementation((url) =>
+        url.includes('/api/meta') ? json(meta) : respond(url),
+    )
+}
+
+const traceUrls = (fetchMock: ReturnType<typeof mockApi>) =>
+    fetchMock.mock.calls
+        .map(([url]) => url)
+        .filter((url) => url.includes('/api/traces'))
+
+const lastTraceUrl = (fetchMock: ReturnType<typeof mockApi>) =>
+    traceUrls(fetchMock).at(-1)
+
+const emptyList = {
+    ...fixture,
+    data: [],
+    pagination: { page: 1, per_page: 25, total: 0, last_page: 1 },
+}
+
+const dataRows = () => screen.getAllByRole('row').slice(1)
+/** The row of a fixture run, found by the link to it. */
+const rowOf = (id: string) =>
+    within(screen.getByRole('table')).getByRole('row', {
+        name: (_, element) =>
+            element.querySelector(`a[href*="/traces/${id}"]`) !== null,
+    })
+const cellsOf = (id: string) =>
+    within(rowOf(id))
+        .getAllByRole('cell')
+        .map((cell) => cell.textContent ?? '')
+const header = (name: RegExp | string) =>
+    screen.getByRole('columnheader', { name })
+const sortButton = (name: RegExp | string) =>
+    within(header(name)).getByRole('button')
+const nextButton = () => screen.getByRole('button', { name: 'Next page' })
+const expectSearch = (expected: string) =>
+    waitFor(() => expect(window.location.search).toBe(expected))
+
+async function loaded() {
+    await screen.findByRole('table', { name: 'Recorded runs' })
+}
+
+beforeEach(() => {
+    mockApi()
+})
+
+describe('the Traces page', () => {
+    it('asks for the default view explicitly and renders a row per run', async () => {
+        const fetchMock = mockApi()
+        renderApp('/traces')
+        await loaded()
+
+        expect(traceUrls(fetchMock)).toEqual([
+            '/trail/api/traces?range=24h&sort=-started_at&page=1',
+        ])
+        expect(dataRows()).toHaveLength(fixture.data.length)
+        expect(
+            screen.getByRole('heading', { level: 1, name: 'Traces' }),
+        ).toBeInTheDocument()
+    })
+
+    it('shows each run with its name, outcome and model', async () => {
+        renderApp('/traces')
+        await loaded()
+
+        const completed = within(rowOf('0199c2f4-6a1e-7c3b-9a55-0e8a4c1d2f30'))
+
+        expect(
+            completed.getByRole('link', { name: 'SupportAssistant' }),
+        ).toBeVisible()
+        expect(completed.getByText('Where is my order?')).toBeVisible()
+        expect(completed.getByText('Completed')).toBeVisible()
+        expect(completed.getByText('claude-sonnet-4-5')).toBeVisible()
+        expect(completed.getByText('$0.0083')).toBeVisible()
+
+        const failed = within(rowOf('trace-failed'))
+
+        expect(failed.getByText('Failed')).toBeVisible()
+        expect(failed.getByText('Rate limited')).toBeVisible()
+        expect(
+            within(rowOf('trace-embedding')).getByRole('img', {
+                name: 'Embedding run',
+            }),
+        ).toBeVisible()
+    })
+
+    it('says why a value is missing instead of showing zero', async () => {
+        renderApp('/traces')
+        await loaded()
+
+        // cells: outcome, model, duration, tokens, cost, started
+        const running = cellsOf('trace-running-priced')
+        expect(running[2]).toBe('In progress')
+        expect(running[3]).toBe('Pending')
+        expect(running[4]).toBe('Pending')
+
+        expect(cellsOf('trace-unpriced')[4]).toBe('Unpriced')
+        expect(cellsOf('trace-failed')[3]).toBe('Not reported')
+        expect(cellsOf('trace-failed')[4]).toBe('Not captured')
+
+        // The run that reported nothing: no model, duration, tokens or cost.
+        const bare = cellsOf('trace-bare')
+        expect(bare[1]).toBe('Not capturedNot captured')
+        expect(bare[2]).toBe('Not captured')
+        expect(bare[3]).toBe('Not reported')
+        expect(bare[4]).toBe('Not captured')
+
+        for (const cell of screen.getAllByRole('cell')) {
+            expect(cell.textContent).not.toMatch(/^\s*(\$?0(\.0+)?|0 ?m?s)\s*$/)
+        }
+    })
+
+    it('shows nothing under the name of a run that has no prompt', async () => {
+        renderApp('/traces')
+        await loaded()
+
+        const cell = within(rowOf('trace-embedding')).getByRole('rowheader')
+
+        expect(cell.querySelectorAll('p')).toHaveLength(0)
+        expect(cell).toHaveTextContent(/^Embeddings/)
+    })
+
+    it('links each run name to its page', async () => {
+        renderApp('/traces')
+        await loaded()
+
+        for (const trace of fixture.data) {
+            expect(
+                within(rowOf(trace.id)).getByRole('link', { name: trace.name }),
+            ).toHaveAttribute('href', `/trail/traces/${trace.id}`)
+        }
+    })
+
+    it('keeps the time range on the link to a run', async () => {
+        renderApp('/traces?range=7d&sort=-cost')
+        await loaded()
+
+        expect(
+            within(rowOf('trace-bare')).getByRole('link', { name: 'Bare' }),
+        ).toHaveAttribute('href', '/trail/traces/trace-bare?range=7d')
+    })
+})
+
+describe('the URL drives the view', () => {
+    it('requests what the URL says and marks the sorted column', async () => {
+        const fetchMock = mockApi()
+        renderApp('/traces?sort=-duration&page=2&range=7d')
+        await loaded()
+
+        expect(traceUrls(fetchMock)).toEqual([
+            '/trail/api/traces?range=7d&sort=-duration&page=2',
+        ])
+        expect(header(/Duration/)).toHaveAttribute('aria-sort', 'descending')
+        expect(header(/Started/)).toHaveAttribute('aria-sort', 'none')
+        expect(screen.getByText('Page 2 of 3')).toBeVisible()
+        expect(
+            screen.getByRole('combobox', { name: 'Time range' }),
+        ).toHaveTextContent('Last 7 days')
+    })
+
+    it('falls back to the defaults for an invalid sort or page', async () => {
+        const fetchMock = mockApi()
+        renderApp('/traces?sort=bogus&page=0')
+        await loaded()
+
+        expect(traceUrls(fetchMock)).toEqual([
+            '/trail/api/traces?range=24h&sort=-started_at&page=1',
+        ])
+        expect(header(/Started/)).toHaveAttribute('aria-sort', 'descending')
+    })
+})
+
+describe('an invalid page in the URL', () => {
+    it.each(['abc', '-3', '1.5', '0'])('%s is page 1', async (bad) => {
+        const fetchMock = mockApi()
+        renderApp(`/traces?page=${bad}`)
+        await loaded()
+
+        expect(lastTraceUrl(fetchMock)).toBe(
+            '/trail/api/traces?range=24h&sort=-started_at&page=1',
+        )
+    })
+})
+
+describe('the view drives the URL', () => {
+    it('sorts a column in its first direction, flips it, and returns to page 1', async () => {
+        const fetchMock = mockApi()
+        renderApp('/traces?page=2')
+        await loaded()
+
+        await userEvent.click(sortButton(/Duration/))
+
+        await expectSearch('?sort=-duration')
+        await waitFor(() =>
+            expect(lastTraceUrl(fetchMock)).toBe(
+                '/trail/api/traces?range=24h&sort=-duration&page=1',
+            ),
+        )
+        expect(header(/Duration/)).toHaveAttribute('aria-sort', 'descending')
+
+        await userEvent.click(sortButton(/Duration/))
+
+        await expectSearch('?sort=duration')
+        expect(header(/Duration/)).toHaveAttribute('aria-sort', 'ascending')
+    })
+
+    it.each([
+        [/Run/, '?sort=agent'],
+        [/Est\. cost/, '?sort=-cost'],
+        [/Started/, '?sort=started_at'],
+    ])('sorts %s with the first click', async (name, expected) => {
+        renderApp('/traces')
+        await loaded()
+
+        await userEvent.click(sortButton(name))
+
+        await expectSearch(expected)
+    })
+
+    it('pages forward and keeps the sort', async () => {
+        const fetchMock = mockApi()
+        renderApp('/traces?sort=-cost')
+        await loaded()
+
+        await userEvent.click(nextButton())
+
+        await expectSearch('?sort=-cost&page=2')
+        await waitFor(() =>
+            expect(lastTraceUrl(fetchMock)).toBe(
+                '/trail/api/traces?range=24h&sort=-cost&page=2',
+            ),
+        )
+    })
+
+    it('changes the range, returns to page 1 and keeps the sort, in one history entry', async () => {
+        const fetchMock = mockApi()
+        renderApp('/traces?sort=-cost&page=3')
+        await loaded()
+
+        const entries = window.history.length
+
+        await userEvent.click(
+            screen.getByRole('combobox', { name: 'Time range' }),
+        )
+        await userEvent.click(
+            screen.getByRole('option', { name: 'Last 7 days' }),
+        )
+
+        await expectSearch('?sort=-cost&range=7d')
+        expect(window.history.length).toBe(entries + 1)
+        await waitFor(() =>
+            expect(lastTraceUrl(fetchMock)).toBe(
+                '/trail/api/traces?range=7d&sort=-cost&page=1',
+            ),
+        )
+    })
+
+    it('restores the previous sort and page with Back', async () => {
+        renderApp('/traces')
+        await loaded()
+
+        await userEvent.click(sortButton(/Duration/))
+        await userEvent.click(nextButton())
+
+        await expectSearch('?sort=-duration&page=2')
+
+        act(() => window.history.back())
+        await expectSearch('?sort=-duration')
+        await waitFor(() =>
+            expect(header(/Duration/)).toHaveAttribute(
+                'aria-sort',
+                'descending',
+            ),
+        )
+
+        act(() => window.history.back())
+        await expectSearch('')
+        await waitFor(() =>
+            expect(header(/Started/)).toHaveAttribute(
+                'aria-sort',
+                'descending',
+            ),
+        )
+    })
+})
+
+describe('the view after a change', () => {
+    it('falls back to 24 hours for an unknown range', async () => {
+        const fetchMock = mockApi()
+        renderApp('/traces?range=forever')
+        await loaded()
+
+        expect(lastTraceUrl(fetchMock)).toBe(
+            '/trail/api/traces?range=24h&sort=-started_at&page=1',
+        )
+        expect(
+            screen.getByRole('combobox', { name: 'Time range' }),
+        ).toHaveTextContent('Last 24 hours')
+    })
+
+    it('marks the Run header when sorted by agent', async () => {
+        renderApp('/traces?sort=agent')
+        await loaded()
+
+        expect(header(/Run/)).toHaveAttribute('aria-sort', 'ascending')
+
+        await userEvent.click(sortButton(/Run/))
+
+        await waitFor(() =>
+            expect(header(/Run/)).toHaveAttribute('aria-sort', 'descending'),
+        )
+    })
+
+    it('keeps focus on the sort button and on Next once the new rows arrive', async () => {
+        const fetchMock = mockApi()
+        renderApp('/traces')
+        await loaded()
+
+        await userEvent.click(sortButton(/Duration/))
+        await waitFor(() =>
+            expect(lastTraceUrl(fetchMock)).toContain('sort=-duration'),
+        )
+        expect(sortButton(/Duration/)).toHaveFocus()
+
+        await userEvent.click(nextButton())
+        await screen.findByText('Page 2 of 3')
+        expect(nextButton()).toHaveFocus()
+    })
+})
+
+describe('a page past the end', () => {
+    it('lands on the real last page without adding a history entry', async () => {
+        const fetchMock = mockApi()
+        renderApp('/traces?page=99')
+
+        const entries = window.history.length
+
+        await expectSearch('?page=3')
+        await screen.findByText('Page 3 of 3')
+        expect(window.history.length).toBe(entries)
+        expect(lastTraceUrl(fetchMock)).toBe(
+            '/trail/api/traces?range=24h&sort=-started_at&page=3',
+        )
+        expect(dataRows()).toHaveLength(fixture.data.length)
+    })
+
+    it('does not show an empty table while it moves', () => {
+        mockApi((url) =>
+            url.includes('page=99') ? json(listFor(url)) : never(),
+        )
+        renderApp('/traces?page=99')
+
+        expect(screen.queryByRole('table')).not.toBeInTheDocument()
+    })
+})
+
+describe('while the runs load, fail or are missing', () => {
+    it('says so while the first page loads, with no table and no count', () => {
+        mockApi(never)
+        renderApp('/traces')
+
+        expect(screen.getByRole('status')).toHaveTextContent('Loading runs…')
+        expect(screen.queryByRole('table')).not.toBeInTheDocument()
+        expect(screen.queryByText(/traces$/)).not.toBeInTheDocument()
+    })
+
+    it('says so when the request fails', async () => {
+        mockApi(() => json({ message: 'No.' }, 500))
+        renderApp('/traces')
+
+        expect(await screen.findByRole('alert')).toHaveTextContent(
+            'The runs could not be loaded.',
+        )
+        expect(screen.queryByRole('table')).not.toBeInTheDocument()
+    })
+
+    it('says so when the range holds no runs', async () => {
+        mockApi(() => json(emptyList))
+        renderApp('/traces')
+
+        expect(
+            await screen.findByText('No runs in this time range.'),
+        ).toHaveAttribute('role', 'status')
+        expect(screen.queryByRole('table')).not.toBeInTheDocument()
+    })
+
+    it('does not claim a new range is empty because the previous one was', async () => {
+        const fetchMock = mockApi(() => json(emptyList))
+        renderApp('/traces?range=1h')
+        await screen.findByText('No runs in this time range.')
+
+        answerWith(fetchMock, never)
+        await userEvent.click(
+            screen.getByRole('combobox', { name: 'Time range' }),
+        )
+        await userEvent.click(
+            screen.getByRole('option', { name: 'Last 7 days' }),
+        )
+
+        await screen.findByText('Loading runs…')
+        expect(
+            screen.queryByText('No runs in this time range.'),
+        ).not.toBeInTheDocument()
+    })
+
+    it('keeps the rows on screen, marked busy, while the next page loads', async () => {
+        const fetchMock = mockApi()
+        renderApp('/traces')
+        await loaded()
+
+        const next = deferred()
+        answerWith(fetchMock, () => next.promise)
+
+        await userEvent.click(nextButton())
+
+        await waitFor(() => expect(traceUrls(fetchMock)).toHaveLength(2))
+        expect(dataRows()).toHaveLength(fixture.data.length)
+        expect(screen.queryByText('Loading runs…')).not.toBeInTheDocument()
+
+        const region = screen.getByRole('table').closest('[aria-busy]')
+
+        expect(region).toHaveAttribute('aria-busy', 'true')
+        expect(region).toHaveClass('opacity-60')
+        // The footer still describes the rows on screen, not the URL that has moved on.
+        expect(screen.getByText('Page 1 of 3')).toBeVisible()
+        expect(screen.getByText('1–25 of 60 traces')).toBeVisible()
+
+        next.resolve(
+            new Response(JSON.stringify(listFor('/trail/api/traces?page=2'))),
+        )
+
+        await screen.findByText('Page 2 of 3')
+        expect(screen.getByRole('table').closest('[aria-busy]')).toBeNull()
+    })
+
+    it('does not leave another page’s rows up when the next page fails', async () => {
+        const fetchMock = mockApi()
+        renderApp('/traces')
+        await loaded()
+
+        answerWith(fetchMock, () => json({ message: 'No.' }, 500))
+
+        await userEvent.click(nextButton())
+
+        expect(await screen.findByRole('alert')).toHaveTextContent(
+            'The runs could not be loaded.',
+        )
+        expect(screen.queryByRole('table')).not.toBeInTheDocument()
+    })
+})

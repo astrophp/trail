@@ -56,6 +56,8 @@ const features = tableFeatures({
 /**
  * A column of a `DataTable`. Sorting is opted into with `enableSorting` and
  * `sortDescFirst` (the direction of the first click; ascending when left out).
+ * A sortable column also needs an accessor (`accessorKey` or `accessorFn`): TanStack Table
+ * reports a column without one as not sortable, and its header renders without a button.
  */
 export type DataTableColumn<TData extends RowData> = ColumnDef<
     typeof features,

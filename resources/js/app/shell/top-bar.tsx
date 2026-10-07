@@ -14,11 +14,13 @@ import { Button } from '@/components/ui/button'
 import { Kbd } from '@/components/ui/kbd'
 import { SidebarTrigger, useSidebar } from '@/components/ui/sidebar'
 import { useBoot } from '@/hooks/use-boot'
+import { useTimeRangeLink } from '@/hooks/use-time-range'
 
 export function TopBar({ triggerRef }: { triggerRef: Ref<HTMLButtonElement> }) {
     const boot = useBoot()
     const { pathname } = useLocation()
     const { openMobile } = useSidebar()
+    const linkTo = useTimeRangeLink()
     const trail = breadcrumbTrail(resolveRoute(pathname))
 
     return (
@@ -48,7 +50,7 @@ export function TopBar({ triggerRef }: { triggerRef: Ref<HTMLButtonElement> }) {
                                 <BreadcrumbItem className="min-w-0">
                                     {crumb.to ? (
                                         <BreadcrumbLink asChild>
-                                            <Link to={crumb.to}>
+                                            <Link to={linkTo(crumb.to)}>
                                                 {crumb.title}
                                             </Link>
                                         </BreadcrumbLink>

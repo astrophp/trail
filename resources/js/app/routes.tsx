@@ -10,6 +10,7 @@ import type { ReactElement } from 'react'
 import { matchPath } from 'react-router'
 import { NotFoundPage } from '@/pages/not-found-page'
 import { PlaceholderPage } from '@/pages/placeholder-page'
+import { TracesPage } from '@/pages/traces-page'
 
 export type Section =
     'overview' | 'traces' | 'conversations' | 'agents' | 'usage'
@@ -43,7 +44,7 @@ export const routeTable: RouteDef[] = [
     {
         path: '/traces',
         title: 'Traces',
-        element: <PlaceholderPage title="Traces" />,
+        element: <TracesPage />,
         section: 'traces',
         icon: ListTreeIcon,
     },
