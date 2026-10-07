@@ -104,3 +104,15 @@ it('keeps the providers already registered', function () {
         ->toContain('App\Providers\AppServiceProvider::class,')
         ->toContain(TRAIL_PROVIDER.'::class,');
 });
+
+it('warns, without failing, when there is no provider list to register in', function () {
+    unlink($this->providersFile);
+
+    $this->artisan('trail:install')
+        ->expectsOutputToContain('Could not register the provider automatically. Add '.TRAIL_PROVIDER.'::class to your application\'s provider list.')
+        ->assertSuccessful();
+
+    expect($this->providersFile)->not->toBeFile()
+        ->and(config_path('trail.php'))->toBeFile()
+        ->and(app_path('Providers/TrailServiceProvider.php'))->toBeFile();
+});

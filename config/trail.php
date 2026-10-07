@@ -35,6 +35,7 @@ return [
     |
     | The number of days to keep recorded traces. "trail:prune" deletes older
     | traces with their spans and bookmarks; "--hours" overrides this once.
+    | It must be a positive number: anything else and the command deletes nothing.
     |
     | Trail never schedules its commands. To prune and sweep automatically,
     | add them to your schedule, for example in routes/console.php:

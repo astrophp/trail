@@ -5,7 +5,6 @@ namespace Astro\Trail\Storage\Models\Concerns;
 use Astro\Trail\Enums\IssueKind;
 use Astro\Trail\Enums\Status;
 use Astro\Trail\Storage\StaleRuns;
-use DateTimeInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
@@ -57,7 +56,7 @@ trait ResolvesStaleRuns
      *
      * @param  Builder<static>  $query
      */
-    public function scopeEffectiveStatus(Builder $query, Status $status): void
+    public function scopeWhereEffectiveStatus(Builder $query, Status $status): void
     {
         $column = $query->qualifyColumn('status');
         $created = $query->qualifyColumn('created_at');
@@ -79,7 +78,7 @@ trait ResolvesStaleRuns
      *
      * @param  Builder<static>  $query
      */
-    public function scopeEffectiveIssueKind(Builder $query, IssueKind $kind): void
+    public function scopeWhereEffectiveIssueKind(Builder $query, IssueKind $kind): void
     {
         $column = $query->qualifyColumn('issue_kind');
         $status = $query->qualifyColumn('status');
@@ -99,10 +98,14 @@ trait ResolvesStaleRuns
         });
     }
 
-    private function createdAt(): ?DateTimeInterface
+    /**
+     * The created_at string as stored, not parsed, so it is compared exactly
+     * like the scopes and the sweep compare it.
+     */
+    private function createdAt(): ?string
     {
-        $createdAt = $this->getAttribute('created_at');
+        $createdAt = $this->getRawOriginal('created_at');
 
-        return $createdAt instanceof DateTimeInterface ? $createdAt : null;
+        return is_string($createdAt) ? $createdAt : null;
     }
 }

@@ -17,6 +17,9 @@ final class StaleRuns
 {
     public const DATE_FORMAT = 'Y-m-d H:i:s.v';
 
+    /** About ten years; keeps the cutoff a valid date whatever is configured. */
+    public const MAXIMUM_TIMEOUT_SECONDS = 315360000;
+
     /** Used when trail.stale_after is not a number. */
     public const DEFAULT_TIMEOUT_SECONDS = 3600;
 
@@ -27,7 +30,7 @@ final class StaleRuns
     {
         $configured = config('trail.stale_after');
 
-        return self::floor(is_numeric($configured) ? (int) $configured : self::DEFAULT_TIMEOUT_SECONDS);
+        return self::floor(is_numeric($configured) ? (int) min((float) $configured, self::MAXIMUM_TIMEOUT_SECONDS) : self::DEFAULT_TIMEOUT_SECONDS);
     }
 
     /**
@@ -61,25 +64,45 @@ final class StaleRuns
             ->format(self::DATE_FORMAT);
     }
 
-    public static function isStale(Status $status, ?DateTimeInterface $createdAt): bool
+    /**
+     * Whether a row with this status and stored created_at is stale. The stored
+     * string is compared as it is, like the sweep and the scopes do in the
+     * database, so no timezone conversion can make the answers differ.
+     */
+    public static function isStale(Status $status, ?string $createdAt): bool
     {
+        $createdAt = self::normalize($createdAt);
+
         return $status === Status::Running
             && $createdAt !== null
-            && self::format($createdAt) < self::cutoffColumn();
+            && $createdAt < self::cutoffColumn();
     }
 
-    public static function effectiveStatus(Status $status, ?DateTimeInterface $createdAt): Status
+    public static function effectiveStatus(Status $status, ?string $createdAt): Status
     {
         return self::isStale($status, $createdAt) ? Status::Incomplete : $status;
     }
 
-    public static function effectiveIssueKind(Status $status, ?DateTimeInterface $createdAt, ?IssueKind $issueKind): ?IssueKind
+    public static function effectiveIssueKind(Status $status, ?string $createdAt, ?IssueKind $issueKind): ?IssueKind
     {
         return self::isStale($status, $createdAt) ? IssueKind::Abandoned : $issueKind;
     }
 
+    /**
+     * Pad a stored datetime to the Y-m-d H:i:s.v shape, for drivers that return
+     * fewer fractional digits or none. Returns null when it is not a datetime.
+     */
+    private static function normalize(?string $stored): ?string
+    {
+        if ($stored === null || preg_match('/^(\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2})(?:\.(\d+))?/', $stored, $m) !== 1) {
+            return null;
+        }
+
+        return str_replace('T', ' ', $m[1]).'.'.substr(str_pad($m[2] ?? '', 3, '0'), 0, 3);
+    }
+
     private static function floor(int $seconds): int
     {
-        return max(TraceStore::MINIMUM_STALE_SECONDS, $seconds);
+        return max(TraceStore::MINIMUM_STALE_SECONDS, min(self::MAXIMUM_TIMEOUT_SECONDS, $seconds));
     }
 }

@@ -10,9 +10,6 @@ use Symfony\Component\Console\Attribute\AsCommand;
 #[AsCommand(name: 'trail:prune')]
 class PruneCommand extends Command
 {
-    /** Used when trail.retention is not a non-negative number. */
-    private const DEFAULT_RETENTION_DAYS = 14;
-
     /** About a hundred years; keeps the cut-off a valid date. */
     private const MAX_HOURS = 876000;
 
@@ -22,35 +19,32 @@ class PruneCommand extends Command
 
     public function handle(): int
     {
-        $hours = $this->hours();
-
-        if ($hours === null) {
-            $this->components->error('The --hours option must be a number between 0 and '.self::MAX_HOURS.'.');
-
-            return self::FAILURE;
-        }
-
-        $deleted = Trail::store()->prune(Carbon::now()->subSeconds((int) round($hours * 3600)));
-
-        $this->components->info("Deleted {$deleted} ".($deleted === 1 ? 'trace' : 'traces').' older than '.(float) $hours.' hours.');
-
-        return self::SUCCESS;
-    }
-
-    private function hours(): ?float
-    {
         $option = $this->option('hours');
 
         if ($option === null) {
             $days = config('trail.retention');
+            $hours = is_numeric($days) && $days > 0 ? (float) $days * 24 : null;
 
-            return (is_numeric($days) && $days >= 0 ? (float) $days : self::DEFAULT_RETENTION_DAYS) * 24;
+            if ($hours === null || $hours > self::MAX_HOURS) {
+                $this->components->error('trail.retention must be a positive number of days, at most '.intdiv(self::MAX_HOURS, 24).'.');
+                $this->line('Nothing was deleted. Use --hours for a one-off prune.');
+
+                return self::FAILURE;
+            }
+        } else {
+            $hours = is_numeric($option) && $option >= 0 && $option <= self::MAX_HOURS ? (float) $option : null;
+
+            if ($hours === null) {
+                $this->components->error('The --hours option must be a number between 0 and '.self::MAX_HOURS.'.');
+
+                return self::FAILURE;
+            }
         }
 
-        if (! is_numeric($option) || $option < 0 || $option > self::MAX_HOURS) {
-            return null;
-        }
+        $deleted = Trail::store()->prune(Carbon::now()->subSeconds((int) round($hours * 3600)));
 
-        return (float) $option;
+        $this->components->info("Deleted {$deleted} ".($deleted === 1 ? 'trace' : 'traces').' older than '.$hours.' hours.');
+
+        return self::SUCCESS;
     }
 }

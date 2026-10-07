@@ -4,6 +4,7 @@ namespace Astro\Trail\Console;
 
 use Illuminate\Console\Command;
 use Illuminate\Support\ServiceProvider;
+use RuntimeException;
 use Symfony\Component\Console\Attribute\AsCommand;
 
 #[AsCommand(name: 'trail:install')]
@@ -25,7 +26,7 @@ class InstallCommand extends Command
         $this->useApplicationNamespace();
 
         if (! $this->registerProvider()) {
-            $this->components->warn('Could not register the provider. Add '.$this->providerClass().'::class to your bootstrap/providers.php.');
+            $this->components->warn('Could not register the provider automatically. Add '.$this->providerClass().'::class to your application\'s provider list.');
         }
 
         $this->components->info('Trail is installed. Run `php artisan migrate` to create its tables.');
@@ -35,7 +36,16 @@ class InstallCommand extends Command
 
     private function providerClass(): string
     {
-        return $this->laravel->getNamespace().'Providers\\TrailServiceProvider';
+        return $this->namespace().'Providers\\TrailServiceProvider';
+    }
+
+    private function namespace(): string
+    {
+        try {
+            return $this->laravel->getNamespace();
+        } catch (RuntimeException) {
+            return 'App\\';
+        }
     }
 
     private function useApplicationNamespace(): void
@@ -47,7 +57,7 @@ class InstallCommand extends Command
         }
 
         $contents = (string) file_get_contents($path);
-        $replaced = str_replace('namespace App\Providers;', 'namespace '.$this->laravel->getNamespace().'Providers;', $contents);
+        $replaced = str_replace('namespace App\Providers;', 'namespace '.$this->namespace().'Providers;', $contents);
 
         if ($replaced !== $contents) {
             file_put_contents($path, $replaced);

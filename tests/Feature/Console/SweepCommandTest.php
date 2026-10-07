@@ -35,7 +35,12 @@ it('marks stale running traces and spans as incomplete and abandoned', function 
         ->issue_kind->toBe('abandoned')
         ->ended_at->toBeNull()
         ->duration_ms->toBeNull()
-        ->and(DB::table('trail_spans')->where('id', 'stale-span')->value('status'))->toBe('incomplete')
+        ->and(DB::table('trail_spans')->where('id', 'stale-span')->first())
+        ->status->toBe('incomplete')
+        ->issue_kind->toBe('abandoned')
+        ->ended_at->toBeNull()
+        ->duration_ms->toBeNull()
+        ->and(DB::table('trail_spans')->where('id', 'fresh-span')->value('issue_kind'))->toBeNull()
         ->and(DB::table('trail_traces')->where('id', 'fresh')->value('status'))->toBe('running')
         ->and(DB::table('trail_spans')->where('id', 'fresh-span')->value('status'))->toBe('running')
         ->and(DB::table('trail_traces')->where('id', 'done')->value('status'))->toBe('completed');
@@ -86,4 +91,20 @@ it('works while recording is disabled', function () {
     $this->artisan('trail:sweep')->assertSuccessful();
 
     expect(DB::table('trail_traces')->where('id', 'stale')->value('status'))->toBe('incomplete');
+});
+
+it('sweeps a fresh running span of a stale trace by its own age, as the store defines', function () {
+    $this->travelTo(Carbon::parse('2026-03-01 12:00:00'));
+    config(['trail.stale_after' => 300]);
+
+    $trace = Rows::trace(['id' => 'stale']);
+    Rows::span($trace, ['id' => 'young-span']);
+    trailBackdate('trail_traces', 'stale', '2026-03-01 11:00:00.000');
+
+    $this->artisan('trail:sweep')->assertSuccessful();
+
+    expect(DB::table('trail_traces')->where('id', 'stale')->value('status'))->toBe('incomplete')
+        ->and(DB::table('trail_spans')->where('id', 'young-span')->first())
+        ->status->toBe('running')
+        ->issue_kind->toBeNull();
 });

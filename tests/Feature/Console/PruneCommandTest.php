@@ -76,3 +76,39 @@ it('works while recording is disabled', function () {
 
     expect(DB::table('trail_traces')->pluck('id')->all())->toBe(['recent']);
 });
+
+it('refuses to prune when the configured retention is not a positive number', function (mixed $retention) {
+    config(['trail.retention' => $retention]);
+    trailSeedAgedTraces();
+
+    $this->artisan('trail:prune')
+        ->expectsOutputToContain('trail.retention must be a positive number of days')
+        ->expectsOutputToContain('--hours')
+        ->assertFailed();
+
+    expect(DB::table('trail_traces')->count())->toBe(2)
+        ->and(DB::table('trail_spans')->count())->toBe(2)
+        ->and(DB::table('trail_bookmarks')->count())->toBe(2);
+})->with([0, -5, null, false, 'abc', '', 1e30, '1e999']);
+
+it('still lets --hours prune when the configured retention is invalid', function () {
+    config(['trail.retention' => 0]);
+    trailSeedAgedTraces();
+
+    $this->artisan('trail:prune', ['--hours' => '12'])->assertSuccessful();
+
+    expect(DB::table('trail_traces')->count())->toBe(0);
+});
+
+it('keeps a trace exactly at the cut-off and deletes one a millisecond older', function () {
+    $this->travelTo(Carbon::parse('2026-03-01 12:00:00'));
+
+    foreach (['at-cutoff' => '2026-03-01 11:00:00.000', 'older' => '2026-03-01 10:59:59.999', 'newer' => '2026-03-01 11:00:00.001'] as $id => $createdAt) {
+        Rows::trace(['id' => $id]);
+        DB::table('trail_traces')->where('id', $id)->update(['created_at' => $createdAt]);
+    }
+
+    $this->artisan('trail:prune', ['--hours' => '1'])->expectsOutputToContain('Deleted 1 trace')->assertSuccessful();
+
+    expect(DB::table('trail_traces')->orderBy('id')->pluck('id')->all())->toBe(['at-cutoff', 'newer']);
+});
