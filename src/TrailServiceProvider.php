@@ -13,7 +13,6 @@ use Astro\Trail\Console\PauseCommand;
 use Astro\Trail\Console\PruneCommand;
 use Astro\Trail\Console\ResumeCommand;
 use Astro\Trail\Console\SweepCommand;
-use Astro\Trail\Http\Middleware\Authorize;
 use Astro\Trail\Pricing\CostCalculator;
 use Astro\Trail\Pricing\PriceBook;
 use Astro\Trail\Storage\Contracts\TraceStore;
@@ -22,9 +21,7 @@ use Illuminate\Contracts\Cache\Factory as CacheFactory;
 use Illuminate\Contracts\Config\Repository;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Contracts\Foundation\Application;
-use Illuminate\Contracts\Foundation\CachesRoutes;
 use Illuminate\Database\ConnectionResolverInterface;
-use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 
@@ -93,16 +90,12 @@ class TrailServiceProvider extends ServiceProvider
     }
 
     /**
-     * Register the dashboard routes, unless Trail or its dashboard is switched off, or the
-     * application's routes are cached (a cached route file would not include them).
+     * Register the dashboard routes, unless Trail or its dashboard is switched off. Laravel itself
+     * skips the route file when the application's routes are cached.
      */
     private function registerRoutes(): void
     {
         if (! config('trail.enabled') || ! config('trail.dashboard.enabled')) {
-            return;
-        }
-
-        if ($this->app instanceof CachesRoutes && $this->app->routesAreCached()) {
             return;
         }
 
@@ -114,7 +107,7 @@ class TrailServiceProvider extends ServiceProvider
             'domain' => is_string($domain) && $domain !== '' ? $domain : null,
             // Never the root: the dashboard answers every path under its prefix, and would take the application's.
             'prefix' => $path === '' ? 'trail' : $path,
-            'middleware' => [...Arr::wrap(config('trail.middleware')), Authorize::class],
+            'middleware' => config('trail.middleware'),
         ], function (): void {
             $this->loadRoutesFrom(__DIR__.'/../routes/web.php');
         });

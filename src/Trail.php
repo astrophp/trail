@@ -133,6 +133,6 @@ class Trail
 
         $guard = $this->container->make(Repository::class)->get('trail.guard');
 
-        return Gate::forUser($request->user(is_string($guard) && $guard !== '' ? $guard : null))->check('viewTrail');
+        return Gate::forUser($request->user(is_string($guard) ? $guard : null))->check('viewTrail');
     }
 }
