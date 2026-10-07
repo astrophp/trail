@@ -5,6 +5,7 @@ namespace Astro\Trail\Pricing;
 use Astro\Trail\Enums\SpanType;
 use Illuminate\Contracts\Config\Repository;
 use Illuminate\Database\ConnectionResolverInterface;
+use Illuminate\Support\Carbon;
 use Throwable;
 
 class PriceBook
@@ -15,8 +16,16 @@ class PriceBook
      */
     public const VERSION_SUFFIX = '/^-(latest|\d{8}|\d{4}-\d{2}-\d{2}|\d{2}-\d{4}|\d{3,4})$/';
 
+    /**
+     * How long stored prices are kept before the next lookup reads them again,
+     * whether the last read worked or failed.
+     */
+    public const REFRESH_SECONDS = 60;
+
     /** @var array<string, array<string, Rate>>|null */
     private ?array $rows = null;
+
+    private ?int $loadedAt = null;
 
     public function __construct(
         private readonly Repository $config,
@@ -59,6 +68,7 @@ class PriceBook
     public function flush(): void
     {
         $this->rows = null;
+        $this->loadedAt = null;
     }
 
     /**
@@ -87,13 +97,15 @@ class PriceBook
         }
 
         try {
-            $observed = $this->resolver->connection($this->connection)
+            $connection = $this->resolver->connection($this->connection);
+
+            $observed = $connection->transaction(fn () => $connection
                 ->table('trail_spans')
                 ->whereIn('type', [SpanType::Step->value, SpanType::Embedding->value])
                 ->whereNotNull('provider')
                 ->whereNotNull('model')
                 ->distinct()
-                ->get(['provider', 'model']);
+                ->get(['provider', 'model']));
 
             foreach ($observed as $row) {
                 if (is_string($row->provider) && is_string($row->model)) {
@@ -134,14 +146,19 @@ class PriceBook
      */
     private function databaseRows(): array
     {
-        if ($this->rows !== null) {
+        $now = Carbon::now()->getTimestamp();
+
+        if ($this->rows !== null && $this->loadedAt !== null && $now - $this->loadedAt <= self::REFRESH_SECONDS) {
             return $this->rows;
         }
 
         $this->rows = [];
+        $this->loadedAt = $now;
 
         try {
-            $rows = $this->resolver->connection($this->connection)->table('trail_prices')->get();
+            // A savepoint when nested, so a failed read cannot abort the caller's transaction.
+            $connection = $this->resolver->connection($this->connection);
+            $rows = $connection->transaction(fn () => $connection->table('trail_prices')->get());
             $loaded = [];
 
             foreach ($rows as $row) {

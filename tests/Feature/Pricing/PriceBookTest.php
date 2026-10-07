@@ -64,11 +64,21 @@ it('prefers the longest listed key', function () {
     ]]);
 
     expect(book()->rateFor('openai', 'gpt-4o-mini-2024-07-18')?->model)->toBe('gpt-4o-mini')
-        ->and(book()->rateFor('openai', 'gpt-4o-mini-2024-07-18')?->input)->toBe(0.15)
         ->and(book()->rateFor('openai', 'gpt-4o-2024-08-06')?->model)->toBe('gpt-4o')
         ->and(book()->rateFor('anthropic', 'claude-opus-4-5-20251101')?->model)->toBe('claude-opus-4-5')
         ->and(book()->rateFor('anthropic', 'claude-opus-4-20250514')?->model)->toBe('claude-opus-4');
 });
+
+it('prefers the longest key when several keys match the suffix rule', function (array $table) {
+    config(['trail.pricing' => ['acme' => $table]]);
+
+    expect(book()->rateFor('acme', 'acme-08-2024')?->model)->toBe('acme-08')
+        ->and(book()->rateFor('acme', 'acme-08-2024')?->input)->toBe(2.0)
+        ->and(book()->rateFor('acme', 'acme-2024')?->model)->toBe('acme');
+})->with([
+    'short key first' => [['acme' => rate(1.0), 'acme-08' => rate(2.0)]],
+    'long key first' => [['acme-08' => rate(2.0), 'acme' => rate(1.0)]],
+]);
 
 it('does not price a model by a bare prefix', function (string $provider, string $key, string $model) {
     config(['trail.pricing' => [$provider => [$key => rate(1.0)]]]);
@@ -164,6 +174,91 @@ it('reads database rows once until flushed', function () {
 
     expect(book()->rateFor('acme', 'tiny')?->input)->toBe(4.0)
         ->and($queries)->toBe(2);
+});
+
+it('reads stored prices again once the refresh window has passed', function () {
+    config(['trail.pricing' => []]);
+    Rows::price(['provider' => 'acme', 'model' => 'tiny', 'input' => 1]);
+
+    $queries = 0;
+    DB::listen(function ($query) use (&$queries) {
+        if (str_starts_with($query->sql, 'select') && str_contains($query->sql, 'trail_prices')) {
+            $queries++;
+        }
+    });
+
+    $this->travelTo(now());
+
+    expect(book()->rateFor('acme', 'tiny')?->input)->toBe(1.0);
+
+    DB::table('trail_prices')->where('model', 'tiny')->update(['input' => 5]);
+
+    $this->travel(PriceBook::REFRESH_SECONDS)->seconds();
+
+    expect(book()->rateFor('acme', 'tiny')?->input)->toBe(1.0)
+        ->and($queries)->toBe(1);
+
+    $this->travel(2)->seconds();
+
+    expect(book()->rateFor('acme', 'tiny')?->input)->toBe(5.0)
+        ->and($queries)->toBe(2);
+});
+
+it('does not retry or report a failed read within the window, and recovers after it', function () {
+    Exceptions::fake();
+    $this->travelTo(now());
+
+    config(['trail.pricing' => []]);
+    Rows::price(['provider' => 'acme', 'model' => 'tiny', 'input' => 2]);
+
+    $resolver = new FlakyResolver(app(ConnectionResolverInterface::class));
+    $book = new PriceBook(app('config'), $resolver);
+
+    expect($book->rateFor('acme', 'tiny'))->toBeNull();
+
+    $resolver->failing = false;
+    $this->travel(PriceBook::REFRESH_SECONDS)->seconds();
+
+    expect($book->rateFor('acme', 'tiny'))->toBeNull();
+
+    Exceptions::assertReportedCount(1);
+
+    $this->travel(2)->seconds();
+
+    expect($book->rateFor('acme', 'tiny')?->input)->toBe(2.0);
+
+    Exceptions::assertReportedCount(1);
+});
+
+it('leaves the callers transaction usable when a read fails', function () {
+    Exceptions::fake();
+
+    config(['trail.pricing' => ['openai' => ['gpt-5' => rate(1.0)]]]);
+    Rows::price(['provider' => 'acme', 'model' => 'tiny', 'input' => 2]);
+
+    $connection = DB::connection();
+    $prefix = $connection->getTablePrefix();
+
+    expect($connection->transactionLevel())->toBeGreaterThan(0);
+
+    // With this prefix the tables do not exist, so the engine itself rejects the statements.
+    $connection->setTablePrefix('missing_');
+
+    try {
+        $book = new PriceBook(app('config'), app(ConnectionResolverInterface::class));
+        $rate = $book->rateFor('openai', 'gpt-5');
+        $known = $book->knownModels();
+    } finally {
+        $connection->setTablePrefix($prefix);
+    }
+
+    expect($rate?->input)->toBe(1.0)
+        ->and($rate?->custom)->toBeFalse()
+        ->and($known)->toBe([['provider' => 'openai', 'model' => 'gpt-5']]);
+
+    Exceptions::assertReportedCount(2);
+
+    expect(DB::table('trail_prices')->count())->toBe(1);
 });
 
 it('falls back to config and reports once when the prices cannot be read', function () {
