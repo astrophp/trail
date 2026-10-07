@@ -9,6 +9,7 @@ use Astro\Trail\Enums\Status;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
 
 /**
@@ -47,6 +48,7 @@ use Illuminate\Support\Carbon;
  * @property Carbon $created_at
  * @property Carbon $updated_at
  * @property-read Collection<int, Span> $spans
+ * @property-read Bookmark|null $bookmark
  */
 class Trace extends Model
 {
@@ -102,5 +104,13 @@ class Trace extends Model
     public function spans(): HasMany
     {
         return $this->hasMany(Span::class, 'trace_id');
+    }
+
+    /**
+     * @return HasOne<Bookmark, $this>
+     */
+    public function bookmark(): HasOne
+    {
+        return $this->hasOne(Bookmark::class, 'trace_id');
     }
 }

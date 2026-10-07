@@ -4,6 +4,8 @@ namespace Astro\Trail\Tests\Fixtures\Storage;
 
 use Astro\Trail\Enums\SpanType;
 use Astro\Trail\Enums\Status;
+use Astro\Trail\Storage\Models\Bookmark;
+use Astro\Trail\Storage\Models\Price;
 use Astro\Trail\Storage\Models\Span;
 use Astro\Trail\Storage\Models\Trace;
 use Illuminate\Support\Carbon;
@@ -38,6 +40,25 @@ class Rows
             'status' => Status::Running,
             'started_at' => Carbon::parse('2026-01-01 12:00:00'),
         ], $attributes));
+    }
+
+    /**
+     * @param  array<string, mixed>  $attributes
+     */
+    public static function price(array $attributes = []): Price
+    {
+        return Price::create(array_merge([
+            'provider' => 'openai',
+            'model' => 'model-'.str()->uuid(),
+        ], $attributes));
+    }
+
+    /**
+     * @param  array<string, mixed>  $attributes
+     */
+    public static function bookmark(Trace $trace, array $attributes = []): Bookmark
+    {
+        return Bookmark::create(array_merge(['trace_id' => $trace->id], $attributes));
     }
 
     /**
