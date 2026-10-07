@@ -238,7 +238,11 @@ export function isSameDay(
 
 /** The full date and time with the zone's offset: `Oct 7, 2026, 14:03:22 GMT+3`. The only place a zone label is produced. */
 export function formatDateTime(at: Date, timeZone: string | undefined): string {
-    return zoneFormatter('dateTime', timeZone).format(at)
+    // A zero offset is written `GMT` by some versions of the runtime's locale data and `GMT+0`
+    // by others; it is always shown as `GMT`.
+    return zoneFormatter('dateTime', timeZone)
+        .format(at)
+        .replace(/GMT[+-]0$/, 'GMT')
 }
 
 const headLength = 8
