@@ -104,6 +104,54 @@ A user is `{ "id", "type", "name", "email" }`. `id` and `type` are what was reco
 `email` are `null` when the user can no longer be resolved, and the client falls back to the id.
 A run without a user has `null` in place of the object.
 
+## The trace
+
+One run, as every endpoint returns it:
+
+```json
+{
+  "id": "0199c2f4-6a1e-7c3b-9a55-0e8a4c1d2f30",
+  "type": "agent",
+  "name": "SupportAssistant",
+  "agent_class": "App\\Ai\\Agents\\SupportAssistant",
+  "status": "completed",
+  "issue_kind": null,
+  "streamed": false,
+  "recovered": false,
+  "child_failed": false,
+  "provider": "anthropic",
+  "model": "claude-sonnet-4-5",
+  "duration_ms": 1840.412,
+  "usage": {
+    "state": "reported",
+    "input_tokens": 1200,
+    "output_tokens": 310,
+    "cache_read_tokens": null,
+    "cache_write_tokens": null,
+    "reasoning_tokens": null,
+    "total_tokens": 1510
+  },
+  "cost": { "state": "estimated", "amount": 0.00825 },
+  "span_count": 4,
+  "prompt_excerpt": "Where is my order?",
+  "response_excerpt": "Your order shipped on Monday.",
+  "conversation_id": null,
+  "user": { "id": "7", "type": "App\\Models\\User", "name": "Ada", "email": "ada@example.com" },
+  "bookmarked": false,
+  "started_at": "2026-01-01T12:00:00.000Z",
+  "ended_at": "2026-01-01T12:00:01.840Z"
+}
+```
+
+- `type` is `agent`, or `embedding` for embeddings generated outside an agent run.
+- `agent_class` is `null` for an anonymous agent and for an embedding run.
+- `provider` and `model` are those the run asked for on its last attempt. A run can use more.
+- `input_tokens` counts everything sent, cached tokens included, and `output_tokens` includes
+  reasoning tokens. `total_tokens` is the sum of whichever of the two was reported, and `null`
+  when neither was.
+- `issue_kind` is `rate_limited`, `provider_overloaded`, `provider_connection`,
+  `insufficient_credits`, `tool_error`, `exception`, `abandoned` or `null`.
+
 ## Endpoints
 
 ### `GET /api/meta`
@@ -135,3 +183,41 @@ What the dashboard needs around every page. Takes a time range, which applies to
 - `filters` lists what was observed in the range, sorted by name, at most 100 of each. `agents`
   are the names of runs; `providers` and `models` come from every step of a run, not only the
   first, since one run can use several models.
+
+### `GET /api/traces`
+
+The recorded runs in a time range, filtered, sorted and paginated.
+
+| Parameter | Keeps the runs |
+| -- | -- |
+| `status` | with that status |
+| `agent` | with that name |
+| `provider`, `model` | that used it in any step, not only the first. Sent together, one step must match both |
+| `conversation` | of that conversation id |
+| `user_id`, `user_type` | of that user. `user_type` narrows `user_id` and cannot be sent alone |
+| `issue_kind` | with that issue kind |
+| `streamed`, `recovered`, `child_failed` | with that flag set |
+| `unpriced` | with at least one span that reported usage and could not be priced |
+| `slow` | whose duration is at or above the 95th percentile of the runs in the time range |
+| `bookmarked` | that are bookmarked |
+| `search` | whose id, name, provider, model, prompt excerpt, conversation id or user id contains the text (at most 200 characters), whatever its case. Outside ASCII, case is matched as the database matches it |
+
+`streamed`, `recovered`, `child_failed`, `unpriced`, `slow` and `bookmarked` are switches: `1` or
+`true` applies the filter, `0`, `false` or leaving it out does not. Filters combine with *and*.
+
+`sort` is `started_at`, `duration`, `cost` or `agent`; the default is `-started_at`.
+
+```json
+{
+  "data": [{ "id": "…" }],
+  "pagination": { "page": 1, "per_page": 25, "total": 37, "last_page": 2 },
+  "range": { "preset": "24h", "from": "…", "to": "…" },
+  "status_counts": { "all": 52, "completed": 37, "failed": 9, "incomplete": 3, "running": 2, "awaiting_approval": 1 },
+  "slow_threshold_ms": null
+}
+```
+
+- `status_counts` counts the runs that pass every filter except `status`, so the counts describe
+  the same view as the rows whichever status is selected.
+- `slow_threshold_ms` is the duration `slow` compared against. It is `null` when `slow` is not
+  applied, and when no run in the range has a duration, in which case `slow` matches nothing.
