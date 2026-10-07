@@ -1,4 +1,5 @@
 import { ThemePair } from '@/catalogue/theme-pair'
+import { TokensSection } from '@/catalogue/tokens-section'
 import type { LocatedEntry } from '@/catalogue/entries'
 
 export function CataloguePage({ entries }: { entries: LocatedEntry[] }) {
@@ -10,6 +11,14 @@ export function CataloguePage({ entries }: { entries: LocatedEntry[] }) {
                 </h1>
                 <nav aria-label="Sections">
                     <ul className="flex flex-wrap gap-4 text-sm">
+                        <li>
+                            <a
+                                className="text-muted-foreground underline-offset-4 hover:underline"
+                                href="#tokens"
+                            >
+                                Tokens
+                            </a>
+                        </li>
                         {entries.map((entry) => (
                             <li key={entry.id}>
                                 <a
@@ -23,6 +32,7 @@ export function CataloguePage({ entries }: { entries: LocatedEntry[] }) {
                     </ul>
                 </nav>
             </header>
+            <TokensSection />
             {entries.map((entry) => (
                 <section
                     key={entry.id}

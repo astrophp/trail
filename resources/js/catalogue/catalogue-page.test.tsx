@@ -21,6 +21,9 @@ const entries = [
 describe('CataloguePage', () => {
     it('links to each entry and renders every specimen in both themes', () => {
         const { container } = render(<CataloguePage entries={entries} />)
+        const section = within(
+            container.querySelector<HTMLElement>('#ui-sample')!,
+        )
 
         expect(
             within(screen.getByRole('navigation')).getByRole('link', {
@@ -28,13 +31,15 @@ describe('CataloguePage', () => {
             }),
         ).toHaveAttribute('href', '#ui-sample')
         expect(screen.getByRole('main')).toBeInTheDocument()
-        expect(screen.getAllByText('count 3')).toHaveLength(2)
+        expect(section.getAllByText('count 3')).toHaveLength(2)
         expect(
-            within(screen.getByRole('group', { name: 'Dark theme' })).getByText(
-                'count 3',
-            ),
+            within(
+                section.getByRole('group', { name: 'Dark theme' }),
+            ).getByText('count 3'),
         ).toBeInTheDocument()
-        expect(screen.getByRole('group', { name: 'Light theme' })).toBeVisible()
-        expect(container.querySelectorAll('.dark')).toHaveLength(1)
+        expect(section.getByRole('group', { name: 'Light theme' })).toHaveClass(
+            'light',
+        )
+        expect(container.querySelectorAll('#ui-sample .dark')).toHaveLength(1)
     })
 })
