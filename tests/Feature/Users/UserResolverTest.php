@@ -14,7 +14,6 @@ use Illuminate\Database\Events\TransactionBeginning;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Exceptions;
-use Illuminate\Support\Facades\Schema;
 
 /*
 |--------------------------------------------------------------------------
@@ -113,8 +112,7 @@ it('resolves the users of a model whose table is missing to null, reporting it o
 });
 
 it('resolves a user who was soft-deleted', function () {
-    Schema::table('users', fn ($table) => $table->softDeletes());
-    DB::table('users')->where('id', $this->ada)->update(['deleted_at' => now()]);
+    DB::table('users')->where('id', $this->ada)->update([SoftUser::DELETED_AT => now()]);
 
     $resolved = ($this->resolve)([['id' => $this->ada, 'type' => SoftUser::class]]);
 
