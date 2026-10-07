@@ -4,8 +4,10 @@ use Astro\Trail\Enums\ErrorSource;
 use Astro\Trail\Enums\IssueKind;
 use Astro\Trail\Enums\SpanType;
 use Astro\Trail\Enums\Status;
+use Astro\Trail\Storage\ArrayTraceStore;
 use Astro\Trail\Storage\Contracts\TraceStore;
 use Astro\Trail\Storage\DatabaseTraceStore;
+use Astro\Trail\Tests\Fixtures\Storage\ArrayStoreProbe;
 use Astro\Trail\Tests\Fixtures\Storage\DatabaseStoreProbe;
 use Astro\Trail\Tests\Fixtures\Storage\Records;
 use Illuminate\Database\ConnectionResolverInterface;
@@ -16,6 +18,11 @@ uses(RefreshDatabase::class);
 
 dataset('stores', [
     'database' => [fn () => [new DatabaseTraceStore(app(ConnectionResolverInterface::class)), new DatabaseStoreProbe]],
+    'array' => [function () {
+        $store = new ArrayTraceStore;
+
+        return [$store, new ArrayStoreProbe($store)];
+    }],
 ]);
 
 dataset('totals', [

@@ -45,7 +45,10 @@
         "laravel": {
             "providers": [
                 "Astro\\Trail\\TrailServiceProvider"
-            ]
+            ],
+            "aliases": {
+                "Trail": "Astro\\Trail\\Facades\\Trail"
+            }
         }
     },
     "config": {

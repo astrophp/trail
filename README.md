@@ -22,6 +22,32 @@ application's own database, and serves a dashboard from your application.
 - Laravel 12 or 13
 - `laravel/ai` 1.1+
 
+## Testing
+
+`Trail::fake()` swaps Trail's storage for an in-memory store, so your tests never touch Trail's tables.
+
+```php
+use Astro\Trail\Enums\Status;
+use Astro\Trail\Facades\Trail;
+use Astro\Trail\Storage\TraceRecord;
+
+it('records the support agent', function () {
+    $trail = Trail::fake();
+
+    // ... run the code under test ...
+
+    $trail->assertRecorded(SupportAgent::class, fn (TraceRecord $trace) => $trace->status === Status::Completed);
+});
+
+it('records nothing for a guest', function () {
+    $trail = Trail::fake();
+
+    // ... run the code under test ...
+
+    $trail->assertNothingRecorded();
+});
+```
+
 ## Contributing
 
 ```bash
