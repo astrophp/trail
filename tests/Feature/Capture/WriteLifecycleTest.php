@@ -514,7 +514,7 @@ describe('a late write', function () {
 });
 
 it('writes finished traces without a flush once a process holds more than its limit, and keeps open ones', function () {
-    $this->app->instance(Recorder::class, new Recorder($this->app, $this->app->make(CostCalculator::class), 2));
+    $this->app->instance(Recorder::class, new Recorder($this->app, $this->app->make(CostCalculator::class), maxBufferedTraces: 2));
 
     // Run "A" is a stream its consumer abandoned, so it stays open while two runs finish: three
     // traces are held, one more than the limit allows.

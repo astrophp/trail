@@ -61,6 +61,7 @@ class Recorder
     public function __construct(
         private readonly Container $container,
         private readonly CostCalculator $costs,
+        private ?Payload $payload = null,
         private readonly int $maxBufferedTraces = self::MAX_BUFFERED_TRACES,
     ) {}
 
@@ -97,9 +98,15 @@ class Recorder
             agentClass: $class,
             provider: $provider,
             model: $prompt->model,
-            input: ['prompt' => $prompt->prompt, 'system' => $this->systemPrompt($agent)],
             openedAt: (float) hrtime(true),
         );
+
+        $input = $this->capturing('input', fn (): array => [
+            'prompt' => $prompt->prompt,
+            'system' => $this->systemPrompt($agent),
+            ...($prompt->attachments->isEmpty() ? [] : ['attachments' => $this->payload()->attachments($prompt->attachments)]),
+        ]);
+        $span->apply('input', $input);
 
         $buffer = $this->bufferFor($event, $span);
 
@@ -117,6 +124,7 @@ class Recorder
 
         if ($isRoot) {
             $buffer->streamed = $streamed;
+            $buffer->promptExcerpt = $this->excerpt(is_array($input->value) ? ($input->value['prompt'] ?? null) : null);
             $this->learnIdentity($buffer, Identity::of($agent));
             [$resolved, $resolvesRemaining] = $this->recordResolvedApprovals($buffer, $prompt);
         }
@@ -167,24 +175,34 @@ class Recorder
     }
 
     /**
-     * What a paused response is waiting for, read from the response of the terminal event.
-     *
-     * @return list<array{tool_call_id: string, tool: string, arguments: mixed, reason: ?string}>
+     * What a paused response is waiting for, read from the response of the terminal event. With
+     * payload capture off, only the call and the tool are kept: no arguments and no reason.
      */
-    private function pendingApprovals(AgentResponse $response): array
+    private function pendingApprovals(AgentResponse $response): Captured
     {
+        $payload = $this->payload();
         $pending = [];
 
         foreach ($response->pendingApprovals as $approval) {
             $pending[] = [
                 'tool_call_id' => $approval->id,
                 'tool' => $approval->tool,
-                'arguments' => Payload::value($approval->arguments),
-                'reason' => $approval->reason,
+                ...($payload->capturing() ? ['arguments' => $approval->arguments, 'reason' => $approval->reason] : []),
             ];
         }
 
-        return $pending;
+        return $payload->capturing() ? $payload->capture($pending, 'pending_approvals') : new Captured($pending);
+    }
+
+    private function pendingApprovalsCaptured(AgentResponse $response): ?Captured
+    {
+        $captured = null;
+
+        Guard::run(function () use (&$captured, $response): void {
+            $captured = $this->pendingApprovals($response);
+        });
+
+        return $captured;
     }
 
     /**
@@ -344,10 +362,10 @@ class Recorder
             $this->driver($event->provider),
             $event->model,
             Carbon::now(),
-            [
-                'messages' => Payload::messages($event->messages),
-                'options' => Payload::options($event->options),
-            ],
+            $this->capturing('input', fn (): array => [
+                'messages' => $this->payload()->messages($event->messages),
+                'options' => $this->payload()->options($event->options),
+            ]),
         );
     }
 
@@ -369,7 +387,7 @@ class Recorder
                 $this->driver($event->provider),
                 $event->model,
                 $now->copy()->subMicroseconds($this->microseconds($event->time)),
-                ['messages' => null, 'options' => null],
+                new Captured(['messages' => null, 'options' => null]),
             );
         }
 
@@ -380,11 +398,11 @@ class Recorder
         $run->lastText = $response->text;
 
         // Everything that can fail is built first, so a step is never completed with its output or usage missing.
-        $output = $this->captured(fn (): array => [
-            'text' => Payload::value($response->text),
-            'tool_calls' => Payload::toolCalls($response->toolCalls),
+        $output = $this->capturing('output', fn (): array => [
+            'text' => $response->text,
+            'tool_calls' => $this->payload()->toolCalls($response->toolCalls),
             'finish_reason' => $response->finishReason->value,
-            ...($response->structured === null ? [] : ['structured' => Payload::value($response->structured)]),
+            ...($response->structured === null ? [] : ['structured' => $response->structured]),
         ]);
 
         // A provider that sent no usage block shows up as zero tokens and no cache counts; that is not "free".
@@ -398,7 +416,7 @@ class Recorder
         $step->endedAt = $now;
         // A streamed step only knows the model it was requested against.
         $step->respondingModel = $run->streamed ? null : $response->meta->model;
-        $step->output = $output;
+        $step->apply('output', $output);
         $step->inputTokens = $reported ? $usage->inputTokens : null;
         $step->outputTokens = $reported ? $usage->outputTokens : null;
         $step->cacheReadTokens = $reported ? $usage->cacheReadInputTokens : null;
@@ -434,12 +452,12 @@ class Recorder
             $span = $this->openTool($run, $event, $now->copy()->subMicroseconds($this->microseconds($event->time)));
         }
 
-        $output = $this->captured(fn (): array => ['result' => Payload::value($event->result)]);
+        $output = $this->capturing('output', fn (): array => ['result' => $event->result]);
 
         $span->status = Status::Completed;
         $span->durationMs = $event->time;
         $span->endedAt = $now;
-        $span->output = $output;
+        $span->apply('output', $output);
 
         // The tool returned while an embeddings call under it never ended: the tool caught its error.
         // Trail never saw the exception, so only the status is recorded.
@@ -455,7 +473,7 @@ class Recorder
         }
 
         $now = Carbon::now();
-        $failure = Failure::from($event->exception, ErrorSource::Step);
+        $failure = $this->failure($event->exception, ErrorSource::Step);
         $step = $run->step;
 
         if ($step === null || $step->stepNumber !== $event->stepNumber) {
@@ -465,7 +483,7 @@ class Recorder
                 $this->driver($event->provider),
                 $event->model,
                 $now->copy()->subMicroseconds($this->microseconds($event->time)),
-                ['messages' => null, 'options' => null],
+                new Captured(['messages' => null, 'options' => null]),
             );
         }
 
@@ -488,7 +506,7 @@ class Recorder
         }
 
         $now = Carbon::now();
-        $failure = Failure::from($event->exception, ErrorSource::Tool);
+        $failure = $this->failure($event->exception, ErrorSource::Tool);
         $span = $run->buffer->span($event->toolInvocationId);
 
         if ($span === null || $span->type !== SpanType::Tool) {
@@ -551,8 +569,8 @@ class Recorder
 
         $now = Carbon::now();
         $duration = $run->span->openedAt === null ? null : (hrtime(true) - $run->span->openedAt) / 1e6;
-        $failure = Failure::from($event->exception, $run->sourceOf($event->exception));
-        $runFailure = Failure::from($event->exception, ErrorSource::Run);
+        $failure = $this->failure($event->exception, $run->sourceOf($event->exception));
+        $runFailure = $this->failure($event->exception, ErrorSource::Run);
 
         // Whatever this run still had open died with it, and is never left running.
         foreach ($run->buffer->drafts() as $span) {
@@ -607,24 +625,25 @@ class Recorder
         $duration = $run->span->openedAt === null ? null : (hrtime(true) - $run->span->openedAt) / 1e6;
         $status = $response->hasPendingApprovals() ? Status::AwaitingApproval : Status::Completed;
 
-        $output = $this->captured(fn (): array => [
+        $output = $this->capturing('output', fn (): array => [
             // A plain response's text is its last step's; a streamed response joins every step's.
-            'text' => Payload::value($run->streamed ? ($run->lastText ?? $response->text) : $response->text),
-            ...($response instanceof StructuredAgentResponse ? ['structured' => Payload::value($response->structured)] : []),
+            'text' => $run->streamed ? ($run->lastText ?? $response->text) : $response->text,
+            ...($response instanceof StructuredAgentResponse ? ['structured' => $response->structured] : []),
         ]);
 
-        $pending = $response->hasPendingApprovals() ? $this->captured(fn (): array => $this->pendingApprovals($response)) : null;
+        $pending = $response->hasPendingApprovals() ? $this->pendingApprovalsCaptured($response) : null;
         $resolved = $run->resolvesRemaining ? $this->captured(fn (): array => $this->resolvedWithWildcard($run, $response)) : null;
         $identity = $run->isRoot() ? Identity::of($event->prompt->agent) : null;
 
         $run->span->status = $status;
         $run->span->endedAt = $now;
         $run->span->durationMs = $duration;
-        $run->span->output = $output;
+        $run->span->apply('output', $output);
 
         if (! $run->isRoot()) {
             if ($pending !== null) {
-                $run->span->setMetadata('pending_approvals', $pending);
+                $run->span->setMetadata('pending_approvals', $pending->value);
+                $run->span->note($pending);
             }
 
             return;
@@ -633,8 +652,11 @@ class Recorder
         $this->releaseChildren($run);
 
         if ($pending !== null) {
-            $run->buffer->setMetadata('pending_approvals', $pending);
+            $run->buffer->setMetadata('pending_approvals', $pending->value);
+            $run->span->note($pending);
         }
+
+        $run->buffer->responseExcerpt = $this->excerpt(is_array($output->value) ? ($output->value['text'] ?? null) : null);
 
         if ($resolved !== null) {
             $run->buffer->setMetadata('resolved_tool_call_ids', $resolved);
@@ -758,7 +780,7 @@ class Recorder
             $now = Carbon::now();
             $span = $call->span;
             $duration = $span->openedAt === null ? null : (hrtime(true) - $span->openedAt) / 1e6;
-            $failure = Failure::from($event->exception, ErrorSource::Run);
+            $failure = $this->failure($event->exception, ErrorSource::Run);
 
             $span->status = Status::Failed;
             $span->endedAt = $now;
@@ -870,12 +892,9 @@ class Recorder
         return $tool !== null && $tool->type === SpanType::Tool ? $tool->id : $runId;
     }
 
-    /**
-     * @param  array<string, mixed>  $input
-     */
-    private function openStep(Run $run, int $stepNumber, string $provider, string $model, Carbon $startedAt, array $input): SpanDraft
+    private function openStep(Run $run, int $stepNumber, string $provider, string $model, Carbon $startedAt, Captured $input): SpanDraft
     {
-        return $run->buffer->open(new SpanDraft(
+        $step = new SpanDraft(
             id: (string) Str::uuid7(),
             type: SpanType::Step,
             name: 'step',
@@ -886,15 +905,17 @@ class Recorder
             stepNumber: $stepNumber,
             provider: $provider,
             model: $model,
-            input: $input,
-        ));
+        );
+        $step->apply('input', $input);
+
+        return $run->buffer->open($step);
     }
 
     private function openTool(Run $run, InvokingTool|ToolInvoked|ToolFailed $event, Carbon $startedAt): SpanDraft
     {
         $name = $this->toolName($event->tool);
 
-        return $run->buffer->open(new SpanDraft(
+        $tool = new SpanDraft(
             id: $event->toolInvocationId,
             type: SpanType::Tool,
             name: $name,
@@ -902,8 +923,10 @@ class Recorder
             startedAt: $startedAt,
             parentId: $run->span->id,
             attempt: $run->attempt,
-            input: ['arguments' => Payload::value($event->arguments)],
-        ));
+        );
+        $tool->apply('input', $this->capturing('input', fn (): array => ['arguments' => $event->arguments]));
+
+        return $run->buffer->open($tool);
     }
 
     /**
@@ -923,6 +946,65 @@ class Recorder
         } catch (Throwable) {
             return $anonymous ? self::ANONYMOUS_TOOL : class_basename($tool);
         }
+    }
+
+    /**
+     * The payload capturer, built from config the first time it is needed. If it cannot be built,
+     * nothing is captured: a payload that cannot be checked is never stored.
+     */
+    private function payload(): Payload
+    {
+        if ($this->payload !== null) {
+            return $this->payload;
+        }
+
+        try {
+            return $this->payload = $this->container->make(Payload::class);
+        } catch (Throwable $e) {
+            Guard::run(function () use ($e): void {
+                throw $e;
+            });
+
+            return $this->payload = new Payload(capture: false);
+        }
+    }
+
+    /**
+     * A payload as it will be stored. If it cannot be built it is not stored, and the failure is reported.
+     *
+     * @param  Closure(): mixed  $build
+     */
+    private function capturing(string $field, Closure $build): Captured
+    {
+        $captured = new Captured;
+
+        Guard::run(function () use (&$captured, $field, $build): void {
+            $captured = $this->payload()->capture($build(), $field);
+        });
+
+        return $captured;
+    }
+
+    /**
+     * An exception as it will be stored, its message redacted and truncated like any payload.
+     */
+    private function failure(Throwable $exception, ErrorSource $source): Failure
+    {
+        $failure = Failure::from($exception, $source);
+
+        try {
+            return $failure->withMessage($this->payload()->message($failure->errorMessage, 'error_message'));
+        } catch (Throwable) {
+            return $failure->withMessage(new Captured);
+        }
+    }
+
+    /**
+     * The start of a text, cut for the excerpt on a trace row.
+     */
+    private function excerpt(mixed $text): ?string
+    {
+        return is_string($text) && $text !== '' ? mb_substr($text, 0, Payload::EXCERPT_LENGTH, 'UTF-8') : null;
     }
 
     /**
@@ -957,6 +1039,10 @@ class Recorder
      */
     private function systemPrompt(Agent $agent): ?string
     {
+        if (! $this->payload()->capturesSystemPrompt()) {
+            return null;
+        }
+
         try {
             return (string) $agent->instructions();
         } catch (Throwable) {

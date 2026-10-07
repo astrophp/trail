@@ -49,6 +49,88 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Payload Capture
+    |--------------------------------------------------------------------------
+    |
+    | What Trail stores of the prompts, messages, tool arguments and results and
+    | model output of each run. "enabled" turns payload storage off entirely: runs,
+    | steps, timings, usage, cost and error classes are still recorded, but no
+    | input, output or excerpt is, and neither are the arguments of a pending
+    | approval. Exception messages are diagnostic rather than content, so they are
+    | kept, redacted and truncated like any other text.
+    |
+    | "system_prompt" controls whether the agent's instructions are read and
+    | stored. "max_length" is the longest any single string is kept, in
+    | characters; longer ones are cut and the span is marked truncated. Use null
+    | for no limit. Zero and negative values are not limits and use the default.
+    |
+    */
+
+    'capture' => [
+        'enabled' => true,
+        'system_prompt' => true,
+        'max_length' => 10000,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Redaction
+    |--------------------------------------------------------------------------
+    |
+    | Secrets are removed before anything is stored, and before text is cut to
+    | its maximum length, so a secret cut in half cannot slip past a pattern.
+    |
+    | A value under one of the "keys" is replaced as a whole, at any depth. Keys
+    | match exactly, ignoring case, dashes, underscores and spaces, so "token"
+    | does not match "input_tokens".
+    |
+    | Every string is also scrubbed with the "patterns" (regular expressions,
+    | each match is replaced). The defaults cover bearer tokens, common provider
+    | API keys, AWS keys, JSON web tokens and private key blocks, and are kept
+    | narrow so ordinary text is left alone. A pattern that is not valid is
+    | reported once and skipped. A string a pattern cannot be run on is replaced
+    | as a whole.
+    |
+    */
+
+    'redaction' => [
+        'enabled' => true,
+
+        'keys' => [
+            'password', 'passwd', 'password_confirmation', 'secret', 'secret_key', 'token', 'api_key', 'apikey',
+            'x_api_key', 'authorization', 'proxy_authorization', 'access_token', 'refresh_token', 'id_token',
+            'session_token', 'auth_token', 'x_auth_token', 'bearer_token', 'client_secret', 'private_key',
+            'credentials', 'cookie', 'set_cookie',
+        ],
+
+        'patterns' => [
+            // An HTTP bearer token.
+            '/\bBearer\s+[A-Za-z0-9\-._~+\/]{16,}=*/i',
+            // Provider API keys (OpenAI, Anthropic and the like); a digit is required, so "sk-learn-pipeline" is left alone.
+            '/\b(?:sk|pk|rk)-(?=[A-Za-z0-9_\-]{20,})(?=[A-Za-z0-9_\-]*\d)[A-Za-z0-9_\-]+/',
+            // Stripe keys.
+            '/\b(?:sk|rk|pk)_(?:live|test)_[A-Za-z0-9]{16,}/',
+            // GitHub tokens.
+            '/\bgh[pousr]_[A-Za-z0-9]{36,255}\b/',
+            '/\bgithub_pat_[A-Za-z0-9_]{22,255}/',
+            // Slack tokens.
+            '/\bxox[abposr]-[A-Za-z0-9\-]{10,}/',
+            '/\bxapp-\d-[A-Za-z0-9\-]{10,}/',
+            // Google API keys.
+            '/\bAIza[0-9A-Za-z_\-]{35}\b/',
+            // AWS access key ids, and secret access keys introduced by their label.
+            '/\b(?:AKIA|ASIA)[0-9A-Z]{16}\b/',
+            '/\baws[_\- ]?secret[_\- ]?(?:access[_\- ]?)?key\b["\']?\s*[:=]\s*["\']?[A-Za-z0-9\/+=]{40}(?![A-Za-z0-9\/+=])/i',
+            // JSON web tokens.
+            '/\beyJ[A-Za-z0-9_\-]{10,}\.eyJ[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{10,}/',
+            // Private key blocks, complete or cut short.
+            '/-----BEGIN (?:[A-Z0-9]+ )*PRIVATE KEY-----.*?-----END (?:[A-Z0-9]+ )*PRIVATE KEY-----/s',
+            '/-----BEGIN (?:[A-Z0-9]+ )*PRIVATE KEY-----[A-Za-z0-9+\/=\s]*/',
+        ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Stale Runs
     |--------------------------------------------------------------------------
     |

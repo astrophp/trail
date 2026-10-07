@@ -21,10 +21,12 @@ final readonly class Failure
 
     public function __construct(
         public string $errorClass,
-        public string $errorMessage,
+        public ?string $errorMessage,
         public ErrorSource $source,
         public ?int $httpStatus,
         public IssueKind $issueKind,
+        public bool $redacted = false,
+        public ?int $truncatedFrom = null,
     ) {}
 
     public static function from(Throwable $exception, ErrorSource $source): self
@@ -35,6 +37,25 @@ final readonly class Failure
             $source,
             self::httpStatus($exception),
             self::issueKind($exception, $source),
+        );
+    }
+
+    /**
+     * The same failure with its message as it is stored: redacted and truncated, or null when it
+     * could not be made safe to store.
+     */
+    public function withMessage(Captured $message): self
+    {
+        $length = $message->truncated['error_message'] ?? null;
+
+        return new self(
+            $this->errorClass,
+            is_string($message->value) ? $message->value : null,
+            $this->source,
+            $this->httpStatus,
+            $this->issueKind,
+            $message->redacted,
+            $length,
         );
     }
 

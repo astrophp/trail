@@ -73,8 +73,54 @@ final class SpanDraft
         $this->errorHttpStatus = null;
     }
 
+    /**
+     * Take a captured payload as the span's input or output, with what was done to it.
+     */
+    public function apply(string $field, ?Captured $captured): void
+    {
+        if ($captured === null) {
+            return;
+        }
+
+        $value = is_array($captured->value) ? $captured->value : null;
+
+        if ($field === 'input') {
+            $this->input = $value;
+        } else {
+            $this->output = $value;
+        }
+
+        $this->note($captured);
+    }
+
+    /**
+     * Record that part of what the span holds was redacted or cut short, and where.
+     */
+    public function note(Captured $captured): void
+    {
+        if ($captured->redacted) {
+            $this->redacted = true;
+        }
+
+        if ($captured->truncated === []) {
+            return;
+        }
+
+        $this->truncated = true;
+        $existing = $this->metadata['truncated'] ?? [];
+        $this->setMetadata('truncated', [...(is_array($existing) ? $existing : []), ...$captured->truncated]);
+    }
+
     public function fail(Failure $failure): void
     {
+        if ($failure->redacted) {
+            $this->redacted = true;
+        }
+
+        if ($failure->truncatedFrom !== null) {
+            $this->note(new Captured(null, false, ['error_message' => $failure->truncatedFrom]));
+        }
+
         $this->issueKind = $failure->issueKind;
         $this->errorClass = $failure->errorClass;
         $this->errorMessage = $failure->errorMessage;
