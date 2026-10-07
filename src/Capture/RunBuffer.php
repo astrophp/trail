@@ -21,6 +21,12 @@ final class RunBuffer
 
     private int $sequence = 0;
 
+    /** @var array<string, true> the invocation ids of the runs of this trace that have not ended */
+    public array $runIds = [];
+
+    /** @var array<string, true> the open embeddings calls of this trace */
+    public array $embeddingIds = [];
+
     /**
      * @param  array<string, mixed>|null  $metadata
      */

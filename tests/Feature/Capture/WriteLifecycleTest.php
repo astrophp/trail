@@ -512,7 +512,7 @@ describe('a late write', function () {
     });
 });
 
-it('writes finished traces without a flush once a process holds more than its limit, and keeps open ones', function () {
+it('writes the oldest finished trace without a flush once a process holds more than its limit, and keeps open ones', function () {
     $this->app->instance(Recorder::class, new Recorder($this->app, $this->app->make(CostCalculator::class), maxBufferedTraces: 2));
 
     // Run "A" is a stream its consumer abandoned, so it stays open while two runs finish: three
@@ -528,7 +528,8 @@ it('writes finished traces without a flush once a process holds more than its li
 
     $probe = new DatabaseStoreProbe;
 
-    expect($probe->spanCount())->toBe(4)
+    // The terminal event of C writes the oldest finished trace, B, and nothing else; A is still being captured.
+    expect($probe->spanCount())->toBe(2)
         ->and($probe->traceCount())->toBe(3)
         ->and($probe->spans($open))->toBe([]);
 

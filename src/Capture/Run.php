@@ -24,6 +24,7 @@ final class Run
         public int $failovers = 0,
         public bool $streamed = false,
         public ?string $lastText = null,
+        public int $sent = 0,
         private ?WeakReference $failure = null,
         private ?ErrorSource $failureSource = null,
     ) {}
