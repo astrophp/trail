@@ -2,6 +2,8 @@
 
 namespace Astro\Trail;
 
+use Astro\Trail\Capture\Listeners;
+use Astro\Trail\Capture\Recorder;
 use Astro\Trail\Console\ClearCommand;
 use Astro\Trail\Console\InstallCommand;
 use Astro\Trail\Console\PruneCommand;
@@ -11,6 +13,7 @@ use Astro\Trail\Pricing\PriceBook;
 use Astro\Trail\Storage\Contracts\TraceStore;
 use Astro\Trail\Storage\DatabaseTraceStore;
 use Illuminate\Contracts\Config\Repository;
+use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Database\ConnectionResolverInterface;
 use Illuminate\Support\ServiceProvider;
@@ -32,6 +35,8 @@ class TrailServiceProvider extends ServiceProvider
         });
 
         $this->app->singleton(CostCalculator::class);
+
+        $this->app->singleton(Recorder::class, fn (Application $app) => new Recorder($app, $app->make(CostCalculator::class)));
 
         $this->app->singleton(Trail::class, fn (Application $app) => new Trail($app));
 
@@ -59,6 +64,10 @@ class TrailServiceProvider extends ServiceProvider
 
             $this->publishes([__DIR__.'/../config/trail.php' => config_path('trail.php')], 'trail-config');
             $this->publishes([__DIR__.'/../stubs/TrailServiceProvider.stub' => app_path('Providers/TrailServiceProvider.php')], 'trail-provider');
+        }
+
+        if (config('trail.enabled')) {
+            Listeners::register($this->app->make(Dispatcher::class), $this->app);
         }
     }
 }
