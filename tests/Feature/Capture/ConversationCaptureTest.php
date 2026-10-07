@@ -12,6 +12,7 @@ use Astro\Trail\Tests\Fixtures\Tools\CallbackTool;
 use Astro\Trail\Tests\Fixtures\Tools\LookupTool;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\DB;
+use Laravel\Ai\Concerns\RemembersConversations;
 use Laravel\Ai\Events\AgentPrompted;
 use Laravel\Ai\Events\PromptingAgent;
 use Laravel\Ai\Models\Conversation;
@@ -193,6 +194,8 @@ it('never replaces a known conversation id with an unknown one at the end of the
 
     $remembers = new class extends AssistantAgent
     {
+        use RemembersConversations;
+
         public function currentConversation(): ?string
         {
             return 'conversation-1';
@@ -206,6 +209,8 @@ it('never replaces a known conversation id with an unknown one at the end of the
 
     $forgets = new class extends AssistantAgent
     {
+        use RemembersConversations;
+
         public function currentConversation(): ?string
         {
             return null;
@@ -237,6 +242,8 @@ describe('identity read from hand-built events', function () {
         /** An agent whose conversation and participant are the given ones. */
         $this->agentOf = fn (?string $conversation, ?object $participant) => new class($conversation, $participant) extends AssistantAgent
         {
+            use RemembersConversations;
+
             public function __construct(private ?string $conversation, private ?object $participant)
             {
                 parent::__construct();
