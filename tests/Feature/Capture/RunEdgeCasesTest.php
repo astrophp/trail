@@ -2,9 +2,7 @@
 
 use Astro\Trail\Facades\Trail;
 use Astro\Trail\Tests\Fixtures\Agents\AssistantAgent;
-use Astro\Trail\Tests\Fixtures\Agents\RememberingAgent;
 use Astro\Trail\Tests\Fixtures\Capture\Captured;
-use Astro\Trail\Tests\Fixtures\Conversations\ConversationParticipant;
 use Astro\Trail\Tests\Fixtures\Sdk\FakeAnthropic;
 use Astro\Trail\Tests\Fixtures\Tools\ApprovalTool;
 use Astro\Trail\Tests\Fixtures\Tools\CallbackTool;
@@ -29,11 +27,8 @@ use Laravel\Ai\Tools\Request;
 it('pauses for approval without a tool span and ends as awaiting approval', function () {
     FakeAnthropic::script([FakeAnthropic::toolUse([['id' => 'toolu_1', 'name' => 'delete_records', 'input' => ['table' => 'users']]])]);
 
-    // The SDK's conversation tables are loaded after the test database was built, so they are migrated now.
-    $this->migrateSdkTables();
-    $this->artisan('migrate')->run();
-
-    $response = (new RememberingAgent([new ApprovalTool]))->forUser(new ConversationParticipant)->prompt('Delete the users', model: FakeAnthropic::MODEL);
+    // An ad-hoc history lets the SDK pause without its conversation tables.
+    $response = (new AssistantAgent([new ApprovalTool]))->withMessages([])->prompt('Delete the users', model: FakeAnthropic::MODEL);
     Trail::flush();
 
     $run = Captured::read($response->invocationId);
