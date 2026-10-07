@@ -29,11 +29,12 @@ class UserResolver
     public function __construct(private readonly ?Closure $callback = null) {}
 
     /**
-     * The key a pair is found under in the result of resolve().
+     * The key a pair is found under in the result of resolve(). Length-prefixed, so it is defined
+     * for any bytes (an id need not be UTF-8) and two different pairs never share one.
      */
     public static function key(string $type, string $id): string
     {
-        return (string) json_encode([$type, $id]);
+        return strlen($type).':'.$type.strlen($id).':'.$id;
     }
 
     /**
@@ -167,7 +168,9 @@ class UserResolver
     }
 
     /**
-     * One query for the model's users. Inside an application transaction it runs in a savepoint,
+     * One query for the model's users, whatever the model would hide or load by default: a stored
+     * id names its user even when they were soft-deleted or fall outside a global scope, and eager
+     * loads or counts would add queries that can fail. Inside an application transaction it runs in a savepoint,
      * since on Postgres a failed statement would otherwise abort the application's transaction.
      *
      * @param  class-string<Model>  $model
@@ -176,7 +179,7 @@ class UserResolver
      */
     private function read(string $model, array $ids): iterable
     {
-        $query = $model::query();
+        $query = (new $model)->newModelQuery();
         $connection = $query->getConnection();
 
         if ($connection->transactionLevel() === 0) {

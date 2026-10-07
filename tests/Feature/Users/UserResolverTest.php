@@ -1,13 +1,20 @@
 <?php
 
 use Astro\Trail\Facades\Trail;
+use Astro\Trail\Tests\Fixtures\Storage\Transactions;
+use Astro\Trail\Tests\Fixtures\Users\EagerUser;
 use Astro\Trail\Tests\Fixtures\Users\Ghost;
+use Astro\Trail\Tests\Fixtures\Users\HiddenUser;
 use Astro\Trail\Tests\Fixtures\Users\Member;
+use Astro\Trail\Tests\Fixtures\Users\SoftUser;
 use Astro\Trail\Tests\Fixtures\Users\User;
 use Astro\Trail\Users\UserResolver;
 use Illuminate\Database\Eloquent\Relations\Relation;
+use Illuminate\Database\Events\TransactionBeginning;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Exceptions;
+use Illuminate\Support\Facades\Schema;
 
 /*
 |--------------------------------------------------------------------------
@@ -103,6 +110,84 @@ it('resolves the users of a model whose table is missing to null, reporting it o
     expect($resolved[($this->key)(Ghost::class, 1)])->toBeNull()
         ->and($resolved[($this->key)(Ghost::class, 2)])->toBeNull()
         ->and($resolved[($this->key)(User::class, $this->ada)]['name'])->toBe('Ada');
+});
+
+it('resolves a user who was soft-deleted', function () {
+    Schema::table('users', fn ($table) => $table->softDeletes());
+    DB::table('users')->where('id', $this->ada)->update(['deleted_at' => now()]);
+
+    $resolved = ($this->resolve)([['id' => $this->ada, 'type' => SoftUser::class]]);
+
+    expect(SoftUser::query()->find($this->ada))->toBeNull()
+        ->and($resolved[($this->key)(SoftUser::class, $this->ada)])->toBe(['name' => 'Ada', 'email' => 'ada@example.test']);
+});
+
+it('resolves a user a global scope hides', function () {
+    $resolved = ($this->resolve)([['id' => $this->ada, 'type' => HiddenUser::class]]);
+
+    expect(HiddenUser::query()->find($this->ada))->toBeNull()
+        ->and($resolved[($this->key)(HiddenUser::class, $this->ada)]['name'])->toBe('Ada');
+});
+
+it('reads a model that always eager loads a missing relation with exactly one query', function () {
+    Exceptions::fake();
+
+    $resolved = ($this->resolve)([['id' => $this->ada, 'type' => EagerUser::class], ['id' => $this->grace, 'type' => EagerUser::class]]);
+
+    Exceptions::assertNothingReported();
+    expect(array_column($resolved, 'name'))->toBe(['Ada', 'Grace'])
+        ->and(array_filter($this->queries, fn (string $sql) => str_starts_with($sql, 'select')))->toHaveCount(1);
+});
+
+describe('keys', function () {
+    it('are told apart for ids that are not valid UTF-8', function () {
+        $keys = [UserResolver::key('staff', "\xff"), UserResolver::key('staff', "\xfe"), UserResolver::key('staff', ''), UserResolver::key("st\xffaff", 'a')];
+
+        expect(array_unique($keys))->toHaveCount(4)
+            ->and(UserResolver::key('a', '1:b'))->not->toBe(UserResolver::key('a1:', 'b'));
+    });
+
+    it('keep two non-UTF-8 users apart in the result', function () {
+        Trail::resolveUsersUsing(fn () => ['staff' => ["\xff" => ['name' => 'First', 'email' => null], "\xfe" => ['name' => 'Second', 'email' => null]]]);
+
+        $resolved = Trail::users()->resolve([['id' => "\xff", 'type' => 'staff'], ['id' => "\xfe", 'type' => 'staff']]);
+
+        expect($resolved[UserResolver::key('staff', "\xff")]['name'])->toBe('First')
+            ->and($resolved[UserResolver::key('staff', "\xfe")]['name'])->toBe('Second');
+    });
+});
+
+describe('with no transaction open', function () {
+    it('reads the users without opening a savepoint', function () {
+        Transactions::outside(function () {
+            $began = 0;
+            Event::listen(TransactionBeginning::class, function () use (&$began) {
+                $began++;
+            });
+
+            $id = DB::table('users')->insertGetId(['name' => 'Lin', 'email' => 'lin@example.test', 'password' => 'x']);
+
+            try {
+                $resolved = (new UserResolver)->resolve([['id' => $id, 'type' => User::class]]);
+            } finally {
+                DB::table('users')->where('id', $id)->delete();
+            }
+
+            expect($resolved[UserResolver::key(User::class, (string) $id)])->toBe(['name' => 'Lin', 'email' => 'lin@example.test'])
+                ->and($began)->toBe(0);
+        });
+    });
+
+    it('resolves a model whose table is missing to null, reporting it once', function () {
+        Transactions::outside(function () {
+            Exceptions::fake();
+
+            $resolved = (new UserResolver)->resolve([['id' => 1, 'type' => Ghost::class]]);
+
+            Exceptions::assertReportedCount(1);
+            expect(array_values($resolved))->toBe([null]);
+        });
+    });
 });
 
 describe('with a resolver of the application\'s own', function () {

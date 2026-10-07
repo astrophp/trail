@@ -26,6 +26,7 @@ use Laravel\Ai\Events\ProviderFailedOver;
 use Laravel\Ai\Events\StartingStep;
 use Laravel\Ai\Events\StepCompleted;
 use Laravel\Ai\Events\StepFailed;
+use Laravel\Ai\Events\ToolApprovalResolved;
 use Laravel\Ai\Events\ToolFailed;
 use Laravel\Ai\Events\ToolInvoked;
 use Laravel\Ai\Gateway\ParentInvocation;
@@ -112,16 +113,13 @@ class Recorder
 
         $isRoot = $prompt->parentInvocationId === null;
 
-        $resolved = [];
-        $resolvesRemaining = false;
-
         if ($isRoot) {
             $buffer->streamed = $streamed;
             $this->learnIdentity($buffer, Identity::of($agent));
-            [$resolved, $resolvesRemaining] = $this->recordResolvedApprovals($buffer, $prompt);
+            $this->recordResolvedApprovals($buffer, $prompt);
         }
 
-        $run = new Run($event->invocationId, $buffer, $span, streamed: $streamed, resolvedIds: $resolved, resolvesRemaining: $resolvesRemaining);
+        $run = new Run($event->invocationId, $buffer, $span, streamed: $streamed);
         $this->runs[$event->invocationId] = $run;
 
         if ($isRoot) {
@@ -137,33 +135,75 @@ class Recorder
 
     /**
      * A run that resumes a pause is its own trace. The tool calls its decisions name are stored
-     * when it starts, so they survive a resumed run that fails. A wildcard names no call: it is
-     * resolved from the response at the end, when the response reports which calls it settled.
-     *
-     * @return array{list<string>, bool} the calls named, and whether a wildcard decision covers the rest
+     * when it starts, so they survive a resumed run that fails. A wildcard names no call: the SDK
+     * reports the calls it settled afterwards, in approvalsResolved().
      */
-    private function recordResolvedApprovals(RunBuffer $buffer, AgentPrompt $prompt): array
+    private function recordResolvedApprovals(RunBuffer $buffer, AgentPrompt $prompt): void
     {
         if (! $prompt->hasApprovalDecisions() || $prompt->approvalDecisions === null) {
-            return [[], false];
+            return;
         }
 
         $ids = [];
-        $wildcard = false;
 
         foreach (array_keys($prompt->approvalDecisions->all()) as $id) {
-            if ($id === '*') {
-                $wildcard = true;
-
-                continue;
+            if ($id !== '*') {
+                $ids[] = (string) $id;
             }
-
-            $ids[] = (string) $id;
         }
 
         $buffer->setMetadata('resolved_tool_call_ids', $ids);
+    }
 
-        return [$ids, $wildcard];
+    /**
+     * The SDK's own statement of which tool calls a resume settled. It fires after the terminal
+     * event, so the trace is found by its buffer and not by a run, and it is lost when the resumed
+     * run fails: what the decisions named at the start is all that is known then. Only the ids are
+     * taken from it; the tool spans come from the tool events.
+     */
+    public function approvalsResolved(ToolApprovalResolved $event): void
+    {
+        $ids = [];
+
+        foreach ($event->toolResults as $result) {
+            $ids[] = (string) $result->id;
+        }
+
+        $buffer = $this->buffers[$event->invocationId] ?? null;
+
+        if ($buffer !== null) {
+            $buffer->setMetadata('resolved_tool_call_ids', $this->united($buffer->metadata['resolved_tool_call_ids'] ?? null, $ids));
+
+            return;
+        }
+
+        // A sub-agent that resumed a pause: its span is still in the buffer of the trace it ran in.
+        foreach ($this->buffers as $buffer) {
+            $span = $buffer->span($event->invocationId);
+
+            if ($span !== null && $span->type === SpanType::Agent) {
+                $span->setMetadata('resolved_tool_call_ids', $this->united($span->metadata['resolved_tool_call_ids'] ?? null, $ids));
+
+                return;
+            }
+        }
+    }
+
+    /**
+     * @param  list<string>  $ids
+     * @return list<string>
+     */
+    private function united(mixed $known, array $ids): array
+    {
+        $union = is_array($known) ? array_values(array_filter($known, is_string(...))) : [];
+
+        foreach ($ids as $id) {
+            if (! in_array($id, $union, true)) {
+                $union[] = $id;
+            }
+        }
+
+        return $union;
     }
 
     /**
@@ -185,26 +225,6 @@ class Recorder
         }
 
         return $pending;
-    }
-
-    /**
-     * The calls a wildcard decision settled: results the response holds for calls that this run did
-     * not make itself, since the paused run made them.
-     *
-     * @return list<string>
-     */
-    private function resolvedWithWildcard(Run $run, AgentResponse $response): array
-    {
-        $ids = $run->resolvedIds;
-        $own = $response->toolCalls->pluck('id')->all();
-
-        foreach ($response->toolResults as $result) {
-            if (! in_array($result->id, $own, true) && ! in_array($result->id, $ids, true)) {
-                $ids[] = $result->id;
-            }
-        }
-
-        return $ids;
     }
 
     /**
@@ -614,7 +634,6 @@ class Recorder
         ]);
 
         $pending = $response->hasPendingApprovals() ? $this->captured(fn (): array => $this->pendingApprovals($response)) : null;
-        $resolved = $run->resolvesRemaining ? $this->captured(fn (): array => $this->resolvedWithWildcard($run, $response)) : null;
         $identity = $run->isRoot() ? Identity::of($event->prompt->agent) : null;
 
         $run->span->status = $status;
@@ -634,10 +653,6 @@ class Recorder
 
         if ($pending !== null) {
             $run->buffer->setMetadata('pending_approvals', $pending);
-        }
-
-        if ($resolved !== null) {
-            $run->buffer->setMetadata('resolved_tool_call_ids', $resolved);
         }
 
         // The conversation of a new run only exists by now; the response and the agent both report it.

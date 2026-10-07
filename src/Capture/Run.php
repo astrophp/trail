@@ -13,7 +13,6 @@ use WeakReference;
 final class Run
 {
     /**
-     * @param  list<string>  $resolvedIds  the tool calls a resuming run's decisions name
      * @param  WeakReference<Throwable>|null  $failure
      */
     public function __construct(
@@ -25,8 +24,6 @@ final class Run
         public int $failovers = 0,
         public bool $streamed = false,
         public ?string $lastText = null,
-        public array $resolvedIds = [],
-        public bool $resolvesRemaining = false,
         private ?WeakReference $failure = null,
         private ?ErrorSource $failureSource = null,
     ) {}
