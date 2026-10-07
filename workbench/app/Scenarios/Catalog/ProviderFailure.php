@@ -6,23 +6,13 @@ use Astro\Trail\Tests\Fixtures\Sdk\FakeAnthropic;
 use Laravel\Ai\Exceptions\RateLimitedException;
 use Workbench\App\Agents\SupportAssistant;
 use Workbench\App\Scenarios\Backend;
+use Workbench\App\Scenarios\Scenario;
 
-class ProviderFailure extends Base
+class ProviderFailure extends Scenario
 {
-    public function key(): string
-    {
-        return 'provider-failure';
-    }
+    protected string $title = 'A provider failure';
 
-    public function title(): string
-    {
-        return 'A provider failure';
-    }
-
-    public function description(): string
-    {
-        return 'The provider answers 429 Too Many Requests and there is nothing to fail over to.';
-    }
+    protected string $description = 'The provider answers 429 Too Many Requests and there is nothing to fail over to.';
 
     public function supportsLive(): bool
     {

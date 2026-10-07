@@ -19,7 +19,7 @@ class RunScenarioCommand extends Command
 
     public function handle(ScenarioRunner $runner, Registry $registry): int
     {
-        $this->components->info('Mode: '.$runner->mode()->label());
+        $this->components->info('Mode: '.$runner->label());
 
         if ($this->option('list')) {
             foreach ($registry->all() as $scenario) {

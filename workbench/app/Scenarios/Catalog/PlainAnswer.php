@@ -5,23 +5,13 @@ namespace Workbench\App\Scenarios\Catalog;
 use Astro\Trail\Tests\Fixtures\Sdk\FakeAnthropic;
 use Workbench\App\Agents\SupportAssistant;
 use Workbench\App\Scenarios\Backend;
+use Workbench\App\Scenarios\Scenario;
 
-class PlainAnswer extends Base
+class PlainAnswer extends Scenario
 {
-    public function key(): string
-    {
-        return 'plain-answer';
-    }
+    protected string $title = 'Plain answer';
 
-    public function title(): string
-    {
-        return 'Plain answer';
-    }
-
-    public function description(): string
-    {
-        return 'The support assistant answers a question in a single step, without tools.';
-    }
+    protected string $description = 'The support assistant answers a question in a single step, without tools.';
 
     public function run(Backend $backend): void
     {

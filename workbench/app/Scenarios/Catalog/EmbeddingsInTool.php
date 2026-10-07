@@ -5,23 +5,13 @@ namespace Workbench\App\Scenarios\Catalog;
 use Astro\Trail\Tests\Fixtures\Sdk\FakeAnthropic;
 use Workbench\App\Agents\HelpCentreAssistant;
 use Workbench\App\Scenarios\Backend;
+use Workbench\App\Scenarios\Scenario;
 
-class EmbeddingsInTool extends Base
+class EmbeddingsInTool extends Scenario
 {
-    public function key(): string
-    {
-        return 'embeddings-in-tool';
-    }
+    protected string $title = 'Embeddings inside a tool';
 
-    public function title(): string
-    {
-        return 'Embeddings inside a tool';
-    }
-
-    public function description(): string
-    {
-        return 'A help-centre search tool embeds the question and the article titles to find the best match.';
-    }
+    protected string $description = 'A help-centre search tool embeds the question and the article titles to find the best match.';
 
     public function supportsLive(): bool
     {

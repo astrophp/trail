@@ -5,23 +5,13 @@ namespace Workbench\App\Scenarios\Catalog;
 use Astro\Trail\Tests\Fixtures\Sdk\FakeAnthropic;
 use Workbench\App\Agents\SupportAssistant;
 use Workbench\App\Scenarios\Backend;
+use Workbench\App\Scenarios\Scenario;
 
-class ToolCalls extends Base
+class ToolCalls extends Scenario
 {
-    public function key(): string
-    {
-        return 'tool-calls';
-    }
+    protected string $title = 'Tool calls';
 
-    public function title(): string
-    {
-        return 'Tool calls';
-    }
-
-    public function description(): string
-    {
-        return 'The assistant looks an order up with a tool, then answers from the result.';
-    }
+    protected string $description = 'The assistant looks an order up with a tool, then answers from the result.';
 
     public function run(Backend $backend): void
     {

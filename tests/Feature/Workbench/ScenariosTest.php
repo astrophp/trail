@@ -12,9 +12,9 @@ use Illuminate\Support\Facades\Http;
 use Workbench\App\Agents\SupportAssistant;
 use Workbench\App\Models\User;
 use Workbench\App\Scenarios\Backend;
-use Workbench\App\Scenarios\Catalog\Base;
 use Workbench\App\Scenarios\Outcome;
 use Workbench\App\Scenarios\Registry;
+use Workbench\App\Scenarios\Scenario;
 use Workbench\App\Scenarios\ScenarioRunner;
 use Workbench\App\Tools\CarrierUnavailable;
 
@@ -145,8 +145,7 @@ function expectations(): array
 }
 
 it('has a scenario for each of the thirteen runs', function () {
-    expect(array_keys(app(Registry::class)->all()))->toBe(array_keys(expectations()))
-        ->and(array_keys(app(Registry::class)->all()))->toHaveCount(13);
+    expect(array_keys(app(Registry::class)->all()))->toBe(array_keys(expectations()));
 });
 
 it('records the run of the scenario', function (string $key) {
@@ -181,21 +180,15 @@ it('leaves the HTTP client and its script as it found them', function () {
 });
 
 it('fails a scenario that does not use everything it scripted', function () {
-    $scenario = new class extends Base
+    $scenario = new class extends Scenario
     {
+        protected string $title = 'Leftover';
+
+        protected string $description = 'Scripts two responses and asks for one.';
+
         public function key(): string
         {
             return 'leftover';
-        }
-
-        public function title(): string
-        {
-            return 'Leftover';
-        }
-
-        public function description(): string
-        {
-            return 'Scripts two responses and asks for one.';
         }
 
         public function run(Backend $backend): void

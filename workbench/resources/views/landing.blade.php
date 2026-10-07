@@ -17,8 +17,8 @@
 <body>
     <h1>{{ config('app.name') }}</h1>
     <p>
-        Mode: <strong>{{ $runner->mode()->label() }}</strong>.
-        @unless ($runner->mode()->isLive())
+        Mode: <strong>{{ $runner->label() }}</strong>.
+        @unless ($runner->isLive())
             Scenarios run against scripted provider responses; set <code>ANTHROPIC_API_KEY</code> or <code>OPENAI_API_KEY</code> in <code>workbench/.env</code> to use a real provider.
         @endunless
     </p>
@@ -53,7 +53,7 @@
                 <tr>
                     <td>{{ $scenario->title() }}<br><code>{{ $scenario->key() }}</code></td>
                     <td>{{ $scenario->description() }}</td>
-                    <td>{{ $runner->runsLive($scenario) ? $runner->mode()->label() : 'offline' }}@unless ($scenario->supportsLive()) <span class="muted">(always)</span>@endunless</td>
+                    <td>{{ $runner->runsLive($scenario) ? $runner->label() : 'offline' }}@unless ($scenario->supportsLive()) <span class="muted">(always)</span>@endunless</td>
                     <td>
                         <form method="post" action="{{ route('workbench.run', $scenario->key()) }}">
                             @csrf

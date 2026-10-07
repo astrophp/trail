@@ -2,7 +2,6 @@
 
 namespace Astro\Trail\Tests\Fixtures\Workbench;
 
-use Illuminate\Support\Facades\Http;
 use Workbench\App\Providers\WorkbenchServiceProvider;
 
 use function Orchestra\Testbench\default_migration_path;
@@ -27,7 +26,5 @@ trait BootsWorkbench
     {
         // A key exported in the developer's shell must not turn these tests into live runs.
         config(['ai.providers.anthropic.key' => null, 'ai.providers.openai.key' => null]);
-
-        Http::preventStrayRequests();
     }
 }

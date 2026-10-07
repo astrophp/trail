@@ -5,23 +5,13 @@ namespace Workbench\App\Scenarios\Catalog;
 use Astro\Trail\Tests\Fixtures\Sdk\FakeAnthropic;
 use Workbench\App\Agents\TicketTriage;
 use Workbench\App\Scenarios\Backend;
+use Workbench\App\Scenarios\Scenario;
 
-class StructuredOutput extends Base
+class StructuredOutput extends Scenario
 {
-    public function key(): string
-    {
-        return 'structured-output';
-    }
+    protected string $title = 'Structured output';
 
-    public function title(): string
-    {
-        return 'Structured output';
-    }
-
-    public function description(): string
-    {
-        return 'The triage agent sorts a support message into a category, a priority and a summary.';
-    }
+    protected string $description = 'The triage agent sorts a support message into a category, a priority and a summary.';
 
     public function run(Backend $backend): void
     {

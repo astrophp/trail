@@ -6,23 +6,13 @@ use Astro\Trail\Tests\Fixtures\Sdk\FakeAnthropic;
 use Workbench\App\Agents\AccountAssistant;
 use Workbench\App\Scenarios\Backend;
 use Workbench\App\Scenarios\Customers;
+use Workbench\App\Scenarios\Scenario;
 
-class Conversation extends Base
+class Conversation extends Scenario
 {
-    public function key(): string
-    {
-        return 'conversation';
-    }
+    protected string $title = 'A remembered conversation';
 
-    public function title(): string
-    {
-        return 'A remembered conversation';
-    }
-
-    public function description(): string
-    {
-        return 'A customer asks about an order and follows up; both runs belong to one stored conversation.';
-    }
+    protected string $description = 'A customer asks about an order and follows up; both runs belong to one stored conversation.';
 
     public function run(Backend $backend): void
     {

@@ -25,7 +25,26 @@ final class Backend
     /** @var list<FakeAnthropic> */
     private array $scripts = [];
 
+    /** @var list<string> The providers tried, in order, when looking for a real key. */
+    public const PROVIDERS = ['anthropic', 'openai'];
+
     private function __construct(public readonly ?string $provider) {}
+
+    /**
+     * The first provider with a real key configured, or null when there is none.
+     */
+    public static function detect(): ?string
+    {
+        foreach (self::PROVIDERS as $provider) {
+            $key = config("ai.providers.{$provider}.key");
+
+            if (is_string($key) && $key !== '' && $key !== self::PLACEHOLDER_KEY) {
+                return $provider;
+            }
+        }
+
+        return null;
+    }
 
     public static function offline(): self
     {
@@ -128,7 +147,7 @@ final class Backend
             'ai.providers.backup' => ['driver' => 'anthropic', 'key' => self::PLACEHOLDER_KEY, 'url' => 'https://backup.anthropic.test/v1'],
         ]);
 
-        foreach (['anthropic', 'openai'] as $provider) {
+        foreach (self::PROVIDERS as $provider) {
             if (! is_string(config("ai.providers.{$provider}.key")) || config("ai.providers.{$provider}.key") === '') {
                 config(["ai.providers.{$provider}.key" => self::PLACEHOLDER_KEY]);
             }
