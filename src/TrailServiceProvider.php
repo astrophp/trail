@@ -4,6 +4,10 @@ namespace Astro\Trail;
 
 use Astro\Trail\Capture\Listeners;
 use Astro\Trail\Capture\Recorder;
+use Astro\Trail\Console\ClearCommand;
+use Astro\Trail\Console\InstallCommand;
+use Astro\Trail\Console\PruneCommand;
+use Astro\Trail\Console\SweepCommand;
 use Astro\Trail\Pricing\CostCalculator;
 use Astro\Trail\Pricing\PriceBook;
 use Astro\Trail\Storage\Contracts\TraceStore;
@@ -49,6 +53,18 @@ class TrailServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
+
+        if ($this->app->runningInConsole()) {
+            $this->commands([
+                InstallCommand::class,
+                PruneCommand::class,
+                SweepCommand::class,
+                ClearCommand::class,
+            ]);
+
+            $this->publishes([__DIR__.'/../config/trail.php' => config_path('trail.php')], 'trail-config');
+            $this->publishes([__DIR__.'/../stubs/TrailServiceProvider.stub' => app_path('Providers/TrailServiceProvider.php')], 'trail-provider');
+        }
 
         if (config('trail.enabled')) {
             Listeners::register($this->app->make(Dispatcher::class), $this->app);
