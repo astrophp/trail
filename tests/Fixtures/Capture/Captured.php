@@ -48,6 +48,25 @@ final class Captured
     }
 
     /**
+     * The tree of spans as [type, name, parent, attempt, sequence, status], with each parent shown
+     * under the label given for its id, so a test states the tree in terms of the SDK's own ids.
+     *
+     * @param  array<string, string>  $labels  id => label
+     * @return list<array{string, string, ?string, int, int, string}>
+     */
+    public function outline(array $labels): array
+    {
+        return array_map(fn (array $span): array => [
+            $span['type'],
+            $span['name'],
+            $span['parent_id'] === null ? null : ($labels[$span['parent_id']] ?? 'unlabelled:'.$span['parent_id']),
+            $span['attempt'],
+            $span['sequence'],
+            $span['status'],
+        ], $this->spans);
+    }
+
+    /**
      * The trace row exactly as stored, volatile columns included.
      *
      * @return array<string, mixed>

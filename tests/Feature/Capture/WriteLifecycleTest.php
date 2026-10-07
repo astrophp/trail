@@ -12,6 +12,7 @@ use Astro\Trail\Tests\Fixtures\Capture\Queue\AgentJob;
 use Astro\Trail\Tests\Fixtures\Capture\Queue\MemoryConnector;
 use Astro\Trail\Tests\Fixtures\Capture\Queue\MemoryQueue;
 use Astro\Trail\Tests\Fixtures\Capture\Queue\NoopJob;
+use Astro\Trail\Tests\Fixtures\Capture\Streams;
 use Astro\Trail\Tests\Fixtures\Sdk\FakeAnthropic;
 use Astro\Trail\Tests\Fixtures\Storage\DatabaseStoreProbe;
 use Astro\Trail\Tests\Fixtures\Storage\Transactions;
@@ -515,31 +516,28 @@ describe('a late write', function () {
 it('writes finished traces without a flush once a process holds more than its limit, and keeps open ones', function () {
     $this->app->instance(Recorder::class, new Recorder($this->app, $this->app->make(CostCalculator::class), 2));
 
-    $inside = null;
+    // Run "A" is a stream its consumer abandoned, so it stays open while two runs finish: three
+    // traces are held, one more than the limit allows.
+    $open = Streams::abandonedAfter(2);
 
-    $tool = new CallbackTool('lookup', function () use (&$inside) {
-        (new AssistantAgent)->prompt('B');
+    AssistantAgent::fake(['B done', 'C done']);
+    (new AssistantAgent)->prompt('B');
 
-        $afterOne = DB::table('trail_spans')->count();
+    expect(DB::table('trail_spans')->count())->toBe(0);
 
-        (new AssistantAgent)->prompt('C');
+    (new AssistantAgent)->prompt('C');
 
-        $inside = [$afterOne, DB::table('trail_spans')->count(), DB::table('trail_traces')->count()];
+    $probe = new DatabaseStoreProbe;
 
-        return 'ok';
-    });
-
-    // The outer run is open while two inner runs finish: three traces are held, one more than the limit allows.
-    AssistantAgent::fake([new ToolCall('call_1', 'lookup', ['query' => 'x']), 'B done', 'C done', 'A done']);
-    $response = (new AssistantAgent([$tool]))->prompt('A');
-
-    expect($inside)->toBe([0, 4, 3])
-        ->and(DB::table('trail_spans')->where('trace_id', $response->invocationId)->count())->toBe(0);
+    expect($probe->spanCount())->toBe(4)
+        ->and($probe->traceCount())->toBe(3)
+        ->and($probe->spans($open))->toBe([]);
 
     Trail::flush();
 
-    expect(Captured::read($response->invocationId)->trace()['status'])->toBe('completed')
-        ->and($this->probe->spanCount())->toBe(4 + 4);
+    expect($probe->trace($open)['status'])->toBe('running')
+        ->and(count($probe->spans($open)))->toBe(2)
+        ->and($probe->spanCount())->toBe(4 + 2);
 });
 
 describe('flush points', function () {
