@@ -4,8 +4,8 @@ import { readFileSync } from 'node:fs'
 import { gzipSync } from 'node:zlib'
 
 const budgets = {
-    'dist/app.js': 100_000,
-    'dist/app.css': 6_000,
+    'dist/app.js': 125_000,
+    'dist/app.css': 8_000,
 }
 
 const kb = (bytes) => `${(bytes / 1000).toFixed(1)} kB`

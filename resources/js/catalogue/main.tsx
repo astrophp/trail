@@ -1,5 +1,6 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
+import { ThemeProvider } from '@/app/providers/theme-provider'
 import { CataloguePage } from '@/catalogue/catalogue-page'
 import { locateEntries } from '@/catalogue/entries'
 import type { CatalogueEntry } from '@/catalogue/types'
@@ -17,7 +18,9 @@ const root = document.getElementById('catalogue')
 if (root) {
     createRoot(root).render(
         <StrictMode>
-            <CataloguePage entries={locateEntries(modules)} />
+            <ThemeProvider>
+                <CataloguePage entries={locateEntries(modules)} />
+            </ThemeProvider>
         </StrictMode>,
     )
 }

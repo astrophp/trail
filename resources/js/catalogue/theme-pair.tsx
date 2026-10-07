@@ -7,7 +7,7 @@ export function ThemePair({ children }: { children: ReactNode }) {
             <div
                 role="group"
                 aria-label="Light theme"
-                className="rounded-lg border bg-background p-4 text-foreground"
+                className="light rounded-lg border bg-background p-4 text-foreground"
             >
                 {children}
             </div>
