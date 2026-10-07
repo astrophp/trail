@@ -18,3 +18,5 @@
 /pint.json          export-ignore
 /tsconfig.json      export-ignore
 /vite.config.ts     export-ignore
+/testbench.yaml     export-ignore
+/workbench          export-ignore
