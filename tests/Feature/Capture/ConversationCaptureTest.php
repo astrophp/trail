@@ -3,6 +3,7 @@
 use Astro\Trail\Facades\Trail;
 use Astro\Trail\Tests\Fixtures\Agents\AssistantAgent;
 use Astro\Trail\Tests\Fixtures\Agents\BrokenParticipantAgent;
+use Astro\Trail\Tests\Fixtures\Agents\ContractOnlyAgent;
 use Astro\Trail\Tests\Fixtures\Agents\RememberingAgent;
 use Astro\Trail\Tests\Fixtures\Capture\Captured;
 use Astro\Trail\Tests\Fixtures\Conversations\ConversationParticipant;
@@ -12,6 +13,7 @@ use Astro\Trail\Tests\Fixtures\Tools\CallbackTool;
 use Astro\Trail\Tests\Fixtures\Tools\LookupTool;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\DB;
+use Laravel\Ai\Concerns\RemembersConversations;
 use Laravel\Ai\Events\AgentPrompted;
 use Laravel\Ai\Events\PromptingAgent;
 use Laravel\Ai\Models\Conversation;
@@ -146,6 +148,16 @@ describe('a failed turn', function () {
     });
 });
 
+it('reads the identity of an agent that implements the SDK\'s contract without its trait', function () {
+    FakeAnthropic::script([FakeAnthropic::text('ok')]);
+
+    $response = (new ContractOnlyAgent(new ConversationParticipant, 'conversation-by-contract'))->prompt('Hi');
+
+    expect(($this->identity)(($this->read)($response->invocationId)))->toBe([
+        'conversation_id' => 'conversation-by-contract', 'user_id' => '42', 'user_type' => ConversationParticipant::class,
+    ]);
+});
+
 describe('a run without an identity', function () {
     it('has no conversation and no user', function () {
         AssistantAgent::fake(['Hello']);
@@ -193,6 +205,8 @@ it('never replaces a known conversation id with an unknown one at the end of the
 
     $remembers = new class extends AssistantAgent
     {
+        use RemembersConversations;
+
         public function currentConversation(): ?string
         {
             return 'conversation-1';
@@ -206,6 +220,8 @@ it('never replaces a known conversation id with an unknown one at the end of the
 
     $forgets = new class extends AssistantAgent
     {
+        use RemembersConversations;
+
         public function currentConversation(): ?string
         {
             return null;
@@ -237,6 +253,8 @@ describe('identity read from hand-built events', function () {
         /** An agent whose conversation and participant are the given ones. */
         $this->agentOf = fn (?string $conversation, ?object $participant) => new class($conversation, $participant) extends AssistantAgent
         {
+            use RemembersConversations;
+
             public function __construct(private ?string $conversation, private ?object $participant)
             {
                 parent::__construct();

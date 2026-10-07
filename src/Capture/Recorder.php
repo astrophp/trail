@@ -6,6 +6,7 @@ use Astro\Trail\Enums\ErrorSource;
 use Astro\Trail\Enums\IssueKind;
 use Astro\Trail\Enums\SpanType;
 use Astro\Trail\Enums\Status;
+use Astro\Trail\Exceptions\RecordingFailed;
 use Astro\Trail\Pricing\CostCalculator;
 use Astro\Trail\RecordingCandidate;
 use Astro\Trail\Storage\Contracts\TraceStore;
@@ -31,6 +32,9 @@ use Laravel\Ai\Events\ToolApprovalResolved;
 use Laravel\Ai\Events\ToolFailed;
 use Laravel\Ai\Events\ToolInvoked;
 use Laravel\Ai\Gateway\ParentInvocation;
+use Laravel\Ai\Messages\AssistantMessage;
+use Laravel\Ai\Messages\Message;
+use Laravel\Ai\Messages\ToolResultMessage;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\StructuredAgentResponse;
@@ -57,6 +61,23 @@ class Recorder
     /** @var array<string, EmbeddingCall> keyed by the embeddings invocation id */
     private array $embeddings = [];
 
+    /** @var array<string, true> traces whose run has ended, oldest first, waiting for the next flush */
+    private array $finished = [];
+
+    /** @var array<string, array<string, true>> the open embeddings calls under a span, by that span */
+    private array $embeddingsByParent = [];
+
+    /** How many traces one terminal event may write once more are held than the limit allows. */
+    private const WRITES_PER_EVENT = 2;
+
+    /** How long Trail stops writing after the store fails like a store that is unavailable, in nanoseconds. */
+    private const OUTAGE_PAUSE = 30_000_000_000;
+
+    /** Set while Trail is inside one of its own calls to the store. */
+    private int $writing = 0;
+
+    private ?int $writesPausedUntil = null;
+
     /** How many skipped invocation ids a process with no flush point remembers. */
     private const MAX_SKIPPED_IDS = 1000;
 
@@ -66,12 +87,16 @@ class Recorder
     /** How many traces a process with no flush point may hold before it writes the finished ones. */
     private const MAX_BUFFERED_TRACES = 100;
 
+    /**
+     * @param  (Closure(): int)|null  $clock  nanoseconds on a monotonic clock; replaceable in tests
+     */
     public function __construct(
         private readonly Container $container,
         private readonly CostCalculator $costs,
         private ?Payload $payload = null,
         private readonly int $maxBufferedTraces = self::MAX_BUFFERED_TRACES,
         private readonly int $maxSkippedIds = self::MAX_SKIPPED_IDS,
+        private readonly ?Closure $clock = null,
     ) {}
 
     public function agentStarting(PromptingAgent $event, bool $streamed = false): void
@@ -104,6 +129,13 @@ class Recorder
         $anonymous = (new ReflectionClass($agent))->isAnonymous();
         $class = $anonymous ? null : $agent::class;
         $name = $class === null ? self::ANONYMOUS_AGENT : class_basename($class);
+
+        // A run that starts because Trail is writing is not recorded, and neither are its later events.
+        if ($this->writing > 0) {
+            $this->skip($event->invocationId);
+
+            return;
+        }
 
         // The one decision about a top-level run. A sub-agent never asks: it follows a parent the
         // recorder knows, unless it starts where recording is off.
@@ -166,11 +198,13 @@ class Recorder
         }
 
         $run = new Run($event->invocationId, $buffer, $span, streamed: $streamed);
-        $this->runs[$event->invocationId] = $run;
+        $this->track($run);
 
         if ($isRoot) {
+            Guard::run(fn () => $this->shed());
+
             // The only query issued while a run is in flight: it makes the run visible as it starts.
-            Guard::run(fn () => $this->container->make(TraceStore::class)->start($buffer->trace()));
+            $this->storing(fn () => $this->container->make(TraceStore::class)->start($buffer->trace()));
         }
     }
 
@@ -357,7 +391,9 @@ class Recorder
         $buffer->clearFailure();
 
         // The manual retry is not a failover, so the trace is not marked recovered; the terminal event decides.
-        return $this->runs[$invocationId] = new Run($invocationId, $buffer, $span, attempt: $span->attempt, streamed: $streamed);
+        unset($this->finished[$invocationId]);
+
+        return $this->track(new Run($invocationId, $buffer, $span, attempt: $span->attempt, streamed: $streamed));
     }
 
     private function startAttempt(Run $run, string $provider, string $model): void
@@ -367,6 +403,8 @@ class Recorder
         $run->attempt++;
         $run->step = null;
         $run->lastText = null;
+        $run->sent = 0;
+        $run->fingerprint = null;
         $run->forgetFailure();
         $run->span->attempt = $run->attempt;
         $run->span->provider = $provider;
@@ -400,7 +438,7 @@ class Recorder
                 $abandoned[$span->id] = true;
 
                 if ($directChild) {
-                    unset($this->runs[$span->id]);
+                    $this->untrack($span->id);
                 }
             }
         }
@@ -413,14 +451,14 @@ class Recorder
                 $abandoned[$span->id] = true;
 
                 // A sub-agent from an abandoned attempt gets no more events.
-                unset($this->runs[$span->id]);
+                $this->untrack($span->id);
             }
         }
     }
 
     private function abandon(SpanDraft $span): void
     {
-        unset($this->embeddings[$span->id]);
+        $this->dropEmbedding($span->id);
 
         $span->status = Status::Incomplete;
         $span->issueKind = IssueKind::Abandoned;
@@ -462,11 +500,64 @@ class Recorder
             $this->driver($event->provider),
             $event->model,
             Carbon::now(),
-            $this->capturing('input', fn (): array => [
-                'messages' => $this->payload()->messages($event->messages),
-                'options' => $this->payload()->options($event->options),
-            ]),
+            $this->stepInput($run, $event),
         );
+    }
+
+    /**
+     * What a step's input stores. A step sends the whole history again, so only the messages that
+     * the previous step of the same attempt did not send are stored, with the number it did send as
+     * "messages_offset". The history of a step is the stored messages of the steps before it in the
+     * attempt, in order, followed by its own. The first step of an attempt has offset 0 and holds
+     * everything, ad-hoc history included. A history that is no longer than the previous one, or
+     * that no longer has the same message where the previous one ended, was rewritten or
+     * shortened, so it is stored whole, again with offset 0.
+     */
+    private function stepInput(Run $run, StartingStep $event): Captured
+    {
+        $total = count($event->messages);
+        $offset = 0;
+
+        // Only a history that still starts with what the previous step sent can be stored as what came after it.
+        if ($run->sent > 0 && $total > $run->sent && $run->fingerprint === $this->fingerprint($event->messages[$run->sent - 1] ?? null)) {
+            $offset = $run->sent;
+        }
+
+        $input = $this->capturing('input', fn (): array => [
+            'messages' => $this->payload()->messages($offset === 0 ? $event->messages : array_slice($event->messages, $offset)),
+            'messages_offset' => $offset,
+            'options' => $this->payload()->options($event->options),
+        ]);
+
+        // What the previous step sent is only remembered once it was stored, so a step whose input
+        // could not be built does not make the next one skip the messages it lost.
+        if ($input->value !== null) {
+            $run->sent = $total;
+            $run->fingerprint = $this->fingerprint($event->messages[$total - 1] ?? null);
+        }
+
+        return $input;
+    }
+
+    /**
+     * A cheap mark of a message: its kind, the length of its content, a hash of the start of it and
+     * the ids of the calls and results it holds. Two histories that agree on the mark of the message
+     * at the same place are taken to agree up to it; the whole history is never compared.
+     */
+    private function fingerprint(mixed $message): string
+    {
+        if (! $message instanceof Message) {
+            return get_debug_type($message);
+        }
+
+        $content = $message->content ?? '';
+        $ids = match (true) {
+            $message instanceof AssistantMessage => $message->toolCalls->pluck('id')->implode(','),
+            $message instanceof ToolResultMessage => $message->toolResults->pluck('id')->implode(','),
+            default => '',
+        };
+
+        return $message->role->value.':'.strlen($content).':'.md5(substr($content, 0, 256)).':'.md5($ids);
     }
 
     public function stepCompleted(StepCompleted $event): void
@@ -630,17 +721,20 @@ class Recorder
      */
     private function closeEmbeddingsOf(Run $run, SpanDraft $tool, Carbon $now, ?Failure $failure): void
     {
-        foreach ($run->buffer->drafts() as $span) {
-            if ($span->type === SpanType::Embedding && $span->parentId === $tool->id && $span->status === Status::Running) {
+        foreach (array_keys($this->embeddingsByParent[$tool->id] ?? []) as $id) {
+            $span = $this->embeddings[$id]->span ?? null;
+
+            if ($span !== null && $span->status === Status::Running) {
                 $span->status = Status::Failed;
                 $span->endedAt = $now;
                 $span->durationMs = null;
-                unset($this->embeddings[$span->id]);
 
                 if ($failure !== null) {
                     $span->fail($failure);
                 }
             }
+
+            $this->dropEmbedding($id);
         }
     }
 
@@ -665,7 +759,7 @@ class Recorder
             return;
         }
 
-        unset($this->runs[$event->invocationId]);
+        $this->untrack($event->invocationId);
 
         $now = Carbon::now();
         $duration = $run->span->openedAt === null ? null : (hrtime(true) - $run->span->openedAt) / 1e6;
@@ -679,7 +773,7 @@ class Recorder
                 $span->endedAt = $now;
                 $span->durationMs = null;
                 $span->fail($runFailure);
-                unset($this->embeddings[$span->id]);
+                $this->dropEmbedding($span->id);
             }
         }
 
@@ -705,7 +799,7 @@ class Recorder
         $run->buffer->durationMs = $duration;
         $run->buffer->fail($failure);
 
-        Guard::run(fn () => $this->writeFinishedBeyondLimit());
+        $this->finishedBuffer($run->buffer);
     }
 
     public function agentCompleted(AgentPrompted $event): void
@@ -718,7 +812,7 @@ class Recorder
 
         // The run is finished whatever happens next, so it leaves the recorder before anything can fail.
         // Its trace stays buffered until the next flush.
-        unset($this->runs[$event->invocationId]);
+        $this->untrack($event->invocationId);
 
         $now = Carbon::now();
         $response = $event->response;
@@ -769,11 +863,15 @@ class Recorder
         $run->buffer->endedAt = $now;
         $run->buffer->durationMs = $duration;
 
-        Guard::run(fn () => $this->writeFinishedBeyondLimit());
+        $this->finishedBuffer($run->buffer);
     }
 
     public function embeddingsGenerating(GeneratingEmbeddings $event): void
     {
+        if ($this->writing > 0) {
+            return;
+        }
+
         // The one place the SDK's own ambient parent ids are used: an embeddings call names no run.
         [$runId, $toolId] = ParentInvocation::current();
 
@@ -800,7 +898,7 @@ class Recorder
             $span->parentId = $this->parentSpanId($run->buffer, $runId, $toolId);
             $span->attempt = $run->attempt;
             $run->buffer->open($span);
-            $this->embeddings[$event->invocationId] = new EmbeddingCall($run->buffer, $span, false);
+            $this->openEmbedding(new EmbeddingCall($run->buffer, $span, false));
 
             return;
         }
@@ -820,9 +918,11 @@ class Recorder
             model: $span->model,
         );
         $buffer->open($span);
-        $this->embeddings[$event->invocationId] = new EmbeddingCall($buffer, $span, true);
+        $this->openEmbedding(new EmbeddingCall($buffer, $span, true));
 
-        Guard::run(fn () => $this->container->make(TraceStore::class)->start($buffer->trace()));
+        Guard::run(fn () => $this->shed());
+
+        $this->storing(fn () => $this->container->make(TraceStore::class)->start($buffer->trace()));
     }
 
     public function embeddingsGenerated(EmbeddingsGenerated $event): void
@@ -833,7 +933,7 @@ class Recorder
             return;
         }
 
-        unset($this->embeddings[$event->invocationId]);
+        $this->dropEmbedding($event->invocationId);
 
         $now = Carbon::now();
         $span = $call->span;
@@ -856,7 +956,7 @@ class Recorder
         $call->buffer->endedAt = $now;
         $call->buffer->durationMs = $duration;
 
-        Guard::run(fn () => $this->writeFinishedBeyondLimit());
+        $this->finishedBuffer($call->buffer);
     }
 
     /**
@@ -874,7 +974,7 @@ class Recorder
                 continue;
             }
 
-            unset($this->embeddings[$id]);
+            $this->dropEmbedding($id);
 
             $now = Carbon::now();
             $span = $call->span;
@@ -892,7 +992,7 @@ class Recorder
                 $call->buffer->durationMs = $duration;
                 $call->buffer->fail($failure);
 
-                Guard::run(fn () => $this->writeFinishedBeyondLimit());
+                $this->finishedBuffer($call->buffer);
             }
 
             return;
@@ -905,15 +1005,67 @@ class Recorder
      */
     private function releaseChildren(Run $root): void
     {
-        foreach ($this->runs as $id => $run) {
-            if ($run->buffer === $root->buffer) {
-                unset($this->runs[$id]);
+        foreach (array_keys($root->buffer->runIds) as $id) {
+            $this->untrack($id);
+        }
+    }
+
+    private function track(Run $run): Run
+    {
+        $this->runs[$run->invocationId] = $run;
+        $run->buffer->runIds[$run->invocationId] = true;
+
+        return $run;
+    }
+
+    private function untrack(string $invocationId): void
+    {
+        $run = $this->runs[$invocationId] ?? null;
+
+        if ($run !== null) {
+            unset($run->buffer->runIds[$invocationId]);
+        }
+
+        unset($this->runs[$invocationId]);
+    }
+
+    private function openEmbedding(EmbeddingCall $call): void
+    {
+        $id = $call->span->id;
+
+        $this->embeddings[$id] = $call;
+        $call->buffer->embeddingIds[$id] = true;
+
+        if ($call->span->parentId !== null) {
+            $this->embeddingsByParent[$call->span->parentId][$id] = true;
+        }
+    }
+
+    private function dropEmbedding(string $id): void
+    {
+        $call = $this->embeddings[$id] ?? null;
+
+        if ($call === null) {
+            return;
+        }
+
+        unset($call->buffer->embeddingIds[$id], $this->embeddings[$id]);
+
+        $parent = $call->span->parentId;
+
+        if ($parent !== null) {
+            unset($this->embeddingsByParent[$parent][$id]);
+
+            if (($this->embeddingsByParent[$parent] ?? []) === []) {
+                unset($this->embeddingsByParent[$parent]);
             }
         }
     }
 
     /**
      * Write every trace in its current state, finished or not, and forget everything in flight.
+     * It is for between runs: a run that is still going when it is called is written as running,
+     * and is not followed after that.
      */
     public function flush(): void
     {
@@ -921,7 +1073,9 @@ class Recorder
 
         $this->runs = [];
         $this->buffers = [];
+        $this->finished = [];
         $this->embeddings = [];
+        $this->embeddingsByParent = [];
         $this->skipped = [];
 
         Guard::run(fn () => $this->container->make(Sampler::class)->flushed());
@@ -931,25 +1085,59 @@ class Recorder
         }
     }
 
-    /**
-     * A process that never reaches a flush point would hold finished traces forever. Past the limit
-     * the finished ones are written and dropped; traces still being captured stay.
-     */
-    private function writeFinishedBeyondLimit(): void
+    private function finishedBuffer(RunBuffer $buffer): void
     {
-        if (count($this->buffers) <= $this->maxBufferedTraces) {
+        $this->finished[$buffer->id] = true;
+
+        Guard::run(fn () => $this->shed());
+    }
+
+    /**
+     * A process with no flush point would hold every trace forever. Past the limit, the oldest finished
+     * trace is written and dropped, or, when none has finished, the oldest open one is written as
+     * it stands (running, exactly as a flush would) and dropped with its runs. A process with no flush
+     * point necessarily writes inside a call once it is over the limit; at most WRITES_PER_EVENT
+     * traces are written by any one event, so no call pays for more than that and a backlog drains
+     * over the calls that follow.
+     */
+    private function shed(): void
+    {
+        $written = 0;
+
+        while ($written < self::WRITES_PER_EVENT && count($this->buffers) > $this->maxBufferedTraces) {
+            $id = array_key_first($this->finished) ?? array_key_first($this->buffers);
+
+            if ($id === null) {
+                return;
+            }
+
+            $this->evict($id);
+            $written++;
+        }
+    }
+
+    private function evict(string $id): void
+    {
+        $buffer = $this->buffers[$id] ?? null;
+
+        unset($this->buffers[$id], $this->finished[$id]);
+
+        if ($buffer === null) {
             return;
         }
 
-        foreach ($this->buffers as $id => $buffer) {
-            if (! $buffer->finished()) {
-                continue;
-            }
+        // Written as it stands, and then gone: a later start for the same id must not begin it over.
+        $this->skip($id);
 
-            unset($this->buffers[$id]);
-
-            $this->write($buffer);
+        foreach (array_keys($buffer->runIds) as $runId) {
+            $this->untrack($runId);
         }
+
+        foreach (array_keys($buffer->embeddingIds) as $embeddingId) {
+            $this->dropEmbedding($embeddingId);
+        }
+
+        $this->write($buffer);
     }
 
     /**
@@ -1168,10 +1356,73 @@ class Recorder
      */
     private function write(RunBuffer $buffer): void
     {
-        Guard::run(function () use ($buffer): void {
-            Guard::run(fn () => $this->price($buffer));
+        $this->storing(function () use ($buffer): void {
+            try {
+                $this->price($buffer);
+            } catch (Throwable $e) {
+                // The prices only add a cost. A store that is down fails the write itself just below.
+                if (StoreFailure::meansUnavailable($e)) {
+                    throw $e;
+                }
+
+                $this->reportWrite($e);
+            }
 
             $this->container->make(TraceStore::class)->store($buffer->trace(), $buffer->spans());
+        });
+    }
+
+    /**
+     * A call into Trail's own tables. While one runs, nothing that starts is recorded, so an
+     * application listener that reacts to Trail's queries cannot start runs that cause more queries.
+     * After a failure that looks like a store that is down, writes are not attempted for a while:
+     * one failure is reported, the traces that would have been written are dropped, and the callers
+     * of the AI calls pay nothing more for it.
+     *
+     * @param  Closure(): void  $call
+     */
+    private function storing(Closure $call): void
+    {
+        if ($this->writesPausedUntil !== null && $this->now() < $this->writesPausedUntil) {
+            return;
+        }
+
+        $this->writing++;
+
+        try {
+            $call();
+        } catch (Throwable $e) {
+            if (StoreFailure::meansUnavailable($e)) {
+                $this->writesPausedUntil = $this->now() + self::OUTAGE_PAUSE;
+            }
+
+            $this->reportWrite($e);
+        } finally {
+            $this->writing--;
+        }
+    }
+
+    private function now(): int
+    {
+        if ($this->clock !== null) {
+            return ($this->clock)();
+        }
+
+        [$seconds, $nanoseconds] = hrtime();
+
+        return $seconds * 1_000_000_000 + $nanoseconds;
+    }
+
+    /**
+     * Report a failed write. Whatever the store threw is reported as a stand-in that holds no value
+     * from the statement, since for Trail those are prompts and tool results.
+     */
+    private function reportWrite(Throwable $e): void
+    {
+        $report = RecordingFailed::because($e);
+
+        Guard::run(function () use ($report): void {
+            throw $report;
         });
     }
 
