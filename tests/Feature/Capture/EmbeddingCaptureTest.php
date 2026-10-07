@@ -5,6 +5,7 @@ use Astro\Trail\Facades\Trail;
 use Astro\Trail\Pricing\CostCalculator;
 use Astro\Trail\Tests\Fixtures\Agents\AssistantAgent;
 use Astro\Trail\Tests\Fixtures\Capture\Captured;
+use Astro\Trail\Tests\Fixtures\Capture\FailoverSpyRecorder;
 use Astro\Trail\Tests\Fixtures\Capture\Failures;
 use Astro\Trail\Tests\Fixtures\Capture\Streams;
 use Astro\Trail\Tests\Fixtures\Capture\ThrowingRecorder;
@@ -21,6 +22,12 @@ use Laravel\Ai\Embeddings;
 use Laravel\Ai\Events\EmbeddingsGenerated;
 use Laravel\Ai\Events\GeneratingEmbeddings;
 use Laravel\Ai\Events\InvokingTool;
+use Laravel\Ai\Events\ProviderFailedOver;
+use Laravel\Ai\Exceptions\RateLimitedException;
+use Laravel\Ai\Prompts\EmbeddingsPrompt;
+use Laravel\Ai\Responses\Data\Meta;
+use Laravel\Ai\Responses\Data\Usage;
+use Laravel\Ai\Responses\EmbeddingsResponse;
 
 /*
 |--------------------------------------------------------------------------
@@ -264,4 +271,213 @@ it('lets embeddings return their result when every Trail listener throws', funct
 
     Exceptions::assertReported(fn (RuntimeException $e) => $e->getMessage() === 'embeddingsGenerating failed');
     Exceptions::assertReported(fn (TypeError $e) => $e->getMessage() === 'embeddingsGenerated failed');
+});
+
+describe('when the call fails over to another provider', function () {
+    beforeEach(function () {
+        config([
+            'ai.providers.second' => ['driver' => 'openai', 'key' => 'test-key', 'url' => 'https://second.openai.test/v1'],
+        ]);
+
+        $this->rateLimited = fn () => Http::response(['error' => ['message' => 'slow down']], 429);
+        $this->succeeded = fn () => Http::response([
+            'data' => [['embedding' => [0.1, 0.2]]],
+            'usage' => ['prompt_tokens' => 7, 'total_tokens' => 7],
+        ]);
+    });
+
+    it('records the failed attempt as a failed trace and the recovery as a completed one', function () {
+        Http::fake(['api.openai.com/*' => ($this->rateLimited)(), 'second.openai.test/*' => ($this->succeeded)()]);
+
+        Embeddings::for(['a'])->generate(['openai', 'second']);
+        [$first, $second] = array_map(fn ($entry) => $entry->invocationId, $this->sdk->of(GeneratingEmbeddings::class));
+        Trail::flush();
+
+        $failed = Captured::read($first);
+        $recovered = Captured::read($second);
+
+        expect((new DatabaseStoreProbe)->traceCount())->toBe(2)
+            ->and(Captured::pick([$failed->trace()], ['status', 'issue_kind', 'error_class', 'error_source', 'error_http_status', 'input_tokens', 'span_count'])[0])
+            ->toBe(['status' => 'failed', 'issue_kind' => 'rate_limited', 'error_class' => RateLimitedException::class, 'error_source' => 'run', 'error_http_status' => 429, 'input_tokens' => null, 'span_count' => 1])
+            ->and($failed->rawTrace()['ended_at'])->not->toBeNull()
+            ->and($failed->rawTrace()['duration_ms'])->toBeFloat()
+            ->and(Captured::pick($failed->spans(), ['type', 'status', 'issue_kind', 'error_source', 'error_http_status']))->toBe([
+                ['type' => 'embedding', 'status' => 'failed', 'issue_kind' => 'rate_limited', 'error_source' => 'run', 'error_http_status' => 429],
+            ])->and($failed->rawSpans()[0]['ended_at'])->not->toBeNull()
+            ->and($failed->rawSpans()[0]['duration_ms'])->toBeFloat()
+            ->and(Captured::pick([$recovered->trace()], ['status', 'issue_kind', 'input_tokens'])[0])->toBe(['status' => 'completed', 'issue_kind' => null, 'input_tokens' => 7])
+            ->and(DB::table('trail_traces')->where('status', 'running')->count())->toBe(0)
+            ->and(DB::table('trail_spans')->where('status', 'running')->count())->toBe(0);
+    });
+
+    it('records a call that fails over with a single provider as one failed trace', function () {
+        Http::fake(['api.openai.com/*' => ($this->rateLimited)()]);
+
+        Failures::thrown(fn () => Embeddings::for(['a'])->generate());
+        $id = $this->sdk->sole(GeneratingEmbeddings::class)->invocationId;
+        Trail::flush();
+        $run = Captured::read($id);
+
+        expect((new DatabaseStoreProbe)->traceCount())->toBe(1)
+            ->and(Captured::pick([$run->trace()], ['status', 'issue_kind', 'error_http_status'])[0])->toBe(['status' => 'failed', 'issue_kind' => 'rate_limited', 'error_http_status' => 429])
+            ->and($run->rawTrace()['ended_at'])->not->toBeNull()
+            ->and(Captured::pick($run->spans(), ['status']))->toBe([['status' => 'failed']]);
+    });
+
+    it('fails the embedding span inside a tool and lets the run complete when the next provider answers', function () {
+        Http::fake(['api.openai.com/*' => ($this->rateLimited)(), 'second.openai.test/*' => ($this->succeeded)()]);
+        ($this->parentScript)();
+
+        $tool = new CallbackTool('embed', fn () => (string) count(Embeddings::for(['a'])->generate(['openai', 'second'])));
+
+        (new AssistantAgent([$tool]))->prompt('Hi', model: FakeAnthropic::MODEL);
+        $run = ($this->stored)()->assertVolatileColumns();
+
+        $toolId = $this->sdk->sole(InvokingTool::class)->event->toolInvocationId;
+        [$failedId, $recoveredId] = array_map(fn ($entry) => $entry->invocationId, $this->sdk->of(GeneratingEmbeddings::class));
+
+        expect($run->outline([$this->sdk->invocationIds()[0] => 'parent', $toolId => 'tool']))->toBe([
+            ['agent', 'AssistantAgent', null, 1, 1, 'completed'],
+            ['step', 'step', 'parent', 1, 2, 'completed'],
+            ['tool', 'embed', 'parent', 1, 3, 'completed'],
+            ['embedding', 'embeddings', 'tool', 1, 4, 'failed'],
+            ['embedding', 'embeddings', 'tool', 1, 5, 'completed'],
+            ['step', 'step', 'parent', 1, 6, 'completed'],
+        ])->and([$run->spanId(3), $run->spanId(4)])->toBe([$failedId, $recoveredId])
+            ->and(Captured::pick([$run->spans()[3]], ['issue_kind', 'error_class', 'error_source', 'error_http_status'])[0])
+            ->toBe(['issue_kind' => 'rate_limited', 'error_class' => RateLimitedException::class, 'error_source' => 'run', 'error_http_status' => 429])
+            ->and($run->rawSpans()[3]['ended_at'])->not->toBeNull()
+            ->and($run->rawSpans()[3]['duration_ms'])->toBeFloat()
+            ->and($run->rawSpans()[4]['input_tokens'])->toBe(7)
+            ->and($run->trace()['status'])->toBe('completed');
+    });
+
+    it('leaves a standalone call that fails with an error the SDK does not fail over on running', function () {
+        Http::fake(['api.openai.com/*' => Http::response(['error' => ['message' => 'bad']], 500)]);
+
+        Failures::thrown(fn () => Embeddings::for(['a'])->generate());
+        $id = $this->sdk->sole(GeneratingEmbeddings::class)->invocationId;
+        Trail::flush();
+
+        expect(Captured::read($id)->rawTrace()['status'])->toBe('running');
+    });
+
+    it('does not take an agent failover for an embeddings failover', function () {
+        $spy = new FailoverSpyRecorder($this->app, $this->app->make(CostCalculator::class));
+        $this->app->instance(Recorder::class, $spy);
+        FakeAnthropic::script([FakeAnthropic::error(429), FakeAnthropic::text('Done')]);
+
+        (new AssistantAgent)->prompt('Hi', provider: ['anthropic' => 'model-a', 'backup' => 'model-b']);
+
+        expect($this->sdk->names())->toContain('AgentFailedOver')
+            ->and($spy->failovers)->toBe(0);
+
+        Http::fake(['api.openai.com/*' => ($this->rateLimited)()]);
+        Failures::thrown(fn () => Embeddings::for(['a'])->generate());
+
+        // The same spy does hear an embeddings failover.
+        expect($spy->failovers)->toBe(1);
+    });
+
+    it('ignores a failover that matches no open embeddings call', function () {
+        Http::fake(['api.openai.com/*' => Http::response(['error' => ['message' => 'bad']], 500)]);
+        Exceptions::fake();
+
+        // A call that stays open on openai / text-embedding-3-small.
+        Failures::thrown(fn () => Embeddings::for(['a'])->generate());
+        $provider = $this->sdk->sole(GeneratingEmbeddings::class)->event->provider;
+        $id = $this->sdk->sole(GeneratingEmbeddings::class)->invocationId;
+
+        event(new ProviderFailedOver($provider, 'another-model', new RateLimitedException('slow down')));
+        Trail::flush();
+
+        // And with no call open at all.
+        event(new ProviderFailedOver($provider, 'text-embedding-3-small', new RateLimitedException('slow down')));
+
+        $run = Captured::read($id);
+
+        expect($run->rawTrace()['status'])->toBe('running')
+            ->and(Captured::pick($run->spans(), ['status']))->toBe([['status' => 'running']])
+            ->and((new DatabaseStoreProbe)->traceCount())->toBe(1);
+
+        Exceptions::assertNothingReported();
+    });
+
+    it('lets embeddings fail over when every Trail listener throws', function () {
+        Http::fake(['api.openai.com/*' => ($this->rateLimited)(), 'second.openai.test/*' => ($this->succeeded)()]);
+        Exceptions::fake();
+        $this->app->instance(Recorder::class, new ThrowingRecorder($this->app, $this->app->make(CostCalculator::class)));
+
+        $response = Embeddings::for(['a'])->generate(['openai', 'second']);
+
+        expect($response->embeddings)->toHaveCount(1);
+
+        Exceptions::assertReported(fn (RuntimeException $e) => $e->getMessage() === 'providerFailedOver failed');
+    });
+});
+
+describe('a stray event for a call that already ended', function () {
+    it('does not reopen an embedding the tool closed as failed', function () {
+        Http::fake(['api.openai.com/*' => Http::response(['error' => ['message' => 'bad']], 500)]);
+        ($this->parentScript)();
+
+        $tool = new CallbackTool('embed', function () {
+            try {
+                Embeddings::for(['a'])->generate();
+            } catch (Throwable) {
+                return 'caught';
+            }
+
+            return 'unreachable';
+        });
+
+        (new AssistantAgent([$tool]))->prompt('Hi', model: FakeAnthropic::MODEL);
+
+        $generating = $this->sdk->sole(GeneratingEmbeddings::class)->event;
+        $response = new EmbeddingsResponse([[0.1]], new Usage(9), new Meta('openai', $generating->model));
+
+        event(new EmbeddingsGenerated($generating->invocationId, $generating->provider, $generating->model, $generating->prompt, $response));
+        $run = ($this->stored)()->assertVolatileColumns(untimed: [3]);
+
+        expect(Captured::pick([$run->spans()[3]], ['type', 'status', 'input_tokens', 'cost'])[0])->toBe(['type' => 'embedding', 'status' => 'failed', 'input_tokens' => null, 'cost' => null])
+            ->and($run->spans()[3]['output'])->toBeNull();
+    });
+});
+
+describe('the dimensions it records', function () {
+    it('stores the dimensions the caller asked for', function () {
+        ($this->openai)();
+
+        Embeddings::for(['a'])->dimensions(256)->generate();
+        $id = $this->sdk->sole(GeneratingEmbeddings::class)->invocationId;
+        Trail::flush();
+
+        expect(Captured::read($id)->spans()[0]['input'])->toBe(['count' => 1, 'dimensions' => 256]);
+    });
+
+    it('stores none when the SDK says the model\'s native size with a zero', function () {
+        ($this->openai)();
+
+        Embeddings::for(['a'])->generate();
+        $real = $this->sdk->sole(GeneratingEmbeddings::class)->event;
+        $native = new EmbeddingsPrompt(['a', 'b'], 0, $real->prompt->provider, $real->model);
+
+        event(new GeneratingEmbeddings('native-size-call', $real->provider, $real->model, $native));
+        Trail::flush();
+
+        expect(Captured::read('native-size-call')->spans()[0]['input'])->toBe(['count' => 2, 'dimensions' => null]);
+    });
+});
+
+it('records a standalone call whose provider sent no usage with no tokens, no cost and no unpriced span', function () {
+    ($this->openai)(['usage' => null]);
+
+    Embeddings::for(['a', 'b'])->generate();
+    $id = $this->sdk->sole(GeneratingEmbeddings::class)->invocationId;
+    Trail::flush();
+    $run = Captured::read($id);
+
+    expect(Captured::pick([$run->trace()], ['status', 'input_tokens', 'cost', 'span_count', 'unpriced_span_count'])[0])
+        ->toBe(['status' => 'completed', 'input_tokens' => null, 'cost' => null, 'span_count' => 1, 'unpriced_span_count' => 0])
+        ->and($run->rawSpans()[0]['input_tokens'])->toBeNull();
 });

@@ -22,6 +22,7 @@ use Laravel\Ai\Events\EmbeddingsGenerated;
 use Laravel\Ai\Events\GeneratingEmbeddings;
 use Laravel\Ai\Events\InvokingTool;
 use Laravel\Ai\Events\PromptingAgent;
+use Laravel\Ai\Events\ProviderFailedOver;
 use Laravel\Ai\Events\StartingStep;
 use Laravel\Ai\Events\StepCompleted;
 use Laravel\Ai\Events\StepFailed;
@@ -184,9 +185,21 @@ class Recorder
         $abandoned = [];
 
         foreach ($run->buffer->drafts() as $span) {
-            if ($span->status === Status::Running && $this->owns($run, $span)) {
+            if ($span->status !== Status::Running) {
+                continue;
+            }
+
+            // A sub-agent hangs directly under the run when its tool's span was missing. It is not the
+            // run's own span, but it belongs to the attempt that was walked away from all the same.
+            $directChild = $span->type === SpanType::Agent && $span->parentId === $run->span->id;
+
+            if ($this->owns($run, $span) || $directChild) {
                 $this->abandon($span);
                 $abandoned[$span->id] = true;
+
+                if ($directChild) {
+                    unset($this->runs[$span->id]);
+                }
             }
         }
 
@@ -198,23 +211,29 @@ class Recorder
                 $abandoned[$span->id] = true;
 
                 // A sub-agent from an abandoned attempt gets no more events.
-                unset($this->runs[$span->id], $this->embeddings[$span->id]);
+                unset($this->runs[$span->id]);
             }
         }
     }
 
     private function abandon(SpanDraft $span): void
     {
+        unset($this->embeddings[$span->id]);
+
         $span->status = Status::Incomplete;
         $span->issueKind = IssueKind::Abandoned;
     }
 
     /**
      * Whether a span belongs to the run itself: its steps and tools, and the embeddings its tools
-     * made. A sub-agent's spans belong to the sub-agent's own run.
+     * made. A sub-agent's spans, its agent span included, belong to the sub-agent's own run.
      */
     private function owns(Run $run, SpanDraft $span): bool
     {
+        if ($span->type === SpanType::Agent) {
+            return false;
+        }
+
         if ($span->parentId === $run->span->id) {
             return true;
         }
@@ -414,6 +433,7 @@ class Recorder
                 $span->status = Status::Failed;
                 $span->endedAt = $now;
                 $span->durationMs = null;
+                unset($this->embeddings[$span->id]);
 
                 if ($failure !== null) {
                     $span->fail($failure);
@@ -457,6 +477,7 @@ class Recorder
                 $span->endedAt = $now;
                 $span->durationMs = null;
                 $span->fail($runFailure);
+                unset($this->embeddings[$span->id]);
             }
         }
 
@@ -537,8 +558,8 @@ class Recorder
             startedAt: Carbon::now(),
             provider: $event->provider->driver(),
             model: $event->model,
-            // How many inputs, never the texts themselves.
-            input: ['count' => count($event->prompt->inputs), 'dimensions' => $event->prompt->dimensions],
+            // How many inputs, never the texts themselves. Zero dimensions is the SDK's way of saying the model's native size.
+            input: ['count' => count($event->prompt->inputs), 'dimensions' => $event->prompt->dimensions > 0 ? $event->prompt->dimensions : null],
             openedAt: (float) hrtime(true),
         );
 
@@ -605,6 +626,46 @@ class Recorder
         $call->buffer->durationMs = $duration;
 
         Guard::run(fn () => $this->writeFinishedBeyondLimit());
+    }
+
+    /**
+     * An embeddings call that failed with an error the SDK can fail over on fires only this event,
+     * which names no invocation: the next provider is tried as a new call with its own id. Calls are
+     * synchronous, so the failed one is the most recently opened call still running against that
+     * provider and model. The event also serves other SDK features; without such a call it is ignored.
+     */
+    public function providerFailedOver(ProviderFailedOver $event): void
+    {
+        $driver = $event->provider->driver();
+
+        foreach (array_reverse($this->embeddings, true) as $id => $call) {
+            if ($call->span->status !== Status::Running || $call->span->provider !== $driver || $call->span->model !== $event->model) {
+                continue;
+            }
+
+            unset($this->embeddings[$id]);
+
+            $now = Carbon::now();
+            $span = $call->span;
+            $duration = $span->openedAt === null ? null : (hrtime(true) - $span->openedAt) / 1e6;
+            $failure = Failure::from($event->exception, ErrorSource::Run);
+
+            $span->status = Status::Failed;
+            $span->endedAt = $now;
+            $span->durationMs = $duration;
+            $span->fail($failure);
+
+            if ($call->standalone) {
+                $call->buffer->status = Status::Failed;
+                $call->buffer->endedAt = $now;
+                $call->buffer->durationMs = $duration;
+                $call->buffer->fail($failure);
+
+                Guard::run(fn () => $this->writeFinishedBeyondLimit());
+            }
+
+            return;
+        }
     }
 
     /**

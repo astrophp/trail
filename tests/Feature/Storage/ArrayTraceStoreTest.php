@@ -1,9 +1,11 @@
 <?php
 
+use Astro\Trail\Enums\SpanType;
 use Astro\Trail\Enums\Status;
 use Astro\Trail\Storage\ArrayTraceStore;
 use Astro\Trail\Tests\Fixtures\Storage\Records;
 use Illuminate\Support\Carbon;
+use PHPUnit\Framework\ExpectationFailedException;
 
 it('lists traces in the order they were first stored', function () {
     $store = new ArrayTraceStore;
@@ -128,4 +130,17 @@ it('matches an agent class written with a leading backslash', function () {
     $store->store(Records::trace(['id' => 'trace-1', 'agentClass' => 'App\\Agents\\SupportAgent']), []);
 
     $store->assertRecorded('\\App\\Agents\\SupportAgent')->assertRecordedCount(1, '\\App\\Agents\\SupportAgent');
+
+    expect(fn () => $store->assertNotRecorded('\\App\\Agents\\SupportAgent'))->toThrow(ExpectationFailedException::class);
+});
+
+it('matches an agent span class written with a leading backslash', function () {
+    $store = new ArrayTraceStore;
+    $store->store(Records::trace(['id' => 'trace-1']), [
+        Records::span('trace-1', ['id' => 'span-1', 'type' => SpanType::Agent, 'agentClass' => 'App\\Agents\\ResearchAgent']),
+    ]);
+
+    $store->assertSpanRecorded('\\App\\Agents\\ResearchAgent', fn ($span) => $span->id === 'span-1');
+
+    expect(fn () => $store->assertSpanNotRecorded('\\App\\Agents\\ResearchAgent'))->toThrow(ExpectationFailedException::class);
 });
