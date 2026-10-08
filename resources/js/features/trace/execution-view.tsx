@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from 'react'
 import type { TraceDetailResponse } from '@/api/types'
 import { SplitView } from '@/components/patterns/split-view'
-import { buildSpanTree } from '@/features/trace/build-span-tree'
+import type { SpanTree } from '@/features/trace/build-span-tree'
 import { EvidencePanel } from '@/features/trace/evidence-panel'
 import { ExecutionPane } from '@/features/trace/execution-pane'
 import { resolveSelection } from '@/features/trace/resolve-selection'
@@ -11,6 +11,8 @@ import type { SetUrlState } from '@/hooks/use-url-state'
 
 type ExecutionViewProps = {
     data: TraceDetailResponse['data']
+    /** The run's spans as a tree; see `buildSpanTree`. */
+    tree: SpanTree
     /** The span the URL asks for, by id; empty when it names none. */
     span: string
     /** The evidence tab the URL asks for. */
@@ -21,13 +23,12 @@ type ExecutionViewProps = {
 /** The workbench: in one card the execution tree and the evidence for the selected span. */
 export function ExecutionView({
     data,
+    tree,
     span: requested,
     tab,
     setParams,
 }: ExecutionViewProps) {
     const { trace, detail, spans, usage, coverage } = data
-    // Built once per response, not per render.
-    const tree = useMemo(() => buildSpanTree(spans), [spans])
     const axisMs = useMemo(
         () => timingAxis(trace.duration_ms, spans),
         [trace.duration_ms, spans],
