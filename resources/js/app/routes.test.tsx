@@ -14,7 +14,7 @@ describe('resolveRoute', () => {
         ['/traces/abc', 'traces', 'Trace'],
         ['/traces/compare', 'traces', 'Compare'],
         ['/conversations', 'conversations', 'Conversations'],
-        ['/conversations/c1', 'conversations', 'Conversation'],
+        ['/conversations/transcript', 'conversations', 'Conversation'],
         ['/agents', 'agents', 'Agents'],
         ['/agents/SupportAgent', 'agents', 'Agent'],
         ['/usage', 'usage', 'Usage & cost'],

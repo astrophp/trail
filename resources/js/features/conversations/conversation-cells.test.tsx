@@ -68,7 +68,10 @@ describe('the conversation cell', () => {
 
         expect(
             within(header).getByRole('link', { name: 'Approve it' }),
-        ).toHaveAttribute('href', '/trail/conversations/conversation-shared')
+        ).toHaveAttribute(
+            'href',
+            '/trail/conversations/transcript?id=conversation-shared',
+        )
         expect(lineOf('conversation-shared')).toHaveTextContent(
             'conversa…ared · Refunds, SupportAssistant',
         )
@@ -82,7 +85,10 @@ describe('the conversation cell', () => {
 
         expect(
             within(header).getByRole('link', { name: 'No prompt stored' }),
-        ).toHaveAttribute('href', '/trail/conversations/conversation-bare')
+        ).toHaveAttribute(
+            'href',
+            '/trail/conversations/transcript?id=conversation-bare',
+        )
     })
 
     it('links an id with a slash, a space and non-ASCII characters as one path segment', async () => {
@@ -91,7 +97,10 @@ describe('the conversation cell', () => {
 
         expect(
             within(rowOf(id)).getByRole('link', { name: 'Reopen it' }),
-        ).toHaveAttribute('href', '/trail/conversations/team%2Fa%20b.%C3%A9')
+        ).toHaveAttribute(
+            'href',
+            '/trail/conversations/transcript?id=team%2Fa+b.%C3%A9',
+        )
     })
 
     it('shortens a uuid id in the middle, keeps the agent names visible and the whole id in the title', async () => {

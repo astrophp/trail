@@ -3,8 +3,8 @@ import { cn } from '@/lib/utils'
 
 type SectionLabelProps = {
     children: ReactNode
-    /** `h3` for a label that names a section; `p` for one inside a section that already has a heading. */
-    as?: 'h3' | 'p'
+    /** `h3` for a label that names a section (`h2` when it is a page's own section); `p` for one inside a section that already has a heading. */
+    as?: 'h2' | 'h3' | 'p'
     className?: string
 }
 

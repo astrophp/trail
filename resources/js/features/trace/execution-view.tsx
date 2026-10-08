@@ -36,7 +36,7 @@ export function ExecutionView({
     onSelect,
     onBack,
 }: ExecutionViewProps) {
-    const { trace, detail, spans, usage, coverage } = data
+    const { trace, spans, usage, coverage } = data
     const axisMs = useMemo(
         () => timingAxis(trace.duration_ms, spans),
         [trace.duration_ms, spans],
@@ -65,13 +65,6 @@ export function ExecutionView({
         [setParams],
     )
     const focusHandled = useCallback(() => setFocusSpan(null), [])
-    const run = useMemo(
-        () => ({
-            status: trace.status,
-            pendingApprovals: detail.pending_approvals,
-        }),
-        [trace.status, detail.pending_approvals],
-    )
     const selectTab = useCallback(
         (next: string) => {
             // The select only offers tabs; a value it does not know is left out of the URL.
@@ -121,7 +114,6 @@ export function ExecutionView({
                         tree={tree}
                         subtotal={agents.get(selected.span.id)}
                         coverage={coverage}
-                        run={run}
                         tab={tab}
                         onTabChange={selectTab}
                         onSelect={selectFromPanel}

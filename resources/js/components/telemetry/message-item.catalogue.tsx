@@ -1,7 +1,7 @@
 import { MessageItem } from '@/components/telemetry/message-item'
-import { stepSpan } from '@/catalogue/step-span'
 import type { CatalogueEntry } from '@/catalogue/types'
 import type { JsonValue } from '@/lib/json'
+import type { MessageVariant } from '@/components/telemetry/message-item'
 
 const long = Array.from(
     { length: 40 },
@@ -12,12 +12,27 @@ function specimen(message: JsonValue, truncated: Record<string, number> = {}) {
     return () => (
         <ol>
             <MessageItem
-                span={stepSpan({ messages: [message] }, truncated)}
-                index={0}
-                number={1}
                 message={message}
+                truncatedPaths={truncated}
+                basePath="input.messages.0"
+                heading="Message 1"
             />
         </ol>
+    )
+}
+
+function framed(
+    variant: MessageVariant,
+    message: JsonValue,
+    truncated: Record<string, number> = {},
+) {
+    return () => (
+        <MessageItem
+            message={message}
+            truncatedPaths={truncated}
+            heading="Turn 1 message"
+            variant={variant}
+        />
     )
 }
 
@@ -100,6 +115,28 @@ export const catalogue: CatalogueEntry = {
         {
             name: 'Long message',
             Component: specimen({ role: 'assistant', content: long }),
+        },
+        {
+            name: 'Prompt bubble (transcript)',
+            Component: framed('bubble', {
+                role: 'user',
+                content: 'Where is my order?',
+            }),
+        },
+        {
+            name: 'Prompt bubble, cut short and long',
+            Component: framed(
+                'bubble',
+                { role: 'user', content: long },
+                { content: 90000 },
+            ),
+        },
+        {
+            name: 'Response, plain (transcript)',
+            Component: framed('plain', {
+                role: 'assistant',
+                content: 'Your order shipped on Monday.',
+            }),
         },
     ],
 }

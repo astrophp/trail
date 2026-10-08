@@ -15,7 +15,6 @@ import {
 import { truncationUnseen } from '@/features/trace/truncation-unseen'
 import { SpanFailure } from '@/features/trace/span-failure'
 import { tabList, tabTrigger } from '@/features/trace/tab-styles'
-import type { RunContext } from '@/features/trace/tool-call-status'
 import { SpanHeader } from '@/features/trace/span-header'
 import { cn } from '@/lib/utils'
 
@@ -25,8 +24,6 @@ type EvidencePanelProps = {
     /** The server's subtotal for this span, when it is an agent. */
     subtotal: AgentSubtotal | undefined
     coverage: Coverage
-    /** The run's status and pending approvals, which say why a tool call has no span. */
-    run: RunContext
     /** The tab the URL asks for; the span's first tab when it does not have that one. */
     tab: string
     onTabChange: (tab: string) => void
@@ -47,7 +44,6 @@ export function EvidencePanel({
     tree,
     subtotal,
     coverage,
-    run,
     tab,
     onTabChange,
     onSelect,
@@ -145,7 +141,6 @@ export function EvidencePanel({
                         tree={tree}
                         subtotal={subtotal}
                         coverage={coverage}
-                        run={run}
                         onSelect={onSelect}
                     />
                 </TabsContent>
