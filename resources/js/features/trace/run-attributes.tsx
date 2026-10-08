@@ -1,3 +1,4 @@
+import { Link } from 'react-router'
 import type { CostState, Trace, UsageState } from '@/api/types'
 import { KeyValue } from '@/components/patterns/key-value'
 import { KeyValueList } from '@/components/patterns/key-value-list'
@@ -8,6 +9,7 @@ import { Timestamp } from '@/components/telemetry/timestamp'
 import { UserLabel } from '@/components/telemetry/user-label'
 import { LastAttempt } from '@/features/trace/last-attempt'
 import { RunPanel } from '@/features/trace/run-panel'
+import { conversationTurnPath } from '@/lib/conversation-path'
 import { formatCount } from '@/lib/format'
 
 const costWords: Record<CostState, string> = {
@@ -95,9 +97,16 @@ export function RunAttributes({
                         label="Conversation id"
                         copy={trace.conversation_id}
                     >
-                        <span className="font-mono text-xs">
+                        <Link
+                            to={conversationTurnPath(
+                                trace.conversation_id,
+                                trace.id,
+                            )}
+                            title="Open the conversation at this run"
+                            className="rounded-sm font-mono text-xs underline-offset-4 hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                        >
                             {trace.conversation_id}
-                        </span>
+                        </Link>
                     </KeyValue>
                 )}
                 {user === null ? null : (

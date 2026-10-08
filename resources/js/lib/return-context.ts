@@ -1,5 +1,8 @@
-/** The longest value of a `from` parameter that is read: far past any list view's query. */
-const maxLength = 2000
+/**
+ * The longest value of a `from` parameter that is read: far past any list view's query, and past
+ * a 255-character conversation id of four-byte characters once it is percent-encoded.
+ */
+const maxLength = 4096
 
 /** Where a detail page was opened from: a path inside the dashboard and its query. */
 export type ReturnTarget = {

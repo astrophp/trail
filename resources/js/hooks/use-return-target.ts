@@ -1,13 +1,14 @@
 import { useMemo } from 'react'
 import { useSearchParams } from 'react-router'
 import { comparePath } from '@/lib/compare-path'
+import { transcriptPath } from '@/lib/conversation-path'
 import { parseReturn, type ReturnTarget } from '@/lib/return-context'
 
 /**
- * The pages a run can be opened from, as route patterns. Conversations and agents join this list
- * when they have a page that lists runs.
+ * The pages a run can be opened from, as route patterns: the list of runs, the comparison and a
+ * conversation's page. Agents join this list when they have a page that lists runs.
  */
-const returnRoutes = ['/traces', comparePath]
+const returnRoutes = ['/traces', comparePath, transcriptPath]
 
 /** The list a detail page leads back to when it was not opened from one. */
 const fallback = '/traces'
@@ -23,24 +24,41 @@ export function useReturnTarget(): ReturnTarget | null {
     return useMemo(() => parseReturn(from, returnRoutes), [from])
 }
 
+/** What a run was opened from: the list of runs, the comparison, a conversation, or nothing. */
+export type BackSource = 'list' | 'comparison' | 'conversation'
+
 /**
- * Where the way back goes and what to call it: the list the run was opened from with the view it
- * had, or the bare list. `from` is the validated target as a `from` value (`null` without one).
+ * Where the way back goes and what to call it: the page the run was opened from with the view it
+ * had, or the bare list. `from` is the validated target as a `from` value, and `null` when the
+ * run has no neighbours to step through (it was opened from the comparison, or from nothing);
+ * `source` says which page it is.
  */
 export function useBackLink(): {
     to: string
     label: string
     from: string | null
+    source: BackSource
 } {
     const target = useReturnTarget()
     const from = target === null ? null : `${target.pathname}${target.search}`
 
-    const comparison = target?.pathname === comparePath
+    const source: BackSource =
+        target?.pathname === comparePath
+            ? 'comparison'
+            : target?.pathname === transcriptPath
+              ? 'conversation'
+              : 'list'
 
-    // Each list will bring its own words. A comparison has no neighbours: `from` is for lists.
     return {
         to: from ?? fallback,
-        label: comparison ? 'Back to comparison' : 'Back to traces',
-        from: comparison ? null : from,
+        label:
+            source === 'comparison'
+                ? 'Back to comparison'
+                : source === 'conversation'
+                  ? 'Back to conversation'
+                  : 'Back to traces',
+        // A comparison has no neighbours: `from` is for lists and conversations.
+        from: source === 'comparison' ? null : from,
+        source,
     }
 }
