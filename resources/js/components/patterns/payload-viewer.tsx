@@ -28,6 +28,11 @@ type PayloadViewerProps = {
     missingReason?: string
     /** The text that stands for a removed value; it is marked wherever it appears. */
     redactionMarker?: string
+    /**
+     * A text is shown as running prose, with no box and no copy button, for where the value is
+     * the content of a message and the frame is the caller's. A structured value is not affected.
+     */
+    plain?: boolean
     className?: string
 }
 
@@ -54,6 +59,7 @@ export function PayloadViewer({
     originalLength,
     missingReason,
     redactionMarker = '[redacted]',
+    plain = false,
     className,
 }: PayloadViewerProps) {
     const container = value !== undefined && isContainer(value) ? value : null
@@ -108,6 +114,32 @@ export function PayloadViewer({
                 <p className="text-ui">
                     <span className="text-muted-foreground">Not captured</span>
                     {missingReason ? ` ${missingReason}` : null}
+                </p>
+            </div>
+        )
+    }
+
+    if (plain && typeof value === 'string') {
+        return (
+            <div
+                data-slot="payload-viewer"
+                data-state="plain"
+                role="group"
+                aria-label={label}
+                className={cn('flex min-w-0 flex-col gap-2', className)}
+            >
+                {notices}
+                <p className="text-ui leading-relaxed">
+                    {value === '' ? (
+                        <span className="text-muted-foreground">
+                            Empty text
+                        </span>
+                    ) : (
+                        <CappedText
+                            text={value}
+                            redactionMarker={redactionMarker}
+                        />
+                    )}
                 </p>
             </div>
         )
