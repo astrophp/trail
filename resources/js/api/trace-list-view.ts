@@ -1,5 +1,6 @@
 import { traceSorts, type TraceListParams, type TraceSort } from '@/api/traces'
 import type { Status } from '@/api/types'
+import { searchParam } from '@/lib/search'
 import { timeRangeParam, type TimeRangePreset } from '@/lib/time-range'
 import {
     boolParam,
@@ -7,7 +8,6 @@ import {
     intParam,
     readState,
     stringParam,
-    type Param,
 } from '@/lib/url-state'
 
 /** The status tabs in the order they are shown, after "All traces". */
@@ -25,19 +25,6 @@ export const statusFilters = ['all', ...statusOrder] as const
 export type StatusFilter = (typeof statusFilters)[number]
 
 export const defaultTraceSort: TraceSort = '-started_at'
-
-/** The API takes at most this many characters of a search. */
-const searchLength = 200
-
-/** What a search means: without the spaces around it, and no longer than the API reads. */
-export function normalizeSearch(text: string): string {
-    return text.trim().slice(0, searchLength)
-}
-
-const searchParam: Param<string> = {
-    ...stringParam(),
-    parse: normalizeSearch,
-}
 
 /**
  * What the list keeps in the URL besides the time range. The names are the API's own
