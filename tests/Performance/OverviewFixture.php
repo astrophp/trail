@@ -42,11 +42,15 @@ final class OverviewFixture
     ];
 
     /**
-     * @return int how many rows were inserted
+     * @param  bool  $spans  also fill `trail_spans`, from a random stream of its own so that the runs are the same either way
+     * @return int how many runs were inserted
      */
-    public static function seed(Connection $db, int $rows, CarbonImmutable $now, int $seed = 20261007): int
+    public static function seed(Connection $db, int $rows, CarbonImmutable $now, int $seed = 20261007, bool $spans = false): int
     {
         mt_srand($seed);
+
+        $spanFixture = $spans ? new SpanFixture($seed) : null;
+        $spanChunk = [];
 
         $names = [];
 
@@ -107,14 +111,27 @@ final class OverviewFixture
                 'updated_at' => $moment,
             ];
 
+            if ($spanFixture !== null) {
+                array_push($spanChunk, ...$spanFixture->forRun(end($chunk), $startedAt));
+            }
+
             if (count($chunk) === self::CHUNK) {
                 $db->table('trail_traces')->insert($chunk);
                 $chunk = [];
+            }
+
+            if (count($spanChunk) >= SpanFixture::CHUNK) {
+                $db->table('trail_spans')->insert($spanChunk);
+                $spanChunk = [];
             }
         }
 
         if ($chunk !== []) {
             $db->table('trail_traces')->insert($chunk);
+        }
+
+        if ($spanChunk !== []) {
+            $db->table('trail_spans')->insert($spanChunk);
         }
 
         return $rows;
