@@ -547,16 +547,33 @@ describe('when filters hide every conversation', () => {
         expect(searchBox()).toHaveFocus()
     })
 
-    it('treats an empty "With failures" tab as a filter that hides everything, and clears it too', async () => {
+    it('says an empty "With failures" tab is about failures, with no filter to clear', async () => {
         mockApi((url) =>
             url.includes('failed=1') ? json(emptyList) : json(listFor(url)),
         )
         renderApp('/conversations?failed=1')
 
         await screen.findByRole('heading', {
-            name: 'No conversations match these filters',
+            name: 'No conversations with failures in this period',
         })
 
+        expect(
+            screen.queryByRole('button', { name: 'Clear filters' }),
+        ).not.toBeInTheDocument()
+        expect(
+            screen.queryByText('No conversations match these filters'),
+        ).not.toBeInTheDocument()
+    })
+
+    it('keeps the no-match state, with its clear button, when the tab and a search are both on', async () => {
+        mockApi((url) =>
+            url.includes('failed=1') ? json(emptyList) : json(listFor(url)),
+        )
+        renderApp('/conversations?failed=1&search=zzz')
+
+        await screen.findByRole('heading', {
+            name: 'No conversations match these filters',
+        })
         await userEvent.click(
             screen.getByRole('button', { name: 'Clear filters' }),
         )

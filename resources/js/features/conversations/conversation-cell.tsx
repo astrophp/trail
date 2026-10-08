@@ -14,6 +14,13 @@ export function agentLine(conversation: Conversation): string {
     )
     const names = conversation.agents.join(', ')
 
+    if (names === '') {
+        // Only the count is known: say so rather than start the line with a bare "+N".
+        return unnamed === 0
+            ? ''
+            : `${formatCount(unnamed)} ${unnamed === 1 ? 'agent' : 'agents'}`
+    }
+
     return unnamed === 0 ? names : `${names} +${formatCount(unnamed)}`
 }
 
@@ -25,6 +32,8 @@ export function ConversationCell({
 }) {
     const prompt = conversation.prompt_excerpt
     const agents = agentLine(conversation)
+    const line =
+        agents === '' ? conversation.id : `${conversation.id} · ${agents}`
 
     return (
         <div className="flex max-w-55 min-w-0 flex-col gap-1 leading-normal md:max-w-85">
@@ -36,11 +45,10 @@ export function ConversationCell({
                 {prompt ?? 'Prompt not captured'}
             </RowLink>
             <p
-                title={conversation.id}
+                title={line}
                 className="truncate font-mono text-caption text-faint"
             >
-                {conversation.id}
-                {agents === '' ? null : ` · ${agents}`}
+                {line}
             </p>
         </div>
     )

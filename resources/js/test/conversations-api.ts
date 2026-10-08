@@ -122,12 +122,24 @@ export const sortButton = (name: RegExp | string) =>
 export const chips = () =>
     within(screen.getByRole('list', { name: 'Active filters' }))
 
+/** The muted line of a conversation's first cell: its id, then its agents. */
+export function lineOf(id: string): HTMLElement {
+    const line = [...document.querySelectorAll('tbody p[title]')].find((p) => {
+        const title = p.getAttribute('title')
+
+        return title === id || title?.startsWith(`${id} · `)
+    })
+
+    if (!(line instanceof HTMLElement)) {
+        throw new Error(`No line for the conversation ${id}.`)
+    }
+
+    return line
+}
+
 /** The row of a conversation, found by its id on the second line of its first cell. */
 export function rowOf(id: string): HTMLElement {
-    const line = [...document.querySelectorAll('tbody p[title]')].find(
-        (p) => p.getAttribute('title') === id,
-    )
-    const found = line?.closest('tr')
+    const found = lineOf(id).closest('tr')
 
     if (!(found instanceof HTMLElement)) {
         throw new Error(`No row for the conversation ${id}.`)

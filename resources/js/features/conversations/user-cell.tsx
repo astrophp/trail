@@ -19,7 +19,7 @@ export function UserCell({ conversation }: { conversation: Conversation }) {
     }
 
     return (
-        <div className="flex min-w-0 flex-col gap-1 leading-normal">
+        <div className="flex max-w-55 min-w-0 flex-col gap-1 leading-normal md:max-w-70">
             {first === undefined ? null : (
                 <>
                     <span className="flex min-w-0 items-baseline gap-1.5">

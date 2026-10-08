@@ -88,4 +88,17 @@ describe('StatusBadge', () => {
         expect(container.firstElementChild).not.toHaveClass('bg-info-soft')
         expect(container.firstElementChild).not.toHaveClass('rounded-full')
     })
+
+    it('can draw only the icon, keeping the given words for assistive technology and as a tooltip', () => {
+        const { container } = render(
+            <StatusBadge status="running" iconOnly label="2 running" />,
+        )
+
+        expect(container.firstElementChild).toHaveAttribute(
+            'title',
+            '2 running',
+        )
+        expect(screen.getByText('2 running')).toHaveClass('sr-only')
+        expect(screen.queryByText('Running')).not.toBeInTheDocument()
+    })
 })

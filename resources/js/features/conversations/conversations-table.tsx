@@ -24,8 +24,17 @@ export function ConversationsTable({
     searchRef: RefObject<HTMLInputElement | null>
     className?: string
 }) {
-    const { view, sort, page, hasFilters, setSort, setPage, clearAll } =
-        useConversationList()
+    const {
+        view,
+        sort,
+        page,
+        hasFilters,
+        activeFilters,
+        failed: failedTab,
+        setSort,
+        setPage,
+        clearAll,
+    } = useConversationList()
     const { data, isError, error, refetch, isFetching, isPlaceholderData } =
         useConversations(view)
 
@@ -41,7 +50,10 @@ export function ConversationsTable({
     })
 
     // The retry button, or the button of a no-match state, goes away when rows replace it.
-    useFocusHandoff(failed || (empty && hasFilters))
+    // Only the tab is on: an empty answer there is about the tab, not about a filter to remove.
+    const onlyFailures = failedTab && activeFilters.length === 0
+
+    useFocusHandoff(failed || (empty && hasFilters && !onlyFailures))
 
     if (failed) {
         return (
@@ -70,7 +82,13 @@ export function ConversationsTable({
                 caption="Recorded conversations"
                 empty={
                     empty ? (
-                        hasFilters ? (
+                        onlyFailures ? (
+                            <EmptyState
+                                icon={MessageSquareIcon}
+                                title="No conversations with failures in this period"
+                                description="No conversation active in this period has a failed or incomplete turn."
+                            />
+                        ) : hasFilters ? (
                             <EmptyState
                                 icon={SearchXIcon}
                                 title="No conversations match these filters"

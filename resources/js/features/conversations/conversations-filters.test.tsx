@@ -186,7 +186,7 @@ describe('the chips', () => {
         )
     })
 
-    it('"Clear all" clears every filter including the tab, keeps the sort and moves focus to the search box', async () => {
+    it('"Clear all" clears the chips only, keeps the sort and the tab, and moves focus to the search box', async () => {
         renderApp(
             '/conversations?sort=-cost&search=refund&agent=Refunds&failed=1',
         )
@@ -194,11 +194,8 @@ describe('the chips', () => {
 
         await userEvent.click(screen.getByRole('button', { name: 'Clear all' }))
 
-        await expectSearch('?sort=-cost')
+        await expectSearch('?sort=-cost&failed=1')
         expect(searchBox()).toHaveFocus()
-        expect(tab(/^All conversations/)).toHaveAttribute(
-            'aria-selected',
-            'true',
-        )
+        expect(tab(/^With failures/)).toHaveAttribute('aria-selected', 'true')
     })
 })

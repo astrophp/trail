@@ -5,6 +5,7 @@ import { renderApp } from '@/test/render-app'
 import {
     cellsOf,
     json,
+    lineOf,
     listOf,
     loaded,
     mockApi,
@@ -68,9 +69,9 @@ describe('the conversation cell', () => {
         expect(
             within(header).getByRole('link', { name: 'Approve it' }),
         ).toHaveAttribute('href', '/trail/conversations/conversation-shared')
-        expect(
-            within(header).getByTitle('conversation-shared'),
-        ).toHaveTextContent('conversation-shared · Refunds, SupportAssistant')
+        expect(lineOf('conversation-shared')).toHaveTextContent(
+            'conversation-shared · Refunds, SupportAssistant',
+        )
     })
 
     it('says the prompt was not captured, and still links, when the latest turn has none', async () => {
@@ -102,16 +103,41 @@ describe('the conversation cell', () => {
             }),
         )
 
-        expect(within(rowOf(id)).getByTitle(id)).toHaveTextContent(
+        expect(lineOf(id)).toHaveTextContent(
             'many-agents · Alpha, Beta, Gamma, Delta, Epsilon +3',
         )
+    })
+
+    it('counts the agents instead of starting with "+N" when the list is empty', async () => {
+        const id = 'no-names'
+        await showing(made(id, { agents: [], agent_count: 3 }))
+
+        expect(
+            within(rowOf(id)).getByTitle(`${id} · 3 agents`),
+        ).toHaveTextContent('no-names · 3 agents')
+    })
+
+    it('puts the agents in the tooltip too, since the line is cut to the cell', async () => {
+        const id = 'long-line'
+        await showing(
+            made(id, {
+                agents: ['Refunds', 'SupportAssistant'],
+                agent_count: 5,
+            }),
+        )
+
+        expect(
+            within(rowOf(id)).getByTitle(
+                'long-line · Refunds, SupportAssistant +3',
+            ),
+        ).toBeInTheDocument()
     })
 
     it('adds nothing when the list is the whole count', async () => {
         const id = 'two-agents'
         await showing(made(id, { agents: ['Alpha', 'Beta'], agent_count: 2 }))
 
-        const line = within(rowOf(id)).getByTitle(id).textContent
+        const line = lineOf(id).textContent
 
         expect(line).toBe('two-agents · Alpha, Beta')
         expect(line).not.toContain('+')
@@ -190,7 +216,7 @@ describe('the turns cell', () => {
         const marker = cell.querySelector('[data-slot="status-badge"]')
 
         expect(marker).toHaveAttribute('data-status', 'running')
-        expect(marker).toHaveTextContent('Running')
+        expect(marker).toHaveTextContent('1 running')
         expect(cell).toHaveTextContent('2 turns')
         expect(within(cell).getByTitle('1 running')).toBeInTheDocument()
     })
@@ -205,7 +231,7 @@ describe('the turns cell', () => {
         const marker = cell.querySelector('[data-slot="status-badge"]')
 
         expect(marker).toHaveAttribute('data-status', 'awaiting_approval')
-        expect(marker).toHaveTextContent('Awaiting approval')
+        expect(marker).toHaveTextContent('1 awaiting approval')
         expect(
             within(cell).getByTitle('1 awaiting approval'),
         ).toBeInTheDocument()
@@ -239,6 +265,9 @@ describe('the turns cell', () => {
             ),
         ).toEqual(['running', 'awaiting_approval'])
         expect(cell).toHaveTextContent('5 turns')
+        // The counts reach assistive technology, not only a tooltip.
+        expect(cell).toHaveTextContent('2 running')
+        expect(cell).toHaveTextContent('1 awaiting approval')
     })
 })
 

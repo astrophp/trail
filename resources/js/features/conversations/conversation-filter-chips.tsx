@@ -10,7 +10,7 @@ export function ConversationFilterChips({
     searchRef: RefObject<HTMLInputElement | null>
     className?: string
 }) {
-    const { activeFilters, clear, clearAll } = useConversationList()
+    const { activeFilters, clear } = useConversationList()
 
     return (
         <FilterChips
@@ -21,7 +21,8 @@ export function ConversationFilterChips({
             }))}
             focusWhenEmpty={searchRef}
             className={className}
-            onClearAll={clearAll}
+            // The tab is not a chip, so "Clear all" leaves it where it is.
+            onClearAll={() => clear(['search', 'agent'])}
         />
     )
 }
