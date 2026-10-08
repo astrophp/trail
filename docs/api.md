@@ -887,6 +887,27 @@ validated.
   view, or an unknown run, takes two. The `slow` filter adds the two reads the list makes for its
   threshold.
 
+#### `within=conversation`
+
+Takes the turns of the run's own conversation instead of a view of the list, so a page opened
+from a conversation's transcript steps through that conversation. The response has the same
+shape.
+
+- `previous` is the turn of the conversation that started just before this run and `next` the
+  one that started just after it, in the order of the transcript: `started_at` ascending, turns
+  that started together by id ascending. `next` is therefore the later turn. Stepping `next` from
+  the first turn visits every turn of the conversation once, as `GET /api/conversations/transcript`
+  lists them, and ends with `null`; `previous` does the same backwards.
+- The conversation is whole. The time range, every filter and `sort` are ignored, not validated:
+  a link built for the list may carry them and they change nothing, even when they would leave
+  the run out of that view. The conversation is the run's own `conversation_id`; none is sent.
+- A run without a conversation answers `{ "previous": null, "next": null }`, as does the only
+  turn of a conversation. Runs of other conversations and runs without one are never neighbours.
+- Any other value of `within` is a `422` for `within`, in the shape of every validation error.
+  An unknown run, and an id that cannot be a run's, are a `404` as without it.
+- Three reads at most whatever the length of the conversation: the run, then one row for each
+  neighbour. A run without a conversation, or an unknown run, takes one.
+
 ### `PUT /api/traces/{id}/bookmark`, `DELETE /api/traces/{id}/bookmark`
 
 Bookmarks the run, or removes its bookmark. These are the API's first writes. Both are

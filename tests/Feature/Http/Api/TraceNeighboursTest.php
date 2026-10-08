@@ -372,3 +372,177 @@ describe('cost of the read', function () {
             ->and($many)->toBe([3, 3, 2]);
     });
 });
+
+/*
+|--------------------------------------------------------------------------
+| Within a conversation
+|--------------------------------------------------------------------------
+|
+| The neighbours of a turn are the turns of its own conversation, in the order of the transcript.
+|
+*/
+
+/**
+ * A conversation of turns that share a start, differ by milliseconds and start a second apart,
+ * beside the runs of other conversations and runs without one, started in between.
+ */
+function conversationDataset(): void
+{
+    foreach (['tie-b', 'tie-a', 'tie-d', 'tie-c'] as $id) {
+        Rows::trace(['id' => $id, 'status' => Status::Completed, 'conversation_id' => 'conv', 'started_at' => '2026-01-02 09:00:00.500']);
+    }
+
+    foreach (['ms-z' => '.503', 'ms-x' => '.501', 'ms-y' => '.502'] as $id => $milliseconds) {
+        Rows::trace(['id' => $id, 'status' => Status::Completed, 'conversation_id' => 'conv', 'started_at' => '2026-01-02 09:00:00'.$milliseconds]);
+    }
+
+    foreach (['late-q', 'late-p'] as $id) {
+        Rows::trace(['id' => $id, 'status' => Status::Failed, 'conversation_id' => 'conv', 'started_at' => '2026-01-02 09:00:01.000']);
+    }
+
+    // None of these may appear as a neighbour of a turn.
+    Rows::trace(['id' => 'other-1', 'status' => Status::Completed, 'conversation_id' => 'other', 'started_at' => '2026-01-02 09:00:00.500']);
+    Rows::trace(['id' => 'other-2', 'status' => Status::Completed, 'conversation_id' => 'conv-2', 'started_at' => '2026-01-02 09:00:00.502']);
+    Rows::trace(['id' => 'loose-1', 'status' => Status::Completed, 'started_at' => '2026-01-02 09:00:00.501']);
+    Rows::trace(['id' => 'loose-2', 'status' => Status::Completed, 'started_at' => '2026-01-02 09:00:00.600']);
+}
+
+/**
+ * @return list<string>
+ */
+function transcriptOrder(mixed $test, string $conversation): array
+{
+    $response = $test->getJson('/trail/api/conversations/transcript?limit=100&id='.rawurlencode($conversation));
+    $response->assertOk();
+
+    return array_map(fn (array $turn): string => $turn['trace']['id'], $response->json('data.turns'));
+}
+
+describe('within a conversation', function () {
+    it('steps through the turns in the order of the transcript, both ways', function () {
+        conversationDataset();
+
+        $order = transcriptOrder($this, 'conv');
+
+        expect($order)->toBe(['tie-a', 'tie-b', 'tie-c', 'tie-d', 'ms-x', 'ms-y', 'ms-z', 'late-p', 'late-q'])
+            ->and(walkFrom($this, $order[0], 'next', 'within=conversation'))->toBe($order)
+            ->and(walkFrom($this, $order[8], 'previous', 'within=conversation'))->toBe(array_reverse($order));
+    });
+
+    it('answers the turn before and the turn after a first, a middle and a last turn', function () {
+        conversationDataset();
+
+        expect(neighboursOf($this, 'tie-a', 'within=conversation'))->toBe(['previous' => null, 'next' => 'tie-b'])
+            ->and(neighboursOf($this, 'tie-d', 'within=conversation'))->toBe(['previous' => 'tie-c', 'next' => 'ms-x'])
+            ->and(neighboursOf($this, 'ms-y', 'within=conversation'))->toBe(['previous' => 'ms-x', 'next' => 'ms-z'])
+            ->and(neighboursOf($this, 'late-q', 'within=conversation'))->toBe(['previous' => 'late-p', 'next' => null]);
+    });
+
+    it('has neither neighbour for the only turn of a conversation', function () {
+        conversationDataset();
+        Rows::trace(['id' => 'solo', 'status' => Status::Completed, 'conversation_id' => 'solo-conv', 'started_at' => '2026-01-02 09:00:00.550']);
+
+        expect(neighboursOf($this, 'solo', 'within=conversation'))->toBe(['previous' => null, 'next' => null])
+            ->and(neighboursOf($this, 'solo'))->not->toBe(['previous' => null, 'next' => null]);
+    });
+
+    it('never offers a run of another conversation or a run without one', function () {
+        conversationDataset();
+
+        $offered = [];
+
+        foreach (Trace::query()->where('conversation_id', 'conv')->pluck('id') as $id) {
+            $offered = [...$offered, ...array_values(neighboursOf($this, $id, 'within=conversation'))];
+        }
+
+        expect(array_filter($offered))->not->toContain('other-1', 'other-2', 'loose-1', 'loose-2')
+            ->and(neighboursOf($this, 'other-1', 'within=conversation'))->toBe(['previous' => null, 'next' => null])
+            ->and(neighboursOf($this, 'other-2', 'within=conversation'))->toBe(['previous' => null, 'next' => null]);
+    });
+
+    it('answers no neighbours for a run without a conversation', function () {
+        conversationDataset();
+
+        // Two runs without one, started a moment apart, are not a conversation.
+        expect(neighboursOf($this, 'loose-1', 'within=conversation'))->toBe(['previous' => null, 'next' => null])
+            ->and(neighboursOf($this, 'loose-2', 'within=conversation'))->toBe(['previous' => null, 'next' => null])
+            ->and(neighboursOf($this, 'loose-1'))->not->toBe(['previous' => null, 'next' => null]);
+    });
+
+    it('ignores the range, the filters and the sort, even when they leave the run out', function () {
+        conversationDataset();
+        Rows::trace(['id' => 'old', 'name' => 'Old agent', 'status' => Status::Completed, 'conversation_id' => 'conv', 'started_at' => '2025-06-01 09:00:00']);
+
+        $order = ['old', 'tie-a', 'tie-b', 'tie-c', 'tie-d', 'ms-x', 'ms-y', 'ms-z', 'late-p', 'late-q'];
+        $expected = ['previous' => 'tie-c', 'next' => 'ms-x'];
+
+        expect(neighboursOf($this, 'tie-d', 'within=conversation&range=1h&status=running&agent=Nobody&sort=-cost&slow=1&bookmarked=1&conversation=other&provider=x'))->toBe($expected)
+            ->and(neighboursOf($this, 'old', 'within=conversation&range=1h&status=failed'))->toBe(['previous' => null, 'next' => 'tie-a'])
+            ->and(neighboursOf($this, 'tie-d', 'within=conversation&from=2026-01-01T00:00:00&to=2026-01-01T01:00:00'))->toBe($expected)
+            ->and(walkFrom($this, 'old', 'next', 'within=conversation&sort=agent&status=failed&range=1h'))->toBe($order)
+            // Not validated either: nonsense in a link built elsewhere does not refuse it.
+            ->and(neighboursOf($this, 'tie-d', 'within=conversation&sort=cheapest&range=2d&status=sleeping&page=abc'))->toBe($expected);
+    });
+
+    it('answers a 422 for any other value of within', function (string $query) {
+        conversationDataset();
+
+        $this->getJson("/trail/api/traces/tie-a/neighbours?{$query}")->assertUnprocessable()->assertJsonValidationErrors(['within']);
+    })->with([
+        'unknown' => ['within=list'],
+        'case' => ['within=Conversation'],
+        'array' => ['within[]=conversation'],
+    ]);
+
+    it('behaves as before without it', function () {
+        conversationDataset();
+
+        expect(neighboursOf($this, 'tie-d'))->toBe(neighboursOf($this, 'tie-d', 'sort=-started_at'))
+            ->and(neighboursOf($this, 'tie-d')['next'])->not->toBe('ms-x')
+            ->and(neighboursOf($this, 'tie-d', 'within='))->toBe(neighboursOf($this, 'tie-d'));
+    });
+
+    it('answers a 404 for an unknown run and for an id that cannot be a run', function () {
+        conversationDataset();
+
+        $this->getJson('/trail/api/traces/nothing/neighbours?within=conversation')->assertNotFound()->assertJsonStructure(['message']);
+
+        $queries = 0;
+        DB::listen(function () use (&$queries) {
+            $queries++;
+        });
+
+        $this->getJson('/trail/api/traces/'.str_repeat('x', 65).'/neighbours?within=conversation')->assertNotFound();
+        $this->getJson('/trail/api/traces/a%00b/neighbours?within=conversation')->assertNotFound();
+
+        expect($queries)->toBe(0);
+    });
+
+    it('runs the same few queries for three turns as for three hundred', function () {
+        $queries = function (string $id): int {
+            $count = 0;
+            DB::listen(function () use (&$count) {
+                $count++;
+            });
+
+            $this->getJson("/trail/api/traces/{$id}/neighbours?within=conversation")->assertOk();
+
+            return $count;
+        };
+
+        foreach (range(1, 3) as $i) {
+            Rows::trace(['id' => sprintf('turn-%03d', $i), 'status' => Status::Completed, 'conversation_id' => 'long', 'started_at' => '2026-01-02 09:00:00']);
+        }
+
+        Rows::trace(['id' => 'loose', 'status' => Status::Completed]);
+        $few = [$queries('turn-002'), $queries('turn-001'), $queries('loose')];
+
+        foreach (range(4, 300) as $i) {
+            Rows::trace(['id' => sprintf('turn-%03d', $i), 'status' => Status::Completed, 'conversation_id' => 'long', 'started_at' => '2026-01-02 09:00:00']);
+        }
+
+        expect([$queries('turn-002'), $queries('turn-001'), $queries('loose')])->toBe($few)
+            // The run, then one row for each neighbour; a run without a conversation takes one read.
+            ->and($few)->toBe([3, 3, 1]);
+    });
+});

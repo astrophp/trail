@@ -31,6 +31,46 @@ final class ConversationTurns
     }
 
     /**
+     * The turns of a run's own conversation that started just before it and just after it, in the
+     * transcript's order. Null when there is no such run; a run without a conversation has neither
+     * neighbour.
+     *
+     * Three reads at most whatever the conversation's length: the run, then one row for each
+     * neighbour. The conversation and the run's start are compared inside the database against the
+     * stored values of the run, never bound from PHP.
+     *
+     * @return array{previous: ?string, next: ?string}|null
+     */
+    public function neighbours(string $id): ?array
+    {
+        $run = Trace::query()->toBase()->where('id', $id)->first(['id', 'conversation_id']);
+
+        if ($run === null) {
+            return null;
+        }
+
+        if (! is_string($run->conversation_id) || ! is_string($run->id)) {
+            return ['previous' => null, 'next' => null];
+        }
+
+        return [
+            'previous' => $this->neighbour($run->id, after: false),
+            'next' => $this->neighbour($run->id, after: true),
+        ];
+    }
+
+    private function neighbour(string $pivotId, bool $after): ?string
+    {
+        $conversation = Trace::query()->toBase()->from((new Trace)->getTable().' as pivot')->select('pivot.conversation_id')->where('pivot.id', $pivotId);
+        $direction = $after ? 'asc' : 'desc';
+
+        $found = $this->past(Trace::query()->toBase()->where('conversation_id', '=', $conversation), $pivotId, $after ? '>' : '<', inclusive: false)
+            ->orderBy('started_at', $direction)->orderBy('id', $direction)->limit(1)->value('id');
+
+        return is_string($found) ? $found : null;
+    }
+
+    /**
      * The turns of the window, oldest first.
      *
      * @param  string|null  $anchor  `turn`, `before` or `after`
