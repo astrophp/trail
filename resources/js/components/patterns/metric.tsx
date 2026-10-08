@@ -1,0 +1,69 @@
+import { useId, type ComponentProps, type ReactNode } from 'react'
+import { metricCellClassName } from '@/components/patterns/metric-strip-styles'
+import { RowLink } from '@/components/patterns/row-link'
+import { cn } from '@/lib/utils'
+
+type MetricProps = {
+    label: string
+    /** The value, drawn as given: the caller passes a component that knows how to format it. */
+    children: ReactNode
+    /** How the value moved, usually a `Change`. Under the value. */
+    change?: ReactNode
+    /** A small secondary line beside the change, such as "27 failed". */
+    detail?: ReactNode
+    /** Makes the whole metric a link to the evidence behind it. */
+    to?: ComponentProps<typeof RowLink>['to']
+    className?: string
+}
+
+/**
+ * One figure of a `MetricStrip`: its label, its value, and optionally how it moved and a detail.
+ * With `to` the label is the one link and its target covers the whole metric.
+ */
+export function Metric({
+    label,
+    children,
+    change,
+    detail,
+    to,
+    className,
+}: MetricProps) {
+    const valueId = useId()
+
+    return (
+        <div
+            data-slot="metric"
+            className={cn(
+                metricCellClassName,
+                'flex flex-wrap content-start items-center gap-x-1.5 gap-y-1',
+                className,
+            )}
+        >
+            <dt className="basis-full text-xs text-muted-foreground">
+                {to === undefined ? (
+                    label
+                ) : (
+                    <RowLink
+                        to={to}
+                        aria-describedby={valueId}
+                        className="font-normal text-muted-foreground"
+                    >
+                        {label}
+                    </RowLink>
+                )}
+            </dt>
+            <dd
+                id={valueId}
+                className="mt-1 basis-full text-title-compact text-foreground tabular-nums @3xl:text-title"
+            >
+                {children}
+            </dd>
+            {change ? <dd className="mt-1.5">{change}</dd> : null}
+            {detail ? (
+                <dd className="mt-1.5 text-caption text-muted-foreground">
+                    {detail}
+                </dd>
+            ) : null}
+        </div>
+    )
+}
