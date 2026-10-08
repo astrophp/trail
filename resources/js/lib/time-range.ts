@@ -10,6 +10,13 @@ export const defaultTimeRange: TimeRangePreset = '24h'
 /** The time range as the URL keeps it, under `range`. */
 export const timeRangeParam = enumParam(timeRangePresets, defaultTimeRange)
 
+/** The length of each range as a period, for "the previous 24 hours". */
+export const timeRangePeriods: Record<TimeRangePreset, string> = {
+    '1h': 'hour',
+    '24h': '24 hours',
+    '7d': '7 days',
+}
+
 /** How each range reads in the interface, in the order the presets are offered. */
 export const timeRangeLabels: Record<TimeRangePreset, string> = {
     '1h': 'Last hour',

@@ -6,6 +6,7 @@ import {
     formatDateTime,
     formatDuration,
     formatOffset,
+    formatRate,
     formatRelativeTime,
     formatDayAndClock,
     formatShortDate,
@@ -63,6 +64,21 @@ describe('formatCount', () => {
         [1_234_567, '1,234,567'],
     ])('formats %s as %s', (count, text) => {
         expect(formatCount(count)).toBe(text)
+    })
+})
+
+describe('formatRate', () => {
+    it.each([
+        [0, '0.0%'],
+        [0.0357142857, '3.6%'],
+        [0.5, '50.0%'],
+        [1, '100.0%'],
+        [0.0005, '0.1%'],
+        [0.0004, '<0.1%'],
+        [0.9994, '99.9%'],
+        [0.9996, '>99.9%'],
+    ])('formats %s as %s', (rate, text) => {
+        expect(formatRate(rate)).toBe(text)
     })
 })
 

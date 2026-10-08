@@ -14,6 +14,7 @@ import { ComparePage } from '@/pages/compare-page'
 import { ConversationPage } from '@/pages/conversation-page'
 import { ConversationsPage } from '@/pages/conversations-page'
 import { NotFoundPage } from '@/pages/not-found-page'
+import { OverviewPage } from '@/pages/overview-page'
 import { PlaceholderPage } from '@/pages/placeholder-page'
 import { TracePage } from '@/pages/trace-page'
 import { TracesPage } from '@/pages/traces-page'
@@ -43,7 +44,7 @@ export const routeTable: RouteDef[] = [
     {
         path: '/',
         title: 'Overview',
-        element: <PlaceholderPage title="Overview" />,
+        element: <OverviewPage />,
         section: 'overview',
         icon: LayoutDashboardIcon,
     },

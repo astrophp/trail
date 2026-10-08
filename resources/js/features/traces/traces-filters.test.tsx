@@ -90,6 +90,27 @@ describe('the URL drives every filter', () => {
         expect(chips().getByText('Bookmarked')).toBeVisible()
     })
 
+    it('reads slow from the address, asks the API for it and shows a chip that removes it', async () => {
+        const fetchMock = mockApi()
+        renderApp('/traces?slow=1')
+        await loaded()
+
+        expect(paramsOf(lastTraceUrl(fetchMock)).slow).toBe('1')
+        expect(
+            chips().getByText('Slow: 95th percentile and above'),
+        ).toBeVisible()
+
+        await userEvent.click(
+            screen.getByRole('button', {
+                name: /Remove filter: Slow: 95th percentile and above/,
+            }),
+        )
+        await expectSearch('')
+
+        expect(paramsOf(lastTraceUrl(fetchMock)).slow).toBeUndefined()
+        noChips()
+    })
+
     it('shows no chip and sends no filter for the default view', async () => {
         const fetchMock = mockApi()
         renderApp('/traces')
