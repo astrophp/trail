@@ -30,6 +30,7 @@ export function TraceView({
             {data ? (
                 <LoadedTrace
                     data={data.data}
+                    spanLimit={data.span_limit}
                     onBookmarkChange={onBookmarkChange}
                 />
             ) : query.isError ? (
