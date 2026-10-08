@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { SpanLimit, TraceDetailResponse } from '@/api/types'
+import { Notice } from '@/components/patterns/notice'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { buildSpanTree } from '@/features/trace/build-span-tree'
 import { ExecutionView } from '@/features/trace/execution-view'
 import { RunMetadata } from '@/features/trace/run-metadata'
 import { RunNotices } from '@/features/trace/run-notices'
+import { shownSelection } from '@/features/trace/shown-selection'
 import { tabList, tabTrigger } from '@/features/trace/tab-styles'
+import { TraceFooter } from '@/features/trace/trace-footer'
 import { TraceHeader } from '@/features/trace/trace-header'
 import {
     traceParams,
@@ -14,6 +17,9 @@ import {
 } from '@/features/trace/trace-params'
 import type { Refreshing } from '@/features/trace/use-trace'
 import { UsageView } from '@/features/trace/usage-view'
+import { useFocusAfterStep } from '@/features/trace/use-focus-after-step'
+import { useRestoredLink } from '@/features/trace/use-restored-link'
+import { useSpanSelection } from '@/features/trace/use-span-selection'
 import { useUrlState } from '@/hooks/use-url-state'
 import { cn } from '@/lib/utils'
 
@@ -57,16 +63,33 @@ export function LoadedTrace({
         },
         [setParams],
     )
+    const { selectedId, shown } = useMemo(
+        () => shownSelection(tree, trace.status, { view, span, tab }),
+        [tree, trace.status, view, span, tab],
+    )
+    useFocusAfterStep()
+    const { write, back } = useSpanSelection(span, setParams)
+    const selectSpan = useCallback((id: string) => write({ span: id }), [write])
     const execution = useRef<HTMLDivElement>(null)
+    const restored = useRestoredLink({
+        tree,
+        status: trace.status,
+        span,
+        tab,
+        truncated: spanLimit.truncated,
+        selectedId,
+        setParams,
+        root: execution,
+    })
     // The span opened from the usage table, whose row in the tree takes focus once it is shown.
     const [focusRow, setFocusRow] = useState<string | null>(null)
     // One write: the view goes back to the tree and the span is the one chosen.
     const openSpan = useCallback(
         (id: string) => {
-            setParams({ view: 'execution', span: id }, { replace: true })
+            write({ view: 'execution', span: id })
             setFocusRow(id)
         },
-        [setParams],
+        [write],
     )
 
     // The table that held focus is gone: without this, focus would fall to the page.
@@ -95,8 +118,17 @@ export function LoadedTrace({
             <TraceHeader
                 trace={trace}
                 error={detail.error}
+                shown={shown}
                 onBookmarkChange={onBookmarkChange}
             />
+            {restored.message === null ? null : (
+                <Notice
+                    tone="info"
+                    title={restored.message}
+                    onDismiss={restored.dismiss}
+                    dismissLabel="Dismiss this note"
+                />
+            )}
             <RunNotices
                 data={data}
                 tree={tree}
@@ -129,9 +161,12 @@ export function LoadedTrace({
                     <ExecutionView
                         data={data}
                         tree={tree}
+                        selectedId={selectedId}
                         span={span}
                         tab={tab}
                         setParams={setParams}
+                        onSelect={selectSpan}
+                        onBack={back}
                     />
                 </TabsContent>
                 <TabsContent value="usage">
@@ -145,6 +180,7 @@ export function LoadedTrace({
                     <RunMetadata data={data} spanLimit={spanLimit} />
                 </TabsContent>
             </Tabs>
+            <TraceFooter traceId={trace.id} />
         </div>
     )
 }

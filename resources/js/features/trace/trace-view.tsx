@@ -43,6 +43,8 @@ export function TraceView({
                 <TraceNotFound />
             ) : data ? (
                 <LoadedTrace
+                    // A run keeps nothing of the one before it.
+                    key={data.data.trace.id}
                     data={data.data}
                     spanLimit={data.span_limit}
                     staleAfter={staleAfter}

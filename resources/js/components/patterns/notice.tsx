@@ -45,6 +45,8 @@ type NoticeProps = {
     action?: ReactNode
     /** Shows a "Dismiss" button that calls it. The caller decides whether to remember the choice. */
     onDismiss?: () => void
+    /** The dismiss button's accessible name, when "Dismiss" alone is not specific enough. */
+    dismissLabel?: string
     className?: string
 }
 
@@ -59,6 +61,7 @@ export function Notice({
     children,
     action,
     onDismiss,
+    dismissLabel = 'Dismiss',
     className,
 }: NoticeProps) {
     const Icon = icons[tone]
@@ -91,7 +94,7 @@ export function Notice({
                     <Button
                         variant="ghost"
                         size="icon-xs"
-                        aria-label="Dismiss"
+                        aria-label={dismissLabel}
                         onClick={onDismiss}
                     >
                         <XIcon aria-hidden="true" />

@@ -4,6 +4,7 @@ import type {
     Status,
     TraceDetailResponse,
     TraceListResponse,
+    TraceNeighboursResponse,
 } from '@/api/types'
 import type { TimeRangePreset } from '@/lib/time-range'
 
@@ -51,8 +52,19 @@ export const traceKeys = {
     all: ['traces'] as const,
     list: ['traces', 'list'] as const,
     detail: (id: string) => ['traces', 'detail', id] as const,
+    /** A run's neighbours in one view of the list; the page is no part of the view. */
+    neighbours: (id: string, params: TraceListParams) =>
+        ['traces', 'neighbours', id, withoutPage(params)] as const,
     /** The key of every bookmark write, so a reader can tell that one is under way. */
     bookmark: ['bookmark'] as const,
+}
+
+/** The parameters of a view of the list: everything but the page, which the neighbours ignore. */
+function withoutPage(params: TraceListParams): Omit<TraceListParams, 'page'> {
+    const view: TraceListParams = { ...params }
+    delete view.page
+
+    return view
 }
 
 const tracePath = (id: string) => `/traces/${encodeURIComponent(id)}`
@@ -63,6 +75,21 @@ export function fetchTrace(
     signal?: AbortSignal,
 ): Promise<TraceDetailResponse> {
     return apiRequest<TraceDetailResponse>(tracePath(id), { signal })
+}
+
+/**
+ * The runs listed just before and just after this one in a view of the list (`params` as the list
+ * asks for it; the page is left out). Both are `null` when the run is not in the view.
+ */
+export function fetchNeighbours(
+    id: string,
+    params: TraceListParams,
+    signal?: AbortSignal,
+): Promise<TraceNeighboursResponse> {
+    return apiRequest<TraceNeighboursResponse>(`${tracePath(id)}/neighbours`, {
+        params: withoutPage(params),
+        signal,
+    })
 }
 
 const bookmarkPath = (id: string) => `${tracePath(id)}/bookmark`

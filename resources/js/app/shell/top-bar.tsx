@@ -16,13 +16,13 @@ import { Kbd } from '@/components/ui/kbd'
 import { SidebarTrigger, useSidebar } from '@/components/ui/sidebar'
 import { useBoot } from '@/hooks/use-boot'
 import { useCurrentPageTitle } from '@/hooks/use-page-title'
-import { useTimeRangeLink } from '@/hooks/use-time-range'
+import { useReturnTarget } from '@/hooks/use-return-target'
 
 export function TopBar({ triggerRef }: { triggerRef: Ref<HTMLButtonElement> }) {
     const boot = useBoot()
     const { pathname } = useLocation()
     const { openMobile } = useSidebar()
-    const linkTo = useTimeRangeLink()
+    const back = useReturnTarget()
     const trail = breadcrumbTrail(resolveRoute(pathname), useCurrentPageTitle())
 
     return (
@@ -52,7 +52,14 @@ export function TopBar({ triggerRef }: { triggerRef: Ref<HTMLButtonElement> }) {
                                 <BreadcrumbItem className="min-w-0">
                                     {crumb.to ? (
                                         <BreadcrumbLink asChild>
-                                            <Link to={linkTo(crumb.to)}>
+                                            <Link
+                                                to={
+                                                    // A run opened from a list leads back to that view of it.
+                                                    back?.pathname === crumb.to
+                                                        ? `${back.pathname}${back.search}`
+                                                        : crumb.to
+                                                }
+                                            >
                                                 {crumb.title}
                                             </Link>
                                         </BreadcrumbLink>

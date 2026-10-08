@@ -82,6 +82,21 @@ describe('Notice', () => {
         expect(onDismiss).toHaveBeenCalledOnce()
     })
 
+    it('can name its dismiss button more specifically', () => {
+        render(
+            <Notice
+                tone="info"
+                title="x"
+                onDismiss={() => {}}
+                dismissLabel="Dismiss this note"
+            />,
+        )
+
+        expect(
+            screen.getByRole('button', { name: 'Dismiss this note' }),
+        ).toBeInTheDocument()
+    })
+
     it('takes a class name', () => {
         render(<Notice tone="info" title="x" className="extra" />)
 

@@ -7,7 +7,7 @@ const hrefs = (links: HTMLElement[]) =>
     links.map((link) => link.getAttribute('href'))
 
 describe('the time range across pages', () => {
-    it('is carried by the sidebar and the breadcrumb, and nothing else is', () => {
+    it('is carried by the sidebar, and nothing else is (the breadcrumb of a run leads to the bare list, like its back link)', () => {
         renderApp('/traces/abc?range=7d&sort=duration&page=2')
 
         expect(hrefs(within(nav()).getAllByRole('link'))).toEqual([
@@ -24,7 +24,7 @@ describe('the time range across pages', () => {
             within(
                 screen.getByRole('navigation', { name: 'breadcrumb' }),
             ).getByRole('link', { name: 'Traces' }),
-        ).toHaveAttribute('href', '/trail/traces?range=7d')
+        ).toHaveAttribute('href', '/trail/traces')
     })
 
     it('leaves the links bare for the default range', () => {
