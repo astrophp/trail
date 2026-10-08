@@ -4,11 +4,10 @@
     "type": "module",
     "scripts": {
         "dev": "vite build --watch",
-        "build": "vite build && npm run size",
-        "size": "node scripts/bundle-size.mjs",
+        "build": "vite build",
         "catalogue": "vite resources/js/catalogue --config vite.config.ts --port 5175",
-        "lint": "eslint . && prettier --check resources/js scripts *.ts *.js *.json",
-        "format": "prettier --write resources/js scripts *.ts *.js *.json && eslint . --fix",
+        "lint": "eslint . && prettier --check resources/js *.ts *.js *.json",
+        "format": "prettier --write resources/js *.ts *.js *.json && eslint . --fix",
         "typecheck": "tsc --noEmit",
         "test": "vitest run"
     },
