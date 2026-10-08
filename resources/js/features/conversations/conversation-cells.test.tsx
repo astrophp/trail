@@ -70,18 +70,18 @@ describe('the conversation cell', () => {
             within(header).getByRole('link', { name: 'Approve it' }),
         ).toHaveAttribute('href', '/trail/conversations/conversation-shared')
         expect(lineOf('conversation-shared')).toHaveTextContent(
-            'conversation-shared · Refunds, SupportAssistant',
+            'conversa…ared · Refunds, SupportAssistant',
         )
     })
 
-    it('says the prompt was not captured, and still links, when the latest turn has none', async () => {
+    it('says no prompt is stored, and still links, when the latest turn has none', async () => {
         renderApp('/conversations')
         await loaded()
 
         const header = within(rowOf('conversation-bare')).getByRole('rowheader')
 
         expect(
-            within(header).getByRole('link', { name: 'Prompt not captured' }),
+            within(header).getByRole('link', { name: 'No prompt stored' }),
         ).toHaveAttribute('href', '/trail/conversations/conversation-bare')
     })
 
@@ -92,6 +92,34 @@ describe('the conversation cell', () => {
         expect(
             within(rowOf(id)).getByRole('link', { name: 'Reopen it' }),
         ).toHaveAttribute('href', '/trail/conversations/team%2Fa%20b.%C3%A9')
+    })
+
+    it('shortens a uuid id in the middle, keeps the agent names visible and the whole id in the title', async () => {
+        const id = '019a3f2c-7b1e-7d4a-9c55-0e8f2a6b4d31'
+        await showing(made(id, { agents: ['Refunds'], agent_count: 1 }))
+
+        const line = lineOf(id)
+
+        expect(line).toHaveTextContent('019a3f2c…4d31 · Refunds')
+        expect(line).toHaveAttribute('title', `${id} · Refunds`)
+        expect(line.textContent).not.toContain(id)
+    })
+
+    it('shows a short host-app id whole', async () => {
+        const id = 'order-1234567890'
+        await showing(made(id, { agents: ['Refunds'], agent_count: 1 }))
+
+        expect(lineOf(id)).toHaveTextContent('order-1234567890 · Refunds')
+    })
+
+    it('shortens a long id of non-ASCII characters without splitting one', async () => {
+        const id = `${'😀'.repeat(8)}-middle-${'é'.repeat(3)}😀`
+        await showing(made(id, { agents: [], agent_count: 0 }))
+
+        const line = lineOf(id)
+
+        expect(line).toHaveTextContent(`${'😀'.repeat(8)}…ééé😀`)
+        expect(line).toHaveAttribute('title', id)
     })
 
     it('adds "+N" from agent_count when the row’s list is shorter than the count', async () => {

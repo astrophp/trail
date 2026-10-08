@@ -269,11 +269,20 @@ export function formatDateTime(at: Date, timeZone: string | undefined): string {
 const headLength = 8
 const tailLength = 4
 
-/** `019a3f2c…b7e1`: the first 8 characters, an ellipsis and the last 4. An id too short to gain from it is left whole. */
-export function shortId(id: string): string {
-    if (id.length <= headLength + tailLength + 1) {
+/**
+ * `019a3f2c…b7e1`: the first 8 characters, an ellipsis and the last 4. An id of `whole` characters
+ * or fewer (by default, one too short to gain from it) is left whole. Characters are counted as
+ * code points, so one outside the basic plane is never split.
+ */
+export function shortId(
+    id: string,
+    whole: number = headLength + tailLength + 1,
+): string {
+    const characters = Array.from(id)
+
+    if (characters.length <= whole) {
         return id
     }
 
-    return `${id.slice(0, headLength)}…${id.slice(-tailLength)}`
+    return `${characters.slice(0, headLength).join('')}…${characters.slice(-tailLength).join('')}`
 }

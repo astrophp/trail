@@ -1,7 +1,7 @@
 import type { Conversation } from '@/api/types'
 import { RowLink } from '@/components/patterns/row-link'
 import { conversationPath } from '@/lib/conversation-path'
-import { formatCount } from '@/lib/format'
+import { formatCount, shortId } from '@/lib/format'
 
 /**
  * The agents of a conversation, by name. The row carries at most a few; `agent_count` is the real
@@ -24,6 +24,9 @@ export function agentLine(conversation: Conversation): string {
     return unnamed === 0 ? names : `${names} +${formatCount(unnamed)}`
 }
 
+/** A host-app id up to this many characters is shown whole; a longer one, such as an SDK uuid, is shortened. */
+const longestWholeId = 16
+
 /** What the latest turn was asked, as the link to the conversation, with its id and agents beneath. */
 export function ConversationCell({
     conversation,
@@ -32,20 +35,23 @@ export function ConversationCell({
 }) {
     const prompt = conversation.prompt_excerpt
     const agents = agentLine(conversation)
-    const line =
+    const id = shortId(conversation.id, longestWholeId)
+    const line = agents === '' ? id : `${id} · ${agents}`
+    // The whole id stays in the tooltip, where the line is cut to the cell.
+    const title =
         agents === '' ? conversation.id : `${conversation.id} · ${agents}`
 
     return (
-        <div className="flex max-w-55 min-w-0 flex-col gap-1 leading-normal md:max-w-85">
+        <div className="flex max-w-55 min-w-0 flex-col gap-1 leading-normal md:max-w-85 xl:max-w-120">
             <RowLink
                 to={conversationPath(conversation.id)}
                 title={prompt ?? undefined}
                 className="truncate"
             >
-                {prompt ?? 'Prompt not captured'}
+                {prompt ?? 'No prompt stored'}
             </RowLink>
             <p
-                title={line}
+                title={title}
                 className="truncate font-mono text-caption text-faint"
             >
                 {line}
