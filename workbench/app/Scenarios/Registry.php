@@ -6,10 +6,15 @@ use InvalidArgumentException;
 use Workbench\App\Scenarios\Catalog\AbandonedStream;
 use Workbench\App\Scenarios\Catalog\ApprovalGatedTool;
 use Workbench\App\Scenarios\Catalog\Conversation;
+use Workbench\App\Scenarios\Catalog\ConversationApproval;
+use Workbench\App\Scenarios\Catalog\ConversationDelegation;
+use Workbench\App\Scenarios\Catalog\ConversationFailover;
+use Workbench\App\Scenarios\Catalog\ConversationFailure;
 use Workbench\App\Scenarios\Catalog\Delegation;
 use Workbench\App\Scenarios\Catalog\EmbeddingsInTool;
 use Workbench\App\Scenarios\Catalog\FailingSubAgent;
 use Workbench\App\Scenarios\Catalog\Failover;
+use Workbench\App\Scenarios\Catalog\LongConversation;
 use Workbench\App\Scenarios\Catalog\PartlyPricedRun;
 use Workbench\App\Scenarios\Catalog\PlainAnswer;
 use Workbench\App\Scenarios\Catalog\ProviderFailure;
@@ -39,6 +44,11 @@ final class Registry
         StructuredOutput::class,
         ApprovalGatedTool::class,
         Conversation::class,
+        LongConversation::class,
+        ConversationFailover::class,
+        ConversationApproval::class,
+        ConversationDelegation::class,
+        ConversationFailure::class,
         EmbeddingsInTool::class,
         PartlyPricedRun::class,
         UnpricedRun::class,

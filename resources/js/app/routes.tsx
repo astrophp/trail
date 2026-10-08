@@ -10,6 +10,7 @@ import type { ReactElement } from 'react'
 import { matchPath } from 'react-router'
 import { comparePath } from '@/lib/compare-path'
 import { ComparePage } from '@/pages/compare-page'
+import { ConversationsPage } from '@/pages/conversations-page'
 import { NotFoundPage } from '@/pages/not-found-page'
 import { PlaceholderPage } from '@/pages/placeholder-page'
 import { TracePage } from '@/pages/trace-page'
@@ -69,7 +70,7 @@ export const routeTable: RouteDef[] = [
     {
         path: '/conversations',
         title: 'Conversations',
-        element: <PlaceholderPage title="Conversations" />,
+        element: <ConversationsPage />,
         section: 'conversations',
         icon: MessageSquareIcon,
     },

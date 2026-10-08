@@ -1,7 +1,7 @@
 import { useCallback } from 'react'
 import { useUrlState } from '@/hooks/use-url-state'
 import { timeRangeParam, type TimeRangePreset } from '@/lib/time-range'
-import { intParam, writeState } from '@/lib/url-state'
+import { intParam } from '@/lib/url-state'
 
 const params = {
     range: timeRangeParam,
@@ -27,24 +27,4 @@ export function useTimeRange(): [
     )
 
     return [range, setRange]
-}
-
-/**
- * Where a link to `path` goes so that the time range carries over: the path with
- * the current `?range=`, and nothing else of the current query. The default range
- * is not written, so the link is the bare path.
- */
-export function useTimeRangeLink(): (path: string) => string {
-    const [range] = useTimeRange()
-
-    return useCallback(
-        (path) => {
-            const query = writeState(params, new URLSearchParams(), {
-                range,
-            }).toString()
-
-            return query === '' ? path : `${path}?${query}`
-        },
-        [range],
-    )
 }

@@ -2,9 +2,16 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-/** A response the PHP contract test froze in tests/Contract (`meta`, `traces`, `trace`, `enums`, `bookmark`, `neighbours`). */
+/** A response the PHP contract test froze in tests/Contract (`meta`, `traces`, `trace`, `enums`, `bookmark`, `neighbours`, `conversations`). */
 export function contractFixture(
-    name: 'meta' | 'traces' | 'trace' | 'enums' | 'bookmark' | 'neighbours',
+    name:
+        | 'meta'
+        | 'traces'
+        | 'trace'
+        | 'enums'
+        | 'bookmark'
+        | 'neighbours'
+        | 'conversations',
 ): unknown {
     const path = resolve(
         import.meta.dirname,

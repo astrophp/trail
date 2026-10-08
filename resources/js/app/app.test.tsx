@@ -2,11 +2,18 @@ import { act, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderApp, appReady } from '@/test/render-app'
-import { mockApi } from '@/test/traces-api'
+import { listFor as conversationsFor } from '@/test/conversations-api'
+import { json, listFor, mockApi } from '@/test/traces-api'
 
-// The Traces page asks for its list when a test navigates to it.
+// The Traces and Conversations pages ask for their lists when a test navigates to them.
 beforeEach(() => {
-    mockApi()
+    mockApi((url) =>
+        json(
+            url.includes('/api/conversations')
+                ? conversationsFor(url)
+                : listFor(url),
+        ),
+    )
 })
 
 const nav = () => screen.getByRole('navigation', { name: 'Main' })
