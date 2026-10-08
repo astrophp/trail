@@ -161,6 +161,61 @@ One run, as every endpoint returns it:
 - `issue_kind` is `rate_limited`, `provider_overloaded`, `provider_connection`,
   `insufficient_credits`, `tool_error`, `exception`, `abandoned` or `null`.
 
+## The conversation
+
+The runs that carry the same conversation id, as every endpoint returns them. A run in a
+conversation is one of its turns. A run without a conversation id is not in any conversation.
+
+```json
+{
+  "id": "conversation-1",
+  "turns": { "all": 5, "completed": 3, "failed": 1, "incomplete": 0, "running": 0, "awaiting_approval": 1 },
+  "agents": ["AccountAssistant", "TicketTriage"],
+  "agent_count": 2,
+  "users": [{ "id": "7", "type": "App\\Models\\User", "name": "Ada", "email": "ada@example.com" }],
+  "user_count": 1,
+  "usage": {
+    "state": "reported",
+    "input_tokens": 5200,
+    "output_tokens": 1310,
+    "cache_read_tokens": null,
+    "cache_write_tokens": null,
+    "reasoning_tokens": null,
+    "total_tokens": 6510
+  },
+  "cost": { "state": "estimated", "amount": 0.0412 },
+  "prompt_excerpt": "And the invoice?",
+  "first_activity_at": "2026-01-01T12:00:00.000Z",
+  "last_activity_at": "2026-01-02T09:30:00.000Z"
+}
+```
+
+- Every figure covers all of the conversation's turns, including those outside the time range of
+  the request that listed it.
+- `turns` has the keys of a list's `status_counts`, counted by the status each turn shows, so a
+  stale running turn is `incomplete` and is not `running`.
+- `agents` are the distinct names of the turns, sorted by name, at most 5. `users` are the distinct
+  users (a type and an id) of the turns that have one, at most 3, in the shape of
+  [Users](#users). `agent_count` and `user_count` are the real numbers of distinct names and users,
+  counted by the database, so they can be above the length of the list. A conversation whose turns
+  have no user has `users` empty and `user_count` `0`.
+- Each count of `usage` is the sum of the turns that reported it, and `null` when none did. Its
+  `state` is `pending` when a turn is running, else `reported` when any count is not `null`, else
+  `not_reported`. `total_tokens` follows the rule of a run's.
+- `cost.amount` is the sum of the turns' cost, added by the database, and `null` when no turn has
+  one. Its `state` follows a run's, from the number of spans that reported usage and could not be
+  priced across the turns: `pending` when a turn is running, else `estimated`, `partial`,
+  `unpriced` or `not_captured`. A `pending` amount is what has been recorded so far; it is not
+  final and can still grow.
+- `first_activity_at` is when the earliest turn started and `last_activity_at` when the latest one
+  did. Only a turn starting counts as activity: neither is the end of a turn.
+- `prompt_excerpt` is that of the turn that started last, and of the one with the greatest id when
+  two started together. It is `null` when that turn has none.
+- `id` is the id as stored. Ids, agent names and users are grouped, counted and ordered as the
+  database compares text: MySQL by default ignores case and accents, so there ids that differ only
+  so are one conversation (shown with the spelling of its latest turn), and `agent_count`,
+  `user_count` and the order of `agents` follow that comparison. Elsewhere they differ.
+
 ## The span
 
 One span of a run: an agent's prompt, a model call, a tool call or an embeddings call. Every type
@@ -290,6 +345,51 @@ What the dashboard needs around every page. Takes a time range, which applies to
 - `filters` lists what was observed in the range, sorted by name, at most 100 of each. `agents`
   are the names of runs; `providers` and `models` come from every step of a run, not only the
   first, since one run can use several models.
+
+### `GET /api/conversations`
+
+The conversations in a time range: recorded runs grouped by their conversation id, filtered,
+sorted and paginated. A run without a conversation id (or with an empty one) is not a
+conversation and is never listed, not even as a group of its own.
+
+The time range picks the conversations: one is in the view when at least one of its turns started
+in the range, and a conversation none of whose turns started there is absent. Nothing else about
+a conversation is bounded by the range. It is counted whole, so every figure of a row covers all
+of its turns, and the filters below describe the whole conversation too: a turn outside the range
+can satisfy one, so a row never contradicts the filter that selected it.
+
+| Parameter | Keeps the conversations |
+| -- | -- |
+| `agent` | with a turn by a run of that name |
+| `user_id`, `user_type` | with a turn of that user. `user_type` narrows `user_id` and cannot be sent alone |
+| `failed` | with at least one turn that is failed or incomplete, a stale running turn included |
+| `search` | whose id, or the user id or prompt excerpt of one of whose turns, contains the text (at most 200 characters), whatever its case. Outside ASCII, case is matched as the database matches it |
+
+`failed` is a switch, as on the traces list: `1` or `true` applies it, `0`, `false` or leaving it
+out does not. Filters combine with *and*.
+
+`sort` is `last_activity`, `turns` or `cost`; the default is `-last_activity`. The sort by cost
+puts conversations without one last in both directions, and a tie is broken by the conversation
+id in the direction of the sort, so a page never repeats or skips a conversation.
+
+```json
+{
+  "data": [{ "id": "…" }],
+  "pagination": { "page": 1, "per_page": 25, "total": 12, "last_page": 1 },
+  "range": { "preset": "24h", "from": "…", "to": "…" },
+  "counts": { "all": 12, "failed": 3 }
+}
+```
+
+- `counts` counts the conversations that pass the range and every filter except `failed`, so the
+  numbers describe the same view as the rows whichever tab is selected. `failed` is how many of
+  them have at least one failed or incomplete turn, a stale running turn included: the conversations
+  the `failed` filter keeps. `pagination.total` is one of them, `counts.failed` when `failed` is
+  applied and `counts.all` otherwise. Both are integers, `0` for an empty view.
+
+Each item is the conversation of [The conversation](#the-conversation). The response is read in a
+fixed number of queries whatever the size of the page, plus one lookup of the users for each user
+type on it.
 
 ### `GET /api/traces`
 
