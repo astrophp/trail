@@ -171,10 +171,14 @@ describe('stepping through a view', function () {
     it('has neither neighbour for the only run of a view', function () {
         neighbourDataset();
 
-        expect(listedIds($this, 'agent=ALPHA'))->toBe(['n11'])
-            ->and(neighboursOf($this, 'n11', 'agent=ALPHA'))->toBe(['previous' => null, 'next' => null])
+        // A name that no other run has, in any case: databases differ in how they match case.
+        Rows::trace(['id' => 'solo', 'name' => 'Solo', 'status' => Status::Completed, 'started_at' => '2026-01-02 10:15:00']);
+
+        expect(listedIds($this, 'agent=Solo'))->toBe(['solo'])
+            ->and(neighboursOf($this, 'solo', 'agent=Solo'))->toBe(['previous' => null, 'next' => null])
             // Beside a view in which the same run has both.
-            ->and(neighboursOf($this, 'n11', 'sort=started_at'))->toBe(['previous' => 'n12', 'next' => 'n02']);
+            ->and(neighboursOf($this, 'solo'))->toBe(['previous' => 'n04', 'next' => 'n07'])
+            ->and(neighboursOf($this, 'solo', 'sort=started_at'))->toBe(['previous' => 'n07', 'next' => 'n04']);
     });
 
     it('ignores the page and its size', function () {
