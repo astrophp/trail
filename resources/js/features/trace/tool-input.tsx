@@ -1,7 +1,7 @@
 import type { Span } from '@/api/types'
-import { toolInput } from '@/features/trace/payload-shape'
-import { PayloadSection } from '@/features/trace/payload-section'
-import { WholeInput } from '@/features/trace/whole-input'
+import { toolInput } from '@/components/telemetry/payload-shape'
+import { PayloadSection } from '@/components/telemetry/payload-section'
+import { WholeInput } from '@/components/telemetry/whole-input'
 
 type ToolInputProps = { span: Span }
 

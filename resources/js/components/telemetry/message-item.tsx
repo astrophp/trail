@@ -1,9 +1,9 @@
 import type { Span } from '@/api/types'
 import { Badge } from '@/components/ui/badge'
-import { NamedPayload } from '@/features/trace/named-payload'
-import { asArray, asObject, isAbsent } from '@/features/trace/payload-access'
-import { SectionLabel } from '@/features/trace/section-label'
-import { StoredPayload } from '@/features/trace/stored-payload'
+import { NamedPayload } from '@/components/telemetry/named-payload'
+import { asArray, asObject, isAbsent } from '@/lib/payload-access'
+import { SectionLabel } from '@/components/telemetry/section-label'
+import { StoredPayload } from '@/components/telemetry/stored-payload'
 import { formatCount } from '@/lib/format'
 import type { JsonValue } from '@/lib/json'
 

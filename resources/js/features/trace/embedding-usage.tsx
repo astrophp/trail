@@ -3,7 +3,7 @@ import { KeyValue } from '@/components/patterns/key-value'
 import { KeyValueList } from '@/components/patterns/key-value-list'
 import { CostValue } from '@/components/telemetry/cost-value'
 import { TokenBreakdown } from '@/components/telemetry/token-breakdown'
-import { SectionLabel } from '@/features/trace/section-label'
+import { SectionLabel } from '@/components/telemetry/section-label'
 
 type EmbeddingUsageProps = { span: Span }
 

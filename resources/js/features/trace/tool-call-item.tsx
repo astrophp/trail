@@ -1,8 +1,8 @@
 import type { Span } from '@/api/types'
 import { Button } from '@/components/ui/button'
 import type { SpanTree } from '@/features/trace/build-span-tree'
-import { NamedPayload } from '@/features/trace/named-payload'
-import { asObject } from '@/features/trace/payload-access'
+import { NamedPayload } from '@/components/telemetry/named-payload'
+import { asObject } from '@/lib/payload-access'
 import {
     unlinkedCallWords,
     type RunContext,

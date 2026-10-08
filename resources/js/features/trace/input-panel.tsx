@@ -1,7 +1,7 @@
 import type { Coverage, Span } from '@/api/types'
 import { AgentInput } from '@/features/trace/agent-input'
 import { EmbeddingInput } from '@/features/trace/embedding-input'
-import { StepInput } from '@/features/trace/step-input'
+import { StepInput } from '@/components/telemetry/step-input'
 import { ToolInput } from '@/features/trace/tool-input'
 
 type InputPanelProps = { span: Span; coverage: Coverage }

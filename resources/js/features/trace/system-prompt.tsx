@@ -6,8 +6,8 @@ import {
     CollapsibleTrigger,
 } from '@/components/ui/collapsible'
 import { CountTag } from '@/features/trace/count-tag'
-import { truncationAt } from '@/features/trace/payload-truncation'
-import { StoredPayload } from '@/features/trace/stored-payload'
+import { truncationAt } from '@/components/telemetry/payload-truncation'
+import { StoredPayload } from '@/components/telemetry/stored-payload'
 import { formatCount } from '@/lib/format'
 
 type SystemPromptProps = {

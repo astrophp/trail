@@ -1,6 +1,6 @@
 import type { Span } from '@/api/types'
 import { PayloadViewer } from '@/components/patterns/payload-viewer'
-import { truncationAt } from '@/features/trace/payload-truncation'
+import { truncationAt } from '@/components/telemetry/payload-truncation'
 import type { JsonValue } from '@/lib/json'
 
 type StoredPayloadProps = {

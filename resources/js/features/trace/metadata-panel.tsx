@@ -8,7 +8,7 @@ import { StatusBadge } from '@/components/telemetry/status-badge'
 import { spanTypeLabel } from '@/components/telemetry/span-type-icon'
 import { Timestamp } from '@/components/telemetry/timestamp'
 import { TokenBreakdown } from '@/components/telemetry/token-breakdown'
-import { PayloadSection } from '@/features/trace/payload-section'
+import { PayloadSection } from '@/components/telemetry/payload-section'
 import { spanBilling } from '@/features/trace/span-billing'
 import { formatCount, formatOffset } from '@/lib/format'
 

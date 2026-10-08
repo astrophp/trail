@@ -12,7 +12,7 @@ import {
     availableTabs,
     tabLabels,
 } from '@/features/trace/evidence-tabs'
-import { truncationUnseen } from '@/features/trace/payload-truncation'
+import { truncationUnseen } from '@/features/trace/truncation-unseen'
 import { SpanFailure } from '@/features/trace/span-failure'
 import { tabList, tabTrigger } from '@/features/trace/tab-styles'
 import type { RunContext } from '@/features/trace/tool-call-status'

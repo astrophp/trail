@@ -1,5 +1,5 @@
 import type { Span } from '@/api/types'
-import { inputShape, outputShape } from '@/features/trace/payload-shape'
+import { inputShape, outputShape } from '@/components/telemetry/payload-shape'
 
 export const tabIds = ['input', 'output', 'metadata', 'raw'] as const
 

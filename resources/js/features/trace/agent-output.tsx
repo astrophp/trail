@@ -1,7 +1,7 @@
 import type { Span } from '@/api/types'
-import { isAbsent } from '@/features/trace/payload-access'
-import { agentOutput } from '@/features/trace/payload-shape'
-import { PayloadSection } from '@/features/trace/payload-section'
+import { isAbsent } from '@/lib/payload-access'
+import { agentOutput } from '@/components/telemetry/payload-shape'
+import { PayloadSection } from '@/components/telemetry/payload-section'
 import { WholeOutput } from '@/features/trace/whole-output'
 
 type AgentOutputProps = { span: Span }
