@@ -1,6 +1,6 @@
 import { PageHeader } from '@/components/patterns/page-header'
 import { TimeRangeSelect } from '@/components/patterns/time-range-select'
-import { TracesView } from '@/features/traces'
+import { ExportButton, TracesView } from '@/features/traces'
 import { useMeta } from '@/features/meta'
 import { useTimeRange } from '@/hooks/use-time-range'
 
@@ -16,6 +16,7 @@ export function TracesPage() {
                 description="Follow every run from prompt to response."
             >
                 <TimeRangeSelect value={range} onValueChange={setRange} />
+                <ExportButton />
             </PageHeader>
             <TracesView
                 agents={filters?.agents}

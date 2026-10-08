@@ -8,6 +8,8 @@ import {
 } from 'lucide-react'
 import type { ReactElement } from 'react'
 import { matchPath } from 'react-router'
+import { comparePath } from '@/lib/compare-path'
+import { ComparePage } from '@/pages/compare-page'
 import { NotFoundPage } from '@/pages/not-found-page'
 import { PlaceholderPage } from '@/pages/placeholder-page'
 import { TracePage } from '@/pages/trace-page'
@@ -48,6 +50,14 @@ export const routeTable: RouteDef[] = [
         element: <TracesPage />,
         section: 'traces',
         icon: ListTreeIcon,
+    },
+    {
+        // Before the run page, so `compare` is never read as a run's id.
+        path: comparePath,
+        title: 'Compare',
+        element: <ComparePage />,
+        section: 'traces',
+        parent: '/traces',
     },
     {
         path: '/traces/:traceId',

@@ -1,4 +1,4 @@
-import { apiRequest } from '@/api/client'
+import { apiRequest, apiUrl } from '@/api/client'
 import type {
     BookmarkResponse,
     Status,
@@ -37,6 +37,20 @@ export type TraceListParams = {
     bookmarked?: boolean
 }
 
+/** What `GET /traces/export` is asked for: a view of the list, or just the given `ids`. */
+export type TraceExportParams = TraceListParams & {
+    /** Run ids, separated by commas: at most 100. */
+    ids?: string
+}
+
+/**
+ * Where the CSV of a view of the list is, for a link the browser follows (it streams the file
+ * itself). The page is no part of the view, so one that is given is left out.
+ */
+export function traceExportUrl(params: TraceExportParams): string {
+    return apiUrl('/traces/export', withoutPage(params))
+}
+
 export function fetchTraces(
     params: TraceListParams,
     signal?: AbortSignal,
@@ -60,8 +74,8 @@ export const traceKeys = {
 }
 
 /** The parameters of a view of the list: everything but the page, which the neighbours ignore. */
-function withoutPage(params: TraceListParams): Omit<TraceListParams, 'page'> {
-    const view: TraceListParams = { ...params }
+function withoutPage<T extends { page?: number }>(params: T): Omit<T, 'page'> {
+    const view = { ...params }
     delete view.page
 
     return view

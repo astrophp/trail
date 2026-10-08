@@ -40,6 +40,8 @@ export type DataTableColumnMeta = {
      * do not change height when they arrive. Hidden from assistive technology by the table.
      */
     skeleton?: ReactNode
+    /** Sits before the header's label, outside its sort button: a control for the whole column. */
+    lead?: ReactNode
 }
 
 // Written out in full, so the stylesheet can see every class.
@@ -236,45 +238,55 @@ export function DataTable<TData extends RowData>({
                                             columnClasses(meta, index),
                                         )}
                                     >
-                                        {header.isPlaceholder ? null : sortable ? (
-                                            <Button
-                                                variant="ghost"
-                                                size="xs"
-                                                data-sorted={
-                                                    direction || undefined
-                                                }
-                                                onClick={header.column.getToggleSortingHandler()}
-                                                className={cn(
-                                                    // Fills the header cell, so the target is as tall as the cell.
-                                                    'h-auto w-full gap-1.25 rounded-none px-4 py-2.75 text-caption font-medium text-muted-foreground hover:bg-transparent hover:text-foreground focus-visible:ring-inset data-[sorted]:text-foreground dark:hover:bg-transparent',
-                                                    meta?.align === 'end'
-                                                        ? 'justify-end'
-                                                        : 'justify-start',
-                                                )}
-                                            >
+                                        <div
+                                            className={cn(
+                                                meta?.lead &&
+                                                    'flex items-center pl-4',
+                                            )}
+                                        >
+                                            {meta?.lead}
+                                            {header.isPlaceholder ? null : sortable ? (
+                                                <Button
+                                                    variant="ghost"
+                                                    size="xs"
+                                                    data-sorted={
+                                                        direction || undefined
+                                                    }
+                                                    onClick={header.column.getToggleSortingHandler()}
+                                                    className={cn(
+                                                        // Fills the header cell, so the target is as tall as the cell.
+                                                        'h-auto w-full gap-1.25 rounded-none px-4 py-2.75 text-caption font-medium text-muted-foreground hover:bg-transparent hover:text-foreground focus-visible:ring-inset data-[sorted]:text-foreground dark:hover:bg-transparent',
+                                                        meta?.align === 'end'
+                                                            ? 'justify-end'
+                                                            : 'justify-start',
+                                                    )}
+                                                >
+                                                    <table.FlexRender
+                                                        header={header}
+                                                    />
+                                                    {direction === 'asc' ? (
+                                                        <ArrowUpIcon
+                                                            aria-hidden="true"
+                                                            className="size-3"
+                                                        />
+                                                    ) : direction === 'desc' ? (
+                                                        <ArrowDownIcon
+                                                            aria-hidden="true"
+                                                            className="size-3"
+                                                        />
+                                                    ) : (
+                                                        <ArrowUpDownIcon
+                                                            aria-hidden="true"
+                                                            className="size-3 opacity-55"
+                                                        />
+                                                    )}
+                                                </Button>
+                                            ) : (
                                                 <table.FlexRender
                                                     header={header}
                                                 />
-                                                {direction === 'asc' ? (
-                                                    <ArrowUpIcon
-                                                        aria-hidden="true"
-                                                        className="size-3"
-                                                    />
-                                                ) : direction === 'desc' ? (
-                                                    <ArrowDownIcon
-                                                        aria-hidden="true"
-                                                        className="size-3"
-                                                    />
-                                                ) : (
-                                                    <ArrowUpDownIcon
-                                                        aria-hidden="true"
-                                                        className="size-3 opacity-55"
-                                                    />
-                                                )}
-                                            </Button>
-                                        ) : (
-                                            <table.FlexRender header={header} />
-                                        )}
+                                            )}
+                                        </div>
                                     </TableHead>
                                 )
                             })}

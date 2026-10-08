@@ -1,6 +1,7 @@
+import { isNotFound } from '@/api/client'
 import { usePageTitle } from '@/hooks/use-page-title'
 import { shortId } from '@/lib/format'
-import { isNotFound, useTrace } from '@/features/trace/use-trace'
+import { useTrace } from '@/features/trace/use-trace'
 
 /**
  * Names the page after the run once it is loaded ("SupportAssistant · 019a3f2c…b7e1"), for the

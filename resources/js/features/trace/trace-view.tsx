@@ -1,10 +1,10 @@
+import { isNotFound } from '@/api/client'
 import { ErrorState } from '@/components/patterns/error-state'
 import { LoadedTrace } from '@/features/trace/loaded-trace'
 import { TraceNotFound } from '@/features/trace/trace-not-found'
 import { TraceSkeleton } from '@/features/trace/trace-skeleton'
 import {
     failedRefreshes,
-    isNotFound,
     refreshing,
     useRetryRefresh,
     useTrace,

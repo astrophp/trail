@@ -5,12 +5,13 @@ import { RowLink } from '@/components/patterns/row-link'
 import { AgentIcon } from '@/components/telemetry/agent-icon'
 import { BookmarkToggle } from '@/components/telemetry/bookmark-toggle'
 import { TraceId } from '@/components/telemetry/trace-id'
+import { SelectRow } from '@/features/traces/select-row'
 import { TableBusyContext } from '@/features/traces/table-busy'
 import { useBookmark } from '@/features/traces/use-bookmark'
 import { returnTo } from '@/lib/return-context'
 
 /**
- * Who ran, what it was asked, and which run it is. The name leads to the run, which is told the
+ * Who ran, what it was asked, and which run it is. A checkbox selects it, a star bookmarks it, and the name leads to the run, which is told the
  * whole view of the list it was opened from (range, filters, sort and page) in `from`.
  */
 export function RunCell({ trace }: { trace: Trace }) {
@@ -20,7 +21,8 @@ export function RunCell({ trace }: { trace: Trace }) {
     const busy = useContext(TableBusyContext)
 
     return (
-        <div className="flex max-w-50 min-w-0 items-start gap-1 md:max-w-62.5">
+        <div className="flex max-w-55 min-w-0 items-start gap-1 md:max-w-67.5">
+            <SelectRow trace={trace} />
             <BookmarkToggle
                 trace={trace}
                 onPressedChange={bookmark}
