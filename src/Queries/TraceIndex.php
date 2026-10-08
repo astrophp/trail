@@ -15,6 +15,12 @@ use Illuminate\Database\Eloquent\Collection;
  */
 final class TraceIndex
 {
+    /** The most runs an export writes: the first ones in the list's order. */
+    public const EXPORT_LIMIT = 10000;
+
+    /** How many runs an export reads at a time. */
+    public const EXPORT_CHUNK = 500;
+
     /** The share of runs a "slow" run is at or above. */
     private const SLOW_PERCENTILE = 95;
 
@@ -53,6 +59,16 @@ final class TraceIndex
         'cost' => ['column' => 'cost', 'nulls' => 'case when cost is null then 1 else 0 end'],
         'agent' => ['column' => 'name', 'nulls' => null],
     ];
+
+    /**
+     * @param  int  $exportLimit  the most runs an export writes
+     */
+    public function __construct(private readonly int $exportLimit = self::EXPORT_LIMIT) {}
+
+    public function exportLimit(): int
+    {
+        return $this->exportLimit;
+    }
 
     /**
      * The duration "slow" compares against: the nearest-rank 95th percentile of the runs in the
@@ -112,16 +128,50 @@ final class TraceIndex
      */
     public function rows(TimeRange $range, TraceFilters $filters, ?float $slowThreshold, Page $page): Collection
     {
+        return $this->ordered($range, $filters, $slowThreshold)
+            ->offset($page->offset())->limit($page->perPage)->get();
+    }
+
+    /**
+     * How many runs the list shows for these filters, the status included. When $ids is given only
+     * those runs count.
+     *
+     * @param  list<string>|null  $ids
+     */
+    public function count(TimeRange $range, TraceFilters $filters, ?float $slowThreshold, ?array $ids = null): int
+    {
+        return $this->filtered($range, $filters, $slowThreshold, withStatus: true, ids: $ids)->count();
+    }
+
+    /**
+     * A slice of the list in the list's own order, for an export that reads it piece by piece.
+     *
+     * @param  list<string>|null  $ids  keep only these runs
+     * @return Collection<int, Trace>
+     */
+    public function slice(TimeRange $range, TraceFilters $filters, ?float $slowThreshold, ?array $ids, int $offset, int $limit): Collection
+    {
+        return $this->ordered($range, $filters, $slowThreshold, $ids)->offset($offset)->limit($limit)->get();
+    }
+
+    /**
+     * The runs of the list in its order: the sort, then the id in the same direction so that
+     * runs equal on the sorted column keep one order from page to page.
+     *
+     * @param  list<string>|null  $ids
+     * @return Builder<Trace>
+     */
+    private function ordered(TimeRange $range, TraceFilters $filters, ?float $slowThreshold, ?array $ids = null): Builder
+    {
         $sort = self::SORTS[$filters->sort];
         $direction = $filters->descending ? 'desc' : 'asc';
-        $query = $this->filtered($range, $filters, $slowThreshold, withStatus: true)->select(self::COLUMNS);
+        $query = $this->filtered($range, $filters, $slowThreshold, withStatus: true, ids: $ids)->select(self::COLUMNS);
 
         if ($sort['nulls'] !== null) {
             $query->orderByRaw($sort['nulls']);
         }
 
-        return $query->orderBy($sort['column'], $direction)->orderBy('id', $direction)
-            ->offset($page->offset())->limit($page->perPage)->get();
+        return $query->orderBy($sort['column'], $direction)->orderBy('id', $direction);
     }
 
     /**
@@ -207,12 +257,17 @@ final class TraceIndex
     }
 
     /**
+     * @param  list<string>|null  $ids  keep only these runs
      * @return Builder<Trace>
      */
-    private function filtered(TimeRange $range, TraceFilters $filters, ?float $slowThreshold, bool $withStatus): Builder
+    private function filtered(TimeRange $range, TraceFilters $filters, ?float $slowThreshold, bool $withStatus, ?array $ids = null): Builder
     {
         $query = Trace::query();
         $range->apply($query, 'started_at');
+
+        if ($ids !== null) {
+            $query->whereIn('id', $ids);
+        }
 
         if ($withStatus && $filters->status !== null) {
             $query->whereEffectiveStatus($filters->status);

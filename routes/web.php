@@ -2,6 +2,7 @@
 
 use Astro\Trail\Http\Controllers\Api\MetaController;
 use Astro\Trail\Http\Controllers\Api\TraceBookmarkController;
+use Astro\Trail\Http\Controllers\Api\TraceExportController;
 use Astro\Trail\Http\Controllers\Api\TraceIndexController;
 use Astro\Trail\Http\Controllers\Api\TraceNeighboursController;
 use Astro\Trail\Http\Controllers\Api\TraceShowController;
@@ -14,6 +15,8 @@ use Illuminate\Support\Facades\Route;
 Route::prefix('api')->middleware([RespondWithJson::class, Authorize::class])->group(function () {
     Route::get('meta', MetaController::class)->name('trail.api.meta');
     Route::get('traces', TraceIndexController::class)->name('trail.api.traces.index');
+    // Above the detail route, or "export" would be read as a run's id.
+    Route::get('traces/export', TraceExportController::class)->name('trail.api.traces.export');
     Route::get('traces/{id}', TraceShowController::class)->name('trail.api.traces.show');
     Route::get('traces/{id}/neighbours', TraceNeighboursController::class)->name('trail.api.traces.neighbours');
     Route::put('traces/{id}/bookmark', [TraceBookmarkController::class, 'store'])->name('trail.api.traces.bookmark.store');

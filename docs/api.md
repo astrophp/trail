@@ -6,7 +6,8 @@ versioned, and it may change between releases. This page is the contract every e
 
 ## Requests and responses
 
-- Every response Trail produces is JSON, whatever the request's `Accept` header says.
+- Every response Trail produces is JSON, whatever the request's `Accept` header says, except the
+  file `GET /api/traces/export` sends. Its errors are JSON like any other.
 - Keys are `snake_case`.
 - A successful response is an object with the result under `data`. Anything that describes the
   result rather than being it sits next to `data`, never inside it: `pagination`, `range`, and
@@ -327,6 +328,78 @@ The recorded runs in a time range, filtered, sorted and paginated.
   the same view as the rows whichever status is selected.
 - `slow_threshold_ms` is the duration `slow` compared against. It is `null` when `slow` is not
   applied, and when no run in the range has a duration, in which case `slow` matches nothing.
+
+### `GET /api/traces/export`
+
+The runs of the list as a CSV file: the same time range, filters and sort as `GET /api/traces`,
+read by the list's own query, so a run in the file is the run the list shows, in the same order.
+
+It takes every parameter of the list except `page` and `per_page`, which it ignores, and one of
+its own:
+
+| Parameter | Keeps the runs |
+| -- | -- |
+| `ids` | whose id is in this list of at most 100 run ids, separated by commas with no spaces (a space would be part of an id), each at most 64 characters, none empty. Anything else is a 422. They are still limited to the range and the filters, and keep the list's order, not the order of `ids`. An id outside the view is simply absent from the file |
+
+An invalid parameter is a 422 as for the list, decided before the first byte of the file is sent.
+`ids` is not a parameter of the list.
+
+The file has one header row, then one row for each run, in these columns:
+
+| Column | Value |
+| -- | -- |
+| `id`, `name`, `type`, `agent_class` | as in the list |
+| `status`, `issue_kind` | as the list shows them: a stale running run is `incomplete` and `abandoned` |
+| `streamed`, `recovered`, `child_failed`, `bookmarked` | `true` or `false` |
+| `provider`, `model` | as in the list |
+| `duration_ms` | milliseconds, possibly fractional |
+| `usage_state` | `reported`, `pending` or `not_reported` |
+| `input_tokens`, `output_tokens`, `cache_read_tokens`, `cache_write_tokens`, `reasoning_tokens`, `total_tokens` | counts |
+| `cost_state` | `estimated`, `partial`, `unpriced`, `pending` or `not_captured` |
+| `cost_usd` | US dollars as a plain decimal, never in exponent notation: `0.0000000001`, not `1.0E-10`. For a `pending` run it is what has been recorded so far |
+| `span_count` | the number of spans |
+| `conversation_id` | as in the list |
+| `user_id`, `user_type`, `user_name`, `user_email` | the run's user. `user_name` and `user_email` are empty when the user can no longer be resolved |
+| `started_at`, `ended_at` | ISO 8601 in UTC with milliseconds, as everywhere in the API |
+| `prompt_excerpt`, `response_excerpt` | as in the list |
+
+- A value that was not captured is an **empty cell**. It is never `0`: a `0` in the file is a count
+  or an amount that was recorded. `usage_state` and `cost_state` say why a figure is missing or
+  not final (`pending`, `partial`, `unpriced`, `not_reported`, `not_captured`), so a reader never
+  has to guess from a blank.
+- A file holds at most 10,000 runs, the first ones in the list's order. The response says so in
+  three headers, sent before the file: `X-Trail-Export-Rows` is the number of rows the export set
+  out to write, `X-Trail-Export-Total` is the number of runs in the view, and
+  `X-Trail-Export-Truncated` is `true` when the total is above the limit and `false` otherwise.
+  Narrow the range or the filters to get the rest. When `ids` is sent, both counts are those of the
+  selection.
+- The file is streamed in chunks of 500 runs, so a large export does not need the memory of the
+  file. The response is `text/csv; charset=UTF-8`, an attachment named
+  `trail-traces-YYYYMMDD-HHMMSS.csv` (UTC), and carries `Cache-Control: no-store` and
+  `X-Content-Type-Options: nosniff`. Streaming works only if nothing in front of PHP buffers the
+  response: the endpoint sends `X-Accel-Buffering: no` and flushes each chunk.
+- The encoding is UTF-8 and the file starts with a byte-order mark, so a spreadsheet reads it as
+  UTF-8. Lines end with `\r\n`. A cell that holds a comma, a double quote, a carriage return or a
+  line feed is wrapped in double quotes, with its own double quotes doubled (RFC 4180); a backslash
+  is nothing special.
+- Names, prompts and responses come from user input. A text cell that starts with `=`, `+`, `-`,
+  `@`, a tab, a carriage return or a line feed, or with spaces, tabs, line breaks or no-break
+  spaces followed by `=`, `+`, `-` or `@`, is prefixed with a single quote `'`, so a spreadsheet
+  shows it instead of running it as a formula. The numbers, booleans and timestamps Trail writes
+  are never prefixed.
+- Cells are plain text. A spreadsheet may still reformat a value that looks like a number or a
+  date, for example an id such as `1E10`. `total_tokens` is, as in the list, the sum of whichever
+  of the input and output tokens was reported.
+- An empty view is a 200 with the header row alone.
+- What is guaranteed about failures: an error decided before the file starts (403, 404, 422) is
+  JSON, and no part of a file is sent with it. A failure after the file has started cannot change
+  the status or the headers: the connection ends early and the file is short.
+- What is guaranteed about consistency: the export reads the view in chunks while runs may still be
+  recorded, finish, turn stale or be pruned. A run can therefore appear twice or be missing when
+  the view changes during the export. A view over a finished time range, with nothing recorded
+  into it, is stable.
+- The route is registered before `/api/traces/{id}`, so `export` is never read as a run's id. A
+  run whose id is literally `export` cannot be opened through the detail endpoint.
 
 ### `GET /api/traces/{id}`
 
