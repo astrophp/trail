@@ -40,6 +40,13 @@ shows the reason without working it out:
   one count. `pending`: the run is still running. `not_reported`: it finished without any count.
   Each count is `null` on its own when it was not reported.
 
+- **Messages** of a turn come with `messages_state`. `stored`: every message the turn exchanged was
+  read. `partial`: some were, and `messages_reason` says what is missing. `not_stored`: none could
+  be read, because payload capture was off or nothing was recorded, and `messages` is `[]`. A turn
+  that is `not_stored` is not an empty conversation.
+- **History** is `history_count`, the number of earlier messages left out of a turn. It is `null`,
+  never `0`, when it could not be told; `0` means the turn began with nothing before it.
+
 A span's cost has the same states except `partial`: a span is priced whole, so it is `estimated`,
 `unpriced`, `pending` or `not_captured`. Only step and embedding spans bill. An agent span and a
 tool span never carry usage, so their `usage` and `cost` are `null`, not a state.
@@ -106,6 +113,12 @@ messages per parameter:
 | 404 | No such endpoint or resource, or the dashboard is switched off |
 | 419 | A write without a valid CSRF token. The application's own `web` middleware answers this one, so it is JSON only when the request accepts JSON, as the dashboard's requests do |
 | 422 | A parameter is invalid. Invalid input is never a 500 |
+
+The 422 cases of [`GET /api/conversations/transcript`](#get-apiconversationstranscript):
+
+- `limit` is not a whole number.
+- More than one of `turn`, `before` and `after` is sent, or the one sent is empty, is not text, or
+  cannot be a run's id (longer than 64 characters, holding a NUL byte, or not valid UTF-8).
 
 ## Users
 
@@ -215,6 +228,168 @@ conversation is one of its turns. A run without a conversation id is not in any 
   database compares text: MySQL by default ignores case and accents, so there ids that differ only
   so are one conversation (shown with the spelling of its latest turn), and `agent_count`,
   `user_count` and the order of `agents` follow that comparison. Elsewhere they differ.
+
+### The turn
+
+One turn of a conversation as its transcript returns it: the run, and the messages its spans hold.
+
+```json
+{
+  "trace": { "id": "…" },
+  "detail": { "error": null, "pending_approvals": [], "resolved_tool_call_ids": [] },
+  "root_span_id": "0199c2f4-6a3f-7a10-8c2e-5b7d9e0f1a23",
+  "shown_attempt": 2,
+  "attempts": [
+    {
+      "attempt": 1, "provider": "openai", "model": "gpt-5", "span_id": "0199c2f4-6a40-7b21-9d3f-6c8e0f1a2b34",
+      "error": { "class": "Laravel\\Ai\\Exceptions\\RateLimitedException", "message": "…", "source": "step", "http_status": 429 }
+    },
+    { "attempt": 2, "provider": "anthropic", "model": "claude-sonnet-4-5", "span_id": "0199c2f4-6a41-7c32-8e40-7d9f1a2b3c45", "error": null }
+  ],
+  "messages_state": "stored",
+  "messages_reason": null,
+  "history_count": 4,
+  "messages": [{ "part": "prompt" }],
+  "span_limit": { "limit": 2000, "total": 3, "truncated": false }
+}
+```
+
+- `trace` is the run exactly as the list returns it, and `detail` is that of
+  [`GET /api/traces/{id}`](#get-apitracesid): the same objects, not a copy that can differ.
+- `root_span_id` is the run's own agent span, the one without a parent, and `null` when none was
+  read. Without it there is nothing to read: `attempts` and `messages` are `[]`, `shown_attempt` and
+  `history_count` are `null`, and `messages_state` is `not_stored`.
+- `shown_attempt` is the attempt the messages are read from: the one the run ended on. A provider
+  failover starts another attempt that sends the conversation again, so reading all of them would
+  show the prompt once for each. The earlier attempts are only listed, in `attempts`.
+- `attempts` has one entry for each attempt that has a step or a tool, and the shown one, in
+  ascending order. `provider` and `model` are those of the attempt's first step, else `null`.
+  `span_id` is the attempt's first failed step or tool, else its first step, else `null`; `error`
+  is that span's error in the shape of a span's, else `null`. The list is built from the spans
+  that were read, so it is incomplete when `span_limit.truncated` is `true`.
+- `messages_state` is `stored`, `partial` or `not_stored`. `messages_reason` is `null` unless the
+  state is `partial`, and then the first of these that applies:
+
+  | Reason | The messages are incomplete because |
+  | -- | -- |
+  | `span_limit` | the run has more spans than the limit, and the rest were not read |
+  | `offset_gap` | a step stores only what the step before it did not send, and a step that held some of it is not there, so messages are missing between two steps |
+  | `history_rewritten` | a step sent its history again whole, shorter or different from the one before, so only its tail is added to what was read |
+  | `history_boundary_unknown` | the first step's last message is neither the user's nor a tool result, so where the turn began is not known and none of that step's messages are returned; or the first step was recorded without its messages and the agent has no prompt of its own to say where the turn began |
+  | `step_input_missing` | a step was recorded without the messages it sent, and no later step covers them, so a tool result between two steps may be missing; or no step stored anything and the prompt is the agent's own |
+
+- `history_count` is the number of leading messages of the first stored step that were left out
+  because they came before this turn: the earlier turns of a remembered conversation, and any
+  history given to the agent by hand. It is `null` when it is not known, and `0` when the prompt
+  was the first message.
+- `span_limit` has the meaning it has on the run's endpoint: `limit`, `total` and `truncated`.
+
+A turn reads its own spans and nothing else. It never refers to another turn: a turn that resumed
+a pause starts at the tool result it was given and has no prompt of its own, and nothing in it
+names the turn that paused.
+
+## The message
+
+One message of a turn, in the order it was exchanged. Every message has these keys, and a key the
+stored message does not have is `null`.
+
+```json
+{
+  "part": "activity",
+  "role": "assistant",
+  "content": "Let me check.",
+  "structured": null,
+  "attachments": null,
+  "tool_calls": [
+    {
+      "id": "toolu_01", "name": "lookup_order", "arguments": { "order": 1042 },
+      "link": "linked",
+      "span": { "id": "0199c2f4-6a50-7d43-9f51-8e0a2b3c4d56", "status": "completed", "issue_kind": null, "duration_ms": 120.5 },
+      "agent": null
+    }
+  ],
+  "tool_results": null,
+  "source": { "span_id": "0199c2f4-6a5f-7e54-8062-9f1b3c4d5e67", "path": "input.messages.0", "redacted": false, "truncated": true },
+  "truncated_paths": {}
+}
+```
+
+- `part` is `prompt` (what started the turn), `response` (the answer that ended it) or `activity`
+  (everything else the turn exchanged). A turn has a `response` only when it completed and its
+  last output asked for no tool: a failed, running or waiting turn ends in `activity`.
+- `role` is the stored role string (`user`, `assistant`, `tool_result`), and `null` when the stored
+  message has none. A message built from a step's output is `assistant`, and a prompt built from the
+  agent's own span is `user`.
+- `content`, `structured`, `attachments`, `tool_calls` and `tool_results` are the stored values,
+  and `null` when the stored message has no such key. A stored `""` or `[]` stays as stored:
+  nothing is trimmed, defaulted or parsed again. A stored message without a role passes through
+  with its `content`. For a message built from a step's output, `content` is the output's `text`
+  and `finish_reason` is not returned.
+- `source` says where the message is stored. `span_id` is the span and `path` the place in it:
+  `input.messages.2` is the third of that step's stored messages, which are the ones its attempt
+  had not sent yet and not the whole history; `output` is the step's output; `input` is the agent's
+  own prompt, used when no step stored the start of the turn. `redacted` and `truncated` are the
+  span's own flags: they say that the span has any, not that this message does.
+- `truncated_paths` maps each cut part of this message to its length before it was cut, and is
+  `{}` when nothing in it was cut. It is the span's own `truncated_paths` for the entries under
+  this message, with the path made relative to it. A path matches whole segments, so
+  `input.messages.1` never takes the paths of `input.messages.10`. `truncated` can be `true`
+  while this is empty, when the span was cut somewhere else or with no length to report.
+
+  | Path in the span | In the message |
+  | -- | -- |
+  | `input.messages.K.x` | `x` |
+  | `output.text` | `content` |
+  | `output.tool_calls.i…` | `tool_calls.i…` |
+  | `output.structured…` | `structured…` |
+  | `input.prompt` (the agent's) | `content` |
+  | `input.attachments…` (the agent's) | `attachments…` |
+
+### The tool call
+
+Each entry of a message's `tool_calls`. `id`, `name` and `arguments` are as stored, `null` for a key
+the entry does not have. An entry that is not an object is returned as `arguments`, with `id` and
+`name` `null`, and is `unlinked`.
+
+- `link` says what became of the call, the first that applies. `linked`: the tool span that ran it
+  is known. `awaiting_approval`: the turn is waiting for approval and the call is one of
+  `detail.pending_approvals`. `not_started`: the turn is still running. `unlinked`: none of these.
+- `span` is `{ id, status, issue_kind, duration_ms }` of the tool span, else `null`. Its status is
+  the one the API shows, so a tool that was still running when its run was given up on is
+  `incomplete`.
+- `agent` is the first agent span (by recording order) that the tool span started, else `null`:
+  the agent a call delegated to. It has `span_id`, `name`, `agent_class`, `status`, `issue_kind`,
+  `provider`, `model`, `duration_ms`, and its own `pending_approvals` and
+  `resolved_tool_call_ids`, read as the run's `detail` reads them. A sub-agent that failed has the
+  status `failed` here, while the tool span that started it is `completed`. An agent started
+  directly by the run, and not by a tool, belongs to no call.
+
+A call is linked to a tool span only when the arguments confirm it, because the SDK records no
+call id on a tool span. A tool span is a candidate for a call when it is a direct child of the run,
+of the attempt shown, and recorded after the step that asked and before the next step started. For
+each tool name, in the order the step asked:
+
+1. The k-th call of that name takes the k-th candidate of that name, if the span stored
+   `arguments`, the call has `arguments`, and the two are the same JSON value.
+2. A call left over, with `arguments`, takes the one candidate of its name that no call has taken
+   and whose arguments are equal. None, or more than one, gives no link.
+
+There is no third rule: a call whose arguments were cut or redacted, or whose tool recorded no
+input, is not linked, and neither is one that only the order would suggest. The tools of a
+delegated agent and those of an earlier attempt are never candidates. Same JSON value means keys
+in any order, lists in order, an int equal to the float of the same value (`1` and `1.0`), an empty
+object equal to an empty list, `null` different from an absent key, and nothing else coerced.
+
+A call that appears in a stored message takes the link its own request got, by call id, if the id
+is a string that occurs in one call only among the turn's steps. A turn that resumed a pause also
+links the calls it settled, which sit in the history it did not return, to the tools it ran before
+its first step: by the same two rules, among the calls whose ids `detail.resolved_tool_call_ids`
+names.
+
+### The tool result
+
+Each entry of a message's `tool_results` is `{ id, name, result, span_id }`: the first three as
+stored, and `span_id` the span linked to the call with the same id, else `null`.
 
 ## The span
 
@@ -390,6 +565,83 @@ id in the direction of the sort, so a page never repeats or skips a conversation
 Each item is the conversation of [The conversation](#the-conversation). The response is read in a
 fixed number of queries whatever the size of the page, plus one lookup of the users for each user
 type on it.
+
+### `GET /api/conversations/transcript`
+
+The messages of one conversation: a window of its turns, oldest first, each with the messages its
+spans hold. It is for reading a conversation as the dialogue it was, where the list shows it as a
+row and the run's own page shows one run's spans.
+
+| Parameter | Meaning |
+| -- | -- |
+| `id` | Required. The conversation's id |
+| `limit` | How many turns. The default and the most is 10; a value outside 1 to 10 is clamped, and one that is not a whole number is a 422 |
+| `turn` | A run's id. The window ends at that turn, which it includes: the turn and up to `limit - 1` older ones |
+| `before` | A run's id. Up to `limit` turns that started before it, the nearest ones |
+| `after` | A run's id. Up to `limit` turns that started after it, the nearest ones |
+
+At most one of `turn`, `before` and `after` is sent, and with none the response is the newest
+`limit` turns. A turn is placed by when it started and then by id, and `data.turns` is always in
+that order, oldest first, whichever parameter chose the window. A time range, the filters of
+`GET /api/traces`, `page` and `per_page` are not parameters of this endpoint and are ignored, as
+is any parameter it does not know. Its window is the conversation's own, whole: a turn does not
+need to have started in any range.
+
+```json
+{
+  "data": {
+    "conversation": { "id": "support/ada 1042" },
+    "turns": [{ "trace": { "id": "…" }, "messages": [{ "part": "prompt" }] }]
+  },
+  "turn_limit": { "limit": 10, "total": 3, "truncated": false },
+  "window": { "older": 0, "newer": 0, "anchor": null }
+}
+```
+
+- `data.conversation` is the conversation of [The conversation](#the-conversation), over all of its
+  turns, as `GET /api/conversations` returns it. Each item of `data.turns` is a turn of
+  [The turn](#the-turn), whose `trace` and `detail` are those of the run's own endpoint.
+- **The id is in the query, not the path.** A conversation id is whatever the application chose and
+  can hold a slash, a dot, a space, a percent sign or any other character, which a path cannot
+  carry through every proxy and router. Send it as `encodeURIComponent` encodes it. It is read from
+  the raw query string, because the framework's middleware trims the edges of a value and turns an
+  empty one into `null`, and a conversation id may start or end with a space. An id that is missing
+  or empty, sent more than once as a list, longer than 255 characters, holding a NUL byte or not
+  valid UTF-8 is a `404` that does not reach the database, and so is an id with no turns.
+  The database matches the id itself: MySQL by default ignores case, so there `Case-Id` finds a
+  conversation stored as `case-id`, and `data.conversation.id` is the spelling of its latest turn.
+  Use the id the response returns.
+- `turn_limit` is `{ limit, total, truncated }`. `limit` is the limit that was applied, `total` is
+  the number of turns the conversation has (`data.conversation.turns.all`), and `truncated` is
+  `true` when `window.older` or `window.newer` is above zero.
+- `window` is `{ older, newer, anchor }`. `older` is how many turns started before the first turn
+  returned and `newer` how many started after the last, both counted by the database. When the
+  window is empty, which only `before` and `after` can make, `before` has `older` `0` and `newer`
+  the total, and `after` the reverse.
+- `anchor` is `null`, or `{ param, id, found }`: the parameter that was sent, the id it named and
+  whether it is a turn of this conversation. An anchor that is not one (a turn that was pruned, or
+  one of another conversation) is not an error: the response is the newest window, and `found` is
+  `false`, so a page that opened a turn the retention has since deleted shows the latest turns
+  and can say so.
+- To follow a turn that is still running, ask for `turn=<its id>&limit=1`: the response has the turn
+  as it is now, and the conversation's figures around it, which is what to merge by `trace.id`.
+- **What a turn leaves out.** The earlier history of the conversation, which the SDK sends the model
+  again on every turn and which belongs to the turns that exchanged it; the earlier attempts of a
+  provider failover, which only `attempts` lists; and the inner steps of a sub-agent, which are
+  those of its own agent span (on the run's endpoint) and appear here only as the `agent` of the
+  call that started it. A tool that a sub-agent ran is not linked to any call of this turn.
+- **A turn that resumed a pause** has no prompt: it starts at the tool result the pause was settled
+  with, and `history_count` counts what came before. The calls it settled are linked to the tools
+  it ran when its `detail.resolved_tool_call_ids` names them. A turn is never linked to another by
+  anything in this response.
+- The response is read in a fixed number of queries whatever the number of turns: eight, plus one
+  lookup of the users for each user type, resolved once for the header and the turns together. An
+  anchor adds one, and so does a turn with more spans than the limit, to count them. Each turn
+  carries at most `span_limit.limit` spans; a turn over it is `partial` with the reason
+  `span_limit`, the spans being the first ones in recording order.
+
+Errors: a `404` as above, and a `422` for a `limit` that is not a whole number and for anchors that
+are more than one, empty, or cannot be a run's id.
 
 ### `GET /api/traces`
 

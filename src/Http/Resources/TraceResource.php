@@ -19,8 +19,9 @@ final readonly class TraceResource
 
     /**
      * @param  iterable<Trace>  $traces
+     * @param  ResolvedUsers|null  $users  users already resolved together with other resources, else resolved from the runs
      */
-    public static function of(iterable $traces): self
+    public static function of(iterable $traces, ?ResolvedUsers $users = null): self
     {
         $ids = [];
         $pairs = [];
@@ -38,7 +39,7 @@ final readonly class TraceResource
             }
         }
 
-        return new self(ResolvedUsers::of($pairs), $bookmarked);
+        return new self($users ?? ResolvedUsers::of($pairs), $bookmarked);
     }
 
     /**

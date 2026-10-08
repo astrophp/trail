@@ -1,0 +1,477 @@
+{
+    "data": {
+        "conversation": {
+            "id": "support/ada 1042",
+            "turns": {
+                "all": 3,
+                "completed": 2,
+                "failed": 0,
+                "incomplete": 0,
+                "running": 0,
+                "awaiting_approval": 1
+            },
+            "agents": [
+                "SupportAssistant"
+            ],
+            "agent_count": 1,
+            "users": [
+                {
+                    "id": "7",
+                    "type": "Astro\\Trail\\Tests\\Fixtures\\Users\\User",
+                    "name": "Ada",
+                    "email": "ada@example.test"
+                }
+            ],
+            "user_count": 1,
+            "usage": {
+                "state": "reported",
+                "input_tokens": 6200,
+                "output_tokens": 460,
+                "cache_read_tokens": null,
+                "cache_write_tokens": null,
+                "reasoning_tokens": null,
+                "total_tokens": 6660
+            },
+            "cost": {
+                "state": "estimated",
+                "amount": 0.0255
+            },
+            "prompt_excerpt": "Refund it",
+            "first_activity_at": "2026-01-02T11:00:00.000Z",
+            "last_activity_at": "2026-01-02T11:09:00.000Z"
+        },
+        "turns": [
+            {
+                "trace": {
+                    "id": "t1",
+                    "type": "agent",
+                    "name": "SupportAssistant",
+                    "agent_class": "App\\Ai\\Agents\\SupportAssistant",
+                    "status": "completed",
+                    "issue_kind": null,
+                    "streamed": false,
+                    "recovered": false,
+                    "child_failed": false,
+                    "provider": "anthropic",
+                    "model": "claude-sonnet-4-5",
+                    "duration_ms": 4200,
+                    "usage": {
+                        "state": "reported",
+                        "input_tokens": 1500,
+                        "output_tokens": 220,
+                        "cache_read_tokens": null,
+                        "cache_write_tokens": null,
+                        "reasoning_tokens": null,
+                        "total_tokens": 1720
+                    },
+                    "cost": {
+                        "state": "estimated",
+                        "amount": 0.0078
+                    },
+                    "span_count": 7,
+                    "prompt_excerpt": "Where is order 1042?",
+                    "response_excerpt": "Order 1042 shipped on 30 December and arrives tomorrow.",
+                    "conversation_id": "support/ada 1042",
+                    "user": {
+                        "id": "7",
+                        "type": "Astro\\Trail\\Tests\\Fixtures\\Users\\User",
+                        "name": "Ada",
+                        "email": "ada@example.test"
+                    },
+                    "bookmarked": false,
+                    "started_at": "2026-01-02T11:00:00.000Z",
+                    "ended_at": "2026-01-02T11:00:04.200Z"
+                },
+                "detail": {
+                    "error": null,
+                    "pending_approvals": [],
+                    "resolved_tool_call_ids": []
+                },
+                "root_span_id": "t1-s01",
+                "shown_attempt": 1,
+                "attempts": [
+                    {
+                        "attempt": 1,
+                        "provider": "anthropic",
+                        "model": "claude-sonnet-4-5",
+                        "span_id": "t1-s02",
+                        "error": null
+                    }
+                ],
+                "messages_state": "stored",
+                "messages_reason": null,
+                "history_count": 0,
+                "messages": [
+                    {
+                        "part": "prompt",
+                        "role": "user",
+                        "content": "Where is order 1042?",
+                        "structured": null,
+                        "attachments": null,
+                        "tool_calls": null,
+                        "tool_results": null,
+                        "source": {
+                            "span_id": "t1-s02",
+                            "path": "input.messages.0",
+                            "redacted": false,
+                            "truncated": false
+                        },
+                        "truncated_paths": {}
+                    },
+                    {
+                        "part": "activity",
+                        "role": "assistant",
+                        "content": "Let me check.",
+                        "structured": null,
+                        "attachments": null,
+                        "tool_calls": [
+                            {
+                                "id": "toolu_01",
+                                "name": "lookup_order",
+                                "arguments": {
+                                    "order": 1042
+                                },
+                                "link": "linked",
+                                "span": {
+                                    "id": "t1-s03",
+                                    "status": "completed",
+                                    "issue_kind": null,
+                                    "duration_ms": 120.5
+                                },
+                                "agent": null
+                            },
+                            {
+                                "id": "toolu_02",
+                                "name": "ShippingAgent",
+                                "arguments": {
+                                    "task": "Track parcel for order 1042"
+                                },
+                                "link": "linked",
+                                "span": {
+                                    "id": "t1-s04",
+                                    "status": "completed",
+                                    "issue_kind": null,
+                                    "duration_ms": 1900
+                                },
+                                "agent": {
+                                    "span_id": "t1-s05",
+                                    "name": "ShippingAgent",
+                                    "agent_class": "App\\Ai\\Agents\\ShippingAgent",
+                                    "status": "completed",
+                                    "issue_kind": null,
+                                    "provider": "anthropic",
+                                    "model": "claude-haiku-4-5",
+                                    "duration_ms": 1850,
+                                    "pending_approvals": [],
+                                    "resolved_tool_call_ids": []
+                                }
+                            }
+                        ],
+                        "tool_results": null,
+                        "source": {
+                            "span_id": "t1-s07",
+                            "path": "input.messages.0",
+                            "redacted": false,
+                            "truncated": true
+                        },
+                        "truncated_paths": {}
+                    },
+                    {
+                        "part": "activity",
+                        "role": "tool_result",
+                        "content": null,
+                        "structured": null,
+                        "attachments": null,
+                        "tool_calls": null,
+                        "tool_results": [
+                            {
+                                "id": "toolu_01",
+                                "name": "lookup_order",
+                                "result": "{\"status\":\"shipped\",\"carrier\":\"DHL\"}",
+                                "span_id": "t1-s03"
+                            },
+                            {
+                                "id": "toolu_02",
+                                "name": "ShippingAgent",
+                                "result": "Parcel is out for delivery tomorrow. Tracking notes follow: …",
+                                "span_id": "t1-s04"
+                            }
+                        ],
+                        "source": {
+                            "span_id": "t1-s07",
+                            "path": "input.messages.1",
+                            "redacted": false,
+                            "truncated": true
+                        },
+                        "truncated_paths": {
+                            "tool_results.1.result": 18422
+                        }
+                    },
+                    {
+                        "part": "response",
+                        "role": "assistant",
+                        "content": "Order 1042 shipped on 30 December and arrives tomorrow.",
+                        "structured": null,
+                        "attachments": null,
+                        "tool_calls": [],
+                        "tool_results": null,
+                        "source": {
+                            "span_id": "t1-s07",
+                            "path": "output",
+                            "redacted": false,
+                            "truncated": true
+                        },
+                        "truncated_paths": {}
+                    }
+                ],
+                "span_limit": {
+                    "limit": 2000,
+                    "total": 7,
+                    "truncated": false
+                }
+            },
+            {
+                "trace": {
+                    "id": "t2",
+                    "type": "agent",
+                    "name": "SupportAssistant",
+                    "agent_class": "App\\Ai\\Agents\\SupportAssistant",
+                    "status": "completed",
+                    "issue_kind": null,
+                    "streamed": false,
+                    "recovered": true,
+                    "child_failed": false,
+                    "provider": "anthropic",
+                    "model": "claude-sonnet-4-5",
+                    "duration_ms": 6100,
+                    "usage": {
+                        "state": "reported",
+                        "input_tokens": 2100,
+                        "output_tokens": 180,
+                        "cache_read_tokens": null,
+                        "cache_write_tokens": null,
+                        "reasoning_tokens": null,
+                        "total_tokens": 2280
+                    },
+                    "cost": {
+                        "state": "estimated",
+                        "amount": 0.009
+                    },
+                    "span_count": 3,
+                    "prompt_excerpt": "Can I still change the address?",
+                    "response_excerpt": "Not once it is out for delivery.",
+                    "conversation_id": "support/ada 1042",
+                    "user": {
+                        "id": "7",
+                        "type": "Astro\\Trail\\Tests\\Fixtures\\Users\\User",
+                        "name": "Ada",
+                        "email": "ada@example.test"
+                    },
+                    "bookmarked": false,
+                    "started_at": "2026-01-02T11:05:00.000Z",
+                    "ended_at": "2026-01-02T11:05:06.100Z"
+                },
+                "detail": {
+                    "error": null,
+                    "pending_approvals": [],
+                    "resolved_tool_call_ids": []
+                },
+                "root_span_id": "t2-s01",
+                "shown_attempt": 2,
+                "attempts": [
+                    {
+                        "attempt": 1,
+                        "provider": "openai",
+                        "model": "gpt-5",
+                        "span_id": "t2-s02",
+                        "error": {
+                            "class": "Laravel\\Ai\\Exceptions\\RateLimitedException",
+                            "message": "Application rate limited by AI provider [openai].",
+                            "source": "step",
+                            "http_status": 429
+                        }
+                    },
+                    {
+                        "attempt": 2,
+                        "provider": "anthropic",
+                        "model": "claude-sonnet-4-5",
+                        "span_id": "t2-s03",
+                        "error": null
+                    }
+                ],
+                "messages_state": "stored",
+                "messages_reason": null,
+                "history_count": 4,
+                "messages": [
+                    {
+                        "part": "prompt",
+                        "role": "user",
+                        "content": "Can I still change the address?",
+                        "structured": null,
+                        "attachments": null,
+                        "tool_calls": null,
+                        "tool_results": null,
+                        "source": {
+                            "span_id": "t2-s03",
+                            "path": "input.messages.4",
+                            "redacted": false,
+                            "truncated": false
+                        },
+                        "truncated_paths": {}
+                    },
+                    {
+                        "part": "response",
+                        "role": "assistant",
+                        "content": "Not once it is out for delivery.",
+                        "structured": null,
+                        "attachments": null,
+                        "tool_calls": [],
+                        "tool_results": null,
+                        "source": {
+                            "span_id": "t2-s03",
+                            "path": "output",
+                            "redacted": false,
+                            "truncated": false
+                        },
+                        "truncated_paths": {}
+                    }
+                ],
+                "span_limit": {
+                    "limit": 2000,
+                    "total": 3,
+                    "truncated": false
+                }
+            },
+            {
+                "trace": {
+                    "id": "t3",
+                    "type": "agent",
+                    "name": "SupportAssistant",
+                    "agent_class": "App\\Ai\\Agents\\SupportAssistant",
+                    "status": "awaiting_approval",
+                    "issue_kind": null,
+                    "streamed": false,
+                    "recovered": false,
+                    "child_failed": false,
+                    "provider": "anthropic",
+                    "model": "claude-sonnet-4-5",
+                    "duration_ms": 1300,
+                    "usage": {
+                        "state": "reported",
+                        "input_tokens": 2600,
+                        "output_tokens": 60,
+                        "cache_read_tokens": null,
+                        "cache_write_tokens": null,
+                        "reasoning_tokens": null,
+                        "total_tokens": 2660
+                    },
+                    "cost": {
+                        "state": "estimated",
+                        "amount": 0.0087
+                    },
+                    "span_count": 2,
+                    "prompt_excerpt": "Refund it",
+                    "response_excerpt": null,
+                    "conversation_id": "support/ada 1042",
+                    "user": {
+                        "id": "7",
+                        "type": "Astro\\Trail\\Tests\\Fixtures\\Users\\User",
+                        "name": "Ada",
+                        "email": "ada@example.test"
+                    },
+                    "bookmarked": false,
+                    "started_at": "2026-01-02T11:09:00.000Z",
+                    "ended_at": "2026-01-02T11:09:01.300Z"
+                },
+                "detail": {
+                    "error": null,
+                    "pending_approvals": [
+                        {
+                            "tool_call_id": "toolu_09",
+                            "tool": "refund_order",
+                            "arguments": {
+                                "order": 1042
+                            },
+                            "reason": "Moves money"
+                        }
+                    ],
+                    "resolved_tool_call_ids": []
+                },
+                "root_span_id": "t3-s01",
+                "shown_attempt": 1,
+                "attempts": [
+                    {
+                        "attempt": 1,
+                        "provider": "anthropic",
+                        "model": "claude-sonnet-4-5",
+                        "span_id": "t3-s02",
+                        "error": null
+                    }
+                ],
+                "messages_state": "stored",
+                "messages_reason": null,
+                "history_count": 6,
+                "messages": [
+                    {
+                        "part": "prompt",
+                        "role": "user",
+                        "content": "Refund it",
+                        "structured": null,
+                        "attachments": null,
+                        "tool_calls": null,
+                        "tool_results": null,
+                        "source": {
+                            "span_id": "t3-s02",
+                            "path": "input.messages.6",
+                            "redacted": false,
+                            "truncated": false
+                        },
+                        "truncated_paths": {}
+                    },
+                    {
+                        "part": "activity",
+                        "role": "assistant",
+                        "content": "",
+                        "structured": null,
+                        "attachments": null,
+                        "tool_calls": [
+                            {
+                                "id": "toolu_09",
+                                "name": "refund_order",
+                                "arguments": {
+                                    "order": 1042
+                                },
+                                "link": "awaiting_approval",
+                                "span": null,
+                                "agent": null
+                            }
+                        ],
+                        "tool_results": null,
+                        "source": {
+                            "span_id": "t3-s02",
+                            "path": "output",
+                            "redacted": false,
+                            "truncated": false
+                        },
+                        "truncated_paths": {}
+                    }
+                ],
+                "span_limit": {
+                    "limit": 2000,
+                    "total": 2,
+                    "truncated": false
+                }
+            }
+        ]
+    },
+    "turn_limit": {
+        "limit": 10,
+        "total": 3,
+        "truncated": false
+    },
+    "window": {
+        "older": 0,
+        "newer": 0,
+        "anchor": null
+    }
+}

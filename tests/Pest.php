@@ -22,8 +22,8 @@ uses(MigratesLaravelTables::class)->in('Feature/Users');
 uses(RefreshDatabase::class)->in('Feature/Users');
 uses(RefreshDatabase::class)->in('Feature/Http/Api', 'Feature/Queries');
 uses(MigratesLaravelTables::class, RefreshDatabase::class)->in('Feature/Http/Resources/ResolvedUsersTest.php');
-uses(MigratesLaravelTables::class)->in('Feature/Http/Api/ContractTest.php', 'Feature/Http/Api/ConversationIndexTest.php', 'Feature/Http/Api/TraceBookmarkTest.php', 'Feature/Http/Api/TraceExportTest.php', 'Feature/Http/Api/TraceIndexTest.php', 'Feature/Http/Api/TraceNeighboursTest.php', 'Feature/Http/Api/TraceResourceTest.php');
-uses(MigratesLaravelAndSdkTables::class, ObservesSdk::class)->in('Feature/Http/Api/TraceShowTest.php');
+uses(MigratesLaravelTables::class)->in('Feature/Http/Api/ContractTest.php', 'Feature/Http/Api/ConversationIndexTest.php', 'Feature/Http/Api/ConversationTranscriptTest.php', 'Feature/Http/Api/TraceBookmarkTest.php', 'Feature/Http/Api/TraceExportTest.php', 'Feature/Http/Api/TraceIndexTest.php', 'Feature/Http/Api/TraceNeighboursTest.php', 'Feature/Http/Api/TraceResourceTest.php');
+uses(MigratesLaravelAndSdkTables::class, ObservesSdk::class)->in('Feature/Http/Api/TraceShowTest.php', 'Feature/Http/Api/ConversationTranscriptCaptureTest.php');
 uses(BootsWorkbench::class, RefreshDatabase::class)->in('Feature/Workbench');
 
 /** The window.Trail object of a page, decoded the way the browser decodes it. */

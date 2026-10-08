@@ -4,6 +4,7 @@ use Astro\Trail\Enums\ErrorSource;
 use Astro\Trail\Enums\IssueKind;
 use Astro\Trail\Enums\SpanType;
 use Astro\Trail\Enums\Status;
+use Astro\Trail\Storage\Models\Trace;
 use Astro\Trail\Tests\Fixtures\Storage\Rows;
 use Astro\Trail\Tests\Fixtures\Users\User;
 use Illuminate\Support\Carbon;
@@ -265,6 +266,96 @@ function conversationContractDataset(): void
 }
 
 /**
+ * A conversation of three turns that shows every shape of its transcript: a tool and a delegated
+ * agent with a cut result, a failover that recovered on a history of earlier turns, and a turn
+ * waiting for approval. Spans are laid out by hand, with the ids and values chosen to be read.
+ */
+function transcriptContractDataset(): void
+{
+    DB::table('users')->insert(['id' => 7, 'name' => 'Ada', 'email' => 'ada@example.test', 'password' => 'x']);
+
+    $turn = fn (string $id, string $started, array $attributes) => Rows::trace([...[
+        'id' => $id, 'name' => 'SupportAssistant', 'agent_class' => 'App\\Ai\\Agents\\SupportAssistant', 'conversation_id' => 'support/ada 1042',
+        'user_id' => '7', 'user_type' => User::class, 'provider' => 'anthropic', 'model' => 'claude-sonnet-4-5', 'started_at' => $started,
+    ], ...$attributes]);
+
+    $span = fn (Trace $trace, int $sequence, array $attributes) => Rows::span($trace, [...[
+        'id' => sprintf('%s-s%02d', $trace->id, $sequence), 'sequence' => $sequence, 'status' => Status::Completed,
+        'started_at' => $trace->started_at, 'ended_at' => $trace->started_at, 'duration_ms' => 100.0,
+    ], ...$attributes]);
+
+    $one = $turn('t1', '2026-01-02 11:00:00', [
+        'status' => Status::Completed, 'duration_ms' => 4200.0, 'input_tokens' => 1500, 'output_tokens' => 220, 'cost' => 0.0078, 'span_count' => 7,
+        'prompt_excerpt' => 'Where is order 1042?', 'response_excerpt' => 'Order 1042 shipped on 30 December and arrives tomorrow.', 'ended_at' => '2026-01-02 11:00:04.200',
+    ]);
+    $span($one, 1, ['type' => SpanType::Agent, 'name' => 'SupportAssistant', 'agent_class' => 'App\\Ai\\Agents\\SupportAssistant', 'input' => ['prompt' => 'Where is order 1042?', 'system' => null]]);
+    $span($one, 2, [
+        'parent_id' => 't1-s01', 'provider' => 'anthropic', 'model' => 'claude-sonnet-4-5',
+        'input' => ['messages' => [['role' => 'user', 'content' => 'Where is order 1042?']], 'messages_offset' => 0, 'options' => null],
+        'output' => ['text' => 'Let me check.', 'tool_calls' => [
+            ['id' => 'toolu_01', 'name' => 'lookup_order', 'arguments' => ['order' => 1042]],
+            ['id' => 'toolu_02', 'name' => 'ShippingAgent', 'arguments' => ['task' => 'Track parcel for order 1042']],
+        ], 'finish_reason' => 'tool_calls'],
+    ]);
+    $span($one, 3, ['parent_id' => 't1-s01', 'type' => SpanType::Tool, 'name' => 'lookup_order', 'duration_ms' => 120.5, 'input' => ['arguments' => ['order' => 1042]], 'output' => ['result' => '{"status":"shipped","carrier":"DHL"}']]);
+    $span($one, 4, ['parent_id' => 't1-s01', 'type' => SpanType::Tool, 'name' => 'ShippingAgent', 'duration_ms' => 1900.0, 'input' => ['arguments' => ['task' => 'Track parcel for order 1042']], 'output' => ['result' => 'Parcel is out for delivery tomorrow.']]);
+    $span($one, 5, ['parent_id' => 't1-s04', 'type' => SpanType::Agent, 'name' => 'ShippingAgent', 'agent_class' => 'App\\Ai\\Agents\\ShippingAgent', 'provider' => 'anthropic', 'model' => 'claude-haiku-4-5', 'duration_ms' => 1850.0, 'input' => ['prompt' => 'Track parcel for order 1042', 'system' => null]]);
+    $span($one, 6, ['parent_id' => 't1-s05', 'input' => ['messages' => [['role' => 'user', 'content' => 'Track parcel for order 1042']], 'messages_offset' => 0, 'options' => null], 'output' => ['text' => 'Parcel is out for delivery tomorrow.', 'tool_calls' => [], 'finish_reason' => 'stop']]);
+    $span($one, 7, [
+        'parent_id' => 't1-s01', 'provider' => 'anthropic', 'model' => 'claude-sonnet-4-5', 'truncated' => true,
+        'input' => ['messages' => [
+            ['role' => 'assistant', 'content' => 'Let me check.', 'tool_calls' => [
+                ['id' => 'toolu_01', 'name' => 'lookup_order', 'arguments' => ['order' => 1042]],
+                ['id' => 'toolu_02', 'name' => 'ShippingAgent', 'arguments' => ['task' => 'Track parcel for order 1042']],
+            ]],
+            ['role' => 'tool_result', 'content' => null, 'tool_results' => [
+                ['id' => 'toolu_01', 'name' => 'lookup_order', 'result' => '{"status":"shipped","carrier":"DHL"}'],
+                ['id' => 'toolu_02', 'name' => 'ShippingAgent', 'result' => 'Parcel is out for delivery tomorrow. Tracking notes follow: …'],
+            ]],
+        ], 'messages_offset' => 1, 'options' => null],
+        'output' => ['text' => 'Order 1042 shipped on 30 December and arrives tomorrow.', 'tool_calls' => [], 'finish_reason' => 'stop'],
+        'metadata' => ['truncated' => ['input.messages.1.tool_results.1.result' => 18422]],
+    ]);
+
+    $two = $turn('t2', '2026-01-02 11:05:00', [
+        'status' => Status::Completed, 'recovered' => true, 'duration_ms' => 6100.0, 'input_tokens' => 2100, 'output_tokens' => 180, 'cost' => 0.009, 'span_count' => 3,
+        'prompt_excerpt' => 'Can I still change the address?', 'response_excerpt' => 'Not once it is out for delivery.', 'ended_at' => '2026-01-02 11:05:06.100',
+    ]);
+    $span($two, 1, ['type' => SpanType::Agent, 'name' => 'SupportAssistant', 'attempt' => 2, 'agent_class' => 'App\\Ai\\Agents\\SupportAssistant', 'input' => ['prompt' => 'Can I still change the address?', 'system' => null]]);
+    $span($two, 2, [
+        'parent_id' => 't2-s01', 'attempt' => 1, 'status' => Status::Failed, 'provider' => 'openai', 'model' => 'gpt-5', 'issue_kind' => IssueKind::RateLimited,
+        'error_class' => 'Laravel\\Ai\\Exceptions\\RateLimitedException', 'error_message' => 'Application rate limited by AI provider [openai].', 'error_source' => ErrorSource::Step, 'error_http_status' => 429,
+        'input' => ['messages' => [['role' => 'user', 'content' => 'Can I still change the address?']], 'messages_offset' => 0, 'options' => null],
+    ]);
+    $span($two, 3, [
+        'parent_id' => 't2-s01', 'attempt' => 2, 'provider' => 'anthropic', 'model' => 'claude-sonnet-4-5',
+        'input' => ['messages' => [
+            ['role' => 'user', 'content' => 'Where is order 1042?'], ['role' => 'assistant', 'content' => 'Order 1042 shipped on 30 December and arrives tomorrow.'],
+            ['role' => 'user', 'content' => 'Thanks'], ['role' => 'assistant', 'content' => 'You are welcome.'],
+            ['role' => 'user', 'content' => 'Can I still change the address?'],
+        ], 'messages_offset' => 0, 'options' => null],
+        'output' => ['text' => 'Not once it is out for delivery.', 'tool_calls' => [], 'finish_reason' => 'stop'],
+    ]);
+
+    $three = $turn('t3', '2026-01-02 11:09:00', [
+        'status' => Status::AwaitingApproval, 'duration_ms' => 1300.0, 'input_tokens' => 2600, 'output_tokens' => 60, 'cost' => 0.0087, 'span_count' => 2,
+        'prompt_excerpt' => 'Refund it', 'ended_at' => '2026-01-02 11:09:01.300',
+        'metadata' => ['pending_approvals' => [['tool_call_id' => 'toolu_09', 'tool' => 'refund_order', 'arguments' => ['order' => 1042], 'reason' => 'Moves money']]],
+    ]);
+    $span($three, 1, ['type' => SpanType::Agent, 'name' => 'SupportAssistant', 'status' => Status::AwaitingApproval, 'agent_class' => 'App\\Ai\\Agents\\SupportAssistant', 'input' => ['prompt' => 'Refund it', 'system' => null]]);
+    $span($three, 2, [
+        'parent_id' => 't3-s01', 'provider' => 'anthropic', 'model' => 'claude-sonnet-4-5',
+        'input' => ['messages' => [
+            ['role' => 'user', 'content' => 'Where is order 1042?'], ['role' => 'assistant', 'content' => 'Order 1042 shipped on 30 December and arrives tomorrow.'],
+            ['role' => 'user', 'content' => 'Can I still change the address?'], ['role' => 'assistant', 'content' => 'Not once it is out for delivery.'],
+            ['role' => 'user', 'content' => 'Thanks'], ['role' => 'assistant', 'content' => 'You are welcome.'],
+            ['role' => 'user', 'content' => 'Refund it'],
+        ], 'messages_offset' => 0, 'options' => null],
+        'output' => ['text' => '', 'tool_calls' => [['id' => 'toolu_09', 'name' => 'refund_order', 'arguments' => ['order' => 1042]]], 'finish_reason' => 'tool_calls'],
+    ]);
+}
+
+/**
  * @param  array<string, mixed>|object  $body  decoded as objects where an empty object must stay one
  */
 function assertContract(string $name, array|object $body): void
@@ -312,6 +403,15 @@ it('sends the conversations response the dashboard expects', function () {
     conversationContractDataset();
 
     assertContract('conversations', $this->getJson('/trail/api/conversations')->assertOk()->json());
+});
+
+it('sends the conversation transcript response the dashboard expects', function () {
+    transcriptContractDataset();
+
+    // Decoded as objects: the truncated paths of a message are an empty object when nothing was cut.
+    $response = $this->getJson('/trail/api/conversations/transcript?id='.rawurlencode('support/ada 1042'))->assertOk();
+
+    assertContract('conversation', json_decode($response->getContent(), false, flags: JSON_THROW_ON_ERROR));
 });
 
 it('sends the bookmark response the dashboard expects', function () {
