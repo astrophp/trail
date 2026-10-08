@@ -1,20 +1,19 @@
 import { useEffect, useRef, useState, type RefObject } from 'react'
 import { useLocation, useNavigate } from 'react-router'
 import { SearchField } from '@/components/patterns/search-field'
-import { normalizeSearch } from '@/api/trace-list-view'
+import { normalizeSearch, searchLength } from '@/lib/search'
 
 /** How long typing must pause before the text is acted on. */
 const pause = 300
 
-/** The API reads at most this many characters of a search. */
-const maxLength = 200
-
-type TraceSearchProps = {
+type HistorySearchFieldProps = {
     /** The search the URL has. */
     value: string
     /** Called with the text to search for. `replace` is for a change in the same typing session. */
     onCommit: (value: string, options: { replace: boolean }) => void
     inputRef: RefObject<HTMLInputElement | null>
+    placeholder: string
+    'aria-label': string
     className?: string
 }
 
@@ -23,7 +22,7 @@ const entryKey = () =>
     (window.history.state as { key?: string } | null)?.key ?? 'default'
 
 /**
- * The search box. What is typed stays in the box (a draft) and reaches the URL after a pause of
+ * A list's search box. What is typed stays in the box (a draft) and reaches the URL after a pause of
  * 300 ms, on Enter, or when the box loses focus, so a request is not made per keystroke. Nothing
  * is written while an IME composition is open; a blur ends it.
  *
@@ -34,12 +33,14 @@ const entryKey = () =>
  * focus leaves the box (its clear button counts as the box) and on any location change this box did not make (Back, Forward, a chip, a
  * link), which also drops a write that was waiting and puts the URL's search in the box.
  */
-export function TraceSearch({
+export function HistorySearchField({
     value,
     onCommit,
     inputRef,
+    placeholder,
+    'aria-label': ariaLabel,
     className,
-}: TraceSearchProps) {
+}: HistorySearchFieldProps) {
     const { key } = useLocation()
     const navigate = useNavigate()
     const [draft, setDraft] = useState(value)
@@ -114,9 +115,9 @@ export function TraceSearch({
                     schedule(normalizeSearch(next))
                 }
             }}
-            placeholder="Search agent, prompt, trace ID…"
-            aria-label="Search runs"
-            maxLength={maxLength}
+            placeholder={placeholder}
+            aria-label={ariaLabel}
+            maxLength={searchLength}
             inputRef={inputRef}
             className={className}
             onCompositionStart={() => {

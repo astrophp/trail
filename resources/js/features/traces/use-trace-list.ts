@@ -8,10 +8,8 @@ import {
     type TraceListView,
 } from '@/api/trace-list-view'
 import { statusFilterLabel } from '@/features/traces/trace-status'
-import { useUrlState, type SetUrlState } from '@/hooks/use-url-state'
+import { useListState } from '@/hooks/use-list-state'
 import { useTimeRange } from '@/hooks/use-time-range'
-
-type WriteOptions = Parameters<SetUrlState<typeof traceListParams>>[1]
 
 /**
  * The list's view, read from the URL and written to it: the time range, sort, page and filters.
@@ -20,49 +18,29 @@ type WriteOptions = Parameters<SetUrlState<typeof traceListParams>>[1]
  */
 export function useTraceList() {
     const [range] = useTimeRange()
-    const [state, setState] = useUrlState(traceListParams)
-    const setSort = useCallback(
-        (sort: TraceSort) => setState({ sort, page: 1 }),
-        [setState],
+    const { state, change, setPage, clear, clearAll } = useListState(
+        traceListParams,
+        traceFilterKeys,
     )
-    const setPage = useCallback(
-        (page: number, options?: WriteOptions) => setState({ page }, options),
-        [setState],
-    )
+    const setSort = useCallback((sort: TraceSort) => change({ sort }), [change])
     const setStatus = useCallback(
-        (status: StatusFilter) => setState({ status, page: 1 }),
-        [setState],
+        (status: StatusFilter) => change({ status }),
+        [change],
     )
     const setSearch = useCallback(
-        (search: string, options?: WriteOptions) =>
-            setState({ search, page: 1 }, options),
-        [setState],
+        (search: string, options?: { replace?: boolean }) =>
+            change({ search }, options),
+        [change],
     )
-    const setAgent = useCallback(
-        (agent: string) => setState({ agent, page: 1 }),
-        [setState],
-    )
+    const setAgent = useCallback((agent: string) => change({ agent }), [change])
     const setProvider = useCallback(
-        (provider: string) => setState({ provider, page: 1 }),
-        [setState],
+        (provider: string) => change({ provider }),
+        [change],
     )
     const setBookmarked = useCallback(
-        (bookmarked: boolean) => setState({ bookmarked, page: 1 }),
-        [setState],
+        (bookmarked: boolean) => change({ bookmarked }),
+        [change],
     )
-    /** Puts the given filters back to "no filter", and the list back on page 1: one history entry. */
-    const clear = useCallback(
-        (keys: TraceFilterKey[]) =>
-            setState({
-                ...Object.fromEntries(
-                    keys.map((key) => [key, traceListParams[key].default]),
-                ),
-                page: 1,
-            }),
-        [setState],
-    )
-
-    const clearAll = useCallback(() => clear([...traceFilterKeys]), [clear])
 
     const view: TraceListView = { range, ...state }
     // The filters that are on, in one place: the chips show them and `hasFilters` follows.

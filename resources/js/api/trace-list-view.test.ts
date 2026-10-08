@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-    normalizeSearch,
     readTraceListView,
     traceListApiParams,
     type TraceListView,
@@ -59,13 +58,6 @@ describe('readTraceListView', () => {
     it('normalises the search like the box does', () => {
         expect(read('search=%20%20hi%20there%20%20').search).toBe('hi there')
         expect(read(`search=${'a'.repeat(300)}`).search).toBe('a'.repeat(200))
-    })
-})
-
-describe('normalizeSearch', () => {
-    it('trims and caps the text', () => {
-        expect(normalizeSearch('  x  ')).toBe('x')
-        expect(normalizeSearch('b'.repeat(250))).toHaveLength(200)
     })
 })
 

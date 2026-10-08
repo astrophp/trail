@@ -14,7 +14,7 @@ import { OutcomeCell } from '@/features/traces/outcome-cell'
 import { RunCell } from '@/features/traces/run-cell'
 import { SelectPage } from '@/features/traces/select-page'
 
-// The id of a sortable column is the API's name for the field it sorts by (see trace-sort.ts).
+// The id of a sortable column is the API's name for the field it sorts by (see `toApiSort` in lib/table-sort.ts).
 // A column needs an accessor to be sortable at all; the server sorts, so the values are never read.
 export const traceColumns: DataTableColumn<Trace>[] = [
     {

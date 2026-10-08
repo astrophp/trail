@@ -1,8 +1,8 @@
 import { BookmarkIcon } from 'lucide-react'
 import type { RefObject } from 'react'
+import { HistorySearchField } from '@/components/patterns/history-search-field'
 import { SelectFilter } from '@/components/patterns/select-filter'
 import { ToggleFilter } from '@/components/patterns/toggle-filter'
-import { TraceSearch } from '@/features/traces/trace-search'
 import { useTraceList } from '@/features/traces/use-trace-list'
 import { cn } from '@/lib/utils'
 
@@ -31,7 +31,9 @@ export function TraceFilters({
             data-slot="trace-filters"
             className={cn('flex flex-wrap items-center gap-2', className)}
         >
-            <TraceSearch
+            <HistorySearchField
+                placeholder="Search agent, prompt, trace ID…"
+                aria-label="Search runs"
                 value={list.search}
                 inputRef={searchRef}
                 onCommit={(search, options) => list.setSearch(search, options)}

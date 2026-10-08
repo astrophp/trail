@@ -6,7 +6,7 @@ import { AgentIcon } from '@/components/telemetry/agent-icon'
 import { BookmarkToggle } from '@/components/telemetry/bookmark-toggle'
 import { TraceId } from '@/components/telemetry/trace-id'
 import { SelectRow } from '@/features/traces/select-row'
-import { TableBusyContext } from '@/features/traces/table-busy'
+import { TableBusyContext } from '@/components/patterns/table-busy'
 import { useBookmark } from '@/features/traces/use-bookmark'
 import { returnTo } from '@/lib/return-context'
 

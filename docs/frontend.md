@@ -86,6 +86,35 @@ A value Trail did not capture is `null`, and is shown as `Not captured`, `Pendin
 `Incomplete`, never as zero. Only the `telemetry` components format such values; nothing else
 formats a cost, a token count or a duration by hand.
 
+## Building a list page
+
+A list page (a table of rows the server sorts, filters and pages) is assembled from shared pieces.
+Do not rewrite any of them in a feature.
+
+- **`useListState(params, filterKeys)`** (`hooks`): the view in the URL. One params object per page,
+  containing `page`. Everything that changes which rows are shown goes through `change`, and
+  `clear` / `clearAll` put filters back to their `default`; `setPage` only moves the page.
+- **`HistorySearchField`** (`patterns`): the search box. It commits after a pause, on Enter or on
+  blur, and makes a typing session one history entry. `normalizeSearch` and `searchParam` are in
+  `lib/search`, so the box and the API param agree on what a search is.
+- **`toTableSort` / `toApiSort`** (`lib/table-sort`): the table's sort and the API's `sort` value,
+  for the list of sorts the API takes.
+- **`DataTable`** (`patterns`): draws the loading, refreshing and empty states, and provides
+  `TableBusyContext` from its `busy` prop. A control in a cell that writes to the cache reads it
+  and disables itself while the rows are the previous view's.
+- **`useListStatus`** (`hooks`): from the query, whether to draw `failed`, `loading` or `empty`, and
+  the move off a page past the end.
+
+Two guarantees come with these pieces; keep them when adding a list:
+
+- A filter or sort change returns to page 1 in the **same history entry**, so Back never lands on a
+  page number that meant something else.
+- **Placeholder data is the previous view's answer.** `useListStatus` reports `loading` when there
+  is no data, for a page past the end and for an *empty* placeholder, so "empty" is never read from
+  it. Rows from a placeholder are the previous view's rows: `DataTable` draws them `busy` (dimmed).
+  Any count, total or page number shown outside the dimmed table must also check the query's
+  `isPlaceholderData`; `loading` being false does not make a count current.
+
 ## The catalogue
 
 `npm run catalogue` serves a dev-only page of every shared component in its variants and states, in
