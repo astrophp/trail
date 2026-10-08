@@ -54,7 +54,7 @@ export function Metric({
             </dt>
             <dd
                 id={valueId}
-                className="mt-1 basis-full text-title-compact text-foreground tabular-nums @3xl:text-title"
+                className="mt-1 basis-full text-title-compact text-foreground tabular-nums @2xl:text-title"
             >
                 {children}
             </dd>

@@ -3,8 +3,12 @@ import { formatDuration } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
 type DurationValueProps = {
-    /** A run or, later, a span: anything with a duration and the status it had. */
-    of: { duration_ms: number | null; status: Status }
+    /**
+     * A run or, later, a span: anything with a duration and the status it had. Without a status the
+     * figure belongs to no single run (an average or a percentile over many): missing, it reads
+     * "No measured runs".
+     */
+    of: { duration_ms: number | null; status?: Status }
     className?: string
 }
 
@@ -17,7 +21,11 @@ export function DurationValue({ of, className }: DurationValueProps) {
                 data-slot="duration-value"
                 className={cn('text-muted-foreground', className)}
             >
-                {of.status === 'running' ? 'In progress' : 'Not captured'}
+                {of.status === 'running'
+                    ? 'In progress'
+                    : of.status === undefined
+                      ? 'No measured runs'
+                      : 'Not captured'}
             </span>
         )
     }

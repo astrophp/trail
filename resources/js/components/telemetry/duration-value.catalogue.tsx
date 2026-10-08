@@ -2,7 +2,7 @@ import { DurationValue } from '@/components/telemetry/duration-value'
 import type { Status } from '@/api/types'
 import type { CatalogueEntry } from '@/catalogue/types'
 
-const durations: [string, number | null, Status][] = [
+const durations: [string, number | null, Status | undefined][] = [
     ['Under a millisecond', 0.4, 'completed'],
     ['Milliseconds', 840, 'completed'],
     ['Seconds', 9_200, 'completed'],
@@ -12,6 +12,8 @@ const durations: [string, number | null, Status][] = [
     ['Not captured, completed', null, 'completed'],
     ['Not captured, failed', null, 'failed'],
     ['Not captured, incomplete', null, 'incomplete'],
+    ['Over many runs', 1_900, undefined],
+    ['Over many runs, none measured', null, undefined],
 ]
 
 export const catalogue: CatalogueEntry = {

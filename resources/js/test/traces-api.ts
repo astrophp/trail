@@ -11,6 +11,7 @@ import { contractFixture } from '@/test/contract-fixture'
 export const traceFixture = contractFixture('traces') as TraceListResponse
 export const metaFixture = contractFixture('meta') as MetaResponse
 export const bookmarkFixture = contractFixture('bookmark') as BookmarkResponse
+const overviewFixture = contractFixture('overview')
 
 export const lastPage = 3
 
@@ -71,7 +72,9 @@ const isBookmark = (url: string) => /\/api\/traces\/[^?]+\/bookmark$/.test(url)
  * (by default what the method means) and the list with `respond`.
  */
 export function mockApi(
-    respond: Handler = (url) => json(listFor(url)),
+    // Any other page of the dashboard a test visits on the way gets its own fixture.
+    respond: Handler = (url) =>
+        json(url.includes('/api/overview') ? overviewFixture : listFor(url)),
     bookmark: Handler = (url, init) =>
         json({
             data: {

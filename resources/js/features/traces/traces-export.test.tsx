@@ -29,6 +29,31 @@ describe('exporting the view', () => {
         })
     })
 
+    it('carries the slow filter, and drops it when the filter goes', async () => {
+        mockApi()
+        renderApp('/traces?slow=1')
+        await loaded()
+
+        expect(paramsOf(exportLink().getAttribute('href') ?? '')).toEqual({
+            range: '24h',
+            sort: '-started_at',
+            slow: '1',
+        })
+
+        await userEvent.click(
+            screen.getByRole('button', {
+                name: /Remove filter: Slow: 95th percentile and above/,
+            }),
+        )
+
+        await waitFor(() =>
+            expect(paramsOf(exportLink().getAttribute('href') ?? '')).toEqual({
+                range: '24h',
+                sort: '-started_at',
+            }),
+        )
+    })
+
     it('follows the filters', async () => {
         mockApi()
         renderApp('/traces')

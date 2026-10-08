@@ -33,6 +33,24 @@ describe('MetricStrip', () => {
         },
     )
 
+    it('switches to one row at 672px of its own width, in the strip, the cells and the value size', () => {
+        const { container } = render(
+            <MetricStrip>
+                <Metric label="Traces">1</Metric>
+            </MetricStrip>,
+        )
+        const classes = [
+            container.querySelector('dl'),
+            container.querySelector('[data-slot="metric"]'),
+            container.querySelector('dd'),
+        ].map((element) => element?.className ?? '')
+
+        for (const text of classes) {
+            expect(text).toMatch(/@2xl:/)
+            expect(text).not.toMatch(/@3xl:/)
+        }
+    })
+
     it('takes a class name', () => {
         const { container } = render(
             <MetricStrip className="extra">
