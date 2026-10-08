@@ -2,12 +2,15 @@
 
 namespace Astro\Trail\Tests\Performance;
 
+use Astro\Trail\Queries\OverviewQuery;
+use Astro\Trail\Queries\RunScope;
 use Astro\Trail\Queries\TimeRange;
 use Astro\Trail\Queries\TraceFilters;
 use Astro\Trail\Queries\TraceIndex;
 use Astro\Trail\Storage\StaleRuns;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Connection;
+use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -34,6 +37,14 @@ final class OverviewMeasurement
     private array $digests = [];
 
     private string $output;
+
+    private bool $capturing = false;
+
+    /** The events dispatcher is shared by every connection, so one listener serves them all. */
+    private bool $listening = false;
+
+    /** @var list<QueryExecuted> */
+    private array $captured = [];
 
     public function __construct(
         private readonly string $databases,
@@ -178,8 +189,13 @@ final class OverviewMeasurement
 
             foreach ([null, OverviewFixture::SCOPED_AGENT] as $agent) {
                 $scope = $agent === null ? 'all agents' : 'one agent (~10%)';
-                $results = [];
+                $this->real($db, $driver, $rows, $range, $scope, $agent, $now);
 
+                if (getenv('TRAIL_MEASURE_SHAPES') === '0') {
+                    continue;
+                }
+
+                $results = [];
                 $shapes = [
                     'A one pass' => fn (OverviewShapes $shapes) => $shapes->onePass(),
                     'B two queries' => fn (OverviewShapes $shapes) => $shapes->twoQueries(),
@@ -242,6 +258,79 @@ final class OverviewMeasurement
             'result' => $result,
             'last' => $last,
         ];
+    }
+
+    /**
+     * The overview read the endpoint uses, timed as a whole and query by query, with the plan of
+     * any query over the threshold, and checked against the list's own status counts.
+     */
+    private function real(Connection $db, string $driver, int $rows, string $range, string $scope, ?string $agent, CarbonImmutable $now): void
+    {
+        if (! $this->listening) {
+            $this->listening = true;
+            $db->listen(function (QueryExecuted $executed) {
+                if ($this->capturing) {
+                    $this->captured[] = $executed;
+                }
+            });
+        }
+
+        $timeRange = new TimeRange($range, $now->subSeconds(self::RANGES[$range]['seconds']), $now);
+        $query = new OverviewQuery;
+        $totals = [];
+        $perQuery = [];
+        $statements = [];
+        $overview = null;
+
+        for ($repeat = 0; $repeat < $this->repeats; $repeat++) {
+            $this->captured = [];
+            $this->capturing = true;
+
+            $start = hrtime(true);
+            $overview = $query->read($timeRange, $agent === null ? RunScope::none() : RunScope::agent($agent));
+            $totals[] = (hrtime(true) - $start) / 1e6;
+
+            $this->capturing = false;
+            $statements = $this->captured;
+
+            foreach ($statements as $index => $executed) {
+                $perQuery['Q'.($index + 1)][] = (float) $executed->time;
+            }
+        }
+
+        assert($overview !== null);
+        $median = array_map(self::median(...), $perQuery);
+        $parts = [];
+
+        foreach ($median as $label => $value) {
+            $parts[] = sprintf('%s %.1f', $label, $value);
+        }
+
+        $this->log(sprintf('| OverviewQuery::read (real) | %s | %s | %s | %s | %d | %.1f | %s |', $driver, number_format($rows), $range, $scope, count($statements), self::median($totals), implode(', ', $parts)));
+
+        foreach ($statements as $index => $executed) {
+            $label = 'Q'.($index + 1);
+
+            if ($driver === 'sqlite' || ($median[$label] ?? 0.0) <= self::PLAN_THRESHOLD) {
+                continue;
+            }
+
+            $this->log("\nPlan for the real read, {$label} ({$driver}, ".number_format($rows)." rows, {$range}, {$scope}), median ".sprintf('%.1f', $median[$label])." ms:\n```");
+
+            try {
+                $this->log($this->plan($db, $driver, $executed->sql, $executed->bindings));
+            } catch (\Throwable $exception) {
+                $this->log('The plan could not be read: '.mb_substr($exception->getMessage(), 0, 200));
+            }
+
+            $this->log("```\n");
+        }
+
+        $expected = (new TraceIndex)->statusCounts($timeRange, new TraceFilters(agent: $agent), null);
+
+        if ($overview->summary->figures->runs !== $expected) {
+            $this->findings[] = "{$driver} {$rows} rows {$range} {$scope}: the real read counts ".json_encode($overview->summary->figures->runs).' but TraceIndex::statusCounts counts '.json_encode($expected).'.';
+        }
     }
 
     private function timeExisting(CarbonImmutable $now, string $range, ?string $agent): float
