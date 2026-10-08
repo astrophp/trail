@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { OverviewResponse, Summary } from '@/api/types'
 import { forgetOverviewRefreshFailures } from '@/features/overview/use-overview'
 import { maxFailedRefreshes, refreshEvery } from '@/lib/refresh-policy'
+import { createQueryClient } from '@/app/providers/query-provider'
 import { renderApp } from '@/test/render-app'
 import {
     deferred,
@@ -50,7 +51,7 @@ const busy = () => document.querySelector('[aria-busy="true"]')
 
 async function open(route = '/', period = '24 hours') {
     renderApp(route)
-    await screen.findByText(`Compared with the previous ${period}`)
+    await screen.findAllByText(`vs previous ${period}`)
 }
 
 const pickRange = async (name: string) => {
@@ -163,16 +164,17 @@ describe('the Overview page', () => {
     })
 
     describe('the previous period', () => {
-        it('is named in the footer and the captions', async () => {
+        it('is named in the captions of the changes, with no footer repeating it', async () => {
             mockApi()
             await open()
 
             expect(
-                screen.getByText('Compared with the previous 24 hours'),
-            ).toBeVisible()
-            expect(
                 within(metric('Traces')).getByText('vs previous 24 hours'),
             ).toBeInTheDocument()
+            expect(screen.queryByText(/Compared with the previous/)).toBeNull()
+            expect(
+                screen.queryByText(/No runs were recorded in the previous/),
+            ).toBeNull()
         })
 
         it('is said to be empty, and nothing is compared with it', async () => {
@@ -182,16 +184,12 @@ describe('the Overview page', () => {
                 'No runs were recorded in the previous 24 hours',
             )
 
-            expect(screen.queryByText(/Compared with the previous/)).toBeNull()
+            // Said once, by the footer: no metric draws a change of its own.
             expect(
-                within(metric('Traces')).getByText('No earlier data'),
-            ).toBeInTheDocument()
-            // The cost is pending, so it has no figure to compare.
-            expect(screen.getAllByText('No earlier data')).toHaveLength(3)
-            expect(
-                metric('Estimated cost').querySelector('[data-slot="change"]'),
-            ).toBeNull()
-            expect(strip()?.textContent).not.toMatch(/vs previous/)
+                strip()?.querySelectorAll('[data-slot="change"]'),
+            ).toHaveLength(0)
+            expect(strip()?.textContent).not.toMatch(/No earlier|vs previous/)
+            expect(screen.getAllByText(/previous 24 hours/)).toHaveLength(1)
         })
 
         it('draws no change for a figure that has no value now', async () => {
@@ -226,7 +224,7 @@ describe('the Overview page', () => {
 
             expect(valueOf('Traces')).toBe('0')
             expect(valueOf('Error rate')).toBe('No finished runs')
-            expect(valueOf('Avg duration')).toBe('Not captured')
+            expect(valueOf('Avg duration')).toBe('No measured runs')
             expect(valueOf('Estimated cost')).toBe('Not captured')
             expect(strip()?.textContent).not.toMatch(/0%/)
             expect(
@@ -263,7 +261,7 @@ describe('the Overview page', () => {
             expect(strip()).toBeNull()
 
             slow.resolve(await json(overviewFor('/api/overview?range=24h')))
-            await screen.findByText('Compared with the previous 24 hours')
+            await screen.findAllByText('vs previous 24 hours')
 
             expect(
                 document.querySelector('[data-slot="metric-strip-skeleton"]'),
@@ -297,7 +295,7 @@ describe('the Overview page', () => {
             await userEvent.click(
                 within(alert).getByRole('button', { name: 'Try again' }),
             )
-            await screen.findByText('Compared with the previous 24 hours')
+            await screen.findAllByText('vs previous 24 hours')
 
             expect(screen.queryByRole('alert')).toBeNull()
             expect(overviewUrls(fetchMock)).toHaveLength(2)
@@ -330,7 +328,7 @@ describe('the Overview page', () => {
             expect(strip()).toBeNull()
 
             retry.resolve(await json(overviewFor('/api/overview?range=24h')))
-            await screen.findByText('Compared with the previous 24 hours')
+            await screen.findAllByText('vs previous 24 hours')
         })
 
         it('after data was shown keeps the data and says the refresh failed', async () => {
@@ -385,9 +383,21 @@ describe('the Overview page', () => {
             )
             await screen.findByText(/The last refresh failed/)
 
+            const next = deferred()
             fail = false
+            mockApi((url) =>
+                paramsOf(url).range === '7d'
+                    ? next.promise
+                    : json(overviewFor(url)),
+            )
             await pickRange('Last 7 days')
-            await screen.findByText('Compared with the previous 7 days')
+            await waitFor(() => expect(busy()).not.toBeNull())
+
+            // While the next range loads, and once it has arrived.
+            expect(screen.queryByText(/The last refresh failed/)).toBeNull()
+
+            next.resolve(await json(overviewFor('/api/overview?range=7d')))
+            await screen.findAllByText('vs previous 7 days')
 
             expect(screen.queryByText(/The last refresh failed/)).toBeNull()
         })
@@ -415,7 +425,7 @@ describe('the Overview page', () => {
 
             await pickRange('Last 7 days')
             await expectSearch('?range=7d')
-            await screen.findByText('Compared with the previous 7 days')
+            await screen.findAllByText('vs previous 7 days')
 
             expect(overviewUrls(fetchMock).at(-1)).toBe(
                 '/trail/api/overview?range=7d',
@@ -426,7 +436,7 @@ describe('the Overview page', () => {
 
             await pickRange('Last hour')
             await expectSearch('?range=1h')
-            await screen.findByText('Compared with the previous hour')
+            await screen.findAllByText('vs previous hour')
 
             expect(
                 within(metric('Traces')).getByText('vs previous hour'),
@@ -456,12 +466,13 @@ describe('the Overview page', () => {
                 within(metric('Traces')).getByText('vs previous 24 hours'),
             ).toBeInTheDocument()
             expect(strip()?.textContent).not.toMatch(/7 days/)
-            expect(
-                screen.getByText('Compared with the previous 24 hours'),
-            ).toBeVisible()
             expect(hrefOf('Traces')).toBe('/trail/traces')
             expect(hrefOf('Error rate')).toBe('/trail/traces?status=failed')
-            expect(screen.getByRole('status')).toHaveTextContent('Loading')
+            // The announcement is outside the busy part, where a screen reader may mute it.
+            const status = screen.getByRole('status')
+
+            expect(status).toHaveTextContent('Loading')
+            expect(dimmed).not.toContainElement(status)
 
             next.resolve(
                 await json(
@@ -574,8 +585,187 @@ describe('refreshing by itself', () => {
         await waitFor(() =>
             expect(screen.queryByText(/Refreshing stopped/)).toBeNull(),
         )
+        // The button went away with the notice: focus goes to the page heading.
+        await waitFor(() =>
+            expect(
+                screen.getByRole('heading', { level: 1, name: 'Overview' }),
+            ).toHaveFocus(),
+        )
         await tick()
 
-        expect(overviewUrls(fetchMock).length).toBeGreaterThan(asked + 1)
+        // The retry itself, then the first tick of the interval that started again.
+        expect(overviewUrls(fetchMock)).toHaveLength(asked + 2)
+    })
+})
+
+describe('what a range owns', () => {
+    const fakeInterval = () =>
+        vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })
+
+    const tick = async () => {
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(refreshEvery)
+        })
+    }
+
+    it("says nothing about stopped refreshing over another range's placeholder data", async () => {
+        // B (7 days) fails its first load and two retries: its ledger is at the limit.
+        const reload = deferred()
+        let sevenDays: 'fails' | 'loads' = 'fails'
+        mockApi((url) =>
+            paramsOf(url).range === '7d'
+                ? sevenDays === 'fails'
+                    ? json({ message: 'Down.' }, 500)
+                    : reload.promise
+                : json(overviewFor(url)),
+        )
+        renderApp('/?range=7d')
+        await screen.findByRole('alert')
+
+        for (let times = 1; times < maxFailedRefreshes; times++) {
+            await userEvent.click(
+                screen.getByRole('button', { name: 'Try again' }),
+            )
+            await waitFor(() =>
+                expect(
+                    screen.getByRole('button', { name: 'Try again' }),
+                ).toBeInTheDocument(),
+            )
+        }
+
+        // A (24 hours) has runs running. Back to B: A's figures stay, dimmed, while B loads.
+        await pickRange('Last 24 hours')
+        await screen.findAllByText('vs previous 24 hours')
+        sevenDays = 'loads'
+        await pickRange('Last 7 days')
+        await waitFor(() => expect(busy()).not.toBeNull())
+
+        expect(valueOf('Traces')).toBe('32')
+        expect(screen.queryByText(/Refreshing stopped/)).toBeNull()
+        expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull()
+    })
+
+    it('shows the skeleton for a range still loading, not the error of the one before', async () => {
+        const second = deferred()
+        mockApi((url) =>
+            paramsOf(url).range === '7d'
+                ? json({ message: 'Seven days are down.' }, 500)
+                : second.promise,
+        )
+        renderApp('/?range=7d')
+        await screen.findByRole('alert')
+
+        await pickRange('Last hour')
+        await waitFor(() =>
+            expect(
+                document.querySelectorAll('[data-slot="metric-skeleton"]'),
+            ).toHaveLength(4),
+        )
+
+        expect(screen.queryByRole('alert')).toBeNull()
+        expect(screen.queryByText('Trying again…')).toBeNull()
+
+        // Its own failure shows its own message, never the other range's.
+        second.resolve(await json({ message: 'An hour is down.' }, 500))
+        const alert = await screen.findByRole('alert')
+
+        expect(within(alert).getByText('An hour is down.')).toBeVisible()
+        expect(screen.queryByText('Seven days are down.')).toBeNull()
+    })
+
+    it("does not stop one range's refreshing because another one failed", async () => {
+        fakeInterval()
+        let sevenDaysFail = false
+        const fetchMock = mockApi((url) =>
+            paramsOf(url).range === '7d' && sevenDaysFail
+                ? json({ message: 'Down.' }, 500)
+                : json(overviewFor(url)),
+        )
+        await open()
+        sevenDaysFail = true
+        await pickRange('Last 7 days')
+        await screen.findByRole('alert')
+
+        for (let times = 1; times < maxFailedRefreshes; times++) {
+            await userEvent.click(
+                screen.getByRole('button', { name: 'Try again' }),
+            )
+            await waitFor(() =>
+                expect(
+                    screen.getByRole('button', { name: 'Try again' }),
+                ).toBeInTheDocument(),
+            )
+        }
+
+        await pickRange('Last 24 hours')
+        await screen.findAllByText('vs previous 24 hours')
+        const asked = overviewUrls(fetchMock).filter(
+            (url) => paramsOf(url).range === '24h',
+        ).length
+
+        await tick()
+        await tick()
+
+        expect(
+            overviewUrls(fetchMock).filter(
+                (url) => paramsOf(url).range === '24h',
+            ),
+        ).toHaveLength(asked + 2)
+        expect(screen.queryByText(/Refreshing stopped/)).toBeNull()
+    })
+})
+
+describe('retrying', () => {
+    const nothingRunning = overviewWith({ runs: runs({ completed: 32 }) })
+    const offline = () => Promise.reject(new TypeError('offline'))
+
+    it('does not repeat a failed refresh while figures are on screen', async () => {
+        let online = true
+        const fetchMock = mockApi((url) =>
+            online
+                ? json({ ...nothingRunning, range: overviewFor(url).range })
+                : offline(),
+        )
+        renderApp('/', {}, createQueryClient())
+        await screen.findAllByText('vs previous 24 hours')
+        online = false
+
+        await userEvent.click(screen.getByRole('button', { name: 'Refresh' }))
+        await screen.findByText(
+            'The last refresh failed. What is shown is from before it.',
+        )
+
+        expect(overviewUrls(fetchMock)).toHaveLength(2)
+    })
+
+    it('repeats a first load that got no response, as configured', async () => {
+        const fetchMock = mockApi(offline)
+        renderApp('/', {}, createQueryClient())
+
+        await screen.findByRole('alert')
+
+        // The first request and the two repeats the app's client allows.
+        expect(overviewUrls(fetchMock)).toHaveLength(3)
+    })
+})
+
+describe('an empty range', () => {
+    it.each([
+        ['1h', true],
+        ['24h', true],
+        ['7d', false],
+    ] as const)('for %s %s a longer range to try', async (range, suggests) => {
+        mockApi(() => json(overviewWith(empty, null, range)))
+        renderApp(`/?range=${range}`)
+
+        const notice = await screen.findByText(
+            'No runs were recorded in the selected range.',
+        )
+
+        expect(
+            within(
+                notice.closest('[data-slot="notice"]') as HTMLElement,
+            ).queryByText('Try a longer range.') !== null,
+        ).toBe(suggests)
     })
 })

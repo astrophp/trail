@@ -1,7 +1,7 @@
 import { Change } from '@/components/patterns/change'
 import { Metric } from '@/components/patterns/metric'
 import { RateValue } from '@/components/telemetry/rate-value'
-import { changeCaption, missingEarlier } from '@/features/overview/comparison'
+import { changeCaption, noEarlier } from '@/features/overview/comparison'
 import type { MetricProps } from '@/features/overview/metric-props'
 import { tracesLink } from '@/features/overview/traces-link'
 import { formatCount } from '@/lib/format'
@@ -13,21 +13,22 @@ import { formatCount } from '@/lib/format'
 export function ErrorRateMetric({ summary, previous, range }: MetricProps) {
     const { rate, failed, finished } = summary.error_rate
     const { incomplete } = summary.runs
-    const earlier = previous?.error_rate.rate ?? null
 
     return (
         <Metric
             label="Error rate"
             to={tracesLink(range, { status: 'failed' })}
             change={
-                <Change
-                    mode="points"
-                    polarity="up-is-bad"
-                    current={rate}
-                    previous={earlier}
-                    noPreviousLabel={missingEarlier(previous, 'rate')}
-                    caption={changeCaption(range)}
-                />
+                previous === null ? undefined : (
+                    <Change
+                        mode="points"
+                        polarity="up-is-bad"
+                        current={rate}
+                        previous={previous.error_rate.rate}
+                        noPreviousLabel={noEarlier('rate')}
+                        caption={changeCaption(range)}
+                    />
+                )
             }
             detail={
                 finished === 0 ? undefined : (

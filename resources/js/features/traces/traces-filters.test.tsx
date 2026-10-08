@@ -34,7 +34,7 @@ afterEach(() => {
 
 /** Every filter in one URL. */
 const everything =
-    '?status=failed&search=refund&agent=SupportAssistant&provider=anthropic&bookmarked=1'
+    '?status=failed&search=refund&agent=SupportAssistant&provider=anthropic&bookmarked=1&slow=1'
 
 describe('the URL drives every filter', () => {
     it('selects the status tab, asks the API for it and shows its chip', async () => {
@@ -140,6 +140,7 @@ describe('the URL drives every filter', () => {
             agent: 'SupportAssistant',
             provider: 'anthropic',
             bookmarked: '1',
+            slow: '1',
         })
         expect(tab(/^Failed/)).toHaveAttribute('aria-selected', 'true')
         expect(searchBox()).toHaveValue('refund')
@@ -156,6 +157,7 @@ describe('the URL drives every filter', () => {
             'Agent: SupportAssistant',
             'Provider: anthropic',
             'Bookmarked',
+            'Slow: 95th percentile and above',
         ])
     })
 
@@ -311,7 +313,7 @@ describe('the filters drive the URL', () => {
         await userEvent.click(tab(/^Completed/))
 
         await expectSearch(
-            '?status=completed&search=refund&agent=SupportAssistant&provider=anthropic&bookmarked=1',
+            '?status=completed&search=refund&agent=SupportAssistant&provider=anthropic&bookmarked=1&slow=1',
         )
     })
 })
@@ -427,7 +429,7 @@ describe('the chips', () => {
         )
 
         await expectSearch(
-            '?range=7d&sort=-duration&status=failed&search=refund&provider=anthropic&bookmarked=1',
+            '?range=7d&sort=-duration&status=failed&search=refund&provider=anthropic&bookmarked=1&slow=1',
         )
         expect(agentSelect()).toHaveTextContent('All agents')
         expect(

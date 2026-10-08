@@ -28,7 +28,8 @@ export function OverviewMetrics({ className }: { className?: string }) {
         range,
     )
 
-    useFocusHandoff(failed)
+    // The retry button, or the one of the stopped notice, goes away when the page recovers.
+    useFocusHandoff(failed || overview.refreshing === 'stopped')
 
     if (failed) {
         return (
@@ -59,6 +60,10 @@ export function OverviewMetrics({ className }: { className?: string }) {
                 failed={isError}
                 onRetry={() => void overview.refreshAgain()}
             />
+            {/* Always mounted, so a change of its text is announced; outside the busy part, where it may be muted. */}
+            <span role="status" className="sr-only">
+                {isPlaceholderData ? 'Loading' : ''}
+            </span>
             <div
                 aria-busy={isPlaceholderData || undefined}
                 className={cn(
@@ -66,17 +71,13 @@ export function OverviewMetrics({ className }: { className?: string }) {
                     isPlaceholderData && 'opacity-60',
                 )}
             >
-                {/* Always mounted, so a change of its text is announced. */}
-                <span role="status" className="sr-only">
-                    {isPlaceholderData ? 'Loading' : ''}
-                </span>
                 {summary.runs.all === 0 ? (
                     <Notice
                         tone="info"
                         title="No runs were recorded in the selected range."
                         className="mb-4"
                     >
-                        Try a longer range.
+                        {shown === '7d' ? null : 'Try a longer range.'}
                     </Notice>
                 ) : null}
                 <MetricStrip>
@@ -85,11 +86,11 @@ export function OverviewMetrics({ className }: { className?: string }) {
                     <DurationMetric {...metric} />
                     <CostMetric {...metric} />
                 </MetricStrip>
-                <p className="mt-3 text-caption text-muted-foreground">
-                    {previous === null
-                        ? `No runs were recorded in the previous ${period}`
-                        : `Compared with the previous ${period}`}
-                </p>
+                {previous === null ? (
+                    <p className="mt-3 text-caption text-muted-foreground">
+                        No runs were recorded in the previous {period}
+                    </p>
+                ) : null}
             </div>
         </div>
     )

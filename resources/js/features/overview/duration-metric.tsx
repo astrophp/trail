@@ -1,13 +1,13 @@
 import { Change } from '@/components/patterns/change'
 import { Metric } from '@/components/patterns/metric'
 import { DurationValue } from '@/components/telemetry/duration-value'
-import { changeCaption, missingEarlier } from '@/features/overview/comparison'
+import { changeCaption, noEarlier } from '@/features/overview/comparison'
 import type { MetricProps } from '@/features/overview/metric-props'
 import { tracesLink } from '@/features/overview/traces-link'
 import { formatCount } from '@/lib/format'
 
 const measured = (duration_ms: number | null) => (
-    <DurationValue of={{ duration_ms, status: 'completed' }} />
+    <DurationValue of={{ duration_ms }} />
 )
 
 /**
@@ -23,15 +23,17 @@ export function DurationMetric({ summary, previous, range }: MetricProps) {
             <Metric
                 label="Avg duration"
                 change={
-                    <Change
-                        mode="absolute"
-                        polarity="up-is-bad"
-                        current={average_ms}
-                        previous={previous?.duration.average_ms ?? null}
-                        noPreviousLabel={missingEarlier(previous, 'average')}
-                        renderDifference={(ms) => measured(ms)}
-                        caption={changeCaption(range)}
-                    />
+                    previous === null ? undefined : (
+                        <Change
+                            mode="absolute"
+                            polarity="up-is-bad"
+                            current={average_ms}
+                            previous={previous.duration.average_ms}
+                            noPreviousLabel={noEarlier('average')}
+                            renderDifference={(ms) => measured(ms)}
+                            caption={changeCaption(range)}
+                        />
+                    )
                 }
                 detail={`p95 needs ${formatCount(p95_minimum)} measured runs · ${formatCount(runs)} so far`}
             >
@@ -45,15 +47,17 @@ export function DurationMetric({ summary, previous, range }: MetricProps) {
             label="p95 duration"
             to={tracesLink(range, { slow: true })}
             change={
-                <Change
-                    mode="absolute"
-                    polarity="up-is-bad"
-                    current={p95_ms}
-                    previous={previous?.duration.p95_ms ?? null}
-                    noPreviousLabel={missingEarlier(previous, 'p95')}
-                    renderDifference={(ms) => measured(ms)}
-                    caption={changeCaption(range)}
-                />
+                previous === null ? undefined : (
+                    <Change
+                        mode="absolute"
+                        polarity="up-is-bad"
+                        current={p95_ms}
+                        previous={previous.duration.p95_ms}
+                        noPreviousLabel={noEarlier('p95')}
+                        renderDifference={(ms) => measured(ms)}
+                        caption={changeCaption(range)}
+                    />
+                )
             }
             detail={<>avg {measured(average_ms)}</>}
         >

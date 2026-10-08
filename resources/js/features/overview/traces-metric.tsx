@@ -12,13 +12,15 @@ export function TracesMetric({ summary, previous, range }: MetricProps) {
             label="Traces"
             to={tracesLink(range)}
             change={
-                <Change
-                    mode="relative"
-                    polarity="neutral"
-                    current={summary.runs.all}
-                    previous={previous?.runs.all ?? null}
-                    caption={changeCaption(range)}
-                />
+                previous === null ? undefined : (
+                    <Change
+                        mode="relative"
+                        polarity="neutral"
+                        current={summary.runs.all}
+                        previous={previous.runs.all}
+                        caption={changeCaption(range)}
+                    />
+                )
             }
         >
             {formatCount(summary.runs.all)}

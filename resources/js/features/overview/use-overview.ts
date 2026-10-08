@@ -64,7 +64,10 @@ export function useOverview(range: TimeRangePreset) {
                 ? refreshEvery
                 : false,
     })
-    const running = (query.data?.data.summary.runs.running ?? 0) > 0
+    // Placeholder data is the previous range's answer: it says nothing about this range's runs.
+    const running =
+        !query.isPlaceholderData &&
+        (query.data?.data.summary.runs.running ?? 0) > 0
 
     return {
         ...query,

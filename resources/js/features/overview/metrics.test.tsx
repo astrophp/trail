@@ -110,8 +110,9 @@ describe('the Traces metric', () => {
     it('says there is no earlier data when the previous period had no runs', () => {
         const metric = traces({ previous: null })
 
-        expect(metric.within.getByText('No earlier data')).toBeInTheDocument()
-        expect(metric.text).not.toMatch(/%/)
+        expect(metric.change).toBeNull()
+        expect(metric.text).toBe('Traces32')
+        expect(traces().change).not.toBeNull()
     })
 
     it.each<[TimeRangePreset, string, string]>([
@@ -138,9 +139,10 @@ describe('the Error rate metric', () => {
     it('never adds the failed and the incomplete runs together', () => {
         const metric = errorRate()
 
-        expect(metric.text).not.toMatch(/\b3\b/)
-        expect(metric.within.queryByText(/3 failed/)).not.toBeInTheDocument()
-        expect(metric.within.queryByText(/failed.*failed/)).toBeNull()
+        // The whole detail, so a sum glued to another figure cannot hide in it.
+        expect(
+            metric.within.getByText('1 failed').parentElement?.textContent,
+        ).toBe('1 failed · 2 incomplete')
     })
 
     it('leaves out the incomplete runs when there are none', () => {
@@ -203,7 +205,7 @@ describe('the Error rate metric', () => {
         })
 
         expect(metric.within.getByText('No earlier rate')).toBeInTheDocument()
-        expect(errorRate({ previous: null }).text).toMatch(/No earlier data/)
+        expect(errorRate({ previous: null }).change).toBeNull()
     })
 
     it('links to the failed runs of the range', () => {
@@ -237,7 +239,7 @@ describe('the p95 duration metric', () => {
 
     it('says there is no earlier p95 when the previous period had too few measured runs', () => {
         expect(p95().within.getByText('No earlier p95')).toBeInTheDocument()
-        expect(p95({ previous: null }).text).toMatch(/No earlier data/)
+        expect(p95({ previous: null }).change).toBeNull()
     })
 
     it('links to the slow runs of the range', () => {
@@ -286,7 +288,7 @@ describe('the p95 duration metric', () => {
                 }),
             })
 
-            expect(metric.value).toBe('Not captured')
+            expect(metric.value).toBe('No measured runs')
             expect(metric.change).toBeNull()
             expect(metric.within.getByText(/p95 needs/)).toHaveTextContent(
                 'p95 needs 20 measured runs · 0 so far',
@@ -340,10 +342,10 @@ describe('the Estimated cost metric', () => {
         expect(metric.text).not.toMatch(/unpriced/)
     })
 
-    it('shows the change when both amounts are final', () => {
+    it('shows the change when both amounts are estimated', () => {
         const metric = cost({
             summary: withCost({ state: 'estimated', amount: 0.06 }),
-            previous: withCost({ state: 'partial', amount: 0.05 }),
+            previous: withCost({ state: 'estimated', amount: 0.05 }),
         })
 
         expect(metric.within.getByText('+20.0%')).toBeInTheDocument()
@@ -370,14 +372,47 @@ describe('the Estimated cost metric', () => {
         expect(cost({ summary: withCost(state) }).change).toBeNull()
     })
 
-    it('does not compare with an amount that is not final', () => {
+    it.each<[string, Cost, Cost]>([
+        [
+            'a partial amount before',
+            { state: 'estimated', amount: 0.06 },
+            { state: 'partial', amount: 0.05 },
+        ],
+        [
+            'a partial amount now',
+            { state: 'partial', amount: 0.06 },
+            { state: 'estimated', amount: 0.05 },
+        ],
+        [
+            'a pending amount before',
+            { state: 'estimated', amount: 0.06 },
+            { state: 'pending', amount: 0.05 },
+        ],
+        [
+            'an unpriced cost before',
+            { state: 'estimated', amount: 0.06 },
+            { state: 'unpriced', amount: null },
+        ],
+    ])(
+        'draws no change, and no missing-data line, with %s',
+        (_name, now, before) => {
+            const metric = cost({
+                summary: withCost(now),
+                previous: withCost(before),
+            })
+
+            expect(metric.change).toBeNull()
+            expect(metric.text).not.toMatch(/%|No earlier|vs previous/)
+        },
+    )
+
+    it('draws no change when there is no previous period', () => {
         const metric = cost({
             summary: withCost({ state: 'estimated', amount: 0.06 }),
-            previous: withCost({ state: 'pending', amount: 0.05 }),
+            previous: null,
         })
 
-        expect(metric.within.getByText('No earlier cost')).toBeInTheDocument()
-        expect(metric.text).not.toMatch(/%/)
+        expect(metric.change).toBeNull()
     })
 
     it('links to the runs sorted by cost, most expensive first', () => {
