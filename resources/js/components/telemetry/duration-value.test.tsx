@@ -52,6 +52,23 @@ describe('DurationValue', () => {
         expect(screen.getByText('<1 ms')).toBeInTheDocument()
     })
 
+    it('shows a real sub-millisecond span duration as <1 ms, not zero', () => {
+        render(
+            <DurationValue of={{ duration_ms: 0.0004, status: 'completed' }} />,
+        )
+
+        expect(screen.getByText('<1 ms')).toBeInTheDocument()
+        expect(screen.queryByText('0 ms')).not.toBeInTheDocument()
+    })
+
+    it('shows Not captured for an incomplete span without a duration', () => {
+        render(
+            <DurationValue of={{ duration_ms: null, status: 'incomplete' }} />,
+        )
+
+        expect(screen.getByText('Not captured')).toBeInTheDocument()
+    })
+
     it('accepts a className', () => {
         const { container, rerender } = render(
             <DurationValue

@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
-import type { Cost } from '@/api/types'
+import type { Cost, SpanCost } from '@/api/types'
 import { CostValue } from '@/components/telemetry/cost-value'
 
 describe('CostValue', () => {
@@ -54,6 +54,22 @@ describe('CostValue', () => {
 
         expect(container.textContent).not.toMatch(/\d/)
         expect(container.textContent).not.toContain('$')
+    })
+
+    it("shows a span's estimated cost", () => {
+        const span: SpanCost = { state: 'estimated', amount: 0.0012 }
+
+        render(<CostValue cost={span} />)
+
+        expect(screen.getByText('$0.0012')).toBeInTheDocument()
+    })
+
+    it("shows a span's unpriced cost as Unpriced, with no amount", () => {
+        const span: SpanCost = { state: 'unpriced', amount: null }
+        const { container } = render(<CostValue cost={span} />)
+
+        expect(screen.getByText('Unpriced')).toBeInTheDocument()
+        expect(container.textContent).not.toMatch(/\d|\$/)
     })
 
     it.each<Cost>([

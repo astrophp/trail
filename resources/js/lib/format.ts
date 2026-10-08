@@ -117,6 +117,19 @@ export function formatDuration(ms: number): string {
     return `${Math.floor(totalMinutes / 60)}h ${twoDigits(totalMinutes % 60)}m`
 }
 
+/**
+ * Where something starts on a run's time axis: `+0 ms`, `+31 ms`, `+1.20s`. Built on the units of
+ * `formatDuration`. Before the start is a real minus sign: `−12 ms`.
+ * The input must be finite: a caller that may hold NaN or Infinity guards it first.
+ */
+export function formatOffset(ms: number): string {
+    if (ms === 0) {
+        return '+0 ms'
+    }
+
+    return `${ms < 0 ? '\u2212' : '+'}${formatDuration(Math.abs(ms))}`
+}
+
 /** `just now` for anything under a second (or ahead of `now`, clock skew), then `43s ago`, `5m ago`, `3h ago`, `2d ago`. */
 export function formatRelativeTime(at: Date, now: Date): string {
     const elapsed = now.getTime() - at.getTime()
