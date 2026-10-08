@@ -33,6 +33,11 @@ final readonly class TurnWindow
         if ($value !== null && $value !== '') {
             $integer = is_string($value) ? filter_var($value, FILTER_VALIDATE_INT) : false;
 
+            // A whole number too large for an integer is still a whole number, and out of range.
+            if ($integer === false && is_string($value) && preg_match('/^\s*([+-]?)\d+\s*$/', $value, $digits) === 1) {
+                $integer = $digits[1] === '-' ? PHP_INT_MIN : PHP_INT_MAX;
+            }
+
             if ($integer === false) {
                 throw ValidationException::withMessages(['limit' => 'The limit must be a whole number.']);
             }

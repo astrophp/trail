@@ -6,6 +6,7 @@ use Astro\Trail\Queries\ConversationId;
 use Astro\Trail\Queries\TraceDetail;
 use Astro\Trail\Storage\Models\Trace;
 use Astro\Trail\Tests\Fixtures\Storage\Rows;
+use Astro\Trail\Tests\Fixtures\Users\Member;
 use Astro\Trail\Tests\Fixtures\Users\User;
 use Illuminate\Foundation\Http\Kernel;
 use Illuminate\Foundation\Http\Middleware\ConvertEmptyStringsToNull;
@@ -225,6 +226,9 @@ describe('the window', function () {
         'ten' => ['limit=10', 10],
         'eleven' => ['limit=11', 10],
         'huge' => ['limit=99999999999', 10],
+        'too large for an integer' => ['limit=99999999999999999999', 10],
+        'too small for an integer' => ['limit=-99999999999999999999', 1],
+        'too large with a sign' => ['limit=%2B99999999999999999999', 10],
         'empty' => ['limit=', 10],
     ]);
 
@@ -324,8 +328,14 @@ describe('the window', function () {
         'invalid UTF-8' => ['turn=%FF', 'turn'],
     ]);
 
-    it('never fails on a NUL byte in an anchor', function () {
-        expect($this->getJson(transcriptUrl('c', 'after=t01%00'))->status())->toBeLessThan(500);
+    it('is a 422 for an anchor with a NUL byte inside it', function () {
+        $this->getJson(transcriptUrl('c', 'after=t%0001'))->assertUnprocessable()->assertJsonValidationErrors('after');
+    });
+
+    it('reads an anchor with a NUL byte at its end as the anchor, because the byte is trimmed at the edge', function () {
+        $body = transcriptAt($this, 'c', 'after=t01%00');
+
+        expect($body['window']['anchor'])->toBe(['param' => 'after', 'id' => 't01', 'found' => true]);
     });
 
     it('accepts an anchor as long as the column', function () {
@@ -490,12 +500,10 @@ describe('the cost of a request', function () {
     it('looks up each type of user once, for the header and the turns together', function () {
         DB::table('users')->insert(['id' => 7, 'name' => 'Ada', 'email' => 'ada@example.test', 'password' => 'x']);
         transcriptTurns('c', 3, 1, ['user_id' => '7', 'user_type' => User::class]);
-        transcriptTurns('c', 2, 4, ['user_id' => '7', 'user_type' => 'App\\Models\\Gone']);
+        transcriptTurns('c', 2, 4, ['user_id' => '7', 'user_type' => Member::class]);
 
-        [$queries, $users] = transcriptCost($this, '');
-
-        // One more type, one more lookup (the unknown type is looked up too, and finds nothing).
-        expect($queries)->toBeGreaterThanOrEqual(9)->and($users)->toBe(1);
+        // Two models over one table: the eight queries, and one lookup for each model, not for each turn or for the header.
+        expect(transcriptCost($this, ''))->toBe([10, 2]);
     });
 
     it('reads one more for a turn that has more spans than the limit', function () {

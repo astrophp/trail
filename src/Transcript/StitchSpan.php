@@ -2,6 +2,8 @@
 
 namespace Astro\Trail\Transcript;
 
+use Astro\Trail\Capture\CaptureState;
+
 /**
  * One span of a turn as the stitching reads it: what the span stored, with its status already the
  * one the API shows. Kept apart from the model so the stitching needs neither a database nor an
@@ -43,6 +45,16 @@ final readonly class StitchSpan
     ) {}
 
     /**
+     * Whether the span lost something it cannot say where. Capture sets the flag for a value it
+     * dropped (too deep, too wide, a key too long) without a path, and it keeps the first paths only,
+     * so a list that is empty or full does not show where everything was cut.
+     */
+    public function cutSomewhereUnknown(): bool
+    {
+        return $this->truncated && ($this->truncatedPaths === [] || count($this->truncatedPaths) >= CaptureState::MAX_PATHS);
+    }
+
+    /**
      * Whether a tool span's arguments can be compared with a call's. Redaction replaces a value with
      * a marker, which makes different arguments look equal, and a cut that says nowhere where it was
      * could have reached them.
@@ -75,8 +87,8 @@ final readonly class StitchSpan
     }
 
     /**
-     * Whether the span was cut without saying where, at one of the exact paths, or beneath one of
-     * the others. A path matches whole segments only, so `output.tool_calls.1` is not `output.tool_calls.10`.
+     * Whether the span was cut at one of the exact paths or beneath one of the others, or was cut
+     * somewhere it does not say. A path matches whole segments only, so `output.tool_calls.1` is not `output.tool_calls.10`.
      *
      * @param  list<string>  $exact
      * @param  list<string>  $beneath
@@ -87,7 +99,7 @@ final readonly class StitchSpan
             return false;
         }
 
-        if ($this->truncatedPaths === []) {
+        if ($this->cutSomewhereUnknown()) {
             return true;
         }
 

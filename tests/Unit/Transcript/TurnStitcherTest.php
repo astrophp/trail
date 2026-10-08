@@ -89,6 +89,17 @@ describe('the attempts', function () {
         ]);
     });
 
+    it('gives only the prompt of the agent for a last attempt that has no step yet, and nothing of the earlier attempt', function () {
+        $transcript = Spans::stitch([
+            Spans::root(attempt: 2),
+            Spans::step('a1', 2, [Spans::user('Hi')], output: Spans::text('Early'), attributes: ['attempt' => 1, 'status' => 'failed']),
+        ]);
+
+        expect(Spans::outline($transcript))->toBe([['prompt', 'user', 'Hi']])
+            ->and(Spans::sources($transcript))->toBe(['r:input'])
+            ->and([$transcript->state, $transcript->reason, $transcript->shownAttempt])->toBe(['partial', 'step_input_missing', 2]);
+    });
+
     it('does not list an attempt a sub-agent or an embedding made', function () {
         $transcript = Spans::stitch([
             Spans::root(),
@@ -265,7 +276,7 @@ describe('where the turn starts', function () {
     });
 });
 
-describe('a turn that resumes a pause', function () {
+describe('a turn that starts at a tool result', function () {
     it('starts at the merged tool result, has no prompt and says it counted earlier history', function () {
         $call = Spans::call('toolu_1', 'delete_records', ['table' => 'users']);
 
@@ -290,7 +301,7 @@ describe('a turn that resumes a pause', function () {
         expect(array_column(Spans::outline($transcript), 0))->toBe(['activity', 'response']);
     });
 
-    it('links an approved tool by its arguments and leaves a tool of the paused turn without a span', function () {
+    it('links an approved tool by its arguments and leaves a tool that ran in the history without a span', function () {
         $approved = Spans::call('toolu_1', 'delete_records', ['table' => 'users']);
         $ordinary = Spans::call('toolu_2', 'lookup', ['query' => 'laravel']);
 
@@ -472,7 +483,7 @@ describe('the outputs of steps', function () {
             ->and([$transcript->state, $transcript->reason])->toBe(['stored', null]);
     });
 
-    it('does not take a mid-turn tool result for a resumed pause when the first step lost its start', function () {
+    it('does not take a mid-turn tool result for the start of the turn when the first step lost its start', function () {
         $call = Spans::call('c1', 'x');
 
         $transcript = Spans::stitch([
@@ -486,7 +497,7 @@ describe('the outputs of steps', function () {
             ->and($transcript->historyCount)->toBe(2);
     });
 
-    it('returns nothing from the messages when the first step lost its start and the turn began from a pause', function () {
+    it('returns nothing from the messages when the first step lost its start and the turn began at a tool result', function () {
         $transcript = Spans::stitch([
             Spans::root(['prompt' => '']),
             Spans::step('s1', 2, null, output: Spans::asking([Spans::call('c1', 'x')])),
@@ -791,5 +802,146 @@ describe('the marks of a message', function () {
         expect($transcript->messages[0]['truncated_paths'])->toBe(['content' => 90000, 'attachments.0.name' => 300])
             ->and($transcript->messages[0]['attachments'])->toBe([])
             ->and($transcript->messages[0]['source'])->toBe(['span_id' => 'r', 'path' => 'input', 'redacted' => true, 'truncated' => true]);
+    });
+});
+
+describe('a list of messages that was cut', function () {
+    $old = fn () => [Spans::user('Earlier'), Spans::assistant('Reply'), Spans::user('Another earlier')];
+
+    it('does not give the last stored message as the start of the turn when nothing says where the list was cut', function (array $attributes) use ($old) {
+        $transcript = Spans::stitch([
+            Spans::root(),
+            Spans::step('s1', 2, $old(), output: Spans::text('Done'), attributes: ['truncated' => true, ...$attributes]),
+        ], status: 'completed');
+
+        expect(Spans::outline($transcript))->toBe([['prompt', 'user', 'Hi'], ['response', 'assistant', 'Done']])
+            ->and(Spans::sources($transcript))->toBe(['r:input', 's1:output'])
+            ->and([$transcript->state, $transcript->reason, $transcript->historyCount])->toBe(['partial', 'history_boundary_unknown', null]);
+    })->with([
+        'with no path' => [[]],
+        'with as many paths as are kept' => [['truncated_paths' => array_fill_keys(array_map(fn (int $n): string => 'input.messages.'.$n.'.content', range(0, 49)), 900)]],
+    ]);
+
+    it('does not take an old tool result for the start of a turn from decisions when the list was cut', function () {
+        $transcript = Spans::stitch([
+            Spans::root(['prompt' => '']),
+            Spans::step('s1', 2, [Spans::user('Earlier'), Spans::toolResult([['id' => 'a', 'name' => 'x', 'result' => 'r']])], output: Spans::text('Done'), attributes: ['truncated' => true]),
+        ]);
+
+        expect(Spans::sources($transcript))->toBe(['s1:output'])
+            ->and([$transcript->state, $transcript->reason, $transcript->historyCount])->toBe(['partial', 'history_boundary_unknown', null]);
+    });
+
+    it('still finds the start when the cuts it lists are in strings', function () use ($old) {
+        $transcript = Spans::stitch([
+            Spans::root(),
+            Spans::step('s1', 2, $old(), output: Spans::text('Done'), attributes: ['truncated' => true, 'truncated_paths' => ['input.messages.0.content' => 9000]]),
+        ]);
+
+        expect(Spans::outline($transcript))->toBe([['prompt', 'user', 'Another earlier'], ['response', 'assistant', 'Done']])
+            ->and([$transcript->state, $transcript->historyCount])->toBe(['stored', 2]);
+    });
+
+    it('says messages may be missing after a later step whose list was cut with no path', function () {
+        $transcript = Spans::stitch([
+            Spans::root(),
+            Spans::step('s1', 2, [Spans::user('Hi')], output: Spans::asking([Spans::call('c1', 'x')])),
+            Spans::step('s2', 3, [Spans::assistant('a'), Spans::toolResult([['id' => 'c1', 'name' => 'x', 'result' => 'r']])], 1, Spans::text('Done'), ['truncated' => true]),
+        ]);
+
+        expect(Spans::sources($transcript))->toBe(['s1:input.messages.0', 's2:input.messages.0', 's2:input.messages.1', 's2:output'])
+            ->and([$transcript->state, $transcript->reason])->toBe(['partial', 'offset_gap']);
+    });
+});
+
+describe('a step that stored its messages oddly', function () {
+    it('reads a negative offset as zero', function () {
+        $transcript = Spans::stitch([
+            Spans::root(),
+            Spans::step('s1', 2, [Spans::user('Hi')], -1, Spans::asking([Spans::call('c1', 'x')])),
+            Spans::step('s2', 3, [Spans::assistant('a'), Spans::toolResult([['id' => 'c1', 'name' => 'x', 'result' => 'r']])], 1, Spans::text('Done')),
+        ]);
+
+        expect(Spans::sources($transcript))->toBe(['s1:input.messages.0', 's2:input.messages.0', 's2:input.messages.1', 's2:output'])
+            ->and([$transcript->state, $transcript->reason])->toBe(['stored', null]);
+    });
+
+    it('does not read messages stored as a map', function () {
+        $transcript = Spans::stitch([
+            Spans::root(),
+            Spans::step('s1', 2, ['role' => 'user', 'content' => 'Mapped'], output: Spans::text('Done')),
+        ]);
+
+        expect(Spans::outline($transcript))->toBe([['prompt', 'user', 'Hi'], ['response', 'assistant', 'Done']])
+            ->and([$transcript->state, $transcript->reason, $transcript->historyCount])->toBe(['partial', 'step_input_missing', null]);
+    });
+});
+
+describe('the calls settled by the first message', function () {
+    $history = fn (array $calls) => [Spans::user('Do it'), Spans::assistant('', $calls), Spans::toolResult([['id' => 'toolu_1', 'name' => 'delete_records', 'result' => 'r']])];
+
+    it('are not linked by id when the history repeats an id', function () use ($history) {
+        $call = Spans::call('toolu_1', 'delete_records', ['table' => 'users']);
+
+        $transcript = Spans::stitch([
+            Spans::root(['prompt' => '']),
+            Spans::tool('t1', 2, 'delete_records', ['arguments' => ['table' => 'users']]),
+            Spans::step('s1', 3, [...$history([$call]), Spans::assistant('', [$call]), Spans::toolResult([['id' => 'toolu_1', 'name' => 'delete_records', 'result' => 'r']])], output: Spans::text('Done')),
+        ], resolved: ['toolu_1']);
+
+        expect($transcript->messages[0]['tool_results'][0]['span_id'])->toBeNull();
+    });
+
+    it('are not linked when the arguments in the history were cut', function () use ($history) {
+        $call = Spans::call('toolu_1', 'delete_records', ['table' => 'use']);
+
+        $transcript = Spans::stitch([
+            Spans::root(['prompt' => '']),
+            Spans::tool('t1', 2, 'delete_records', ['arguments' => ['table' => 'use']]),
+            Spans::step('s1', 3, $history([$call]), output: Spans::text('Done'), attributes: ['truncated' => true, 'truncated_paths' => ['input.messages.1.tool_calls.0.arguments.table' => 900]]),
+        ], resolved: ['toolu_1']);
+
+        expect($transcript->messages[0]['tool_results'][0]['span_id'])->toBeNull();
+    });
+
+    it('are not linked when the arguments in the history were redacted', function () use ($history) {
+        $call = Spans::call('toolu_1', 'delete_records', ['table' => '[redacted]']);
+
+        $transcript = Spans::stitch([
+            Spans::root(['prompt' => '']),
+            Spans::tool('t1', 2, 'delete_records', ['arguments' => ['table' => '[redacted]']]),
+            Spans::step('s1', 3, $history([$call]), output: Spans::text('Done'), attributes: ['redacted' => true]),
+        ], resolved: ['toolu_1']);
+
+        expect($transcript->messages[0]['tool_results'][0]['span_id'])->toBeNull();
+    });
+
+    it('are linked when the history is sound', function () use ($history) {
+        $call = Spans::call('toolu_1', 'delete_records', ['table' => 'users']);
+
+        $transcript = Spans::stitch([
+            Spans::root(['prompt' => '']),
+            Spans::tool('t1', 2, 'delete_records', ['arguments' => ['table' => 'users']]),
+            Spans::step('s1', 3, $history([$call]), output: Spans::text('Done')),
+        ], resolved: ['toolu_1']);
+
+        expect($transcript->messages[0]['tool_results'][0]['span_id'])->toBe('t1');
+    });
+});
+
+describe('the calls of an earlier request', function () {
+    it('have not started only in the latest request of a turn that runs', function () {
+        $transcript = Spans::stitch([
+            Spans::root(),
+            Spans::step('s1', 2, [Spans::user('Hi')], output: Spans::asking([Spans::call('c1', 'lookup', ['q' => 'a'])])),
+            Spans::tool('t1', 3, 'lookup', ['arguments' => ['q' => 'other']]),
+            Spans::step('s2', 4, [Spans::assistant('', [Spans::call('c1', 'lookup', ['q' => 'a'])]), Spans::toolResult([['id' => 'c1', 'name' => 'lookup', 'result' => 'r']])], 1, Spans::asking([Spans::call('c2', 'lookup', ['q' => 'b'])])),
+        ], status: 'running');
+
+        $links = fn (array $message): array => array_column($message['tool_calls'], 'link', 'id');
+
+        expect(Spans::sources($transcript))->toBe(['s1:input.messages.0', 's2:input.messages.0', 's2:input.messages.1', 's2:output'])
+            ->and($links($transcript->messages[1]))->toBe(['c1' => 'unlinked'])
+            ->and($links($transcript->messages[3]))->toBe(['c2' => 'not_started']);
     });
 });

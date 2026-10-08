@@ -5,7 +5,8 @@ namespace Astro\Trail\Transcript;
 /**
  * Whether two decoded JSON values are the same value. Stored payloads come back with their keys in
  * the order the database kept, and a number may come back as an int or a float, so neither
- * decides the answer.
+ * decides the answer. A payload is stored as JSON and read back as arrays, so an object whose keys
+ * are 0, 1, 2 and so on is read back as the list it looks like, and is equal to it.
  */
 final class JsonEquality
 {

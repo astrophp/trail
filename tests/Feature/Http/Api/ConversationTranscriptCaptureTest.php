@@ -424,7 +424,7 @@ describe('approvals', function () {
         $resumed = ($this->resume)($conversation, Decisions::from(['toolu_1' => true]), [FakeAnthropic::text('Deleted them')]);
 
         $body = ($this->transcript)($conversation);
-        [$paused, $turn] = $body['data']['turns'];
+        [$first, $turn] = $body['data']['turns'];
         $spans = $this->getJson('/trail/api/traces/'.$resumed->invocationId)->json('data.spans');
         $tool = array_values(array_filter($spans, fn (array $span): bool => $span['type'] === 'tool'))[0];
 
@@ -434,19 +434,16 @@ describe('approvals', function () {
             ->and($turn['detail']['resolved_tool_call_ids'])->toBe(['toolu_1'])
             ->and($turn['messages_state'])->toBe('stored')
             ->and(in_array('prompt', array_column($turn['messages'], 'part'), true))->toBeFalse()
-            ->and($paused['trace']['status'])->toBe('awaiting_approval');
-
-        // Neither turn says anything about the other.
-        expect(json_encode($turn))->not->toContain($paused['trace']['id']);
+            ->and($first['trace']['status'])->toBe('awaiting_approval');
     });
 
-    it('links the tool in the second turn only, so the paused turn keeps no span for it', function () {
+    it('gives a call that waits for approval no span when the conversation goes on', function () {
         [, $conversation] = ($this->pause)();
         ($this->resume)($conversation, Decisions::from(['toolu_1' => true]), [FakeAnthropic::text('Done')]);
 
-        [$paused] = ($this->transcript)($conversation)['data']['turns'];
+        [$first] = ($this->transcript)($conversation)['data']['turns'];
 
-        expect($paused['messages'][1]['tool_calls'][0]['span'])->toBeNull();
+        expect($first['messages'][1]['tool_calls'][0]['span'])->toBeNull();
     });
 
     it('has a rejection with a result as a tool result with no span', function () {
@@ -471,7 +468,7 @@ describe('approvals', function () {
             ->and($turn['trace']['status'])->toBe('completed');
     });
 
-    it('resumes with a wildcard, linking the approved tool and leaving the paused turn\'s ordinary tool without a span', function () {
+    it('settles every call with a wildcard, linking the approved tool and giving the other call of the first turn its own span', function () {
         FakeAnthropic::script([FakeAnthropic::toolUse([
             ['id' => 'toolu_1', 'name' => 'delete_records', 'input' => ['table' => 'users']],
             ['id' => 'toolu_2', 'name' => 'lookup', 'input' => ['query' => 'laravel']],
@@ -486,7 +483,7 @@ describe('approvals', function () {
         $spans = $this->getJson('/trail/api/traces/'.$resumed->invocationId)->json('data.spans');
         $approved = array_values(array_filter($spans, fn (array $span): bool => $span['type'] === 'tool'))[0];
 
-        // The paused turn ran the ordinary tool itself, and holds the gated one back.
+        // The first turn ran the ordinary tool itself, and holds the gated one back.
         expect(captureLinks($first['messages'][1]))->toBe(['awaiting_approval', 'linked'])
             ->and($second['detail']['resolved_tool_call_ids'])->toBe(['toolu_1'])
             ->and(array_column($second['messages'][0]['tool_results'], 'span_id', 'id'))->toBe(['toolu_2' => null, 'toolu_1' => $approved['id']])

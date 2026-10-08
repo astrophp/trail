@@ -273,9 +273,9 @@ One turn of a conversation as its transcript returns it: the run, and the messag
   | Reason | The messages are incomplete because |
   | -- | -- |
   | `span_limit` | the run has more spans than the limit, and the rest were not read |
-  | `offset_gap` | a step stores only what the step before it did not send, and a step that held some of it is not there, so messages are missing between two steps |
+  | `offset_gap` | the stored messages of a step do not start where the step before it ended, or the first step does not start at the beginning of the history, or a step's list was cut and nothing says where, so messages may be missing or where the turn began is not known |
   | `history_rewritten` | a step sent its history again whole, shorter or different from the one before, so only its tail is added to what was read |
-  | `history_boundary_unknown` | the first step's last message is neither the user's nor a tool result, so where the turn began is not known and none of that step's messages are returned; or the first step was recorded without its messages and the agent has no prompt of its own to say where the turn began |
+  | `history_boundary_unknown` | the first step's last message is neither the user's nor a tool result, so where the turn began is not known and none of that step's messages are returned; or the first step's list of messages was cut and nothing says where, so its last message may not be where the turn began; or the first step was recorded without its messages and the agent has no prompt of its own to say where the turn began |
   | `step_input_missing` | a step was recorded without the messages it sent, and no later step covers them, so a tool result between two steps may be missing; or no step stored anything and the prompt is the agent's own |
 
 - `history_count` is the number of leading messages of the first stored step that were left out
@@ -284,9 +284,8 @@ One turn of a conversation as its transcript returns it: the run, and the messag
   was the first message.
 - `span_limit` has the meaning it has on the run's endpoint: `limit`, `total` and `truncated`.
 
-A turn reads its own spans and nothing else. It never refers to another turn: a turn that resumed
-a pause starts at the tool result it was given and has no prompt of its own, and nothing in it
-names the turn that paused.
+A turn reads its own spans and nothing else. It never refers to another turn: a turn whose first
+message is a tool result has no prompt of its own, and nothing in it names any other turn.
 
 ## The message
 
@@ -353,7 +352,7 @@ the entry does not have. An entry that is not an object is returned as `argument
 
 - `link` says what became of the call, the first that applies. `linked`: the tool span that ran it
   is known. `awaiting_approval`: the turn is waiting for approval and the call is one of
-  `detail.pending_approvals`. `not_started`: the turn is still running. `unlinked`: none of these.
+  `detail.pending_approvals`. `not_started`: the turn is still running and the call is in the model's latest request. `unlinked`: none of these.
 - `span` is `{ id, status, issue_kind, duration_ms }` of the tool span, else `null`. Its status is
   the one the API shows, so a tool that was still running when its run was given up on is
   `incomplete`.
@@ -375,14 +374,16 @@ each tool name, in the order the step asked:
    and whose arguments are equal. None, or more than one, gives no link.
 
 There is no third rule: a call whose arguments were cut or redacted, or whose tool recorded no
-input, is not linked, and neither is one that only the order would suggest. The tools of a
+input, is not linked. Nor is a call on a span that was cut somewhere it does not say: one flagged
+`truncated` that lists no cut path, or lists as many as the span keeps. Neither is one that only
+the order would suggest. The tools of a
 delegated agent and those of an earlier attempt are never candidates. Same JSON value means keys
 in any order, lists in order, an int equal to the float of the same value (`1` and `1.0`), an empty
 object equal to an empty list, `null` different from an absent key, and nothing else coerced.
 
 A call that appears in a stored message takes the link its own request got, by call id, if the id
-is a string that occurs in one call only among the turn's steps. A turn that resumed a pause also
-links the calls it settled, which sit in the history it did not return, to the tools it ran before
+is a string that occurs in one call only among the turn's steps. A turn whose first message is a
+tool result also links the calls it settles, which sit in the history it did not return, to the tools it ran before
 its first step: by the same two rules, among the calls whose ids `detail.resolved_tool_call_ids`
 names.
 
@@ -575,7 +576,7 @@ row and the run's own page shows one run's spans.
 | Parameter | Meaning |
 | -- | -- |
 | `id` | Required. The conversation's id |
-| `limit` | How many turns. The default and the most is 10; a value outside 1 to 10 is clamped, and one that is not a whole number is a 422 |
+| `limit` | How many turns. The default and the most is 10; a whole number outside 1 to 10, however large, is clamped; an empty `limit` is the default; anything else that is not a whole number is a 422 |
 | `turn` | A run's id. The window ends at that turn, which it includes: the turn and up to `limit - 1` older ones |
 | `before` | A run's id. Up to `limit` turns that started before it, the nearest ones |
 | `after` | A run's id. Up to `limit` turns that started after it, the nearest ones |
@@ -630,10 +631,10 @@ need to have started in any range.
   provider failover, which only `attempts` lists; and the inner steps of a sub-agent, which are
   those of its own agent span (on the run's endpoint) and appear here only as the `agent` of the
   call that started it. A tool that a sub-agent ran is not linked to any call of this turn.
-- **A turn that resumed a pause** has no prompt: it starts at the tool result the pause was settled
-  with, and `history_count` counts what came before. The calls it settled are linked to the tools
-  it ran when its `detail.resolved_tool_call_ids` names them. A turn is never linked to another by
-  anything in this response.
+- **A turn that starts at a tool result** has no prompt: its first message is the tool result it was
+  given, and `history_count` counts what came before. The calls that result settles are linked to
+  the tools the turn ran when its `detail.resolved_tool_call_ids` names them. No turn is linked to
+  another by anything in this response.
 - The response is read in a fixed number of queries whatever the number of turns: eight, plus one
   lookup of the users for each user type, resolved once for the header and the turns together. An
   anchor adds one, and so does a turn with more spans than the limit, to count them. Each turn

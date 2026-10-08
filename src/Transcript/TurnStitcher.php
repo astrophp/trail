@@ -24,7 +24,7 @@ final class TurnStitcher
 
     private ?int $historyCount = null;
 
-    /** Whether the turn began with a tool result rather than a prompt: a resumed pause. */
+    /** Whether the turn began with a tool result rather than a prompt. */
     private bool $fromDecisions = false;
 
     private bool $prompted = false;
@@ -66,7 +66,7 @@ final class TurnStitcher
      * @param  list<StitchSpan>  $spans  the turn's spans, loaded in any order
      * @param  string  $status  the turn's status as the API shows it
      * @param  list<string>  $pendingCallIds  the calls the turn waits for approval on
-     * @param  list<string>  $resolvedCallIds  the calls the turn settled when it resumed a pause
+     * @param  list<string>  $resolvedCallIds  the calls this turn's first message settles
      * @param  bool  $spanLimited  whether the spans are only the first of more
      */
     public static function stitch(array $spans, string $status, array $pendingCallIds, array $resolvedCallIds, bool $spanLimited): Transcript
@@ -123,7 +123,12 @@ final class TurnStitcher
         $this->collect();
         $this->link($resolvedCallIds);
 
-        $messages = array_map(fn (array $entry): array => $this->message($entry, $status, $pendingCallIds), $this->emitted);
+        $messages = [];
+        $newest = array_key_last($this->emitted);
+
+        foreach ($this->emitted as $position => $entry) {
+            $messages[] = $this->message($entry, $status, $pendingCallIds, $position === $newest && $entry['kind'] === 'output');
+        }
 
         if ($spanLimited) {
             $this->reasons['span_limit'] = true;
@@ -232,6 +237,14 @@ final class TurnStitcher
             return;
         }
 
+        if ($step->cutSomewhereUnknown()) {
+            // A cut list is a prefix of what was sent, and nothing says where it ends: its last message
+            // may be an old one, not the one that began this turn.
+            $this->reasons['history_boundary_unknown'] = true;
+
+            return;
+        }
+
         $role = $messages === [] ? null : self::role($messages[count($messages) - 1]);
 
         if ($afterMissing) {
@@ -278,6 +291,11 @@ final class TurnStitcher
      */
     private function later(StitchSpan $step, array $messages, int $offset, int $sent): void
     {
+        if ($step->cutSomewhereUnknown()) {
+            // Whatever followed the stored prefix is not here, and the span cannot say how much.
+            $this->reasons['offset_gap'] = true;
+        }
+
         if ($offset === $sent) {
             $this->emitFrom($step, $messages, 0, 'activity');
 
@@ -414,7 +432,8 @@ final class TurnStitcher
     }
 
     /**
-     * The tools a resumed pause ran before its first step: their calls are in the history, from the run that paused.
+     * The tools this turn ran before its first step. The calls they answer sit in the history the
+     * first step was sent, ahead of the message the turn began at.
      *
      * @param  list<StitchSpan>  $tools
      * @param  list<string>  $resolvedCallIds
@@ -456,14 +475,15 @@ final class TurnStitcher
     /**
      * @param  array{kind: string, span: StitchSpan, part: string, path: string, item?: mixed, index?: int}  $entry
      * @param  list<string>  $pendingCallIds
+     * @param  bool  $newest  whether it is the model's latest request, the only one that can still be waiting to start
      * @return array<string, mixed>
      */
-    private function message(array $entry, string $status, array $pendingCallIds): array
+    private function message(array $entry, string $status, array $pendingCallIds, bool $newest): array
     {
         $span = $entry['span'];
         $kind = $entry['kind'];
         $source = ['span_id' => $span->id, 'path' => $entry['path'], 'redacted' => $span->redacted, 'truncated' => $span->truncated];
-        $context = ['status' => $status, 'pending' => $pendingCallIds];
+        $context = ['status' => $status, 'pending' => $pendingCallIds, 'newest' => $newest];
 
         if ($kind === 'input') {
             $item = $entry['item'] ?? null;
@@ -523,7 +543,7 @@ final class TurnStitcher
 
     /**
      * @param  callable(int): ?StitchSpan  $linked
-     * @param  array{status: string, pending: list<string>}  $context
+     * @param  array{status: string, pending: list<string>, newest: bool}  $context
      * @return mixed a list of calls, or the stored value when it is not one
      */
     private function shapeCalls(mixed $stored, callable $linked, array $context): mixed
@@ -547,7 +567,7 @@ final class TurnStitcher
             $link = match (true) {
                 $tool !== null => 'linked',
                 $context['status'] === 'awaiting_approval' && is_string($id) && in_array($id, $context['pending'], true) => 'awaiting_approval',
-                $context['status'] === 'running' => 'not_started',
+                $context['status'] === 'running' && $context['newest'] => 'not_started',
                 default => 'unlinked',
             };
 
