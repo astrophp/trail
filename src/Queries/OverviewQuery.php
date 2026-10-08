@@ -37,14 +37,12 @@ final class OverviewQuery
         $buckets = [];
 
         foreach ($cuts as $index => $cut) {
-            $last = $index === count($cuts) - 1;
-
             $buckets[] = new OverviewBucket(
                 from: $cut['from'],
                 to: $cut['to'],
                 full: $cut['full'],
-                // Only the last bucket is open, and only for a range that has not ended in the past.
-                inProgress: $last && ($range->preset !== null || $range->to >= $now) && $cut['end'] > $now,
+                // By the clock: now is inside the bucket's span before the range cut it.
+                inProgress: $cut['start'] <= $now && $now < $cut['end'],
                 figures: RunFigures::fromRow($rows[$index + 1] ?? null),
             );
         }
@@ -75,7 +73,7 @@ final class OverviewQuery
      * One pass: slot 0 is the previous window and slots 1..N the buckets in order, each holding
      * the aggregates of its runs. The stale rule is applied to every run before it is counted.
      *
-     * @param  list<array{from: CarbonImmutable, to: CarbonImmutable, end: CarbonImmutable, full: bool}>  $cuts
+     * @param  list<array{start: CarbonImmutable, end: CarbonImmutable, from: CarbonImmutable, to: CarbonImmutable, full: bool}>  $cuts
      * @return array<int, object> by slot
      */
     private function rows(TimeRange $range, TimeRange $previousRange, array $cuts, RunScope $scope): array

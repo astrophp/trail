@@ -13,7 +13,7 @@ final readonly class OverviewBucket
      * @param  CarbonImmutable  $from  included
      * @param  CarbonImmutable  $to  excluded
      * @param  bool  $full  whether the clock bucket lies wholly inside the range
-     * @param  bool  $inProgress  whether the clock bucket has not ended yet
+     * @param  bool  $inProgress  whether now is inside the clock bucket, whatever part of it the range holds
      */
     public function __construct(
         public CarbonImmutable $from,

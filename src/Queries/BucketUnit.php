@@ -2,6 +2,7 @@
 
 namespace Astro\Trail\Queries;
 
+use Astro\Trail\Storage\StaleRuns;
 use Carbon\CarbonImmutable;
 use Illuminate\Validation\ValidationException;
 
@@ -15,7 +16,12 @@ enum BucketUnit: string
     case Hour = 'hour';
     case Day = 'day';
 
-    /** The longest explicit range that is cut, in days; a series then holds at most 93 buckets. */
+    /**
+     * The longest explicit range that is cut, in days. It reaches at most 94 calendar days, since
+     * a day on which the clock goes forward is 23 hours long: 92 times 24 hours that starts late on
+     * the day before such a day touches 94 days. A range of up to 2 hours reaches at most 25 buckets
+     * and one of up to 48 hours at most 49.
+     */
     public const MAXIMUM_DAYS = 92;
 
     private const HOUR_MS = 3600000;
@@ -49,7 +55,11 @@ enum BucketUnit: string
      * The clock buckets the range touches, in order. Each is cut to the range: it starts no earlier
      * than the range and ends no later. A range that ends exactly on an edge has no bucket after it.
      *
-     * @return list<array{from: CarbonImmutable, to: CarbonImmutable, end: CarbonImmutable, full: bool}> `end` is where the clock bucket ends, uncut
+     * The application stores local times, so in the hour a clock is set back two instants share one
+     * stored time and no bucket inside that hour could tell its runs apart. That whole stretch is
+     * one bucket, longer than the unit.
+     *
+     * @return list<array{start: CarbonImmutable, end: CarbonImmutable, from: CarbonImmutable, to: CarbonImmutable, full: bool}> `start` and `end` are those of the clock bucket, uncut
      */
     public function buckets(TimeRange $range): array
     {
@@ -58,20 +68,71 @@ enum BucketUnit: string
         $from = $range->from->setTimezone($timezone);
         $to = $range->to->setTimezone($timezone);
 
+        // Where each bucket starts, and at the end where the last one ends.
+        $edges = [];
+
+        for ($edge = $this->floor($from); $edge < $to; $edge = $this->next($edge)) {
+            $edges[] = $edge;
+        }
+
+        $edges[] = $edge;
+
+        $merged = self::repeatedStretches($edges);
         $buckets = [];
 
-        for ($edge = $this->floor($from); $edge < $to; $edge = $end) {
-            $end = $this->next($edge);
+        for ($first = 0; $first < count($edges) - 1; $first = $last + 1) {
+            $last = min($merged[$first] ?? $first, count($edges) - 2);
+            $start = $edges[$first];
+            $end = $edges[$last + 1];
 
             $buckets[] = [
-                'from' => $edge < $from ? $from : $edge,
-                'to' => $end > $to ? $to : $end,
+                'start' => $start,
                 'end' => $end,
-                'full' => $edge >= $from && $end <= $to,
+                'from' => $start < $from ? $from : $start,
+                'to' => $end > $to ? $to : $end,
+                'full' => $start >= $from && $end <= $to,
             ];
         }
 
         return $buckets;
+    }
+
+    /**
+     * Where the stored times of the edges, as the database compares them, do not keep increasing:
+     * the edges from the first whose stored time is not below the one after the step back, through
+     * the last whose stored time is not above the one before it, belong to one bucket.
+     *
+     * @param  list<CarbonImmutable>  $edges
+     * @return array<int, int> the first edge of each such stretch => the last edge that starts a piece of it
+     */
+    private static function repeatedStretches(array $edges): array
+    {
+        $stored = array_map(StaleRuns::format(...), $edges);
+        $stretches = [];
+
+        foreach ($stored as $index => $before) {
+            $after = $stored[$index + 1] ?? null;
+
+            if ($after === null || $after > $before) {
+                continue;
+            }
+
+            $first = $index + 1;
+
+            while ($first > 0 && $stored[$first - 1] >= $after) {
+                $first--;
+            }
+
+            $last = $index;
+
+            while (isset($stored[$last + 1]) && $stored[$last + 1] <= $before) {
+                $last++;
+            }
+
+            $stretches[$first] = max($stretches[$first] ?? 0, $last);
+        }
+
+        return $stretches;
     }
 
     private function floor(CarbonImmutable $moment): CarbonImmutable

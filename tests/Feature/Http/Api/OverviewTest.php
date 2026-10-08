@@ -193,6 +193,27 @@ describe('the previous period', function () {
             ->and($body['previous_range'])->toBe(['from' => '2025-12-31T12:00:00.000Z', 'to' => '2026-01-01T12:00:00.000Z']);
     });
 
+    it('counts a stale running run of the previous window as incomplete and makes nothing there pending', function () {
+        overviewRun('2025-12-31 18:00:00', ['status' => Status::Running, 'created_at' => Carbon::now()->subHours(3), 'cost' => 0.2, 'input_tokens' => 4]);
+        overviewRun('2025-12-31 19:00:00', ['cost' => 0.1]);
+
+        $previous = overviewAt($this)['data']['previous'];
+
+        expect($previous['runs'])->toBe(overviewCounts(completed: 1, incomplete: 1))
+            ->and($previous['cost']['state'])->toBe('estimated')
+            ->and($previous['usage']['state'])->toBe('reported');
+    });
+
+    it('puts a run at the previous window\'s first instant in it, and one a millisecond earlier in neither period', function () {
+        overviewRun('2025-12-31 12:00:00', ['id' => 'first-instant']);
+        overviewRun('2025-12-31 11:59:59.999', ['id' => 'a-millisecond-before']);
+
+        $data = overviewAt($this)['data'];
+
+        expect($data['previous']['runs'])->toBe(overviewCounts(completed: 1))
+            ->and($data['summary']['runs'])->toBe(overviewCounts());
+    });
+
     it('puts a run that starts exactly where the range starts in the range', function () {
         overviewRun('2026-01-01 12:00:00', ['id' => 'on-the-edge']);
         overviewRun('2026-01-01 11:59:59.999', ['id' => 'just-before']);
@@ -374,6 +395,17 @@ describe('cost', function () {
             ->and($data['summary']['cost']['amount'])->toBe(0.3703703592)
             ->and($data['summary']['cost']['amount'])->toBe(round(array_sum($amounts), 10));
     });
+
+    it('rounds the previous period\'s amount, one sum from the database, to ten places', function () {
+        overviewRun('2025-12-31 13:00:00', ['cost' => '0.1234567891']);
+        overviewRun('2026-01-01 08:00:00', ['cost' => '0.2345678912']);
+        overviewRun('2026-01-02 08:00:00', ['cost' => '0.5']);
+
+        $data = overviewAt($this)['data'];
+
+        expect($data['previous']['cost'])->toBe(['state' => 'estimated', 'amount' => 0.3580246803])
+            ->and($data['summary']['cost'])->toBe(['state' => 'estimated', 'amount' => 0.5]);
+    });
 });
 
 describe('the series', function () {
@@ -428,16 +460,43 @@ describe('the series', function () {
             ->and($buckets[0])->toMatchArray(['from' => '2026-01-02T10:07:00.000Z', 'to' => '2026-01-02T10:08:00.000Z', 'full' => false]);
     });
 
-    it('is in progress only for a range that ends now, never for one that ended in the past', function () {
-        Carbon::setTestNow('2026-01-02 12:34:56');
+    describe('in progress', function () {
+        beforeEach(fn () => Carbon::setTestNow('2026-01-02 12:34:56'));
 
-        $now = overviewAt($this, 'from=2026-01-02T10:00:00Z&to=2026-01-02T12:34:56Z')['data']['series']['buckets'];
-        $past = overviewAt($this, 'from=2026-01-02T10:00:00Z&to=2026-01-02T12:30:00Z')['data']['series']['buckets'];
+        /**
+         * @return list<string> the `from` of each bucket that is in progress
+         */
+        function overviewOpen(mixed $test, string $query): array
+        {
+            $buckets = overviewAt($test, $query)['data']['series']['buckets'];
 
-        // The last bucket of the past range is the clock hour 12:00-13:00, which is still running at 12:34:56.
-        expect(end($now)['in_progress'])->toBeTrue()
-            ->and(end($past))->toMatchArray(['from' => '2026-01-02T12:00:00.000Z', 'to' => '2026-01-02T12:30:00.000Z', 'in_progress' => false])
-            ->and(array_column($now, 'in_progress'))->toBe([false, false, true]);
+            return array_column(array_filter($buckets, fn (array $bucket) => $bucket['in_progress']), 'from');
+        }
+
+        it('is the bucket of a range that ends now, and only the last', function () {
+            expect(overviewOpen($this, 'from=2026-01-02T10:00:00Z&to=2026-01-02T12:34:56Z'))->toBe(['2026-01-02T12:00:00.000Z'])
+                ->and(overviewOpen($this, 'range=24h'))->toBe(['2026-01-02T12:00:00.000Z']);
+        });
+
+        it('is no bucket of a range that ended before the clock bucket that holds now began', function () {
+            expect(overviewOpen($this, 'from=2026-01-02T08:00:00Z&to=2026-01-02T11:59:59Z'))->toBe([]);
+        });
+
+        it('is by the clock, so the last bucket of a range that ended minutes ago is still open', function () {
+            expect(overviewOpen($this, 'from=2026-01-02T10:00:00Z&to=2026-01-02T12:30:00Z'))->toBe(['2026-01-02T12:00:00.000Z']);
+        });
+
+        it('is not the last bucket of a range that ends in the future when that bucket has not started', function () {
+            // Five-minute buckets 12:00 to 13:50: the one holding 12:34:56 is 12:30, and the last one starts at 13:45.
+            $buckets = overviewAt($this, 'from=2026-01-02T12:00:00Z&to=2026-01-02T13:50:00Z')['data']['series']['buckets'];
+
+            expect(overviewOpen($this, 'from=2026-01-02T12:00:00Z&to=2026-01-02T13:50:00Z'))->toBe(['2026-01-02T12:30:00.000Z'])
+                ->and(end($buckets)['in_progress'])->toBeFalse();
+        });
+
+        it('is no bucket of a range that starts in the future', function () {
+            expect(overviewOpen($this, 'from=2026-01-02T13:00:00Z&to=2026-01-02T14:00:00Z'))->toBe([]);
+        });
     });
 
     it('sends every bucket, with an empty one between two busy ones', function () {
@@ -478,7 +537,25 @@ describe('the series', function () {
             }
         }
 
+        // The summary is built from the buckets, so this alone cannot fail. The list below is the real check.
         expect($total)->toBe($data['summary']['runs'])->and($total['all'])->toBe(9);
+    });
+
+    it('has the list\'s counts for the range and for each of several buckets, read from the list itself', function () {
+        overviewMixedDataset();
+        overviewRun('2026-01-01 12:30:00', ['status' => Status::Failed]);
+
+        $data = overviewAt($this)['data'];
+        $range = $this->getJson('/trail/api/traces?range=24h')->assertOk()->json('status_counts');
+
+        expect($data['summary']['runs'])->toBe($range)->and($range['all'])->toBe(9);
+
+        foreach ([0, 18, 19, 20, 21, 22, 23] as $index) {
+            $bucket = $data['series']['buckets'][$index];
+            $list = $this->getJson('/trail/api/traces?from='.urlencode($bucket['from']).'&to='.urlencode($bucket['to']))->assertOk()->json('status_counts');
+
+            expect($bucket['runs'])->toBe($list);
+        }
     });
 
     it('counts a run at a bucket\'s edge in the bucket that starts there', function () {
@@ -545,6 +622,109 @@ describe('the series', function () {
     });
 });
 
+describe('the hour a clock is set back', function () {
+    beforeEach(function () {
+        config(['app.timezone' => 'America/New_York']);
+        Carbon::setTestNow(Carbon::parse('2026-11-03 12:00:00', 'America/New_York'));
+    });
+
+    /**
+     * @param  array<string, mixed>  $series
+     * @return list<array<string, mixed>>
+     */
+    function overviewAgainstList(mixed $test, array $series): array
+    {
+        foreach ($series as $bucket) {
+            $list = $test->getJson('/trail/api/traces?from='.urlencode($bucket['from']).'&to='.urlencode($bucket['to']))->assertOk()->json('status_counts');
+
+            expect($bucket['runs'])->toBe($list);
+        }
+
+        return $series;
+    }
+
+    it('is one bucket of hours, holding the runs of both passes', function () {
+        // The capture stores the local time, so both passes of the hour are stored as 01:xx.
+        overviewRun('2026-11-01 00:30:00', ['id' => 'before']);
+        overviewRun('2026-11-01 01:10:00', ['id' => 'first-pass']);
+        overviewRun('2026-11-01 01:50:00', ['id' => 'second-pass', 'status' => Status::Failed]);
+        overviewRun('2026-11-01 02:30:00', ['id' => 'after']);
+
+        $body = overviewAt($this, 'from=2026-11-01T00:00:00-04:00&to=2026-11-01T04:00:00-05:00');
+        $buckets = overviewAgainstList($this, $body['data']['series']['buckets']);
+
+        expect($body['data']['series']['bucket'])->toBe('hour')
+            ->and(array_column($buckets, 'from'))->toBe(['2026-11-01T04:00:00.000Z', '2026-11-01T05:00:00.000Z', '2026-11-01T07:00:00.000Z', '2026-11-01T08:00:00.000Z'])
+            ->and(array_column($buckets, 'to'))->toBe(['2026-11-01T05:00:00.000Z', '2026-11-01T07:00:00.000Z', '2026-11-01T08:00:00.000Z', '2026-11-01T09:00:00.000Z'])
+            ->and(array_column($buckets, 'full'))->toBe([true, true, true, true])
+            ->and(array_column(array_column($buckets, 'runs'), 'all'))->toBe([1, 2, 1, 0])
+            ->and($buckets[1]['runs'])->toBe(overviewCounts(completed: 1, failed: 1))
+            ->and($body['data']['summary']['runs'])->toBe(overviewCounts(completed: 3, failed: 1))
+            ->and(array_sum(array_column(array_column($buckets, 'runs'), 'all')))->toBe($body['data']['summary']['runs']['all']);
+
+        $list = $this->getJson('/trail/api/traces?from=2026-11-01T00:00:00-04:00&to=2026-11-01T04:00:00-05:00')->json('status_counts');
+
+        expect($body['data']['summary']['runs'])->toBe($list);
+    });
+
+    it('is one bucket of five minutes, longer than its unit', function () {
+        overviewRun('2026-11-01 00:52:00', ['id' => 'before']);
+        overviewRun('2026-11-01 01:10:00', ['id' => 'first-pass']);
+        overviewRun('2026-11-01 01:40:00', ['id' => 'second-pass', 'status' => Status::Failed]);
+
+        $body = overviewAt($this, 'from=2026-11-01T00:50:00-04:00&to=2026-11-01T01:50:00-05:00');
+        $buckets = overviewAgainstList($this, $body['data']['series']['buckets']);
+
+        expect($body['data']['series']['bucket'])->toBe('5m')
+            ->and(array_column($buckets, 'from'))->toBe(['2026-11-01T04:50:00.000Z', '2026-11-01T04:55:00.000Z', '2026-11-01T05:00:00.000Z'])
+            ->and(array_column($buckets, 'to'))->toBe(['2026-11-01T04:55:00.000Z', '2026-11-01T05:00:00.000Z', '2026-11-01T06:50:00.000Z'])
+            ->and(array_column(array_column($buckets, 'runs'), 'all'))->toBe([1, 0, 2])
+            ->and($body['data']['summary']['runs']['all'])->toBe(3);
+    });
+
+    it('ends the merged bucket at the end of the repeated hour when the range goes on', function () {
+        overviewRun('2026-11-01 01:20:00');
+        overviewRun('2026-11-01 02:20:00');
+
+        $body = overviewAt($this, 'from=2026-11-01T01:00:00-04:00&to=2026-11-01T03:00:00-05:00');
+        $buckets = overviewAgainstList($this, $body['data']['series']['buckets']);
+
+        // 01:00 EDT to 03:00 EST is 3 hours: hour buckets, 01:00 EDT-02:00 EST and 02:00-03:00 EST.
+        expect(array_column($buckets, 'from'))->toBe(['2026-11-01T05:00:00.000Z', '2026-11-01T07:00:00.000Z'])
+            ->and(array_column(array_column($buckets, 'runs'), 'all'))->toBe([1, 1]);
+    });
+
+    it('splits the runs of a range or a previous window that begins inside the hour by their stored time', function () {
+        overviewRun('2026-11-01 01:10:00', ['id' => 'early']);
+        overviewRun('2026-11-01 01:40:00', ['id' => 'late']);
+
+        $body = overviewAt($this, 'from=2026-11-01T01:30:00-05:00&to=2026-11-01T05:30:00-05:00');
+
+        // The range starts at stored time 01:30: the run stored 01:40 is in it, the one stored 01:10 is in the window before it.
+        expect($body['data']['summary']['runs']['all'])->toBe(1)
+            ->and($body['data']['previous']['runs']['all'])->toBe(1)
+            ->and(array_sum(array_column(array_column($body['data']['series']['buckets'], 'runs'), 'all')))->toBe(1);
+    });
+
+    it('leaves no phantom bucket where the clock goes forward', function () {
+        overviewRun('2026-03-08 03:30:00', ['id' => 'after-the-change']);
+
+        $body = overviewAt($this, 'from=2026-03-08T00:00:00-05:00&to=2026-03-08T05:00:00-04:00');
+        $buckets = overviewAgainstList($this, $body['data']['series']['buckets']);
+
+        expect($body['data']['series']['bucket'])->toBe('hour')
+            ->and(array_column($buckets, 'from'))->toBe(['2026-03-08T05:00:00.000Z', '2026-03-08T06:00:00.000Z', '2026-03-08T07:00:00.000Z', '2026-03-08T08:00:00.000Z'])
+            ->and(array_column($buckets, 'to'))->toBe(['2026-03-08T06:00:00.000Z', '2026-03-08T07:00:00.000Z', '2026-03-08T08:00:00.000Z', '2026-03-08T09:00:00.000Z'])
+            ->and(array_column(array_column($buckets, 'runs'), 'all'))->toBe([0, 0, 1, 0]);
+    });
+
+    it('leaves a day alone', function () {
+        $buckets = overviewAt($this, 'from=2026-10-31T00:00:00&to=2026-11-03T00:00:00')['data']['series']['buckets'];
+
+        expect(array_column($buckets, 'to'))->toBe(['2026-11-01T04:00:00.000Z', '2026-11-02T05:00:00.000Z', '2026-11-03T05:00:00.000Z']);
+    });
+});
+
 describe('an explicit range', function () {
     it('picks the unit by length, with the bounds inclusive', function (string $from, string $to, string $unit, int $count) {
         $series = overviewAt($this, "from={$from}&to={$to}")['data']['series'];
@@ -557,6 +737,27 @@ describe('an explicit range', function () {
         'a second more is days' => ['2025-12-30T12:00:00Z', '2026-01-01T12:00:01Z', 'day', 3],
         'ninety-two days is days' => ['2025-10-02T00:00:00Z', '2026-01-02T00:00:00Z', 'day', 92],
     ]);
+
+    it('reaches its real maximum of buckets for each unit', function (string $from, string $to, string $unit, int $count) {
+        $series = overviewAt($this, "from={$from}&to={$to}")['data']['series'];
+
+        expect($series['bucket'])->toBe($unit)->and($series['buckets'])->toHaveCount($count);
+    })->with([
+        'two hours, off the clock' => ['2026-01-02T10:01:00Z', '2026-01-02T12:01:00Z', '5m', 25],
+        'forty-eight hours, off the clock' => ['2026-01-01T10:30:00Z', '2026-01-03T10:30:00Z', 'hour', 49],
+        'ninety-two days, off the clock' => ['2025-10-02T00:30:00Z', '2026-01-02T00:30:00Z', 'day', 93],
+    ]);
+
+    it('reaches 94 days for 92 times 24 hours that start late on the day before the clock goes forward', function () {
+        config(['app.timezone' => 'America/New_York']);
+
+        // 2026-03-08 is 23 hours long in New York.
+        $series = overviewAt($this, 'from=2026-03-07T23:30:00-05:00&to=2026-06-08T00:30:00-04:00')['data']['series'];
+
+        expect($series['bucket'])->toBe('day')
+            ->and($series['buckets'])->toHaveCount(94)
+            ->and($series['buckets'][1])->toMatchArray(['from' => '2026-03-08T05:00:00.000Z', 'to' => '2026-03-09T04:00:00.000Z', 'full' => true]);
+    });
 
     it('refuses a range longer than ninety-two days', function () {
         $this->getJson('/trail/api/overview?from=2025-10-02T00:00:00Z&to=2026-01-02T00:00:01Z')

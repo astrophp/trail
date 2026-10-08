@@ -55,7 +55,7 @@ final class SummaryResource
     }
 
     /**
-     * The mean duration of the runs that have one, to the thousandth of a millisecond the database stores.
+     * The mean duration of the runs that have one, rounded to 3 decimals.
      */
     public static function average(RunFigures $figures): ?float
     {

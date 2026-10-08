@@ -219,9 +219,9 @@ the period before it, and later the runs of one agent. Only the runs that starte
   else `estimated`, `partial`, `unpriced` or `not_captured`.
   `cost_coverage.unpriced_runs` is the number of runs with at least one such step, exactly the runs
   the list keeps with `unpriced=1`, and `runs_without_amount` the number of runs whose cost is `null`.
-- Money: the amount of a range or of a period is the amounts of its buckets added up by the
-  application and rounded to 10 decimal places. That is exact to 10 places for totals up to roughly
-  $100,000.
+- Money: in [`GET /api/overview`](#get-apioverview) the amount of the range is the sums of its
+  buckets added as floating-point numbers and rounded to 10 decimal places. The amount of the
+  previous period is one sum from the database, rounded the same way.
 
 ## The conversation
 
@@ -612,21 +612,31 @@ buckets. It takes a time range and nothing else: any other parameter is ignored.
   | -- | -- | -- |
   | up to 2 hours | `5m` | 25 |
   | up to 48 hours | `hour` | 49 |
-  | up to 92 days | `day` | 93 |
+  | up to 92 days | `day` | 94 |
 
   A longer range is a 422 on `from`: "The range is too long: at most 92 days."
 - Buckets follow the clock of the application's timezone (`app.timezone`): a `5m` bucket starts at
   a multiple of 5 minutes, an `hour` bucket on the hour and a `day` bucket at midnight. A `day`
-  bucket is a calendar day, so across a clock change one is 23 or 25 hours long.
+  bucket is a calendar day, so across a clock change one is 23 or 25 hours long, and a range of
+  92 times 24 hours that begins late on the day before the clock goes forward touches 94 days.
+- The application stores local times, so in the hour a clock is set back two instants share one
+  stored time. That hour is a single bucket whatever the unit, longer than its unit: for `5m` and
+  `hour` buckets it runs from the start of the first pass to the end of the second, and its runs are
+  every run stored with a time in that hour. A range, or a previous window, whose boundary falls
+  inside that hour splits its runs by their stored time, as every time range of this API does. When
+  the clock skips an hour, `hour` buckets have no bucket for it.
 - Every bucket of the range is present, in order and without gaps. `from` and `to` are the part of
   the clock bucket inside the range, `from` included and `to` excluded: the first bucket is cut at
   the range's start and the last at its end. They are the bounds its runs were counted over, so
   `GET /api/traces` with `from` and `to` set to them has the bucket's `runs` as its `status_counts`.
   A range that ends exactly on a bucket edge has no bucket after it, so a `24h` range read on the
   hour has 24 buckets and otherwise 25; a `1h` range has 12 or 13 and a `7d` range 7 or 8.
-- `full` is `false` for a bucket cut at either end. `in_progress` is `true` for the last bucket
-  when its clock bucket has not ended yet and the range has not ended in the past; it is `false`
-  for every other bucket and for every bucket of an explicit range that ended in the past.
+- `full` is `false` for a bucket cut at either end. `in_progress` is `true` when the current time
+  is inside the bucket's clock span, from its start to its end before the range cut it. At most
+  one bucket is in progress. It is the last bucket of a range that ends now, no bucket of a range
+  that ended before the current clock bucket began, and no bucket of a range that starts in the
+  future; the last bucket of a range that ended a few minutes ago can still be in progress, and so
+  can one in the middle of a range that ends in the future.
 - A bucket has `runs` (the keys of a list's `status_counts`, the stale rule applied), `duration`
   (`average_ms`, `null` when `measured` is `0`, and `measured`), `cost` (the cost of
   [The summary](#the-summary) over the bucket's runs, `pending` when one of them is running) and
