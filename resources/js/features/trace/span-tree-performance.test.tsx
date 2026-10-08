@@ -75,5 +75,7 @@ describe('a run of 2,000 spans', () => {
 
         expect(target).toHaveAttribute('aria-selected', 'true')
         expect(vi.mocked(spanTitle).mock.calls.length - rendered).toBe(2)
-    })
+        // Rendering 2,000 rows in jsdom takes a few seconds on a busy machine, longer than the
+        // default timeout; the count asserted above does not depend on how long it takes.
+    }, 60_000)
 })

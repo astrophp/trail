@@ -7,8 +7,8 @@ import { cn } from '@/lib/utils'
 const confirmMs = 1500
 
 type CopyButtonProps = {
-    /** What goes on the clipboard. */
-    text: string
+    /** What goes on the clipboard. A function is called when the button is pressed, never on render. */
+    text: string | (() => string)
     /** The button's accessible name: what is copied ("Copy run id"). It does not change after a copy. */
     label: string
     /** Called after the text reached the clipboard. */
@@ -36,8 +36,10 @@ export function CopyButton({
 
     async function copy() {
         try {
+            const content = typeof text === 'function' ? text() : text
+
             // `navigator.clipboard` is missing outside a secure context.
-            await navigator.clipboard.writeText(text)
+            await navigator.clipboard.writeText(content)
         } catch {
             setCopied(false)
             onFailed?.()

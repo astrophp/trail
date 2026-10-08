@@ -11,6 +11,7 @@ import {
     paramsOf,
     searchBox,
     traceUrls,
+    travel,
 } from '@/test/traces-api'
 
 beforeEach(() => {
@@ -25,9 +26,6 @@ afterEach(() => {
 const typing = () => userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
 const pause = (ms = 300) => act(() => vi.advanceTimersByTimeAsync(ms))
 const entries = () => window.history.length
-const goBack = () => {
-    act(() => window.history.back())
-}
 
 describe('writing to the URL', () => {
     it('waits for a pause in typing: keystrokes make one request and one history entry', async () => {
@@ -118,11 +116,11 @@ describe('the history of a typing session', () => {
         await expectSearch('?search=refund+now')
         expect(entries()).toBe(before + 1)
 
-        goBack()
+        await travel('back')
         await expectSearch('?page=2')
         await waitFor(() => expect(searchBox()).toHaveValue(''))
 
-        act(() => window.history.forward())
+        await travel('forward')
         await expectSearch('?search=refund+now')
         await waitFor(() => expect(searchBox()).toHaveValue('refund now'))
     })
@@ -183,7 +181,7 @@ describe('the history of a typing session', () => {
             await waitFor(() => expect(searchBox()).toHaveValue(''))
             noChips()
             // …so one more Back leaves the page: no entry repeats the one before it.
-            goBack()
+            await travel('back')
             await waitFor(() => expect(window.location.pathname).toBe('/'))
         },
     )
@@ -204,7 +202,7 @@ describe('the history of a typing session', () => {
         await expectSearch('')
         expect(entries()).toBe(before + 1)
         // Back returns to the entry that had `first`.
-        goBack()
+        await travel('back')
         await expectSearch('?search=first')
     })
 
@@ -221,7 +219,7 @@ describe('the history of a typing session', () => {
         await pause()
 
         await expectSearch('?search=first')
-        goBack()
+        await travel('back')
         await waitFor(() => expect(window.location.pathname).toBe('/'))
     })
 })
@@ -237,7 +235,7 @@ describe('a change of location the box did not make', () => {
         await user.tab()
         await expectSearch('?search=second')
 
-        goBack()
+        await travel('back')
         await expectSearch('?search=first')
         await waitFor(() => expect(searchBox()).toHaveValue('first'))
     })
@@ -257,8 +255,11 @@ describe('a change of location the box did not make', () => {
         expect(searchBox()).toHaveValue('first more')
 
         // Still typing (focus never left the box): Back to the entry whose search is the same.
-        goBack()
+        await travel('back')
         await expectSearch('?search=first')
+        // The app has taken the entry's search into the box, which is when the write is dropped;
+        // only then does the clock move on.
+        await waitFor(() => expect(searchBox()).toHaveValue('first'))
         await pause(1000)
 
         expect(window.location.search).toBe('?search=first')

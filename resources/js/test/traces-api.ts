@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { act, screen, waitFor, within } from '@testing-library/react'
 import { expect, vi } from 'vitest'
 import type {
     BookmarkResponse,
@@ -115,6 +115,29 @@ export const paramsOf = (url: string | undefined) =>
 
 export const expectSearch = (expected: string) =>
     waitFor(() => expect(window.location.search).toBe(expected))
+
+/**
+ * Goes Back or Forward one entry and returns once the app has been told. jsdom delivers a
+ * traversal later, on a real timer that a fake clock does not drive: the location changes first
+ * and `popstate` follows. A test that only polled the URL could therefore move a fake clock on
+ * before the app had heard of the change, and a debounce waiting at that moment would fire. Waiting
+ * for the event itself makes the order the test's, not the machine's.
+ */
+export async function travel(direction: 'back' | 'forward') {
+    await act(async () => {
+        const landed = new Promise<void>((resolve) => {
+            window.addEventListener('popstate', () => resolve(), { once: true })
+        })
+
+        if (direction === 'back') {
+            window.history.back()
+        } else {
+            window.history.forward()
+        }
+
+        await landed
+    })
+}
 
 /** The rows are in: the footer only exists once the answer has arrived. */
 export async function loaded() {

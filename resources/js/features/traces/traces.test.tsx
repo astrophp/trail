@@ -1,9 +1,10 @@
-import { act, screen, waitFor, within } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TraceListResponse } from '@/api/types'
 import { contractFixture } from '@/test/contract-fixture'
 import { renderApp, appReady } from '@/test/render-app'
+import { travel } from '@/test/traces-api'
 
 const fixture = contractFixture('traces') as TraceListResponse
 const meta = contractFixture('meta')
@@ -317,7 +318,7 @@ describe('the view drives the URL', () => {
 
         await expectSearch('?sort=-duration&page=2')
 
-        act(() => window.history.back())
+        await travel('back')
         await expectSearch('?sort=-duration')
         await waitFor(() =>
             expect(header(/Duration/)).toHaveAttribute(
@@ -326,7 +327,7 @@ describe('the view drives the URL', () => {
             ),
         )
 
-        act(() => window.history.back())
+        await travel('back')
         await expectSearch('')
         await waitFor(() =>
             expect(header(/Started/)).toHaveAttribute(
