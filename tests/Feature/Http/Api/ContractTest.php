@@ -447,6 +447,21 @@ it('sends the overview response the dashboard expects', function () {
     assertContract('overview', $this->getJson('/trail/api/overview')->assertOk()->json());
 });
 
+it('sends the needs-attention response the dashboard expects', function () {
+    contractDataset();
+
+    // A run left running past the cutoff is incomplete; the shared dataset has one of every other kind.
+    Rows::trace([
+        'id' => 'trace-abandoned', 'name' => 'Retired', 'status' => Status::Running, 'started_at' => '2026-01-02 05:30:00',
+        'created_at' => Carbon::now()->subHours(3),
+    ]);
+    // A second issue kind among the failed runs, and a run that completed although a sub-agent failed.
+    Rows::trace(['id' => 'trace-exception', 'name' => 'Broken', 'status' => Status::Failed, 'issue_kind' => IssueKind::Exception, 'started_at' => '2026-01-02 09:00:00']);
+    Rows::trace(['id' => 'trace-child-failed', 'name' => 'Parent', 'status' => Status::Completed, 'child_failed' => true, 'started_at' => '2026-01-02 09:30:00']);
+
+    assertContract('attention', $this->getJson('/trail/api/overview/attention')->assertOk()->json());
+});
+
 it('sends the bookmark response the dashboard expects', function () {
     Rows::trace(['id' => '0199c2f4-6a1e-7c3b-9a55-0e8a4c1d2f30', 'status' => Status::Completed, 'started_at' => '2026-01-02 11:00:00']);
 

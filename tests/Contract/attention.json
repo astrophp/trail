@@ -1,0 +1,83 @@
+{
+    "data": [
+        {
+            "kind": "failed",
+            "count": 2,
+            "latest_at": "2026-01-02T10:20:00.000Z",
+            "filters": {
+                "status": "failed"
+            },
+            "breakdown": [
+                {
+                    "issue_kind": "rate_limited",
+                    "count": 1,
+                    "latest_at": "2026-01-02T10:20:00.000Z",
+                    "filters": {
+                        "status": "failed",
+                        "issue_kind": "rate_limited"
+                    }
+                },
+                {
+                    "issue_kind": "exception",
+                    "count": 1,
+                    "latest_at": "2026-01-02T09:00:00.000Z",
+                    "filters": {
+                        "status": "failed",
+                        "issue_kind": "exception"
+                    }
+                }
+            ]
+        },
+        {
+            "kind": "incomplete",
+            "count": 2,
+            "latest_at": "2026-01-02T10:10:00.000Z",
+            "filters": {
+                "status": "incomplete"
+            },
+            "breakdown": []
+        },
+        {
+            "kind": "awaiting_approval",
+            "count": 1,
+            "latest_at": "2026-01-02T10:00:00.000Z",
+            "filters": {
+                "status": "awaiting_approval"
+            },
+            "breakdown": []
+        },
+        {
+            "kind": "child_failed",
+            "count": 1,
+            "latest_at": "2026-01-02T09:30:00.000Z",
+            "filters": {
+                "status": "completed",
+                "child_failed": "1"
+            },
+            "breakdown": []
+        },
+        {
+            "kind": "unpriced",
+            "count": 2,
+            "latest_at": "2026-01-02T10:50:00.000Z",
+            "filters": {
+                "unpriced": "1"
+            },
+            "breakdown": []
+        },
+        {
+            "kind": "recovered",
+            "count": 1,
+            "latest_at": "2026-01-02T10:20:00.000Z",
+            "filters": {
+                "recovered": "1"
+            },
+            "breakdown": []
+        }
+    ],
+    "range": {
+        "preset": "24h",
+        "from": "2026-01-01T12:00:00.000Z",
+        "to": "2026-01-02T12:00:00.000Z"
+    }
+}

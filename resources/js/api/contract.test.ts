@@ -2,6 +2,10 @@ import { describe, expect, expectTypeOf, it } from 'vitest'
 import { z } from 'zod'
 import type {
     AgentSubtotal,
+    AttentionItem,
+    AttentionKind,
+    AttentionResponse,
+    AttentionRow,
     BookmarkResponse,
     Conversation,
     ConversationCounts,
@@ -436,6 +440,37 @@ const overviewResponse = z.strictObject({
     previous_range: previousRange,
 })
 
+const attentionKinds = [
+    'failed',
+    'incomplete',
+    'awaiting_approval',
+    'child_failed',
+    'unpriced',
+    'recovered',
+] as const
+
+const attentionFilters = z.record(z.string(), z.string())
+
+const attentionRow = z.strictObject({
+    issue_kind: z.enum(issueKinds),
+    count,
+    latest_at: nullable(timestamp),
+    filters: attentionFilters,
+})
+
+const attentionItem = z.strictObject({
+    kind: z.enum(attentionKinds),
+    count,
+    latest_at: nullable(timestamp),
+    filters: attentionFilters,
+    breakdown: z.array(attentionRow),
+})
+
+const attentionResponse = z.strictObject({
+    data: z.array(attentionItem),
+    range,
+})
+
 const messageParts = ['prompt', 'response', 'activity'] as const
 const toolCallLinks = [
     'linked',
@@ -615,6 +650,18 @@ describe('types', () => {
             z.infer<typeof overviewResponse>
         >().toEqualTypeOf<OverviewResponse>()
         expectTypeOf<(typeof bucketUnits)[number]>().toEqualTypeOf<BucketUnit>()
+        expectTypeOf<
+            z.infer<typeof attentionResponse>
+        >().toEqualTypeOf<AttentionResponse>()
+        expectTypeOf<
+            z.infer<typeof attentionItem>
+        >().toEqualTypeOf<AttentionItem>()
+        expectTypeOf<
+            z.infer<typeof attentionRow>
+        >().toEqualTypeOf<AttentionRow>()
+        expectTypeOf<
+            (typeof attentionKinds)[number]
+        >().toEqualTypeOf<AttentionKind>()
         expectTypeOf<
             z.infer<typeof traceNeighbours>
         >().toEqualTypeOf<TraceNeighbours>()
@@ -861,6 +908,39 @@ describe('tests/Contract/overview.json', () => {
     it('adds up to its summary', () => {
         const total = buckets.reduce((sum, bucket) => sum + bucket.runs.all, 0)
         expect(total).toBe(data?.summary.runs.all)
+    })
+})
+
+describe('tests/Contract/attention.json', () => {
+    const parsed = attentionResponse.safeParse(contractFixture('attention'))
+
+    it('is what the API types describe', () => {
+        expect(parsed.error?.issues).toBeUndefined()
+    })
+
+    const items = parsed.data?.data ?? []
+
+    it('has every kind once, in the order of the kinds', () => {
+        expect(items.map((item) => item.kind)).toEqual([...attentionKinds])
+    })
+
+    it('has a breakdown on the failed item and on no other', () => {
+        for (const item of items) {
+            expect(item.breakdown.length > 0).toBe(item.kind === 'failed')
+        }
+    })
+
+    it('has a breakdown of more than one row, whose rows add to no more than the count', () => {
+        const failed = items.find((item) => item.kind === 'failed')
+
+        expect(failed?.breakdown.length).toBeGreaterThan(1)
+        expect(
+            failed?.breakdown.reduce((sum, row) => sum + row.count, 0),
+        ).toBeLessThanOrEqual(failed?.count ?? 0)
+    })
+
+    it('has no item for a count of zero', () => {
+        expect(items.every((item) => item.count > 0)).toBe(true)
     })
 })
 

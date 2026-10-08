@@ -2,6 +2,10 @@
 
 namespace Astro\Trail\Tests\Performance;
 
+use Astro\Trail\Enums\IssueKind;
+use Astro\Trail\Enums\Status;
+use Astro\Trail\Queries\AttentionItem;
+use Astro\Trail\Queries\AttentionQuery;
 use Astro\Trail\Queries\OverviewQuery;
 use Astro\Trail\Queries\RunScope;
 use Astro\Trail\Queries\TimeRange;
@@ -94,11 +98,13 @@ final class OverviewMeasurement
         $this->analyse($db, $driver);
         $this->log(sprintf("\n### %s, %s rows (seeded in %.1f s; analysed)\n", $driver, number_format($rows), (hrtime(true) - $start) / 1e9));
         $this->log($this->distribution($db));
-        $this->log("| read | database | rows | range | scope | queries | median ms | per query (median ms) |\n| -- | -- | -- | -- | -- | -- | -- | -- |");
+        $this->log("| read | database | rows | range | scope | queries | median ms | per query (median ms) | found |\n| -- | -- | -- | -- | -- | -- | -- | -- | -- |");
 
         foreach (array_keys(self::RANGES) as $range) {
             foreach ([null, OverviewFixture::SCOPED_AGENT] as $agent) {
-                $this->measure($db, $driver, $rows, new TimeRange($range, $now->subSeconds(self::RANGES[$range]), $now), $agent);
+                $window = new TimeRange($range, $now->subSeconds(self::RANGES[$range]), $now);
+                $this->measure($db, $driver, $rows, $window, $agent);
+                $this->measureAttention($db, $driver, $rows, $window, $agent);
             }
         }
 
@@ -141,7 +147,7 @@ final class OverviewMeasurement
         $median = array_map(self::median(...), $perQuery);
         $split = implode(', ', array_map(fn (string $query, float $ms) => sprintf('%s %.1f', $query, $ms), array_keys($median), $median));
 
-        $this->log(sprintf('| OverviewQuery::read | %s | %s | %s | %s | %d | %.1f | %s |', $driver, number_format($rows), $range->preset, $scope, count($statements), self::median($totals), $split));
+        $this->log(sprintf('| OverviewQuery::read | %s | %s | %s | %s | %d | %.1f | %s | |', $driver, number_format($rows), $range->preset, $scope, count($statements), self::median($totals), $split));
 
         foreach ($statements as $index => $executed) {
             $query = 'Q'.($index + 1);
@@ -158,6 +164,91 @@ final class OverviewMeasurement
         if ($overview->summary->figures->runs !== $expected) {
             $this->findings[] = "{$label}: the overview counts ".json_encode($overview->summary->figures->runs).' but TraceIndex::statusCounts counts '.json_encode($expected).'.';
         }
+    }
+
+    /**
+     * The needs-attention read, timed as a whole and query by query, with the plan of a query over
+     * the threshold. Every item and every breakdown row is checked against the count the list's
+     * own query gives for the item's filters.
+     */
+    private function measureAttention(Connection $db, string $driver, int $rows, TimeRange $range, ?string $agent): void
+    {
+        $scope = $agent === null ? 'all agents' : 'one agent (~10%)';
+        $label = "{$driver} {$rows} rows {$range->preset} {$scope}";
+
+        $this->listen($db);
+
+        $totals = [];
+        $perQuery = [];
+        $statements = [];
+        $items = [];
+
+        for ($repeat = 0; $repeat < $this->repeats; $repeat++) {
+            $this->captured = [];
+            $this->capturing = true;
+
+            $start = hrtime(true);
+            $items = (new AttentionQuery)->read($range, $agent === null ? RunScope::none() : RunScope::agent($agent));
+            $totals[] = (hrtime(true) - $start) / 1e6;
+
+            $this->capturing = false;
+            $statements = $this->captured;
+
+            foreach ($statements as $index => $executed) {
+                $perQuery['Q'.($index + 1)][] = (float) $executed->time;
+            }
+        }
+
+        $median = array_map(self::median(...), $perQuery);
+        $split = implode(', ', array_map(fn (string $query, float $ms) => sprintf('%s %.1f', $query, $ms), array_keys($median), $median));
+        $found = implode(', ', array_map(fn (AttentionItem $item) => $item->kind->value.' '.$item->count, $items));
+
+        $this->log(sprintf('| AttentionQuery::read | %s | %s | %s | %s | %d | %.1f | %s | %s |', $driver, number_format($rows), $range->preset, $scope, count($statements), self::median($totals), $split, $found));
+
+        foreach ($statements as $index => $executed) {
+            $query = 'Q'.($index + 1);
+
+            if ($driver !== 'sqlite' && ($median[$query] ?? 0.0) > self::PLAN_THRESHOLD) {
+                $this->log("\nPlan for {$query} of the attention read, {$label}, median ".sprintf('%.1f', $median[$query])." ms:\n```");
+                $this->log($this->plan($db, $driver, $executed->sql, $executed->bindings));
+                $this->log("```\n");
+            }
+        }
+
+        $list = new TraceIndex;
+
+        foreach ($items as $item) {
+            $counted = [[$item->kind->value, $item->filters, $item->count]];
+
+            foreach ($item->breakdown as $row) {
+                $counted[] = ["{$item->kind->value}/{$row->issueKind->value}", $row->filters, $row->count];
+            }
+
+            foreach ($counted as [$name, $filters, $count]) {
+                $listed = $list->count($range, self::filtersOf($filters, $agent), null);
+
+                if ($listed !== $count) {
+                    $this->findings[] = "{$label}: the attention item {$name} counts {$count} but the list counts {$listed} for ".json_encode($filters).'.';
+                }
+            }
+        }
+    }
+
+    /**
+     * The list's filters for the parameters of an item.
+     *
+     * @param  array<string, string>  $parameters
+     */
+    private static function filtersOf(array $parameters, ?string $agent): TraceFilters
+    {
+        return new TraceFilters(
+            status: isset($parameters['status']) ? Status::from($parameters['status']) : null,
+            agent: $agent,
+            issueKind: isset($parameters['issue_kind']) ? IssueKind::from($parameters['issue_kind']) : null,
+            recovered: ($parameters['recovered'] ?? '0') === '1',
+            childFailed: ($parameters['child_failed'] ?? '0') === '1',
+            unpriced: ($parameters['unpriced'] ?? '0') === '1',
+        );
     }
 
     private function listen(Connection $db): void
