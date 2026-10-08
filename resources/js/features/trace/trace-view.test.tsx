@@ -118,8 +118,12 @@ async function openRun(
 
 const header = () =>
     within(document.querySelector('[data-slot="trace-header"]') as HTMLElement)
-const facts = () =>
-    within(screen.getByRole('region', { name: 'Selected span' }))
+const evidence = () =>
+    within(
+        document.querySelector('[data-slot="evidence-panel"]') as HTMLElement,
+    )
+const spanHeader = () =>
+    within(document.querySelector('[data-slot="span-header"]') as HTMLElement)
 const selected = () =>
     screen
         .getAllByRole('treeitem')
@@ -207,6 +211,50 @@ describe('the trace page header', () => {
                 name: 'Bookmark SupportAssistant 0199c2f4…2f30',
             }),
         ).toHaveAttribute('aria-pressed', 'true')
+    })
+
+    it('shows the status as a soft pill right after the title, tinted in its colour', async () => {
+        mockTraceApi({
+            [id]: completedDetail({
+                status: 'running',
+                duration_ms: null,
+                ended_at: null,
+            }),
+        })
+        await openRun()
+
+        const title = screen.getByRole('heading', { level: 1 })
+        const pill = header()
+            .getByText('Running')
+            .closest('span') as HTMLElement
+
+        expect(title.nextElementSibling).toBe(pill)
+        expect(pill).toHaveClass('rounded-full', 'bg-info-soft', 'text-info')
+    })
+
+    it('shows the whole id, and when the run started on one line under the title', async () => {
+        mockTraceApi({
+            [id]: completedDetail({ started_at: '2026-01-02T11:00:05.000Z' }),
+        })
+        await openRun()
+
+        expect(header().getByText(id)).not.toHaveClass('sr-only')
+        expect(header().getByText('Jan 2 · 11:00:05')).toBeInTheDocument()
+    })
+
+    it('labels the figures of the strip, with the model among them', async () => {
+        mockTraceApi({ [id]: completedDetail() })
+        await openRun()
+
+        for (const label of [
+            'Elapsed',
+            'Total tokens',
+            'Estimated cost',
+            'Spans',
+            'Model',
+        ]) {
+            expect(header().getByText(label)).toBeInTheDocument()
+        }
     })
 
     it('shows the id of a user without a name, and leaves out what the run does not have', async () => {
@@ -317,6 +365,60 @@ describe('the trace page header', () => {
     })
 })
 
+describe('the execution pane', () => {
+    it('says how many spans the run has, from the server', async () => {
+        mockTraceApi({
+            [id]: makeDetail({
+                trace: { id, span_count: 6 },
+                spans: completedSpans(),
+            }),
+        })
+        await openRun()
+
+        expect(
+            screen.getByRole('heading', { name: 'Execution' }),
+        ).toBeInTheDocument()
+        expect(screen.getByText('6 spans')).toBeInTheDocument()
+    })
+
+    it('says span in the singular for a run with one', async () => {
+        mockTraceApi({
+            [id]: makeDetail({
+                trace: { id, span_count: 1 },
+                spans: [makeAgentSpan('root', { sequence: 1 })],
+            }),
+        })
+        await openRun()
+
+        expect(screen.getByText('1 span')).toBeInTheDocument()
+        expect(screen.queryByText('1 spans')).not.toBeInTheDocument()
+    })
+
+    it('puts the tree and the evidence in one bordered card, and notes what durations include', async () => {
+        mockTraceApi({ [id]: completedDetail() })
+        await openRun()
+
+        const card = document.querySelector('[data-slot="split-view"]')!
+
+        expect(card).toHaveClass('border', 'rounded-lg')
+        expect(
+            within(card as HTMLElement).getByRole('tree', {
+                name: 'Execution tree',
+            }),
+        ).toBeInTheDocument()
+        expect(
+            within(card as HTMLElement).getByRole('tablist', {
+                name: 'Evidence',
+            }),
+        ).toBeInTheDocument()
+        expect(
+            screen.getByText('Parent durations include their children.'),
+        ).toBeInTheDocument()
+        // The tree itself is not a second box inside the card.
+        expect(screen.getByRole('tree')).not.toHaveClass('border')
+    })
+})
+
 describe('the selected span', () => {
     it('is where the failure started on a failed run, though the root failed too, with its error', async () => {
         mockTraceApi({ [id]: failedDetail() })
@@ -328,11 +430,11 @@ describe('the selected span', () => {
         ).toBeInTheDocument()
         expect(selected()).toEqual(['lookup, Failed'])
         expect(
-            facts().getByRole('heading', { name: 'lookup' }),
+            spanHeader().getByRole('heading', { name: 'lookup' }),
         ).toBeInTheDocument()
-        expect(facts().getByRole('group', { name: 'Error' })).toHaveTextContent(
-            'Lookup table is full',
-        )
+        expect(
+            evidence().getByRole('group', { name: 'Error' }),
+        ).toHaveTextContent('Lookup table is full')
     })
 
     it('is the root on a run that completed', async () => {
@@ -341,10 +443,10 @@ describe('the selected span', () => {
 
         expect(selected()).toEqual(['SupportAssistant, Completed'])
         expect(
-            facts().getByRole('heading', { name: 'SupportAssistant' }),
+            spanHeader().getByRole('heading', { name: 'SupportAssistant' }),
         ).toBeInTheDocument()
         expect(
-            facts().queryByRole('group', { name: 'Error' }),
+            evidence().queryByRole('group', { name: 'Error' }),
         ).not.toBeInTheDocument()
     })
 
@@ -354,7 +456,7 @@ describe('the selected span', () => {
 
         expect(selected()).toEqual(['Model step 2, Completed'])
         expect(
-            facts().getByRole('heading', { name: 'Model step 2' }),
+            spanHeader().getByRole('heading', { name: 'Model step 2' }),
         ).toBeInTheDocument()
 
         const entries = window.history.length
@@ -367,7 +469,7 @@ describe('the selected span', () => {
         expect(window.history.length).toBe(entries)
         expect(selected()).toEqual(['search, Completed'])
         expect(
-            facts().getByRole('heading', { name: 'search' }),
+            spanHeader().getByRole('heading', { name: 'search' }),
         ).toBeInTheDocument()
     })
 
@@ -424,23 +526,27 @@ describe('the selected span', () => {
         await openRun(id, '?span=s2')
 
         expect(
-            facts().getByRole('heading', { name: 'Model step 1' }),
+            spanHeader().getByRole('heading', { name: 'Model step 1' }),
         ).toBeInTheDocument()
-        expect(facts().getByText('Completed')).toBeInTheDocument()
-        expect(facts().getByText('Attempt 2 of 2')).toBeInTheDocument()
-        expect(facts().getByText('gpt-x')).toBeInTheDocument()
-        expect(facts().getByText('openai')).toBeInTheDocument()
-        expect(facts().getByText('840 ms')).toBeInTheDocument()
-        expect(facts().getByText('1.5k')).toBeInTheDocument()
+        expect(spanHeader().getByText('Completed')).toBeInTheDocument()
+        expect(spanHeader().getByText('Attempt 2 of 2')).toBeInTheDocument()
+        expect(spanHeader().getByText('gpt-x')).toBeInTheDocument()
+        expect(spanHeader().getByText('840 ms')).toBeInTheDocument()
+        expect(spanHeader().getByText('1.5k')).toBeInTheDocument()
     })
 
     it('shows no attempt for a run that made one, and no tokens for a tool', async () => {
         mockTraceApi({ [id]: completedDetail() })
         await openRun(id, '?span=t1')
 
-        expect(facts().queryByText('Attempt')).not.toBeInTheDocument()
-        expect(facts().queryByText('Tokens')).not.toBeInTheDocument()
-        expect(facts().queryByText('Requested model')).not.toBeInTheDocument()
+        // The tool's head says what it is, and has no model line, no attempt and no tokens.
+        expect(
+            spanHeader().getByRole('heading', { name: 'search' }),
+        ).toBeInTheDocument()
+        expect(spanHeader().getByText('Tool call')).toBeInTheDocument()
+        expect(spanHeader().queryByText(/ · /)).not.toBeInTheDocument()
+        expect(spanHeader().queryByText(/^Attempt/)).not.toBeInTheDocument()
+        expect(spanHeader().queryByText(/tokens/)).not.toBeInTheDocument()
     })
 })
 
@@ -488,7 +594,7 @@ describe('other shapes of run', () => {
             expect(selected()).toEqual(['Model step 1, Completed']),
         )
         expect(
-            facts().getByRole('heading', { name: 'Model step 1' }),
+            spanHeader().getByRole('heading', { name: 'Model step 1' }),
         ).toBeInTheDocument()
         expect(screen.getAllByRole('treeitem')).toHaveLength(4)
 
@@ -516,9 +622,9 @@ describe('other shapes of run', () => {
             header().getByRole('img', { name: 'Embedding run' }),
         ).toBeInTheDocument()
         expect(
-            facts().getByRole('heading', { name: 'embeddings' }),
+            spanHeader().getByRole('heading', { name: 'embeddings' }),
         ).toBeInTheDocument()
-        expect(screen.queryByText(/^Attempt/)).not.toBeInTheDocument()
+        expect(screen.queryByText(/^Attempt \d+ of/)).not.toBeInTheDocument()
     })
 
     it('labels the attempts of a failover run and restarts the step numbers in each', async () => {
@@ -575,14 +681,14 @@ describe('other shapes of run', () => {
         })
         await openRun()
 
-        expect(facts().getByText('Own tokens')).toBeInTheDocument()
-        expect(facts().getByText('Own cost')).toBeInTheDocument()
+        expect(spanHeader().getByText('own tokens')).toBeInTheDocument()
+        expect(spanHeader().getByText('own cost')).toBeInTheDocument()
 
         await userEvent.click(row('Model step 1, Completed'))
 
-        expect(facts().getByText('Tokens')).toBeInTheDocument()
-        expect(facts().getByText('Cost')).toBeInTheDocument()
-        expect(facts().queryByText('Own tokens')).not.toBeInTheDocument()
+        expect(spanHeader().getByText('tokens')).toBeInTheDocument()
+        expect(spanHeader().getByText('cost')).toBeInTheDocument()
+        expect(spanHeader().queryByText('own tokens')).not.toBeInTheDocument()
     })
 })
 

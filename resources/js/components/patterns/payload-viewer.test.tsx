@@ -721,4 +721,83 @@ describe('PayloadViewer', () => {
             'extra',
         )
     })
+
+    describe('with a heading', () => {
+        it('shows the heading on the left and the copy button in the same row, for text', () => {
+            viewer('Hello there', { heading: 'User prompt' })
+
+            const heading = screen.getByRole('heading', {
+                name: 'User prompt',
+            })
+            const copy = screen.getByRole('button', { name: 'Copy arguments' })
+
+            expect(heading.parentElement).toBe(copy.parentElement)
+            expect(screen.queryByRole('tab')).not.toBeInTheDocument()
+            expect(screen.getByText('Hello there')).toBeVisible()
+        })
+
+        it('puts the Tree and Raw switch and the copy button in the heading row for a structured value', () => {
+            viewer({ a: 1 }, { heading: 'Arguments' })
+
+            const heading = screen.getByRole('heading', { name: 'Arguments' })
+            const row = heading.parentElement as HTMLElement
+
+            expect(
+                within(row).getByRole('tablist', { name: 'arguments view' }),
+            ).toBeInTheDocument()
+            expect(
+                within(row).getByRole('button', { name: 'Copy arguments' }),
+            ).toBeInTheDocument()
+        })
+
+        it('keeps the tree and raw views working under a heading', async () => {
+            viewer({ a: 1 }, { heading: 'Arguments' })
+
+            await userEvent.click(screen.getByRole('tab', { name: 'Raw' }))
+
+            expect(screen.getByText(/"a": 1/)).toBeVisible()
+        })
+
+        it('copies what it copies without a heading', async () => {
+            const user = userEvent.setup()
+            const writeText = vi.fn().mockResolvedValue(undefined)
+
+            setClipboard({ writeText })
+            viewer({ a: 1 }, { heading: 'Arguments' })
+            await user.click(
+                screen.getByRole('button', { name: 'Copy arguments' }),
+            )
+
+            expect(writeText).toHaveBeenCalledWith('{\n  "a": 1\n}')
+        })
+
+        it('shows the heading above the words when nothing was captured', () => {
+            viewer(null, { heading: 'Result' })
+
+            expect(
+                screen.getByRole('heading', { name: 'Result' }),
+            ).toBeInTheDocument()
+            expect(screen.getByText('Not captured')).toBeVisible()
+            expect(
+                screen.queryByRole('button', { name: /^Copy/ }),
+            ).not.toBeInTheDocument()
+        })
+
+        it('has no heading unless one is given', () => {
+            viewer({ a: 1 })
+
+            expect(screen.queryByRole('heading')).not.toBeInTheDocument()
+        })
+
+        it('does not put a box inside the block: the value sits in one bordered block', () => {
+            const { container } = viewer('Hello', { heading: 'Prompt' })
+
+            expect(container.querySelectorAll('.rounded-lg')).toHaveLength(1)
+            expect(
+                container
+                    .querySelector('.rounded-lg')
+                    ?.querySelector('.rounded-lg'),
+            ).toBeNull()
+        })
+    })
 })

@@ -35,24 +35,47 @@ const badge = cva(
                 incomplete: 'text-warning',
                 awaiting_approval: 'text-primary-ink',
             },
+            /** A soft pill in the status colour, for where the status is the page's own. */
+            tinted: {
+                true: 'rounded-full px-2 py-0.5 font-medium',
+                false: '',
+            },
         },
+        compoundVariants: [
+            { status: 'completed', tinted: true, class: 'bg-success-soft' },
+            { status: 'failed', tinted: true, class: 'bg-destructive-soft' },
+            { status: 'running', tinted: true, class: 'bg-info-soft' },
+            { status: 'incomplete', tinted: true, class: 'bg-warning-soft' },
+            {
+                status: 'awaiting_approval',
+                tinted: true,
+                class: 'bg-primary-soft',
+            },
+        ],
+        defaultVariants: { tinted: false },
     },
 )
 
 type StatusBadgeProps = {
     status: Status
+    /** Sits on a soft tint of the status colour, as a pill. */
+    tinted?: boolean
     className?: string
 }
 
 /** The outcome of a run: an icon and a word, coloured. */
-export function StatusBadge({ status, className }: StatusBadgeProps) {
+export function StatusBadge({
+    status,
+    tinted = false,
+    className,
+}: StatusBadgeProps) {
     const { label, Icon } = statuses[status]
 
     return (
         <span
             data-slot="status-badge"
             data-status={status}
-            className={cn(badge({ status }), className)}
+            className={cn(badge({ status, tinted }), className)}
         >
             <Icon
                 className={cn(

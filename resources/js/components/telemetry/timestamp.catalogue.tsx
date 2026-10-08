@@ -24,6 +24,12 @@ export const catalogue: CatalogueEntry = {
             Component: () => <Timestamp at={at} now={now} />,
         })),
         {
+            name: 'On one line',
+            Component: () => (
+                <Timestamp at={ago(5 * 60)} now={now} layout="inline" />
+            ),
+        },
+        {
             name: 'In the application timezone (Europe/Istanbul)',
             Component: () => (
                 <BootContext.Provider

@@ -18,6 +18,12 @@ const maxIndentLevels = 8
 /** What an agent's tokens and cost cover: its own steps, not the agents it delegated to. */
 const ownTitle = "This agent's own steps, without delegated agents"
 
+/**
+ * The width of the right-hand column of a row, which its column label shares. Room is kept in it
+ * for what a row will show beside its figures.
+ */
+export const rightColumn = 'w-2/5 shrink-0'
+
 /** The marker on the disclosure chevron, so a click on it can be told from a click on the row. */
 const toggleSlot = 'span-row-toggle'
 
@@ -83,7 +89,7 @@ export const SpanRow = memo(function SpanRow({
                 )
             }
             onKeyDown={(event) => onKeyDown(event, span.id)}
-            className="span-row flex items-center gap-3 border-b px-3 py-2 text-ui outline-none last:border-b-0 hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset aria-selected:bg-primary-soft"
+            className="span-row flex min-h-12.5 items-center gap-3 rounded-md px-2 py-1.5 text-ui outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset aria-selected:bg-primary-soft aria-selected:hover:bg-primary-soft"
         >
             <div
                 className="flex min-w-0 flex-1 items-center gap-2"
@@ -95,21 +101,21 @@ export const SpanRow = memo(function SpanRow({
                     data-slot={toggleSlot}
                     aria-hidden="true"
                     className={cn(
-                        'flex size-5 shrink-0 items-center justify-center rounded-sm text-muted-foreground',
+                        'flex size-4 shrink-0 items-center justify-center rounded-sm text-muted-foreground',
                         expanded !== undefined && 'hover:bg-muted',
                     )}
                 >
                     {expanded === undefined ? null : (
                         <ChevronRightIcon
                             className={cn(
-                                'size-3.5 transition-transform',
+                                'size-3 transition-transform',
                                 expanded && 'rotate-90',
                             )}
                         />
                     )}
                 </span>
                 <SpanTypeIcon type={span.type} decorative />
-                <div className="flex min-w-0 flex-col">
+                <div className="flex min-w-0 flex-col gap-0.5">
                     <span className="truncate font-medium">{title}</span>
                     <span
                         id={`${domId}-line`}
@@ -124,43 +130,33 @@ export const SpanRow = memo(function SpanRow({
             </div>
             <div
                 id={`${domId}-facts`}
-                className="flex shrink-0 flex-wrap items-center justify-end gap-x-3 gap-y-1"
-            >
-                <AttemptLabel attempt={span.attempt} of={attempts} />
-                {span.status === 'completed' ? null : (
-                    <StatusBadge status={span.status} />
+                className={cn(
+                    rightColumn,
+                    'flex flex-col items-end gap-0.5 text-caption text-muted-foreground',
                 )}
-                <DurationValue
-                    of={span}
-                    className="w-16 text-end text-muted-foreground"
-                />
+            >
+                <div className="flex flex-wrap items-center justify-end gap-x-2 gap-y-0.5">
+                    <AttemptLabel attempt={span.attempt} of={attempts} />
+                    {span.status === 'completed' ? null : (
+                        <StatusBadge status={span.status} />
+                    )}
+                    <DurationValue of={span} className="text-foreground" />
+                </div>
                 {billing ? (
                     <span
                         title={span.type === 'agent' ? ownTitle : undefined}
-                        className="flex items-center gap-3"
+                        className="flex items-center gap-2"
                     >
                         {span.type === 'agent' ? (
                             <span className="sr-only">Own tokens</span>
                         ) : null}
-                        <TokenValue
-                            usage={billing.usage}
-                            className="w-14 text-end"
-                        />
+                        <TokenValue usage={billing.usage} />
                         {span.type === 'agent' ? (
                             <span className="sr-only">Own cost</span>
                         ) : null}
-                        <CostValue
-                            cost={billing.cost}
-                            className="w-16 text-end"
-                        />
+                        <CostValue cost={billing.cost} />
                     </span>
-                ) : (
-                    // Keeps the columns of the rows that do not bill in line with those that do.
-                    <>
-                        <span aria-hidden="true" className="w-14" />
-                        <span aria-hidden="true" className="w-16" />
-                    </>
-                )}
+                ) : null}
             </div>
         </div>
     )

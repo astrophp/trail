@@ -48,6 +48,14 @@ describe('PageHeader', () => {
         ).toBeTruthy()
     })
 
+    it('places a badge right after the title', () => {
+        render(<PageHeader title="Run" badge={<span>Running</span>} />)
+
+        expect(screen.getByRole('heading', { name: 'Run' }).nextSibling).toBe(
+            screen.getByText('Running'),
+        )
+    })
+
     it('accepts a className', () => {
         const { container } = render(
             <PageHeader title="Traces" className="extra" />,

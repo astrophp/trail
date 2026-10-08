@@ -63,4 +63,29 @@ describe('StatusBadge', () => {
 
         expect(container.firstElementChild).toHaveClass('extra')
     })
+
+    it.each([
+        ['completed', 'bg-success-soft'],
+        ['failed', 'bg-destructive-soft'],
+        ['running', 'bg-info-soft'],
+        ['incomplete', 'bg-warning-soft'],
+        ['awaiting_approval', 'bg-primary-soft'],
+    ] as const)(
+        'sits %s on its soft tint as a pill when tinted',
+        (status, tint) => {
+            const { container } = render(<StatusBadge status={status} tinted />)
+
+            expect(container.firstElementChild).toHaveClass(
+                'rounded-full',
+                tint,
+            )
+        },
+    )
+
+    it('has no tint by default', () => {
+        const { container } = render(<StatusBadge status="running" />)
+
+        expect(container.firstElementChild).not.toHaveClass('bg-info-soft')
+        expect(container.firstElementChild).not.toHaveClass('rounded-full')
+    })
 })

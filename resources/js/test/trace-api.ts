@@ -1,5 +1,7 @@
 import type {
     AgentSubtotal,
+    PendingApproval,
+    Coverage,
     Span,
     Trace,
     TraceDetailResponse,
@@ -109,6 +111,10 @@ type DetailOptions = {
     /** The server's subtotals; by default one per agent span, with nothing reported. */
     agents?: AgentSubtotal[]
     error?: TraceDetailResponse['data']['detail']['error']
+    /** The tool calls the run waits on; none by default. */
+    pendingApprovals?: PendingApproval[]
+    /** Parts of the run's coverage to replace; the fixture's otherwise. */
+    coverage?: Partial<Coverage>
 }
 
 /** A trace response for the given spans, on the fixture's run with the given fields replaced. */
@@ -117,6 +123,8 @@ export function makeDetail({
     spans,
     agents,
     error = null,
+    pendingApprovals = [],
+    coverage,
 }: DetailOptions): TraceDetailResponse {
     const base = detailFixture.data
 
@@ -129,8 +137,13 @@ export function makeDetail({
                 span_count: spans.length,
                 ...trace,
             },
-            detail: { ...base.detail, error, pending_approvals: [] },
+            detail: {
+                ...base.detail,
+                error,
+                pending_approvals: pendingApprovals,
+            },
             spans,
+            coverage: { ...base.coverage, ...coverage },
             usage: {
                 ...base.usage,
                 agents:

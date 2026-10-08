@@ -29,7 +29,18 @@ export function App({
                             offset="4rem"
                             mobileOffset="4rem"
                         />
-                        <BrowserRouter basename={routerBasename(boot.path)}>
+                        {/*
+                            A location change is rendered at once, everywhere, instead of in a React transition: the
+                            page never shows a URL that the screen has not caught up with (a busy page used to show
+                            the old tab or span after the address had changed). The price is that a heavy page
+                            blocks input while it renders a change, instead of staying responsive on its old state.
+                            Nothing writes the URL per keystroke (the list's search waits 300 ms, or Enter or
+                            blur), so this does not multiply renders.
+                        */}
+                        <BrowserRouter
+                            basename={routerBasename(boot.path)}
+                            useTransitions={false}
+                        >
                             <Routes>
                                 <Route element={<AppShell />}>
                                     {routeTable.map(({ path, element }) => (

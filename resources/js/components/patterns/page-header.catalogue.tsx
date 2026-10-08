@@ -1,5 +1,6 @@
 import { PageHeader } from '@/components/patterns/page-header'
 import { BotIcon } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import type { CatalogueEntry } from '@/catalogue/types'
 
@@ -22,6 +23,15 @@ export const catalogue: CatalogueEntry = {
                 <PageHeader
                     title="SupportAssistant"
                     icon={<BotIcon aria-hidden="true" className="size-5" />}
+                />
+            ),
+        },
+        {
+            name: 'With a badge after the title',
+            Component: () => (
+                <PageHeader
+                    title="SupportAssistant"
+                    badge={<Badge variant="outline">Streamed</Badge>}
                 />
             ),
         },

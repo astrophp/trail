@@ -110,6 +110,29 @@ describe('Timestamp', () => {
         expect(screen.getByText('Not captured')).toBeInTheDocument()
     })
 
+    it('shows the day and the clock time on one line, even on the same day, when inline', () => {
+        const { container } = render(
+            inZone(
+                'UTC',
+                <Timestamp
+                    at="2026-10-07T21:03:22Z"
+                    now={now}
+                    layout="inline"
+                />,
+            ),
+        )
+
+        expect(screen.getByText('Oct 7 \u00b7 21:03:22')).toBeInTheDocument()
+        expect(screen.queryByText('2m ago')).not.toBeInTheDocument()
+        expect(container.querySelector('time')).toHaveAttribute(
+            'title',
+            'Oct 7, 2026, 21:03:22 GMT',
+        )
+        expect(screen.getByText('Oct 7, 2026, 21:03:22 GMT')).toHaveClass(
+            'sr-only',
+        )
+    })
+
     it('accepts a className', () => {
         const { container } = render(
             <Timestamp at="2026-10-07T21:03:22Z" now={now} className="extra" />,
