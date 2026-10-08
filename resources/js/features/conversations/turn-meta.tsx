@@ -28,10 +28,12 @@ type TurnMetaProps = {
     number: number
     /** The conversation's page at this turn: where the run's page leads back to, and what "Copy link" copies. */
     pagePath: string
+    /** The way to the trace is followed. */
+    onVisit?: () => void
 }
 
 /** The quiet line under a turn: how long it took, its tokens and cost, its spans, the way to its trace and a link to the turn. */
-export function TurnMeta({ trace, number, pagePath }: TurnMetaProps) {
+export function TurnMeta({ trace, number, pagePath, onVisit }: TurnMetaProps) {
     return (
         <div
             data-slot="turn-meta"
@@ -64,6 +66,7 @@ export function TurnMeta({ trace, number, pagePath }: TurnMetaProps) {
                 <Button asChild variant="link" size="xs">
                     <Link
                         to={tracePagePath(trace.id, { from: pagePath })}
+                        onClick={onVisit}
                         aria-label={`Inspect trace of turn ${formatCount(number)}`}
                     >
                         Inspect trace

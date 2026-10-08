@@ -20,6 +20,8 @@ type TurnActivityProps = {
     tools: boolean
     /** The conversation's page at this turn: where the run's page leads back to. */
     pagePath: string
+    /** A chip's link is followed. */
+    onVisit: () => void
 }
 
 /**
@@ -31,6 +33,7 @@ export function TurnActivity({
     number,
     tools,
     pagePath,
+    onVisit,
 }: TurnActivityProps) {
     const [open, setOpen] = useState(false)
     const messages = activityOf(turn)
@@ -55,6 +58,7 @@ export function TurnActivity({
                                 call={call}
                                 traceId={turn.trace.id}
                                 from={pagePath}
+                                onVisit={onVisit}
                             />
                         </li>
                     ))}

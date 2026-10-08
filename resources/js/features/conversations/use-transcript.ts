@@ -4,7 +4,9 @@ import { ApiError, isNotFound } from '@/api/client'
 import { conversationKeys, fetchTranscript } from '@/api/conversations'
 import {
     fromWindow,
+    isPossibleTurn,
     isRunning,
+    placed,
     withEarlier,
     withLater,
     withRefreshed,
@@ -53,11 +55,19 @@ export function useTranscript(id: string, anchor: string) {
             const held = queryClient.getQueryData<TranscriptData>(key)
 
             if (held === undefined) {
+                // A turn no run can have is refused by the API: it is a turn that is gone.
+                const possible = anchor === '' || isPossibleTurn(anchor)
+
                 return fromWindow(
                     await fetchTranscript(
-                        { id, turn: anchor === '' ? undefined : anchor },
+                        {
+                            id,
+                            turn:
+                                anchor === '' || !possible ? undefined : anchor,
+                        },
                         signal,
                     ),
+                    possible ? null : anchor,
                 )
             }
 
@@ -65,11 +75,20 @@ export function useTranscript(id: string, anchor: string) {
                 const last = held.turns.at(-1)?.trace.id
                 const running = held.turns.filter(isRunning)
                 // With nothing running there is still the conversation's figures to bring up to date.
-                const each = (
+                const ids = new Set(
                     running.length > 0 || last === undefined
                         ? running.map((turn) => turn.trace.id)
-                        : [last]
-                ).map((turn) => fetchTranscript({ id, turn, limit: 1 }, signal))
+                        : [last],
+                )
+
+                // With later turns not loaded, the last one's answer says how many lie after it.
+                if (held.newer > 0 && last !== undefined) {
+                    ids.add(last)
+                }
+
+                const each = [...ids].map((turn) =>
+                    fetchTranscript({ id, turn, limit: 1 }, signal),
+                )
                 const later =
                     held.newer === 0 && last !== undefined
                         ? fetchTranscript({ id, after: last }, signal)
@@ -142,6 +161,13 @@ export function useTranscript(id: string, anchor: string) {
                         ? { id, before: edge.trace.id }
                         : { id, after: edge.trace.id },
                 )
+
+                // The turn the window was to follow is not recorded any more: nothing can be added.
+                if (!placed(response)) {
+                    throw new Error(
+                        'The turn next to them is no longer recorded. Reload the page to see the conversation as it is.',
+                    )
+                }
 
                 queryClient.setQueryData<TranscriptData>(key, (current) =>
                     current === undefined

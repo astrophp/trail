@@ -531,7 +531,7 @@ describe('the states with filters', () => {
 
         expect(
             within(card).getByText(
-                'Try removing a filter or searching for something else.',
+                'Try removing a filter, widening the time range or searching for something else.',
             ),
         ).toBeVisible()
         expect(

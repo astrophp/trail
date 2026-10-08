@@ -15,6 +15,8 @@ type ToolChipProps = {
     traceId: string
     /** The page the chip is on, which the run's page leads back to; see `tracePagePath`. */
     from: string
+    /** The chip's link is followed. */
+    onVisit?: () => void
     className?: string
 }
 
@@ -24,7 +26,13 @@ type ToolChipProps = {
  * started, its status and links to the agent's span. A call waiting for approval, or not started,
  * says so and is not a link. A call with no confirmed span says nothing about a status.
  */
-export function ToolChip({ call, traceId, from, className }: ToolChipProps) {
+export function ToolChip({
+    call,
+    traceId,
+    from,
+    onVisit,
+    className,
+}: ToolChipProps) {
     const agent = call.agent
     const name = agent?.name ?? call.name ?? 'Unnamed'
     const icon = <SpanTypeIcon type={agent ? 'agent' : 'tool'} decorative />
@@ -42,6 +50,7 @@ export function ToolChip({ call, traceId, from, className }: ToolChipProps) {
             <Link
                 data-slot="tool-chip"
                 data-link="linked"
+                onClick={onVisit}
                 to={tracePagePath(traceId, { span: spanId, from })}
                 className={cn(
                     chip,

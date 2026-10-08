@@ -36,6 +36,11 @@ export function useTurnArrival(turn: string) {
         timer.current = setTimeout(() => setMarked(null), markedFor)
     }, [])
 
+    // The reader is leaving from this turn: the address will name it, and nothing is to move.
+    const settle = useCallback((id: string) => {
+        handled.current = id
+    }, [])
+
     useEffect(() => {
         if (
             turn === '' ||
@@ -60,5 +65,5 @@ export function useTurnArrival(turn: string) {
 
     useEffect(() => () => clearTimeout(timer.current), [])
 
-    return { marked, arrive }
+    return { marked, arrive, settle }
 }

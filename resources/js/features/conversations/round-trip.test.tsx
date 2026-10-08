@@ -7,7 +7,7 @@ import { conversationPath } from '@/lib/conversation-path'
 import { conversationId, conversationServer } from '@/test/conversation-server'
 import { renderApp, testQueryClient } from '@/test/render-app'
 import { travel } from '@/test/traces-api'
-import { turnOf } from '@/test/transcript-api'
+import { call, message, turnOf, windowOf } from '@/test/transcript-api'
 
 beforeEach(() => {
     window.Trail = {
@@ -595,6 +595,8 @@ describe('the way to the conversation’s runs', () => {
         // It sets no time range, and says the list applies its own.
         expect(link.getAttribute('href')).not.toContain('range')
         expect(link.getAttribute('title')).toMatch(/time range/)
+        // Keyboard and touch readers get it too: it is the link's description, not only a tooltip.
+        expect(link).toHaveAccessibleDescription(/within the time range/)
     })
 
     it('does not say the list holds all of the conversation’s runs', async () => {
@@ -608,6 +610,155 @@ describe('the way to the conversation’s runs', () => {
         expect(`${link.textContent} ${link.getAttribute('title')}`).not.toMatch(
             /\ball\b/i,
         )
+    })
+})
+
+describe('coming back from a turn’s link', () => {
+    it('returns to the turn the reader left, not the one the address named, and stays one entry', async () => {
+        conversationServer(turnsOf(25))
+        await open(route('&turn=r15'))
+        await waitFor(() => expect(heading(15)).toHaveFocus())
+
+        const push = vi.spyOn(window.history, 'pushState')
+        const replace = vi.spyOn(window.history, 'replaceState')
+
+        await userEvent.click(
+            screen.getByRole('link', { name: 'Inspect trace of turn 12' }),
+        )
+        await screen.findByRole('tree', { name: 'Execution tree' })
+
+        // The conversation's entry was rewritten to turn 12; the run's page is the one new entry.
+        expect(push).toHaveBeenCalledTimes(1)
+        expect(replace).toHaveBeenCalled()
+
+        await travel('back')
+        await screen.findByRole('article', { name: 'Turn 12' })
+
+        expect(search().get('turn')).toBe('r12')
+        await waitFor(() => expect(heading(12)).toHaveFocus())
+        expect(article(12)).toHaveAttribute('data-marked', 'true')
+    })
+
+    it('does the same from a tool chip', async () => {
+        const turns = turnsOf(25)
+
+        turns[11] = turnOf('r12', {
+            messages: [
+                message('prompt', 'Question of r12'),
+                message('activity', null, {
+                    tool_calls: [call('lookup', { id: 'r12-lookup' })],
+                }),
+            ],
+        })
+        conversationServer(turns)
+        await open(route('&turn=r15'))
+        await waitFor(() => expect(heading(15)).toHaveFocus())
+        await userEvent.click(
+            within(article(12)).getByRole('link', { name: /lookup/ }),
+        )
+        await screen.findByRole('tree', { name: 'Execution tree' })
+        await travel('back')
+        await screen.findByRole('article', { name: 'Turn 12' })
+
+        expect(search().get('turn')).toBe('r12')
+        await waitFor(() => expect(heading(12)).toHaveFocus())
+    })
+
+    it('moves nothing on the page it is leaving', async () => {
+        const scroll = vi.spyOn(Element.prototype, 'scrollIntoView')
+
+        conversationServer(turnsOf(25))
+        await open(route('&turn=r15'))
+        await waitFor(() => expect(heading(15)).toHaveFocus())
+        scroll.mockClear()
+        await userEvent.click(
+            screen.getByRole('link', { name: 'Inspect trace of turn 12' }),
+        )
+        await screen.findByRole('tree', { name: 'Execution tree' })
+
+        expect(
+            scroll.mock.contexts.filter(
+                (element) => (element as Element).id === 'turn-r12',
+            ),
+        ).toHaveLength(0)
+    })
+})
+
+describe('a turn the address names that no run can have', () => {
+    it('shows the newest turns with the note, and never asks the API with it', async () => {
+        const server = conversationServer(turnsOf(25))
+        const long = 'x'.repeat(70)
+
+        await open(route(`&turn=${long}`))
+
+        expect(queries(server)).toEqual([{ id: conversationId }])
+        expect(numbers()).toEqual(range(16, 25))
+        expect(screen.getByRole('status')).toHaveTextContent(
+            'That turn is no longer recorded.',
+        )
+        expect(screen.queryByRole('alert')).toBeNull()
+    })
+})
+
+describe('more turns next to a turn that is gone', () => {
+    it('says so instead of looking like a dead button, and keeps the turns', async () => {
+        const server = conversationServer(turnsOf(25))
+
+        await open(route('&turn=r15'))
+        // The turn the earlier window follows is pruned while the page is open.
+        server.intercept = (_url, params) =>
+            params.has('before')
+                ? Promise.resolve(
+                      new Response(
+                          JSON.stringify({
+                              ...windowOf(turnsOf(25).slice(15), {
+                                  older: 15,
+                                  newer: 0,
+                              }),
+                              window: {
+                                  older: 15,
+                                  newer: 0,
+                                  anchor: {
+                                      param: 'before',
+                                      id: 'r6',
+                                      found: false,
+                                  },
+                              },
+                          }),
+                          { status: 200 },
+                      ),
+                  )
+                : undefined
+        await userEvent.click(
+            screen.getByRole('button', { name: /^Show earlier turns/ }),
+        )
+
+        const alert = await screen.findByRole('alert')
+
+        expect(alert).toHaveTextContent('Earlier turns could not be loaded')
+        expect(numbers()).toEqual(range(6, 15))
+        expect(screen.getByRole('button', { name: /^Try again/ })).toBeVisible()
+    })
+})
+
+describe('the count of later turns', () => {
+    it('follows a refresh while the newest turns are not loaded', async () => {
+        const server = conversationServer(turnsOf(25))
+
+        await open(route('&turn=r5'))
+        expect(
+            screen.getByRole('button', { name: 'Show later turns (20)' }),
+        ).toBeVisible()
+
+        server.turns = turnsOf(26)
+        fireEvent.click(screen.getByRole('button', { name: 'Refresh' }))
+
+        expect(
+            await screen.findByRole('button', {
+                name: 'Show later turns (21)',
+            }),
+        ).toBeVisible()
+        expect(screen.getByText('26 recorded turns')).toBeVisible()
     })
 })
 

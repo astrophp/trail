@@ -23,6 +23,8 @@ type TurnItemProps = {
     pagePath: string
     /** The reader was just taken here: the turn is quietly highlighted for a moment. */
     marked: boolean
+    /** A link from the turn is followed: the page records this turn as the place to come back to. */
+    onVisit: () => void
 }
 
 /**
@@ -36,6 +38,7 @@ export function TurnItem({
     tools,
     pagePath,
     marked,
+    onVisit,
 }: TurnItemProps) {
     const prompt = promptOf(turn)
     const label = `Turn ${formatCount(number)}`
@@ -66,9 +69,15 @@ export function TurnItem({
                 number={number}
                 tools={tools}
                 pagePath={pagePath}
+                onVisit={onVisit}
             />
             <TurnResponse turn={turn} number={number} />
-            <TurnMeta trace={turn.trace} number={number} pagePath={pagePath} />
+            <TurnMeta
+                trace={turn.trace}
+                number={number}
+                pagePath={pagePath}
+                onVisit={onVisit}
+            />
         </article>
     )
 }

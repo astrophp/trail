@@ -70,7 +70,7 @@ export function LoadedTranscript({
     onRetryRefresh,
 }: LoadedTranscriptProps) {
     const { remember, forget } = usePrependAnchor(turns[0]?.turn.trace.id)
-    const { marked, arrive } = useTurnArrival(turn)
+    const { marked, arrive, settle } = useTurnArrival(turn)
     const all = conversation.turns.all
     const noteShown = missing && turn !== ''
     // The dismiss button goes away with the notice: focus must not fall to the page.
@@ -143,6 +143,12 @@ export function LoadedTranscript({
         }
     }, [lastId, turns])
 
+    // Following a link from a turn: this entry records the turn, so Back comes to the same place.
+    function visit(traceId: string) {
+        settle(traceId)
+        onTurnChange(traceId)
+    }
+
     function jump(traceId: string) {
         arrive(traceId)
         // A jump within the page is not a place to come back to: Back leaves the page.
@@ -213,6 +219,7 @@ export function LoadedTranscript({
                             tools={tools}
                             pagePath={pagePath(item.trace.id)}
                             marked={marked === item.trace.id}
+                            onVisit={() => visit(item.trace.id)}
                         />
                     ))}
                 </div>

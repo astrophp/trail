@@ -17,12 +17,26 @@ export type TranscriptData = {
 }
 
 /** Whether the answer was cut around the run it was asked about, which is the one it is good for. */
-function placed(response: TranscriptResponse): boolean {
+export function placed(response: TranscriptResponse): boolean {
     return response.window.anchor === null || response.window.anchor.found
 }
 
-/** The data a first answer is. A named turn that is not there leaves the newest window and says so. */
-export function fromWindow(response: TranscriptResponse): TranscriptData {
+/** The most characters a run's id has; the API refuses a longer `turn`. */
+const longestTurn = 64
+
+/** Whether the API could have a run by this id: not too long and without a NUL, which it refuses. */
+export function isPossibleTurn(turn: string): boolean {
+    return [...turn].length <= longestTurn && !turn.includes('\0')
+}
+
+/**
+ * The data a first answer is. A named turn that is not there leaves the newest window and says
+ * so. `unasked` is a turn the address named that no run can have, so was not asked for.
+ */
+export function fromWindow(
+    response: TranscriptResponse,
+    unasked: string | null = null,
+): TranscriptData {
     const anchor = response.window.anchor
 
     return {
@@ -30,7 +44,8 @@ export function fromWindow(response: TranscriptResponse): TranscriptData {
         turns: response.data.turns,
         older: response.window.older,
         newer: response.window.newer,
-        missing: anchor !== null && !anchor.found ? anchor.id : null,
+        missing:
+            unasked ?? (anchor !== null && !anchor.found ? anchor.id : null),
     }
 }
 
@@ -104,7 +119,20 @@ export function withRefreshed(
     const turns = data.turns.map((turn) => fresh.get(turn.trace.id) ?? turn)
 
     if (later === null || !placed(later)) {
-        return { ...data, conversation, turns }
+        // With later turns not loaded, the answer about the last loaded turn counts what lies after it.
+        const last = data.turns.at(-1)?.trace.id
+        const newer =
+            later === null && data.newer > 0
+                ? (each.find(
+                      (response) =>
+                          placed(response) &&
+                          response.data.turns.some(
+                              (turn) => turn.trace.id === last,
+                          ),
+                  )?.window.newer ?? data.newer)
+                : data.newer
+
+        return { ...data, conversation, turns, newer }
     }
 
     return {
