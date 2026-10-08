@@ -35,6 +35,21 @@ import type {
     TraceNeighbours,
     TraceNeighboursResponse,
     TraceUsageBreakdown,
+    Attempt,
+    Message,
+    MessagePart,
+    MessageSource,
+    MessagesReason,
+    MessagesState,
+    ToolCall,
+    ToolCallAgent,
+    ToolCallLink,
+    ToolCallSpan,
+    ToolResult,
+    TranscriptResponse,
+    TranscriptWindow,
+    Turn,
+    TurnLimit,
     Usage,
     UsageRow,
     UsageState,
@@ -358,6 +373,127 @@ const conversationListResponse = z.strictObject({
     counts: conversationCounts,
 })
 
+const messageParts = ['prompt', 'response', 'activity'] as const
+const toolCallLinks = [
+    'linked',
+    'awaiting_approval',
+    'not_started',
+    'unlinked',
+] as const
+const messagesStates = ['stored', 'partial', 'not_stored'] as const
+const messagesReasons = [
+    'span_limit',
+    'offset_gap',
+    'history_rewritten',
+    'history_boundary_unknown',
+    'step_input_missing',
+] as const
+
+expectTypeOf<(typeof messageParts)[number]>().toEqualTypeOf<MessagePart>()
+expectTypeOf<(typeof toolCallLinks)[number]>().toEqualTypeOf<ToolCallLink>()
+expectTypeOf<(typeof messagesStates)[number]>().toEqualTypeOf<MessagesState>()
+expectTypeOf<(typeof messagesReasons)[number]>().toEqualTypeOf<MessagesReason>()
+
+const toolCallSpan = z.strictObject({
+    id: z.string(),
+    status,
+    issue_kind: nullable(z.enum(issueKinds)),
+    duration_ms: nullable(z.number()),
+})
+
+const toolCallAgent = z.strictObject({
+    span_id: z.string(),
+    name: z.string(),
+    agent_class: nullable(z.string()),
+    status,
+    issue_kind: nullable(z.enum(issueKinds)),
+    provider: nullable(z.string()),
+    model: nullable(z.string()),
+    duration_ms: nullable(z.number()),
+    pending_approvals: z.array(pendingApproval),
+    resolved_tool_call_ids: z.array(z.string()),
+})
+
+const toolCall = z.strictObject({
+    id: nullable(z.string()),
+    name: nullable(z.string()),
+    arguments: jsonValue,
+    link: z.enum(toolCallLinks),
+    span: nullable(toolCallSpan),
+    agent: nullable(toolCallAgent),
+})
+
+const toolResult = z.strictObject({
+    id: nullable(z.string()),
+    name: nullable(z.string()),
+    result: jsonValue,
+    span_id: nullable(z.string()),
+})
+
+const messageSource = z.strictObject({
+    span_id: z.string(),
+    path: z.string(),
+    redacted: z.boolean(),
+    truncated: z.boolean(),
+})
+
+const message = z.strictObject({
+    part: z.enum(messageParts),
+    role: nullable(z.string()),
+    content: jsonValue,
+    structured: jsonValue,
+    attachments: jsonValue,
+    tool_calls: nullable(z.array(toolCall)),
+    tool_results: nullable(z.array(toolResult)),
+    source: messageSource,
+    truncated_paths: z.record(z.string(), count),
+})
+
+const attempt = z.strictObject({
+    attempt: count,
+    provider: nullable(z.string()),
+    model: nullable(z.string()),
+    span_id: nullable(z.string()),
+    error: nullable(traceError),
+})
+
+const turn = z.strictObject({
+    trace,
+    detail: traceDetail,
+    root_span_id: nullable(z.string()),
+    shown_attempt: nullable(count),
+    attempts: z.array(attempt),
+    messages_state: z.enum(messagesStates),
+    messages_reason: nullable(z.enum(messagesReasons)),
+    history_count: nullable(count),
+    messages: z.array(message),
+    span_limit: spanLimit,
+})
+
+const turnLimit = z.strictObject({
+    limit: count,
+    total: count,
+    truncated: z.boolean(),
+})
+
+const transcriptWindow = z.strictObject({
+    older: count,
+    newer: count,
+    anchor: nullable(
+        z.strictObject({
+            param: z.enum(['turn', 'before', 'after']),
+            id: z.string(),
+            found: z.boolean(),
+        }),
+    ),
+})
+
+const transcriptResponse = z.strictObject({
+    data: z.strictObject({ conversation, turns: z.array(turn) }),
+    turn_limit: turnLimit,
+    window: transcriptWindow,
+})
+
 const bookmarkResponse = z.strictObject({
     data: z.strictObject({ trace_id: z.string(), bookmarked: z.boolean() }),
 })
@@ -445,6 +581,30 @@ describe('types', () => {
         expectTypeOf<
             (typeof coverageReasons)[number]
         >().toEqualTypeOf<CoverageReason>()
+    })
+
+    it('match the schemas of the transcript', () => {
+        expectTypeOf<
+            z.infer<typeof toolCallSpan>
+        >().toEqualTypeOf<ToolCallSpan>()
+        expectTypeOf<
+            z.infer<typeof toolCallAgent>
+        >().toEqualTypeOf<ToolCallAgent>()
+        expectTypeOf<z.infer<typeof toolCall>>().toEqualTypeOf<ToolCall>()
+        expectTypeOf<z.infer<typeof toolResult>>().toEqualTypeOf<ToolResult>()
+        expectTypeOf<
+            z.infer<typeof messageSource>
+        >().toEqualTypeOf<MessageSource>()
+        expectTypeOf<z.infer<typeof message>>().toEqualTypeOf<Message>()
+        expectTypeOf<z.infer<typeof attempt>>().toEqualTypeOf<Attempt>()
+        expectTypeOf<z.infer<typeof turn>>().toEqualTypeOf<Turn>()
+        expectTypeOf<z.infer<typeof turnLimit>>().toEqualTypeOf<TurnLimit>()
+        expectTypeOf<
+            z.infer<typeof transcriptWindow>
+        >().toEqualTypeOf<TranscriptWindow>()
+        expectTypeOf<
+            z.infer<typeof transcriptResponse>
+        >().toEqualTypeOf<TranscriptResponse>()
     })
 })
 
@@ -580,6 +740,54 @@ describe('tests/Contract/conversations.json', () => {
 
     it('counts the conversations the way its pagination does', () => {
         expect(parsed.data?.counts.all).toBe(parsed.data?.pagination.total)
+    })
+})
+
+describe('tests/Contract/conversation.json', () => {
+    const parsed = transcriptResponse.safeParse(contractFixture('conversation'))
+
+    it('is what the API types describe', () => {
+        expect(parsed.error?.issues).toBeUndefined()
+    })
+
+    const { data, window } = parsed.data ?? {
+        data: { conversation: undefined, turns: [] },
+        window: undefined,
+    }
+    const messages = data.turns.flatMap((t) => t.messages)
+
+    it('has turns in order, with the conversation’s own count of them', () => {
+        expect(data.turns.length).toBeGreaterThan(1)
+        expect(data.conversation?.turns.all).toBe(data.turns.length)
+        expect(window?.older).toBe(0)
+    })
+
+    it('has every part of a message, and a linked and an unlinked kind of call', () => {
+        expect(new Set(messages.map((m) => m.part))).toEqual(
+            new Set(messageParts),
+        )
+        expect(
+            new Set(
+                messages
+                    .flatMap((m) => m.tool_calls ?? [])
+                    .map((call) => call.link),
+            ),
+        ).toEqual(new Set(['linked', 'awaiting_approval']))
+    })
+
+    it('has a delegated agent and a cut result', () => {
+        expect(
+            messages
+                .flatMap((m) => m.tool_calls ?? [])
+                .some((call) => call.agent !== null),
+        ).toBe(true)
+        expect(
+            messages.some((m) => Object.keys(m.truncated_paths).length > 0),
+        ).toBe(true)
+    })
+
+    it('has a run that failed over to another attempt', () => {
+        expect(data.turns.some((t) => t.attempts.length > 1)).toBe(true)
     })
 })
 

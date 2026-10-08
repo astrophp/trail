@@ -305,3 +305,123 @@ export type TraceDetailResponse = {
     }
     span_limit: SpanLimit
 }
+
+export type MessagePart = 'prompt' | 'response' | 'activity'
+
+/** What became of a tool call, the first that applies; see docs/api.md. */
+export type ToolCallLink =
+    'linked' | 'awaiting_approval' | 'not_started' | 'unlinked'
+
+/** The tool span that ran a call. Its status is the one the API shows. */
+export type ToolCallSpan = {
+    id: string
+    status: Status
+    issue_kind: IssueKind | null
+    duration_ms: number | null
+}
+
+/** The agent span a tool call delegated to. */
+export type ToolCallAgent = {
+    span_id: string
+    name: string
+    agent_class: string | null
+    status: Status
+    issue_kind: IssueKind | null
+    provider: string | null
+    model: string | null
+    duration_ms: number | null
+    pending_approvals: PendingApproval[]
+    resolved_tool_call_ids: string[]
+}
+
+/** One call a message asked for. `id`, `name` and `arguments` are as stored, `null` when absent. */
+export type ToolCall = {
+    id: string | null
+    name: string | null
+    arguments: JsonValue
+    link: ToolCallLink
+    span: ToolCallSpan | null
+    agent: ToolCallAgent | null
+}
+
+/** The result of a call, as stored; `span_id` is the span linked to the call with the same id. */
+export type ToolResult = {
+    id: string | null
+    name: string | null
+    result: JsonValue
+    span_id: string | null
+}
+
+/** Where a message is stored; `redacted` and `truncated` are the span's flags, not the message's. */
+export type MessageSource = {
+    span_id: string
+    path: string
+    redacted: boolean
+    truncated: boolean
+}
+
+/** One message of a turn. A key the stored message does not have is `null`. */
+export type Message = {
+    part: MessagePart
+    role: string | null
+    content: JsonValue
+    structured: JsonValue
+    attachments: JsonValue
+    tool_calls: ToolCall[] | null
+    tool_results: ToolResult[] | null
+    source: MessageSource
+    /** Each cut part of this message, relative to it, with its length before the cut. */
+    truncated_paths: Record<string, number>
+}
+
+export type MessagesState = 'stored' | 'partial' | 'not_stored'
+
+export type MessagesReason =
+    | 'span_limit'
+    | 'offset_gap'
+    | 'history_rewritten'
+    | 'history_boundary_unknown'
+    | 'step_input_missing'
+
+/** One attempt of a run that has a step or a tool; `error` is that of the attempt's span. */
+export type Attempt = {
+    attempt: number
+    provider: string | null
+    model: string | null
+    span_id: string | null
+    error: TraceError | null
+}
+
+/** One turn of a conversation: the run, and the messages its spans hold. */
+export type Turn = {
+    trace: Trace
+    detail: TraceDetail
+    root_span_id: string | null
+    shown_attempt: number | null
+    attempts: Attempt[]
+    messages_state: MessagesState
+    messages_reason: MessagesReason | null
+    history_count: number | null
+    messages: Message[]
+    span_limit: SpanLimit
+}
+
+/** The turns outside the window are counted by the database: `older` before the first, `newer` after the last. */
+export type TranscriptWindow = {
+    older: number
+    newer: number
+    anchor: {
+        param: 'turn' | 'before' | 'after'
+        id: string
+        found: boolean
+    } | null
+}
+
+/** `total` is the conversation's turns; `truncated` is whether turns lie outside the window. */
+export type TurnLimit = { limit: number; total: number; truncated: boolean }
+
+export type TranscriptResponse = {
+    data: { conversation: Conversation; turns: Turn[] }
+    turn_limit: TurnLimit
+    window: TranscriptWindow
+}
