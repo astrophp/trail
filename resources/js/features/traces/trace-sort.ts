@@ -1,8 +1,6 @@
 import { traceSorts, type TraceSort } from '@/api/traces'
 import type { DataTableSort } from '@/components/patterns/data-table'
 
-export const defaultTraceSort: TraceSort = '-started_at'
-
 /** The table's sort for the API's `sort` value: the column id is the field name. */
 export function toTableSort(sort: TraceSort): DataTableSort {
     return sort.startsWith('-')

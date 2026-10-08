@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type RefObject } from 'react'
 import { useLocation, useNavigate } from 'react-router'
 import { SearchField } from '@/components/patterns/search-field'
-import { normalizeSearch } from '@/features/traces/trace-list-params'
+import { normalizeSearch } from '@/api/trace-list-view'
 
 /** How long typing must pause before the text is acted on. */
 const pause = 300
