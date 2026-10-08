@@ -19,8 +19,11 @@ function Section({
     children: React.ReactNode
 }) {
     return (
-        <section aria-label={label} className="flex min-w-0 flex-col gap-2">
-            <SectionLabel>{label}</SectionLabel>
+        <section
+            aria-label={label}
+            className="flex min-w-0 flex-col gap-2 border-b pb-5"
+        >
+            <SectionLabel as="h2">{label}</SectionLabel>
             {children}
         </section>
     )
@@ -53,7 +56,7 @@ export function TranscriptSide({
     )
 
     return (
-        <div className="flex min-w-0 flex-col gap-6">
+        <div className="flex min-w-0 flex-col gap-5">
             {users.length === 0 && moreUsers === 0 ? null : (
                 <Section
                     label={
@@ -85,11 +88,15 @@ export function TranscriptSide({
                 </Section>
             )}
             <Section label="Session summary">
-                <KeyValueList layout="rows">
+                <KeyValueList
+                    layout="rows"
+                    // A narrow column: the label takes what the value leaves, and the value sits at the right.
+                    className="[&_dd]:flex-none! [&_dd]:justify-end [&_dd]:text-end [&_dt]:w-auto! [&_dt]:min-w-0! [&_dt]:flex-1"
+                >
                     <KeyValue label="Recorded turns">
                         {formatCount(counts.all)}
                     </KeyValue>
-                    <KeyValue label="Failed turns">
+                    <KeyValue label="Failed or incomplete">
                         {formatCount(counts.failed + counts.incomplete)}
                     </KeyValue>
                     {counts.running === 0 ? null : (

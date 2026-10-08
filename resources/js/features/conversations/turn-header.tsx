@@ -31,13 +31,14 @@ export function TurnHeader({ turn, number }: { turn: Turn; number: number }) {
     return (
         <div className="flex flex-col gap-3">
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-                <h3
+                <h2
                     id={turnHeadingDomId(trace.id)}
                     tabIndex={-1}
                     className="rounded-sm bg-muted px-1.5 py-0.5 font-mono text-caption text-muted-foreground outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
                 >
-                    #{formatCount(number)}
-                </h3>
+                    <span className="sr-only">Turn {formatCount(number)}</span>
+                    <span aria-hidden="true">#{formatCount(number)}</span>
+                </h2>
                 <Timestamp
                     at={trace.started_at}
                     layout="inline"
@@ -56,7 +57,7 @@ export function TurnHeader({ turn, number }: { turn: Turn; number: number }) {
                         variant="ghost"
                         size="xs"
                         aria-expanded={open}
-                        aria-controls={detailsId}
+                        aria-controls={open ? detailsId : undefined}
                         onClick={() => setOpen(!open)}
                         className="text-muted-foreground"
                     >

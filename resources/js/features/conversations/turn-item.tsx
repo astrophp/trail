@@ -5,7 +5,11 @@ import { TurnMessagesNotice } from '@/features/conversations/turn-messages-notic
 import { TurnMeta } from '@/features/conversations/turn-meta'
 import { TurnPrompt } from '@/features/conversations/turn-prompt'
 import { TurnResponse } from '@/features/conversations/turn-response'
-import { promptOf, turnDomId } from '@/features/conversations/transcript-turns'
+import {
+    promptOf,
+    turnDomId,
+    turnHeadingDomId,
+} from '@/features/conversations/transcript-turns'
 import { formatCount } from '@/lib/format'
 
 type TurnItemProps = {
@@ -28,7 +32,7 @@ export function TurnItem({ turn, number, tools }: TurnItemProps) {
     return (
         <article
             id={turnDomId(turn.trace.id)}
-            aria-label={label}
+            aria-labelledby={turnHeadingDomId(turn.trace.id)}
             data-slot="turn-item"
             className="flex scroll-mt-20 flex-col gap-5 border-b py-8 first:pt-0 last:border-b-0"
         >

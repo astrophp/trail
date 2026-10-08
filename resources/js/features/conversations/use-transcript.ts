@@ -1,4 +1,4 @@
-import { useInfiniteQuery } from '@tanstack/react-query'
+import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useMemo, useState } from 'react'
 import { isNotFound } from '@/api/client'
 import { conversationKeys, fetchTranscript } from '@/api/conversations'
@@ -11,29 +11,52 @@ import { numberTurns } from '@/features/conversations/transcript-turns'
  * turns. An empty id asks for nothing.
  */
 export function useTranscript(id: string) {
+    const queryClient = useQueryClient()
+    const key = conversationKeys.transcript(id)
     const query = useInfiniteQuery({
         enabled: id !== '',
-        queryKey: conversationKeys.transcript(id),
+        queryKey: key,
         queryFn: ({ pageParam, signal }) =>
-            fetchTranscript({ id, before: pageParam }, signal),
-        initialPageParam: undefined as string | undefined,
-        getNextPageParam: () => undefined,
+            fetchTranscript(
+                { id, before: pageParam === '' ? undefined : pageParam },
+                signal,
+            ),
+        // The newest window has no anchor. It is `''` rather than `undefined` because a page param
+        // that is `undefined` ends a refetch, which walks the stored windows from the oldest one.
+        initialPageParam: '',
+        // A refetch asks again for every window loaded, oldest first: the one after a window is
+        // the next of the params the query holds, so none is dropped.
+        getNextPageParam: (_page, _pages, param) => {
+            const held =
+                queryClient.getQueryData<{ pageParams: string[] }>(key)
+                    ?.pageParams ?? []
+            const index = held.indexOf(param)
+
+            return index === -1 ? undefined : held[index + 1]
+        },
         // The window before the first loaded turn, while the database counts turns before it.
         getPreviousPageParam: (first) =>
             first.window.older > 0 ? first.data.turns[0]?.trace.id : undefined,
     })
     const pages = query.data?.pages
-    const [olderFailure, setOlderFailure] = useState<{ error: unknown } | null>(
-        null,
-    )
+    // Kept with the id it happened for, so another conversation never shows it.
+    const [failure, setFailure] = useState<{
+        id: string
+        error: unknown
+    } | null>(null)
+    const olderFailure =
+        failure !== null && failure.id === id ? { error: failure.error } : null
     const { fetchPreviousPage } = query
 
     // The error stays until a load succeeds, so the retry button is never replaced under focus.
-    const loadEarlier = useCallback(async () => {
+    // Resolves to whether the turns arrived.
+    const loadEarlier = useCallback(async (): Promise<boolean> => {
         const result = await fetchPreviousPage()
 
-        setOlderFailure(result.isError ? { error: result.error } : null)
-    }, [fetchPreviousPage])
+        setFailure(result.isError ? { id, error: result.error } : null)
+
+        return !result.isError
+    }, [fetchPreviousPage, id])
 
     const turns = useMemo(() => numberTurns(pages ?? []), [pages])
     // The earliest window fetched last carries the conversation's figures as of now.

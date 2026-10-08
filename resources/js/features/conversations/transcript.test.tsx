@@ -2,7 +2,7 @@ import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { conversationPath } from '@/lib/conversation-path'
-import { appReady, renderApp } from '@/test/render-app'
+import { appReady, renderApp, testQueryClient } from '@/test/render-app'
 import {
     call,
     deferred,
@@ -32,7 +32,9 @@ async function open(
 
 const turn = (number: number) =>
     screen.getByRole('article', { name: `Turn ${number}` })
-const heading = (name: string) => screen.getByRole('heading', { name })
+// A turn's heading is read out as "Turn 3" and shown as "#3".
+const heading = (name: string) =>
+    screen.getByRole('heading', { name: name.replace('#', 'Turn ') })
 
 beforeEach(() => {
     mockTranscript()
@@ -58,11 +60,9 @@ describe('the conversation page', () => {
 
         const articles = screen.getAllByRole('article')
 
-        expect(articles.map((a) => a.getAttribute('aria-label'))).toEqual([
-            'Turn 5',
-            'Turn 6',
-            'Turn 7',
-        ])
+        expect(
+            articles.map((a) => a.querySelector('h2 .sr-only')?.textContent),
+        ).toEqual(['Turn 5', 'Turn 6', 'Turn 7'])
         expect(within(articles[0]).getByText('Question of a')).toBeVisible()
         expect(within(articles[2]).getByText('Answer of c')).toBeVisible()
         expect(heading('#5')).toBeVisible()
@@ -119,10 +119,43 @@ describe('the conversation page', () => {
         expect(meta).toHaveTextContent('4.20s')
         expect(meta).toHaveTextContent('1.7k')
         expect(meta).toHaveTextContent('$0.0078')
-        expect(meta).toHaveTextContent('7')
         expect(
             within(turn(1)).getByRole('link', { name: /Inspect trace/ }),
         ).toHaveAttribute('href', '/trail/traces/t1')
+    })
+
+    it('shows the span count of a turn under its own label', async () => {
+        // A count that no token or cost figure of the turn contains.
+        await open(windowOf([turnOf('a', { trace: { span_count: 23 } })]))
+
+        const spans = within(turn(1)).getByText('Spans').parentElement
+
+        expect(spans).toHaveTextContent(/^Spans\s*23$/)
+    })
+
+    it('keeps the transcript before the side column in the document', async () => {
+        await open()
+
+        const transcript = screen.getByRole('region', { name: 'Transcript' })
+        const side = screen.getByRole('complementary', {
+            name: 'About this conversation',
+        })
+
+        expect(
+            transcript.compareDocumentPosition(side) &
+                Node.DOCUMENT_POSITION_FOLLOWING,
+        ).toBeTruthy()
+    })
+
+    it('names the turn headings and the side sections as level two headings', async () => {
+        await open()
+
+        expect(heading('#1').tagName).toBe('H2')
+        expect(heading('Jump to turn').tagName).toBe('H2')
+        expect(screen.getByRole('article', { name: 'Turn 1' })).toHaveAttribute(
+            'aria-labelledby',
+            heading('#1').id,
+        )
     })
 
     it('says what the page shows, and does not claim to be complete', async () => {
@@ -204,7 +237,7 @@ describe('the header and the side column', () => {
             rows.getByText(label).closest('[data-slot="key-value"]')
 
         expect(row('Recorded turns')).toHaveTextContent('3')
-        expect(row('Failed turns')).toHaveTextContent('0')
+        expect(row('Failed or incomplete')).toHaveTextContent('0')
         expect(row('Awaiting approval')).toHaveTextContent('1')
         expect(rows.queryByText('Running')).not.toBeInTheDocument()
         expect(row('Input tokens')).toHaveTextContent('6,200')
@@ -234,7 +267,9 @@ describe('the header and the side column', () => {
         )
 
         expect(
-            rows.getByText('Failed turns').closest('[data-slot="key-value"]'),
+            rows
+                .getByText('Failed or incomplete')
+                .closest('[data-slot="key-value"]'),
         ).toHaveTextContent('3')
         expect(
             rows.getByText('Running').closest('[data-slot="key-value"]'),
@@ -608,7 +643,11 @@ describe('turns that did not complete', () => {
         expect(within(failed).getByText('HTTP 429')).toBeVisible()
         expect(within(failed).getByText('Failed')).toBeVisible()
         expect(within(failed).getByText('Rate limited')).toBeVisible()
-        expect(failed.querySelector('[data-variant="plain"]')).toBeNull()
+        expect(
+            failed.querySelector(
+                '[data-slot="turn-response"] [data-slot="message-item"]',
+            ),
+        ).toBeNull()
     })
 
     it('claims no cause for a failed turn with no error recorded', async () => {
@@ -769,7 +808,6 @@ describe('what a turn stored', () => {
             turn(1).querySelector('[data-slot="turn-prompt"]'),
         ).not.toBeNull()
         expect(turn(2).querySelector('[data-slot="turn-prompt"]')).toBeNull()
-        expect(turn(2).querySelector('[data-variant="bubble"]')).toBeNull()
         expect(turn(2).textContent).not.toMatch(/prompt/i)
         expect(within(turn(2)).getByText('Done.')).toBeVisible()
     })
@@ -989,7 +1027,7 @@ describe('earlier turns', () => {
         expect(
             screen
                 .getAllByRole('article')
-                .map((a) => a.getAttribute('aria-label')),
+                .map((a) => a.querySelector('h2 .sr-only')?.textContent),
         ).toEqual(['Turn 11', 'Turn 12', 'Turn 13', 'Turn 14'])
         expect(within(turn(11)).getByText('Question of a')).toBeVisible()
         expect(button()).toHaveTextContent('Show earlier turns (10)')
@@ -1249,5 +1287,169 @@ describe('states', () => {
             await screen.findByRole('status', { name: 'Loading conversation' }),
         ).toBeVisible()
         expect(screen.queryByRole('article')).toBeNull()
+    })
+})
+
+describe('earlier turns and a refetch', () => {
+    const newest = () => windowOf([turnOf('c'), turnOf('d')], { older: 12 })
+    const earlier = () => windowOf([turnOf('a'), turnOf('b')], { older: 10 })
+    const button = () =>
+        screen.getByRole('button', { name: /^(Show earlier turns|Try again)/ })
+    const numbers = () =>
+        screen
+            .getAllByRole('article')
+            .map((a) => a.querySelector('h2 .sr-only')?.textContent)
+
+    it('asks again for every window loaded when the data is refetched, so no newer turn is lost', async () => {
+        const client = testQueryClient()
+        const fetchMock = mockTranscript((url) =>
+            json(queryOf(url).has('before') ? earlier() : newest()),
+        )
+
+        renderApp(route(), {}, client)
+        await screen.findAllByRole('article', { name: /^Turn / })
+        await userEvent.click(button())
+        await screen.findByRole('article', { name: 'Turn 11' })
+
+        const before = transcriptUrls(fetchMock).length
+
+        await client.invalidateQueries()
+        await waitFor(() =>
+            expect(transcriptUrls(fetchMock).length).toBe(before + 2),
+        )
+
+        const again = transcriptUrls(fetchMock).slice(before)
+
+        expect(again.map((url) => queryOf(url).get('before'))).toEqual([
+            'c',
+            null,
+        ])
+        expect(numbers()).toEqual(['Turn 11', 'Turn 12', 'Turn 13', 'Turn 14'])
+        expect(button()).toHaveTextContent('Show earlier turns (10)')
+    })
+
+    it('does not show one conversation’s failure to load earlier turns for another', async () => {
+        mockTranscript((url) => {
+            const id = queryOf(url).get('id')
+
+            if (queryOf(url).has('before')) {
+                return json({ message: 'Database unavailable.' }, 500)
+            }
+
+            return json(
+                windowOf([turnOf(`${id}-x`), turnOf(`${id}-y`)], {
+                    older: 12,
+                    conversation: { id: id ?? '' },
+                }),
+            )
+        })
+        renderApp(route('first'))
+        await screen.findAllByRole('article', { name: /^Turn / })
+        await userEvent.click(button())
+        await screen.findByRole('alert')
+
+        window.history.pushState(
+            {},
+            '',
+            '/trail/conversations/transcript?id=second',
+        )
+        window.dispatchEvent(new PopStateEvent('popstate'))
+
+        await waitFor(() =>
+            expect(
+                screen.getByRole('button', { name: /^Show earlier turns/ }),
+            ).toBeVisible(),
+        )
+        expect(screen.queryByRole('alert')).toBeNull()
+        expect(screen.queryByRole('button', { name: /^Try again/ })).toBeNull()
+    })
+
+    it('drops the place it held when a load failed, so a later change of the first turn moves nothing', async () => {
+        const client = testQueryClient()
+        const scrollBy = vi.fn()
+        let first = 'c'
+
+        window.scrollBy = scrollBy
+        mockTranscript((url) =>
+            queryOf(url).has('before')
+                ? json({ message: 'Database unavailable.' }, 500)
+                : json(windowOf([turnOf(first), turnOf('d')], { older: 12 })),
+        )
+        renderApp(route(), {}, client)
+        await screen.findAllByRole('article', { name: /^Turn / })
+        await userEvent.click(button())
+        await screen.findByRole('alert')
+
+        first = 'x'
+        await client.invalidateQueries()
+        await waitFor(() =>
+            expect(document.getElementById('turn-x')).not.toBeNull(),
+        )
+
+        expect(heading('#13')).not.toHaveFocus()
+        expect(scrollBy).not.toHaveBeenCalled()
+    })
+})
+
+describe('a prompt with nothing to show, and a long one', () => {
+    it('says in the bubble that the text is empty or absent, never an empty frame', async () => {
+        await open(
+            windowOf([
+                turnOf('a', {
+                    messages: [
+                        message('prompt', ''),
+                        message('response', null),
+                    ],
+                }),
+            ]),
+        )
+
+        const prompt = turn(1).querySelector('[data-slot="turn-prompt"]')
+
+        expect(prompt).toHaveTextContent('Empty text')
+        expect(
+            turn(1).querySelector('[data-slot="turn-response"]'),
+        ).toHaveTextContent('No text')
+    })
+
+    it('labels an empty prompt in the jump list as empty', async () => {
+        await open(
+            windowOf([
+                turnOf('a', {
+                    messages: [message('prompt', ''), message('response', 'x')],
+                }),
+            ]),
+        )
+
+        const link = within(
+            screen.getByRole('navigation', { name: 'Jump to turn' }),
+        ).getByRole('link')
+
+        expect(link).toHaveTextContent('Empty prompt')
+        expect(link).not.toHaveTextContent('not text')
+    })
+
+    it('cuts a very long prompt to a short start in the jump list', async () => {
+        const long = `Start ${'word '.repeat(20000)}`
+
+        await open(
+            windowOf([
+                turnOf('a', {
+                    messages: [
+                        message('prompt', long),
+                        message('response', 'x'),
+                    ],
+                }),
+            ]),
+        )
+
+        const link = within(
+            screen.getByRole('navigation', { name: 'Jump to turn' }),
+        ).getByRole('link')
+
+        expect(link).toHaveTextContent(/^#1Start word/)
+        expect(link.textContent?.length).toBeLessThan(160)
+        expect(link.getAttribute('title')).toBeNull()
+        expect(link.textContent).toContain('…')
     })
 })

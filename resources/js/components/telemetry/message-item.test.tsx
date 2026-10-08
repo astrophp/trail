@@ -73,18 +73,81 @@ describe('MessageItem', () => {
         ).toBeInTheDocument()
     })
 
-    it('shows a structured output', () => {
+    it('shows a structured output in a transcript frame', () => {
+        render(
+            <MessageItem
+                variant="plain"
+                message={{
+                    role: 'assistant',
+                    content: null,
+                    structured: { answer: 42 },
+                }}
+                truncatedPaths={{}}
+                heading="Turn 1 response"
+            />,
+        )
+
+        expect(
+            screen.getByRole('group', {
+                name: 'turn 1 response structured output',
+            }),
+        ).toBeInTheDocument()
+        expect(screen.queryByText('No text')).toBeNull()
+    })
+
+    it('leaves a structured output out of the run page’s section, as it always did', () => {
         const item = renderMessage({
             role: 'assistant',
-            content: null,
+            content: 'x',
             structured: { answer: 42 },
         })
 
         expect(
-            within(item).getByRole('group', {
+            within(item).queryByRole('group', {
                 name: 'message 1 structured output',
             }),
-        ).toBeInTheDocument()
+        ).toBeNull()
+    })
+
+    describe('a prompt or response with no text', () => {
+        function renderPlain(message: JsonValue) {
+            render(
+                <MessageItem
+                    variant="bubble"
+                    message={message}
+                    truncatedPaths={{}}
+                    heading="Turn 1 prompt"
+                />,
+            )
+        }
+
+        it('says the text is empty when it was stored as an empty string', () => {
+            renderPlain({ role: 'user', content: '' })
+
+            expect(screen.getByText('Empty text')).toBeVisible()
+        })
+
+        it('says there is no text when the content is null', () => {
+            renderPlain({ role: 'user', content: null })
+
+            expect(screen.getByText('No text')).toBeVisible()
+        })
+
+        it('says nothing extra when the message has tool calls', () => {
+            renderPlain({
+                role: 'assistant',
+                content: '',
+                tool_calls: [{ name: 'search', arguments: { q: 1 } }],
+            })
+
+            expect(screen.queryByText(/^(No|Empty) text$/)).toBeNull()
+        })
+
+        it('does not touch the run page’s section', () => {
+            const item = renderMessage({ role: 'user', content: null })
+
+            expect(within(item).queryByText(/^(No|Empty) text$/)).toBeNull()
+        })
     })
 
     describe('marks of what was cut short', () => {
@@ -285,5 +348,44 @@ describe('the run page’s message markup', () => {
                 '          button data-slot="copy-button" aria-label="Copy message 1 search arguments"',
             ].join('\n'),
         )
+    })
+
+    it('keeps the markup of a message with no role, of one that is not an object, and of one with a structured output', () => {
+        const markup = (message: JsonValue) => {
+            const { unmount } = render(
+                <ol>
+                    <MessageItem
+                        message={message}
+                        truncatedPaths={{}}
+                        basePath="input.messages.0"
+                        heading="Message 1"
+                    />
+                </ol>,
+            )
+            const item = screen.getByRole('listitem', { name: 'Message 1' })
+            const text = skeleton(item).join('\n')
+
+            unmount()
+
+            return text
+        }
+
+        expect(markup({ role: null, content: 'x' })).toBe(
+            [
+                'li data-slot="message-item" aria-label="Message 1"',
+                '  div',
+                '    span data-slot="badge"',
+                '    span',
+                '  div data-slot="payload-viewer" role="group" aria-label="message 1 text"',
+                '    div',
+                '      div',
+                '        span data-slot="capped-text"',
+                '      button data-slot="copy-button" aria-label="Copy message 1 text"',
+            ].join('\n'),
+        )
+        expect(markup('just a string')).toContain('span data-slot="badge"')
+        expect(
+            markup({ role: 'user', content: 'x', structured: { a: 1 } }),
+        ).toBe(markup({ role: 'user', content: 'x' }))
     })
 })

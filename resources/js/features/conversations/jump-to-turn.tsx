@@ -1,3 +1,4 @@
+import type { Turn } from '@/api/types'
 import { SectionLabel } from '@/components/telemetry/section-label'
 import { StatusBadge } from '@/components/telemetry/status-badge'
 import {
@@ -14,6 +15,19 @@ type JumpToTurnProps = {
     onJump: (traceId: string) => void
 }
 
+/** What stands where a prompt's start would: why there is none. */
+function missingPrompt(turn: Turn): string {
+    const prompt = promptOf(turn)
+
+    if (prompt === undefined) {
+        return 'No prompt stored'
+    }
+
+    return typeof prompt.content === 'string'
+        ? 'Empty prompt'
+        : 'Prompt is not text'
+}
+
 /** A list of the loaded turns (number, the start of the prompt, how it ended), each a link to that turn. */
 export function JumpToTurn({ turns, onJump }: JumpToTurnProps) {
     if (turns.length === 0) {
@@ -22,7 +36,7 @@ export function JumpToTurn({ turns, onJump }: JumpToTurnProps) {
 
     return (
         <nav aria-label="Jump to turn" className="flex min-w-0 flex-col gap-2">
-            <SectionLabel>Jump to turn</SectionLabel>
+            <SectionLabel as="h2">Jump to turn</SectionLabel>
             <ol className="flex flex-col">
                 {turns.map(({ turn, number }) => {
                     const start = promptStart(turn)
@@ -46,12 +60,8 @@ export function JumpToTurn({ turns, onJump }: JumpToTurnProps) {
                                             ? 'min-w-0 flex-1 truncate text-muted-foreground'
                                             : 'min-w-0 flex-1 truncate'
                                     }
-                                    title={start ?? undefined}
                                 >
-                                    {start ??
-                                        (promptOf(turn) === undefined
-                                            ? 'No prompt stored'
-                                            : 'Prompt is not text')}
+                                    {start ?? missingPrompt(turn)}
                                 </span>
                                 <StatusBadge
                                     status={turn.trace.status}

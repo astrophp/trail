@@ -21,13 +21,14 @@ type LoadedTranscriptProps = {
     onToolsChange: (tools: boolean) => void
     loadingEarlier: boolean
     earlierFailure: { error: unknown } | null
-    onLoadEarlier: () => Promise<void>
+    onLoadEarlier: () => Promise<boolean>
 }
 
 /**
  * The conversation read top to bottom: a line over it (how many turns were recorded, when, and
- * the "Show tools" switch), the turns, and a sentence saying what the page is. The side column
- * comes first in the page, so below the wide breakpoint it sits above the transcript.
+ * the "Show tools" switch), the turns, and a sentence saying what the page is. The transcript comes
+ * first in the document, so reading and tab order follow it; below the wide breakpoint the side
+ * column is ordered above it.
  */
 export function LoadedTranscript({
     conversation,
@@ -48,7 +49,11 @@ export function LoadedTranscript({
         }
 
         void onLoadEarlier().then(
-            () => undefined,
+            (loaded) => {
+                if (!loaded) {
+                    forget()
+                }
+            },
             () => forget(),
         )
     }
@@ -64,16 +69,6 @@ export function LoadedTranscript({
 
     return (
         <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_auto] lg:gap-10">
-            <aside
-                aria-label="About this conversation"
-                className="min-w-0 lg:order-last lg:w-64 lg:border-s lg:ps-6"
-            >
-                <TranscriptSide
-                    conversation={conversation}
-                    turns={turns}
-                    onJump={jump}
-                />
-            </aside>
             <section aria-label="Transcript" className="min-w-0">
                 <div className="mb-6 flex flex-wrap items-center justify-between gap-x-6 gap-y-2 text-ui text-muted-foreground">
                     <p className="flex flex-wrap items-center gap-x-2">
@@ -124,6 +119,16 @@ export function LoadedTranscript({
                     turn resent from earlier in the conversation are left out.
                 </p>
             </section>
+            <aside
+                aria-label="About this conversation"
+                className="order-first min-w-0 lg:order-none lg:w-64 lg:border-s lg:ps-6"
+            >
+                <TranscriptSide
+                    conversation={conversation}
+                    turns={turns}
+                    onJump={jump}
+                />
+            </aside>
         </div>
     )
 }

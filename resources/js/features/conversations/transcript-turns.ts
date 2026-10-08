@@ -55,11 +55,41 @@ export function activityOf(turn: Turn): Message[] {
     return turn.messages.filter((message) => message.part === 'activity')
 }
 
-/** The text a prompt starts with, or `null` when the turn has no prompt or it is not text. */
+/** How many characters of a prompt the jump list shows. */
+const PROMPT_START_LENGTH = 100
+
+/**
+ * The first words of a prompt (a short excerpt, whitespace collapsed, never the whole text), or
+ * `null` when the turn has no prompt, it is empty or it is not text.
+ */
 export function promptStart(turn: Turn): string | null {
     const content = promptOf(turn)?.content
 
-    return typeof content === 'string' && content !== '' ? content : null
+    if (typeof content !== 'string') {
+        return null
+    }
+
+    const looked = PROMPT_START_LENGTH * 4
+    // Only the head is looked at, so a very long prompt costs nothing.
+    const head = content.slice(0, looked).replace(/\s+/g, ' ').trim()
+
+    if (head === '') {
+        return null
+    }
+
+    if (head.length <= PROMPT_START_LENGTH && content.length <= looked) {
+        return head
+    }
+
+    let end = Math.min(head.length, PROMPT_START_LENGTH)
+    const last = head.charCodeAt(end - 1)
+
+    // Do not cut a character in two.
+    if (last >= 0xd800 && last <= 0xdbff) {
+        end -= 1
+    }
+
+    return `${head.slice(0, end).trimEnd()}…`
 }
 
 /** The element ids the page jumps to and moves focus to. */

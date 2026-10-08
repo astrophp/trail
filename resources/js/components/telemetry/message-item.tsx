@@ -168,6 +168,15 @@ export function MessageItem({
         'result',
     )
 
+    // A prompt or a response with no text and nothing else says so, rather than showing an empty frame.
+    const nothing =
+        !section &&
+        (isAbsent(content) || content === '') &&
+        isAbsent(object.structured) &&
+        (calls === null || calls.length === 0) &&
+        (results === null || results.length === 0) &&
+        isAbsent(object.attachments)
+
     return (
         <Tag {...identity} className={cn(frame({ variant }), className)}>
             {section ? (
@@ -182,6 +191,11 @@ export function MessageItem({
                     </span>
                 </div>
             ) : null}
+            {nothing ? (
+                <p className="text-ui text-muted-foreground">
+                    {content === '' ? 'Empty text' : 'No text'}
+                </p>
+            ) : null}
             {isAbsent(content) || content === '' ? null : (
                 <StoredPayload
                     span={cuts}
@@ -191,7 +205,7 @@ export function MessageItem({
                     plain={plain}
                 />
             )}
-            {isAbsent(object.structured) ? null : (
+            {section || isAbsent(object.structured) ? null : (
                 <StoredPayload
                     span={cuts}
                     path={at(basePath, 'structured')}
