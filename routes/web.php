@@ -3,6 +3,7 @@
 use Astro\Trail\Http\Controllers\Api\MetaController;
 use Astro\Trail\Http\Controllers\Api\TraceBookmarkController;
 use Astro\Trail\Http\Controllers\Api\TraceIndexController;
+use Astro\Trail\Http\Controllers\Api\TraceNeighboursController;
 use Astro\Trail\Http\Controllers\Api\TraceShowController;
 use Astro\Trail\Http\Controllers\DashboardController;
 use Astro\Trail\Http\Middleware\Authorize;
@@ -14,6 +15,7 @@ Route::prefix('api')->middleware([RespondWithJson::class, Authorize::class])->gr
     Route::get('meta', MetaController::class)->name('trail.api.meta');
     Route::get('traces', TraceIndexController::class)->name('trail.api.traces.index');
     Route::get('traces/{id}', TraceShowController::class)->name('trail.api.traces.show');
+    Route::get('traces/{id}/neighbours', TraceNeighboursController::class)->name('trail.api.traces.neighbours');
     Route::put('traces/{id}/bookmark', [TraceBookmarkController::class, 'store'])->name('trail.api.traces.bookmark.store');
     Route::delete('traces/{id}/bookmark', [TraceBookmarkController::class, 'destroy'])->name('trail.api.traces.bookmark.destroy');
 

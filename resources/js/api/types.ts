@@ -127,6 +127,16 @@ export type BookmarkResponse = {
     data: { trace_id: string; bookmarked: boolean }
 }
 
+/** The runs the list shows just before and just after a run, in the view that was asked about. */
+export type TraceNeighbours = {
+    previous: string | null
+    next: string | null
+}
+
+export type TraceNeighboursResponse = {
+    data: TraceNeighbours
+}
+
 export type SpanType = 'agent' | 'step' | 'tool' | 'embedding'
 
 export type ErrorSource = 'step' | 'tool' | 'run'

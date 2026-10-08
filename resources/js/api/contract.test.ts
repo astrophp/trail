@@ -29,6 +29,8 @@ import type {
     TraceDetailResponse,
     TraceError,
     TraceListResponse,
+    TraceNeighbours,
+    TraceNeighboursResponse,
     TraceUsageBreakdown,
     Usage,
     UsageRow,
@@ -334,6 +336,13 @@ const bookmarkResponse = z.strictObject({
     data: z.strictObject({ trace_id: z.string(), bookmarked: z.boolean() }),
 })
 
+const traceNeighbours = z.strictObject({
+    previous: nullable(z.string()),
+    next: nullable(z.string()),
+})
+
+const traceNeighboursResponse = z.strictObject({ data: traceNeighbours })
+
 // The schemas and the types are the same type, both ways.
 describe('types', () => {
     it('match the schemas', () => {
@@ -357,6 +366,12 @@ describe('types', () => {
         expectTypeOf<
             z.infer<typeof bookmarkResponse>
         >().toEqualTypeOf<BookmarkResponse>()
+        expectTypeOf<
+            z.infer<typeof traceNeighbours>
+        >().toEqualTypeOf<TraceNeighbours>()
+        expectTypeOf<
+            z.infer<typeof traceNeighboursResponse>
+        >().toEqualTypeOf<TraceNeighboursResponse>()
         expectTypeOf<
             NonNullable<z.infer<typeof trace>['issue_kind']>
         >().toEqualTypeOf<IssueKind>()
@@ -427,6 +442,32 @@ describe('tests/Contract/bookmark.json', () => {
             bookmarkResponse.safeParse(contractFixture('bookmark')).error
                 ?.issues,
         ).toBeUndefined()
+    })
+})
+
+describe('tests/Contract/neighbours.json', () => {
+    it('is what the API types describe', () => {
+        expect(
+            traceNeighboursResponse.safeParse(contractFixture('neighbours'))
+                .error?.issues,
+        ).toBeUndefined()
+    })
+
+    it('parses a run with no neighbours', () => {
+        expect(
+            traceNeighboursResponse.safeParse({
+                data: { previous: null, next: null },
+            }).success,
+        ).toBe(true)
+    })
+
+    it('has both a previous and a next run', () => {
+        const { data } = traceNeighboursResponse.parse(
+            contractFixture('neighbours'),
+        )
+
+        expect(data.previous).not.toBeNull()
+        expect(data.next).not.toBeNull()
     })
 })
 

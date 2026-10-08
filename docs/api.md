@@ -433,6 +433,34 @@ Everything the run's page needs in one response.
 - A span that is still marked running after `stale_after` seconds is reported `incomplete` and
   `abandoned` span by span, as the run is.
 
+### `GET /api/traces/{id}/neighbours`
+
+The runs listed just before and just after this one in a view of the list, so the run's page can
+step through a filtered list without going back to it.
+
+Takes the same parameters as `GET /api/traces`, without `page` and `per_page`: the time range, the
+filters and `sort`. Invalid input is the same `422`. `page` and `per_page` are ignored, not
+validated.
+
+```json
+{ "data": { "previous": "0199c2f4-6a1e-7c3b-9a55-0e8a4c1d2f30", "next": null } }
+```
+
+- `previous` is the run that `GET /api/traces` shows immediately before this one for the same
+  parameters, and `next` the one immediately after. `null` means there is none: this run is the
+  first or the last of the view. Stepping `next` from the first run of a view visits every run of
+  it once, in the list's order, and ends with `null`; `previous` does the same backwards.
+- Runs tied on the sorted value keep the list's order, by id in the direction of the sort, and
+  runs without a value come last in both directions, as in the list.
+- A run that exists but is not in the view (a filter leaves it out, or it started outside the time
+  range) answers `{ "previous": null, "next": null }`, not an error.
+- An unknown run is a `404`, and so is an id that cannot be a run's (longer than 64 characters,
+  holding a NUL byte, or not valid UTF-8), which does not reach the database.
+- It never loads the list or counts a position: one read learns whether the run is in the view and
+  one read finds each neighbour, three in all whatever the number of runs. A run that is not in the
+  view, or an unknown run, takes two. The `slow` filter adds the two reads the list makes for its
+  threshold.
+
 ### `PUT /api/traces/{id}/bookmark`, `DELETE /api/traces/{id}/bookmark`
 
 Bookmarks the run, or removes its bookmark. These are the API's first writes. Both are
