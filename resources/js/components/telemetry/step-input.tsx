@@ -53,10 +53,10 @@ export function StepInput({ span }: StepInputProps) {
                             {messages.map((message, index) => (
                                 <MessageItem
                                     key={index}
-                                    span={span}
-                                    index={index}
-                                    number={offset + index + 1}
                                     message={message}
+                                    truncatedPaths={span.truncated_paths}
+                                    basePath={`input.messages.${index}`}
+                                    heading={`Message ${formatCount(offset + index + 1)}`}
                                 />
                             ))}
                         </ol>

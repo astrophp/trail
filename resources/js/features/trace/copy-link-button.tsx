@@ -4,6 +4,7 @@ import { notify } from '@/components/patterns/notify'
 import { Button } from '@/components/ui/button'
 import type { Shown } from '@/features/trace/shown-selection'
 import { traceParams } from '@/features/trace/trace-params'
+import { tracePagePath } from '@/lib/trace-page-path'
 import { writeState } from '@/lib/url-state'
 
 /**
@@ -19,7 +20,7 @@ export function CopyLinkButton({
 }) {
     const query = writeState(traceParams, new URLSearchParams(), shown)
     const href = useHref({
-        pathname: `/traces/${encodeURIComponent(traceId)}`,
+        pathname: tracePagePath(traceId),
         search: query.toString(),
     })
 

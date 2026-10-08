@@ -1,6 +1,7 @@
 import type { Conversation } from '@/api/types'
 import { RowLink } from '@/components/patterns/row-link'
 import { conversationPath } from '@/lib/conversation-path'
+import { longestWholeId } from '@/features/conversations/conversation-id'
 import { formatCount, shortId } from '@/lib/format'
 
 /**
@@ -23,9 +24,6 @@ export function agentLine(conversation: Conversation): string {
 
     return unnamed === 0 ? names : `${names} +${formatCount(unnamed)}`
 }
-
-/** A host-app id up to this many characters is shown whole; a longer one, such as an SDK uuid, is shortened. */
-const longestWholeId = 16
 
 /** What the latest turn was asked, as the link to the conversation, with its id and agents beneath. */
 export function ConversationCell({

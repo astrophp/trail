@@ -12,6 +12,8 @@ type StoredPayloadProps = {
     /** The label row of the viewer, when the value has no label of its own above it. */
     heading?: string
     value: JsonValue | undefined
+    /** A text runs as plain text, with no box and no copy button; see `PayloadViewer`. */
+    plain?: boolean
     className?: string
 }
 
@@ -22,6 +24,7 @@ export function StoredPayload({
     label,
     heading,
     value,
+    plain,
     className,
 }: StoredPayloadProps) {
     const { truncated, originalLength } = truncationAt(
@@ -36,6 +39,7 @@ export function StoredPayload({
             heading={heading}
             truncated={truncated}
             originalLength={originalLength}
+            plain={plain}
             className={className}
         />
     )
