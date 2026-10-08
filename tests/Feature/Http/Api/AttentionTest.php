@@ -4,6 +4,7 @@ use Astro\Trail\Enums\IssueKind;
 use Astro\Trail\Enums\Status;
 use Astro\Trail\Facades\Trail;
 use Astro\Trail\Storage\Models\Trace;
+use Astro\Trail\Storage\StaleRuns;
 use Astro\Trail\Tests\Fixtures\Storage\Rows;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -78,7 +79,7 @@ function attentionDataset(): void
 
     attentionRun('2026-01-02 09:30:00', ['id' => 'in1', 'status' => Status::Incomplete, 'child_failed' => true]);
     attentionRun('2026-01-02 10:45:00', ['id' => 'in2', 'status' => Status::Running, 'created_at' => Carbon::now()->subHours(3)]);
-    // Still running and not stale: in no list.
+    // Still running and not stale: in none of failed, incomplete, awaiting_approval and child_failed.
     attentionRun('2026-01-02 11:50:00', ['id' => 'ru1', 'status' => Status::Running]);
     attentionRun('2026-01-02 11:40:00', ['id' => 'ru2', 'status' => Status::Running, 'child_failed' => true]);
 
@@ -493,4 +494,37 @@ it('does not take the overview\'s place, nor does the overview take its', functi
     $this->getJson('/trail/api/overview')->assertOk()->assertJsonPath('data.summary.runs.failed', 1)->assertJsonMissingPath('data.0');
     $this->getJson('/trail/api/overview/attention')->assertOk()->assertJsonPath('data.0.kind', 'failed')->assertJsonMissingPath('data.summary');
     $this->getJson('/trail/api/overview/attention/more')->assertNotFound();
+});
+
+it('counts a running run that is not stale as unpriced and recovered, and in no other kind', function () {
+    attentionRun('2026-01-02 11:30:00', ['id' => 'running', 'status' => Status::Running, 'unpriced_span_count' => 1, 'recovered' => true, 'child_failed' => true]);
+
+    $body = attentionAt($this);
+
+    expect(attentionKinds($body))->toBe(['unpriced', 'recovered']);
+
+    foreach ($body['data'] as $item) {
+        expect($item['count'])->toBe(1)
+            ->and($item['latest_at'])->toBe('2026-01-02T11:30:00.000Z')
+            ->and(attentionListed($this, $item['filters']))->toBe(1);
+    }
+
+    expect($this->getJson('/trail/api/traces?status=running')->json('pagination.total'))->toBe(1);
+});
+
+describe('the stale cutoff', function () {
+    it('makes a run stale only when it was created before the cutoff', function () {
+        // The clock is frozen: the cutoff is an hour before it.
+        attentionRun('2026-01-02 10:00:00', ['id' => 'at-cutoff', 'status' => Status::Running, 'created_at' => Carbon::parse(StaleRuns::cutoffColumn())]);
+        attentionRun('2026-01-02 10:10:00', ['id' => 'before-cutoff', 'status' => Status::Running, 'created_at' => StaleRuns::cutoff()->subMillisecond()]);
+
+        $incomplete = attentionAt($this)['data'][0];
+
+        expect($incomplete['kind'])->toBe('incomplete')
+            ->and($incomplete['count'])->toBe(1)
+            ->and($incomplete['latest_at'])->toBe('2026-01-02T10:10:00.000Z')
+            ->and(attentionListed($this, $incomplete['filters']))->toBe(1)
+            ->and($this->getJson('/trail/api/traces?status=incomplete')->json('data.0.id'))->toBe('before-cutoff')
+            ->and($this->getJson('/trail/api/traces?status=running')->json('data.0.id'))->toBe('at-cutoff');
+    });
 });

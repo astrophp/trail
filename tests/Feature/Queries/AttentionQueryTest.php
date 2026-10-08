@@ -100,3 +100,23 @@ it('reads nothing when the scope holds no run', function () {
 
     expect((new AttentionQuery)->read(attentionRange(), RunScope::agent('Nobody')))->toBe([]);
 });
+
+it('keeps an item whose count is above zero when its latest start cannot be read', function () {
+    $row = (object) [
+        'kind_failed' => '3', 'kind_failed_latest' => 'not a date',
+        'issue_rate_limited' => 2, 'issue_rate_limited_latest' => null,
+        'kind_incomplete' => '0', 'kind_incomplete_latest' => null,
+        'kind_recovered' => 1, 'kind_recovered_latest' => '2026-01-02 10:00:00.000',
+    ];
+
+    $resource = AttentionResource::of(AttentionQuery::items($row));
+
+    expect(array_column($resource, 'kind'))->toBe(['failed', 'recovered'])
+        ->and(array_column($resource, 'count'))->toBe([3, 1])
+        ->and(array_column($resource, 'latest_at'))->toBe([null, '2026-01-02T10:00:00.000Z'])
+        ->and($resource[0]['breakdown'])->toBe([['issue_kind' => 'rate_limited', 'count' => 2, 'latest_at' => null, 'filters' => ['status' => 'failed', 'issue_kind' => 'rate_limited']]]);
+});
+
+it('has no item for a row without counts', function () {
+    expect(AttentionQuery::items(new stdClass))->toBe([]);
+});

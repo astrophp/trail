@@ -691,12 +691,14 @@ pressing first. A kind with no run in the range is absent, so a range with nothi
   priced is in `failed` and in `unpriced`; a run that failed and was recovered by a failover first
   is in `failed` and in `recovered`. A run that failed with a sub-agent that failed is `failed` and
   not `child_failed`, which counts only runs that completed. A running run that is not stale is in
-  no kind.
+  none of `failed`, `incomplete`, `awaiting_approval` and `child_failed`, and can be in `unpriced`
+  or `recovered`, whose counts can therefore still grow while a run is running.
 - The stale rule of [Status](#status) applies to every count as the list applies it: a run still
   marked running after `stale_after` seconds is in `incomplete`, and its issue kind is `abandoned`.
   It is not in `failed`.
 - `latest_at` is when the latest of those runs started, the greatest `started_at` among them, so a
-  run outside the range never moves it. It is never `null`.
+  run outside the range never moves it. It is `null` only when the stored start time of those runs
+  could not be read; the item is still there with its `count`.
 - `breakdown` is `[]` for every kind except `failed`. For `failed` it has a row for each issue kind
   that at least one failed run has, ordered by `count` descending and, among equal counts, in the
   order of the issue kinds in [The trace](#the-trace). A row is `{ issue_kind, count, latest_at,

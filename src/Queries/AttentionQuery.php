@@ -47,8 +47,17 @@ final class AttentionQuery
         $range->apply($query, 'started_at');
         $scope->apply($query);
 
-        $row = $query->first() ?? new stdClass;
+        return self::items($query->first() ?? new stdClass);
+    }
 
+    /**
+     * The items of one row of aggregates. An item exists whenever its count is above 0, even when
+     * its latest start could not be read: a count is never dropped, and `latestAt` is then null.
+     *
+     * @return list<AttentionItem>
+     */
+    public static function items(stdClass $row): array
+    {
         $items = [];
 
         foreach (AttentionKind::cases() as $kind) {
@@ -93,14 +102,13 @@ final class AttentionQuery
     }
 
     /**
-     * @return array{count: int, latest: DateTimeImmutable}|null null when no run is of it
+     * @return array{count: int, latest: ?DateTimeImmutable}|null null when no run is of it
      */
     private static function found(stdClass $row, string $name): ?array
     {
         $count = $row->{$name} ?? null;
-        $latest = self::moment($row->{$name.'_latest'} ?? null);
 
-        return is_numeric($count) && (int) $count > 0 && $latest !== null ? ['count' => (int) $count, 'latest' => $latest] : null;
+        return is_numeric($count) && (int) $count > 0 ? ['count' => (int) $count, 'latest' => self::moment($row->{$name.'_latest'} ?? null)] : null;
     }
 
     /**

@@ -16,7 +16,7 @@ final readonly class AttentionRow
     public function __construct(
         public IssueKind $issueKind,
         public int $count,
-        public DateTimeImmutable $latestAt,
+        public ?DateTimeImmutable $latestAt,
         public array $filters,
     ) {}
 }

@@ -454,14 +454,14 @@ const attentionFilters = z.record(z.string(), z.string())
 const attentionRow = z.strictObject({
     issue_kind: z.enum(issueKinds),
     count,
-    latest_at: timestamp,
+    latest_at: nullable(timestamp),
     filters: attentionFilters,
 })
 
 const attentionItem = z.strictObject({
     kind: z.enum(attentionKinds),
     count,
-    latest_at: timestamp,
+    latest_at: nullable(timestamp),
     filters: attentionFilters,
     breakdown: z.array(attentionRow),
 })

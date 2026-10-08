@@ -220,7 +220,8 @@ export type AttentionKind =
 export type AttentionRow = {
     issue_kind: IssueKind
     count: number
-    latest_at: string
+    /** `null` only when the start time could not be read. */
+    latest_at: string | null
     filters: Record<string, string>
 }
 
@@ -232,7 +233,8 @@ export type AttentionRow = {
 export type AttentionItem = {
     kind: AttentionKind
     count: number
-    latest_at: string
+    /** `null` only when the start time could not be read. */
+    latest_at: string | null
     filters: Record<string, string>
     breakdown: AttentionRow[]
 }
