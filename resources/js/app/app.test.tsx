@@ -169,7 +169,7 @@ describe('document title', () => {
         ['/', 'Overview · Trail'],
         ['/traces', 'Traces · Trail'],
         ['/traces/abc', 'Trace · Trail'],
-        ['/conversations/c1', 'Conversation · Trail'],
+        ['/conversations/transcript', 'Conversation · Trail'],
         ['/agents/x', 'Agent · Trail'],
         ['/usage', 'Usage & cost · Trail'],
         ['/nowhere', 'Page not found · Trail'],

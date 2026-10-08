@@ -1,5 +1,5 @@
 import { apiRequest } from '@/api/client'
-import type { ConversationListResponse } from '@/api/types'
+import type { ConversationListResponse, TranscriptResponse } from '@/api/types'
 import type { TimeRangePreset } from '@/lib/time-range'
 
 /** The values `sort` takes on `GET /conversations`; a leading `-` sorts descending. */
@@ -37,8 +37,25 @@ export function fetchConversations(
     })
 }
 
+/**
+ * A window of one conversation's turns, oldest first: the newest ones, or with `before` (a run's
+ * id) the ones that started before that run. The id is any string the host application chose and
+ * travels in the query. Rejects with a 404 `ApiError` for a conversation with no turns.
+ */
+export function fetchTranscript(
+    params: { id: string; before?: string },
+    signal?: AbortSignal,
+): Promise<TranscriptResponse> {
+    return apiRequest<TranscriptResponse>('/conversations/transcript', {
+        params,
+        signal,
+    })
+}
+
 /** The query keys of everything about conversations. Every cached list starts with `list`. */
 export const conversationKeys = {
     all: ['conversations'] as const,
     list: ['conversations', 'list'] as const,
+    /** One conversation's transcript, whatever windows of it are loaded. */
+    transcript: (id: string) => ['conversations', 'transcript', id] as const,
 }

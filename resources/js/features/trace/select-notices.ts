@@ -1,5 +1,6 @@
 import type { Span, SpanLimit, TraceDetailResponse } from '@/api/types'
 import type { SpanTree } from '@/features/trace/build-span-tree'
+import { waitingTools } from '@/components/telemetry/waiting-tools'
 
 /** What the page says about a run that is not a finished, ordinary one. */
 export type RunNotice =
@@ -80,9 +81,7 @@ export function selectNotices(
     } else if (trace.status === 'awaiting_approval') {
         notices.push({
             kind: 'approval',
-            tools: [
-                ...new Set(detail.pending_approvals.map((item) => item.tool)),
-            ],
+            tools: waitingTools(detail.pending_approvals),
         })
     }
 

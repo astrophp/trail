@@ -9,7 +9,9 @@ import {
 import type { ReactElement } from 'react'
 import { matchPath } from 'react-router'
 import { comparePath } from '@/lib/compare-path'
+import { transcriptPath } from '@/lib/conversation-path'
 import { ComparePage } from '@/pages/compare-page'
+import { ConversationPage } from '@/pages/conversation-page'
 import { ConversationsPage } from '@/pages/conversations-page'
 import { NotFoundPage } from '@/pages/not-found-page'
 import { PlaceholderPage } from '@/pages/placeholder-page'
@@ -75,9 +77,9 @@ export const routeTable: RouteDef[] = [
         icon: MessageSquareIcon,
     },
     {
-        path: '/conversations/:conversationId',
+        path: transcriptPath,
         title: 'Conversation',
-        element: <PlaceholderPage title="Conversation" />,
+        element: <ConversationPage />,
         section: 'conversations',
         parent: '/conversations',
     },

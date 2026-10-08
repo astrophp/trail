@@ -1,5 +1,6 @@
 import type { Conversation } from '@/api/types'
 import { UserLabel } from '@/components/telemetry/user-label'
+import { MoreCount } from '@/features/conversations/more-count'
 import { formatCount } from '@/lib/format'
 
 /**
@@ -24,17 +25,7 @@ export function UserCell({ conversation }: { conversation: Conversation }) {
                 <>
                     <span className="flex min-w-0 items-baseline gap-1.5">
                         <UserLabel user={first} className="truncate" />
-                        {more === 0 ? null : (
-                            <span className="shrink-0 text-caption text-muted-foreground">
-                                <span aria-hidden="true">
-                                    +{formatCount(more)}
-                                </span>
-                                <span className="sr-only">
-                                    and {formatCount(more)} more{' '}
-                                    {more === 1 ? 'user' : 'users'}
-                                </span>
-                            </span>
-                        )}
+                        <MoreCount count={more} noun="user" />
                     </span>
                     {first.email === null || first.name === null ? null : (
                         <span className="truncate text-caption text-muted-foreground">
