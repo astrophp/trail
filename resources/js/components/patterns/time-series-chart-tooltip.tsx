@@ -6,8 +6,8 @@ import { cn } from '@/lib/utils'
 
 type TimeSeriesChartTooltipProps = {
     model: ChartModel
-    /** The key of the bucket under the pointer. Nothing is drawn without one that is known. */
-    bucketKey: string | undefined
+    /** The position of the bucket under the pointer. Nothing is drawn without one that exists. */
+    bucketIndex: number | undefined
     active?: boolean
     missingLabel: string
     inProgressLabel: string
@@ -22,14 +22,14 @@ type TimeSeriesChartTooltipProps = {
  */
 export function TimeSeriesChartTooltip({
     model,
-    bucketKey,
+    bucketIndex,
     active = true,
     missingLabel,
     inProgressLabel,
     formatValue,
     className,
 }: TimeSeriesChartTooltipProps) {
-    const row = model.rows.find((candidate) => candidate.key === bucketKey)
+    const row = bucketIndex === undefined ? undefined : model.rows[bucketIndex]
 
     if (!active || !row) {
         return null

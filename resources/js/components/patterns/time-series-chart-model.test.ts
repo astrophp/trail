@@ -143,6 +143,51 @@ describe('buildChartModel', () => {
     })
 })
 
+describe('buildChartModel: numbers that cannot go on an axis from 0', () => {
+    it('treats a negative value as not captured', () => {
+        const built = model([[3, -1, 0]])
+
+        expect(built.rows.map((row) => row.values[0])).toEqual([3, null, 0])
+        expect(built.status).toBe('data')
+    })
+
+    it('is empty when every value is negative, not zero', () => {
+        expect(model([[-1, -2]]).status).toBe('empty')
+        expect(model([[-1, 0]]).status).toBe('zero')
+    })
+
+    it('is empty, with a finite axis, when a stack adds up past the largest number', () => {
+        const built = model([[1e308], [1e308]])
+
+        expect(built.status).toBe('empty')
+        expect(built.axis.ticks.every(Number.isFinite)).toBe(true)
+        expect(Number.isFinite(built.axis.top)).toBe(true)
+    })
+
+    it('is empty when the top of the axis would pass the largest number', () => {
+        const built = model([[1.7e308]], { stacked: false })
+
+        expect(built.status).toBe('empty')
+        expect(Number.isFinite(built.axis.top)).toBe(true)
+    })
+
+    it('does not let one overflowing bucket hide behind the others', () => {
+        expect(
+            model([
+                [1, 1e308],
+                [1, 1e308],
+            ]).status,
+        ).toBe('empty')
+    })
+
+    it('draws a value an axis can hold, however large', () => {
+        const built = model([[1e300]], { stacked: false })
+
+        expect(built.status).toBe('data')
+        expect(Number.isFinite(built.axis.top)).toBe(true)
+    })
+})
+
 describe('thinTicks', () => {
     const labels = Array.from({ length: 24 }, () => '00:00')
 

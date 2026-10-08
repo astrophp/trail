@@ -17,11 +17,11 @@ const model = buildChartModel({
     formatTick,
 })
 
-function Tooltip({ bucketKey }: { bucketKey: string }) {
+function Tooltip({ bucketIndex }: { bucketIndex: number }) {
     return (
         <TimeSeriesChartTooltip
             model={model}
-            bucketKey={bucketKey}
+            bucketIndex={bucketIndex}
             missingLabel="Not captured"
             inProgressLabel="In progress"
             formatValue={formatValue}
@@ -35,15 +35,15 @@ export const catalogue: CatalogueEntry = {
     specimens: [
         {
             name: 'A complete bucket',
-            Component: () => <Tooltip bucketKey="b3" />,
+            Component: () => <Tooltip bucketIndex={3} />,
         },
         {
             name: 'A bucket with a value not captured',
-            Component: () => <Tooltip bucketKey="b5" />,
+            Component: () => <Tooltip bucketIndex={5} />,
         },
         {
             name: 'A bucket in progress',
-            Component: () => <Tooltip bucketKey="b7" />,
+            Component: () => <Tooltip bucketIndex={7} />,
         },
     ],
 }

@@ -44,7 +44,11 @@ export type ChartSeries = {
     key: string
     label: string
     color: ChartColor
-    /** One value per bucket, in the buckets' order. `null` is not captured, and is not 0. */
+    /**
+     * One value per bucket, in the buckets' order. `null` is not captured, and is not 0. A value
+     * that cannot be drawn on an axis that starts at 0 (below 0, NaN, an infinity) is treated as
+     * not captured, never drawn as something it is not.
+     */
     values: (number | null)[]
 }
 
@@ -65,7 +69,7 @@ export type ChartModel = {
     rows: ChartRow[]
     series: ChartSeries[]
     /**
-     * `empty`: no buckets, or no value in any of them. `zero`: values exist and every one is 0.
+     * `empty`: no buckets, no value in any of them, or numbers too large to put on an axis. `zero`: values exist and every one is 0.
      * `data`: something to draw.
      */
     status: 'empty' | 'zero' | 'data'
@@ -73,9 +77,11 @@ export type ChartModel = {
     axis: { top: number; ticks: number[] }
 }
 
-/** A value the chart can draw. NaN and the infinities are treated as not captured. */
+/** A value the chart can draw: finite and not below 0. Anything else is treated as not captured. */
 function usable(value: number | null | undefined): number | null {
-    return typeof value === 'number' && Number.isFinite(value) ? value : null
+    return typeof value === 'number' && Number.isFinite(value) && value >= 0
+        ? value
+        : null
 }
 
 /**
@@ -134,32 +140,38 @@ export function buildChartModel(input: {
             return null
         }
 
-        return stacked
-            ? present.reduce((sum, value) => sum + value, 0)
-            : Math.max(...present)
+        // A sum of finite values can still overflow; that height cannot be drawn.
+        return usable(
+            stacked
+                ? present.reduce((sum, value) => sum + value, 0)
+                : Math.max(...present),
+        )
     })
     const known = heights.filter((height): height is number => height !== null)
+    const overflowed = rows.some(
+        (row, index) =>
+            heights[index] === null &&
+            row.values.some((value) => value !== null),
+    )
 
-    if (known.length === 0) {
+    if (known.length === 0 || overflowed) {
         return { rows, series, status: 'empty', axis: niceAxis(0) }
     }
 
-    // A value below 0 is not expected; it never lowers the axis, which starts at 0.
-    const tallest = Math.max(0, ...known)
+    const tallest = Math.max(...known)
+    const axis = niceAxis(tallest)
+
+    // A top that rounds up past the largest number cannot be drawn either.
+    if (!Number.isFinite(axis.top) || !axis.ticks.every(Number.isFinite)) {
+        return { rows, series, status: 'empty', axis: niceAxis(0) }
+    }
 
     return {
         rows,
         series,
-        status: tallest === 0 && allEqual(rows, 0) ? 'zero' : 'data',
-        axis: niceAxis(tallest),
+        status: tallest === 0 ? 'zero' : 'data',
+        axis,
     }
-}
-
-/** Whether every captured value is exactly `target`. */
-function allEqual(rows: ChartRow[], target: number): boolean {
-    return rows.every((row) =>
-        row.values.every((value) => value === null || value === target),
-    )
 }
 
 /**

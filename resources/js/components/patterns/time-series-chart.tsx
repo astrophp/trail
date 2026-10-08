@@ -1,4 +1,4 @@
-import { useId, useRef, useState, type ReactElement } from 'react'
+import { useId, useState, type ReactElement } from 'react'
 import { Bar, CartesianGrid, ComposedChart, Line, XAxis, YAxis } from 'recharts'
 import { PanelEmpty } from '@/components/patterns/panel-empty'
 import {
@@ -10,6 +10,7 @@ import {
     type ChartSeries,
 } from '@/components/patterns/time-series-chart-model'
 import { TimeSeriesChartTable } from '@/components/patterns/time-series-chart-table'
+import { tooltipTarget } from '@/components/patterns/time-series-chart-tooltip-target'
 import { TimeSeriesChartTooltip } from '@/components/patterns/time-series-chart-tooltip'
 import { Button } from '@/components/ui/button'
 import {
@@ -36,11 +37,24 @@ const lineWidth = 2
 const dotRadius = 3
 /** A line's first and last point sit on the edge of the plot; this keeps their labels in view. */
 const linePadding = { left: 12, right: 12 }
-/** The width before the container is measured, and what the y axis takes from the x axis's room. */
+/** The width before the container is measured. */
 const initialWidth = 320
-const yAxisAllowance = 48
 const characterWidth = 7
 const yAxisPadding = 8
+
+/**
+ * The width left for the x axis: the container's, less what the y axis, the margins and a line's
+ * padding take. The y axis width, the margins and the padding are the ones passed to Recharts.
+ */
+function plotWidth(width: number, yAxisWidth: number, isLine: boolean) {
+    return (
+        width -
+        yAxisWidth -
+        margin.left -
+        margin.right -
+        (isLine ? linePadding.left + linePadding.right : 0)
+    )
+}
 
 type Shared = {
     buckets: ChartBucket[]
@@ -55,8 +69,14 @@ type Shared = {
     formatValue: (value: number, seriesKey: string) => string
     /** Drawn in the tooltip and the table for a value that was not captured. */
     missingLabel: string
-    /** The chart's text equivalent, in a sentence. It names and describes the chart for assistive technology. */
+    /**
+     * The chart's text equivalent, in a sentence. It is the drawing's label and the table's
+     * caption. The drawing, legend included, is hidden from assistive technology, so the summary
+     * must name what the chart shows (every series) and say what it says.
+     */
     summary: string
+    /** The heading of the column of bucket labels in the table. Defaults to "Time". */
+    bucketColumnLabel?: string
     /** Shown in place of the chart when there are no buckets, or no bucket has a value. */
     emptyLabel: string
     /** Said under the chart when every value is 0. */
@@ -102,6 +122,7 @@ export function TimeSeriesChart({
     formatValue,
     missingLabel,
     summary,
+    bucketColumnLabel = 'Time',
     emptyLabel,
     zeroLabel,
     inProgressLabel = 'In progress',
@@ -118,8 +139,7 @@ export function TimeSeriesChart({
         formatBucket,
         formatTick,
     })
-    const measured = useRef<HTMLDivElement>(null)
-    const width = useElementWidth(measured, initialWidth)
+    const [measure, width] = useElementWidth(initialWidth)
     const tableId = useId()
     const [open, setOpen] = useState(false)
 
@@ -138,17 +158,6 @@ export function TimeSeriesChart({
             { label: one.label, color: chartColorVariable(one.color) },
         ]),
     )
-    const shown = new Set(
-        thinTicks(
-            model.rows.map((row) => row.tick),
-            width - yAxisAllowance,
-        ),
-    )
-    const tickKeys = model.rows
-        .filter((_, index) => shown.has(index))
-        .map((row) => row.key)
-    const tickLabels = new Map(model.rows.map((row) => [row.key, row.tick]))
-    const filling = model.rows.filter((row) => row.inProgress)
     const first = series[0]
     const yLabels = model.axis.ticks.map((tick) =>
         first ? formatValue(tick, first.key) : '',
@@ -157,10 +166,20 @@ export function TimeSeriesChart({
     const yAxisWidth =
         Math.max(...yLabels.map((label) => label.length)) * characterWidth +
         yAxisPadding
-
-    const data = model.rows.map((row) => {
+    const shown = new Set(
+        thinTicks(
+            model.rows.map((row) => row.tick),
+            plotWidth(width, yAxisWidth, line !== undefined),
+        ),
+    )
+    // Rows are told apart by position, so two buckets with one key still make two categories.
+    const tickIndexes = model.rows.flatMap((_, index) =>
+        shown.has(index) ? [index] : [],
+    )
+    const filling = model.rows.filter((row) => row.inProgress)
+    const data = model.rows.map((row, index) => {
         const record: Record<string, string | number | boolean | null> = {
-            key: row.key,
+            index,
             inProgress: row.inProgress,
         }
 
@@ -211,7 +230,7 @@ export function TimeSeriesChart({
                     {`${inProgressLabel}: ${filling.map((row) => row.label).join(', ')}`}
                 </p>
             ) : null}
-            <div ref={measured} role="img" aria-label={summary}>
+            <div ref={measure} role="img" aria-label={summary}>
                 <ChartContainer
                     config={config}
                     className={cn(
@@ -226,14 +245,14 @@ export function TimeSeriesChart({
                     >
                         <CartesianGrid vertical={false} />
                         <XAxis
-                            dataKey="key"
-                            ticks={tickKeys}
+                            dataKey="index"
+                            ticks={tickIndexes}
                             interval={0}
                             tickLine={false}
                             tickMargin={8}
                             padding={line ? linePadding : undefined}
-                            tickFormatter={(key: string) =>
-                                tickLabels.get(key) ?? ''
+                            tickFormatter={(index: number) =>
+                                model.rows[index]?.tick ?? ''
                             }
                         />
                         <YAxis
@@ -249,20 +268,20 @@ export function TimeSeriesChart({
                             }
                         />
                         <ChartTooltip
-                            content={({ active, label }) => (
-                                <TimeSeriesChartTooltip
-                                    model={model}
-                                    active={active}
-                                    bucketKey={
-                                        typeof label === 'string'
-                                            ? label
-                                            : undefined
-                                    }
-                                    missingLabel={missingLabel}
-                                    inProgressLabel={inProgressLabel}
-                                    formatValue={formatValue}
-                                />
-                            )}
+                            content={(props) => {
+                                const target = tooltipTarget(props)
+
+                                return (
+                                    <TimeSeriesChartTooltip
+                                        model={model}
+                                        active={target.active}
+                                        bucketIndex={target.index}
+                                        missingLabel={missingLabel}
+                                        inProgressLabel={inProgressLabel}
+                                        formatValue={formatValue}
+                                    />
+                                )
+                            }}
                         />
                         <ChartLegend content={<ChartLegendContent />} />
                         {bars?.map((one, index) => (
@@ -322,6 +341,7 @@ export function TimeSeriesChart({
                 <TimeSeriesChartTable
                     model={model}
                     caption={summary}
+                    bucketColumnLabel={bucketColumnLabel}
                     missingLabel={missingLabel}
                     inProgressLabel={inProgressLabel}
                     formatValue={formatValue}

@@ -165,6 +165,32 @@ export const catalogue: CatalogueEntry = {
             ),
         },
         {
+            name: 'Narrow: long y labels',
+            Component: () => (
+                <div className="max-w-72">
+                    <TimeSeriesChart
+                        {...shared}
+                        formatValue={(value) =>
+                            `$1,${String(value).padStart(3, '0')}.00`
+                        }
+                        buckets={hourlyBuckets(24)}
+                        bars={[
+                            {
+                                key: 'alpha',
+                                label: 'Alpha',
+                                color: 'chart-1',
+                                values: Array.from(
+                                    { length: 24 },
+                                    (_, index) => (index * 7) % 23,
+                                ),
+                            },
+                        ]}
+                        summary="One invented series over 24 hours."
+                    />
+                </div>
+            ),
+        },
+        {
             name: 'Wide: 24 buckets',
             Component: () => <StackedBars count={24} />,
         },

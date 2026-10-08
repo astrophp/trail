@@ -24,6 +24,7 @@ export const catalogue: CatalogueEntry = {
                         formatTick,
                     })}
                     caption="Three stacked series over eight hours."
+                    bucketColumnLabel="Time"
                     missingLabel="Not captured"
                     inProgressLabel="In progress"
                     formatValue={formatValue}

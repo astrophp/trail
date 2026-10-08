@@ -23,6 +23,7 @@ function renderTable(className?: string) {
         <TimeSeriesChartTable
             model={model}
             caption="Three series over eight hours."
+            bucketColumnLabel="Time"
             missingLabel="Not captured"
             inProgressLabel="In progress"
             formatValue={formatValue}
@@ -41,7 +42,7 @@ describe('TimeSeriesChartTable', () => {
         const headers = within(table).getAllByRole('columnheader')
 
         expect(headers.map((header) => header.textContent)).toEqual([
-            'Three series over eight hours.',
+            'Time',
             'Alpha',
             'Beta',
             'Gamma',

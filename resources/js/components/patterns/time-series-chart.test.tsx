@@ -78,7 +78,7 @@ const measured = vi.hoisted(() => ({ width: 320 }))
 
 // jsdom measures nothing: the width the chart believes its container has is set here.
 vi.mock('@/hooks/use-element-width', () => ({
-    useElementWidth: () => measured.width,
+    useElementWidth: () => [() => {}, measured.width],
 }))
 
 const stubWidth = (width: number) => {
@@ -580,5 +580,173 @@ describe('TimeSeriesChart: the rest', () => {
         })
 
         expect(container.firstElementChild).toHaveClass('extra')
+    })
+})
+
+describe('TimeSeriesChart: the room the x axis really has', () => {
+    const values = Array.from({ length: 24 }, (_, index) => index + 1)
+    // Ticks of 0, 10, 20, 30 written as "$1,000.00": nine characters, a 71 px axis.
+    const long = (value: number) => `$1,${String(value).padStart(3, '0')}.00`
+    const props = { formatValue: long, buckets: hourlyBuckets(24, false) }
+
+    it('subtracts the whole y axis and the margins, so a long y label thins the x labels further', () => {
+        // Labels take 47 px a slot. The plot is 142 - 71 - 16 = 55 px: room for one. Taking a flat
+        // 48 px for the axis would have found 94 px and kept two.
+        stubWidth(142)
+
+        const { container } = renderChart({ ...props, bars: [bar(values)] })
+
+        expect(xLabels(container)).toEqual(['05:00'])
+    })
+
+    it('keeps the labels a short y label leaves room for', () => {
+        stubWidth(142)
+
+        const { container } = renderChart({
+            buckets: hourlyBuckets(24, false),
+            bars: [bar(values)],
+        })
+
+        // "30 u" is a 36 px axis: 142 - 36 - 16 = 90 px, room for one slot of 47 and not two.
+        expect(xLabels(container)).toHaveLength(1)
+
+        stubWidth(160)
+        const again = renderChart({
+            buckets: hourlyBuckets(24, false),
+            bars: [bar(values)],
+        })
+
+        // 160 - 36 - 16 = 108 px: two slots.
+        expect(xLabels(again.container)).toHaveLength(2)
+    })
+
+    it('takes a line’s padding off the plot too', () => {
+        // The axis is "6 lvl": 43 px. A bar's plot at 153 is 153 - 43 - 16 = 94 px (two slots);
+        // a line's is 24 px narrower, 70 px (one slot).
+        stubWidth(153)
+        const small = values.map((value) => value / 5)
+
+        const bars = renderChart({
+            buckets: hourlyBuckets(24, false),
+            bars: [bar(small)],
+            formatValue: (value) => `${value} lvl`,
+        })
+
+        expect(xLabels(bars.container)).toHaveLength(2)
+
+        const lines = renderChart({
+            buckets: hourlyBuckets(24, false),
+            line: line(small),
+            formatValue: (value) => `${value} lvl`,
+        })
+
+        expect(xLabels(lines.container)).toHaveLength(1)
+    })
+})
+
+describe('TimeSeriesChart: buckets that share a key', () => {
+    it('draws each as its own bar, with its own tick and its own table row', async () => {
+        const buckets = hourlyBuckets(2, false).map((bucket) => ({
+            ...bucket,
+            key: 'same',
+        }))
+        const { container } = renderChart({
+            buckets,
+            bars: [bar([3, 6])],
+        })
+
+        expect(
+            container.querySelectorAll('.recharts-bar-rectangle'),
+        ).toHaveLength(2)
+        expect(xLabels(container)).toEqual(['06:00', '07:00'])
+
+        await userEvent.click(screen.getByRole('button', { name: 'View data' }))
+
+        const rows = screen.getAllByRole('row').slice(1)
+
+        expect(rows.map((row) => row.textContent)).toEqual([
+            'Jan 5, 06:00\u201307:003 u',
+            'Jan 5, 07:00\u201308:006 u',
+        ])
+    })
+})
+
+describe('TimeSeriesChart: values that cannot be drawn', () => {
+    it('treats a negative value as not captured, in the table and the drawing', async () => {
+        const { container } = renderChart({
+            bars: [bar([4, -2, 6])],
+            buckets: hourlyBuckets(3, false),
+        })
+
+        await userEvent.click(screen.getByRole('button', { name: 'View data' }))
+
+        expect(
+            screen
+                .getAllByRole('row')
+                .slice(1)
+                .map((row) => within(row).getAllByRole('cell')[0].textContent),
+        ).toEqual(['4 u', 'Not captured', '6 u'])
+        // The negative one draws no height.
+        expect(barHeights(container)[1]).toBe(0)
+        expect(container.textContent).not.toMatch(/-2|NaN|Infinity/)
+    })
+
+    it('shows the empty message, not a chart under a 0–1 axis, when every value is negative', () => {
+        const { container } = renderChart({ bars: [bar([-1, -5, -2])] })
+
+        expect(screen.getByText(words.emptyLabel)).toBeInTheDocument()
+        expect(container.querySelector('svg')).toBeNull()
+    })
+
+    it('shows the empty message, with no Infinity on an axis, when a stack overflows', () => {
+        const { container } = renderChart({
+            bars: [bar([1e308, 1]), { ...bar([1e308, 1]), key: 'beta' }],
+        })
+
+        expect(screen.getByText(words.emptyLabel)).toBeInTheDocument()
+        expect(container.querySelector('svg')).toBeNull()
+        expect(container.textContent).not.toMatch(/Infinity|NaN/)
+    })
+
+    it('shows the empty message when the top of the axis would overflow', () => {
+        renderChart({ line: line([1.7e308, 1]) })
+
+        expect(screen.getByText(words.emptyLabel)).toBeInTheDocument()
+    })
+
+    it('still draws a large value an axis can hold', () => {
+        const { container } = renderChart({ line: line([1e300, 2e300]) })
+
+        expect(container.querySelector('svg')).not.toBeNull()
+        expect(container.textContent).not.toMatch(/Infinity|NaN/)
+    })
+})
+
+describe('TimeSeriesChart: the corner of the table', () => {
+    it('names the bucket column with its own short label, not the summary', async () => {
+        renderChart({ bars: [bar([1, 2, 3])] })
+
+        await userEvent.click(screen.getByRole('button', { name: 'View data' }))
+
+        const table = screen.getByRole('table', { name: summary })
+
+        expect(
+            within(table)
+                .getAllByRole('columnheader')
+                .map((header) => header.textContent),
+        ).toEqual(['Time', 'Alpha'])
+        // Once as the table's caption; the drawing's label is an attribute, not text.
+        expect(screen.getAllByText(summary)).toHaveLength(1)
+    })
+
+    it('takes the column’s name from the caller', async () => {
+        renderChart({ bars: [bar([1])], bucketColumnLabel: 'Hour' })
+
+        await userEvent.click(screen.getByRole('button', { name: 'View data' }))
+
+        expect(
+            screen.getByRole('columnheader', { name: 'Hour' }),
+        ).toBeInTheDocument()
+        expect(screen.queryByRole('columnheader', { name: 'Time' })).toBeNull()
     })
 })

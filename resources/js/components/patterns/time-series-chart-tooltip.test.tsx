@@ -24,7 +24,7 @@ function renderTooltip(
     return render(
         <TimeSeriesChartTooltip
             model={model}
-            bucketKey="b3"
+            bucketIndex={3}
             missingLabel="Not captured"
             inProgressLabel="In progress"
             formatValue={formatValue}
@@ -46,7 +46,7 @@ describe('TimeSeriesChartTooltip', () => {
     })
 
     it('says a value was not captured in words, and does not write a 0 for it', () => {
-        const { container } = renderTooltip({ bucketKey: 'b5' })
+        const { container } = renderTooltip({ bucketIndex: 5 })
         const rows = container.querySelectorAll('.flex.items-center')
 
         expect(rows[1]).toHaveTextContent('Beta')
@@ -58,14 +58,14 @@ describe('TimeSeriesChartTooltip', () => {
     })
 
     it('marks a bucket in progress, and only that one', () => {
-        const { container, rerender } = renderTooltip({ bucketKey: 'b7' })
+        const { container, rerender } = renderTooltip({ bucketIndex: 7 })
 
         expect(container).toHaveTextContent('(In progress)')
 
         rerender(
             <TimeSeriesChartTooltip
                 model={model}
-                bucketKey="b6"
+                bucketIndex={6}
                 missingLabel="Not captured"
                 inProgressLabel="In progress"
                 formatValue={formatValue}
@@ -83,7 +83,7 @@ describe('TimeSeriesChartTooltip', () => {
         rerender(
             <TimeSeriesChartTooltip
                 model={model}
-                bucketKey="nope"
+                bucketIndex={99}
                 missingLabel="Not captured"
                 inProgressLabel="In progress"
                 formatValue={formatValue}
@@ -95,7 +95,7 @@ describe('TimeSeriesChartTooltip', () => {
         rerender(
             <TimeSeriesChartTooltip
                 model={model}
-                bucketKey={undefined}
+                bucketIndex={undefined}
                 missingLabel="Not captured"
                 inProgressLabel="In progress"
                 formatValue={formatValue}

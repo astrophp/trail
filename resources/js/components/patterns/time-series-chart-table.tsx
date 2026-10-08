@@ -14,6 +14,8 @@ type TimeSeriesChartTableProps = {
     model: ChartModel
     /** What the table is: the caption. */
     caption: string
+    /** The name of the column of bucket labels. */
+    bucketColumnLabel: string
     /** Drawn for a value that was not captured. */
     missingLabel: string
     /** The words that mark a bucket still filling. */
@@ -26,6 +28,7 @@ type TimeSeriesChartTableProps = {
 export function TimeSeriesChartTable({
     model,
     caption,
+    bucketColumnLabel,
     missingLabel,
     inProgressLabel,
     formatValue,
@@ -36,9 +39,7 @@ export function TimeSeriesChartTable({
             <TableCaption className="sr-only">{caption}</TableCaption>
             <TableHeader>
                 <TableRow>
-                    <TableHead scope="col">
-                        <span className="sr-only">{caption}</span>
-                    </TableHead>
+                    <TableHead scope="col">{bucketColumnLabel}</TableHead>
                     {model.series.map((series) => (
                         <TableHead
                             key={series.key}
@@ -51,8 +52,8 @@ export function TimeSeriesChartTable({
                 </TableRow>
             </TableHeader>
             <TableBody>
-                {model.rows.map((row) => (
-                    <TableRow key={row.key}>
+                {model.rows.map((row, rowIndex) => (
+                    <TableRow key={`${rowIndex}:${row.key}`}>
                         <TableHead scope="row" className="font-normal">
                             {row.label}
                             {row.inProgress ? (
