@@ -10,6 +10,7 @@ import type { ReactElement } from 'react'
 import { matchPath } from 'react-router'
 import { NotFoundPage } from '@/pages/not-found-page'
 import { PlaceholderPage } from '@/pages/placeholder-page'
+import { TracePage } from '@/pages/trace-page'
 import { TracesPage } from '@/pages/traces-page'
 
 export type Section =
@@ -51,7 +52,7 @@ export const routeTable: RouteDef[] = [
     {
         path: '/traces/:traceId',
         title: 'Trace',
-        element: <PlaceholderPage title="Trace" />,
+        element: <TracePage />,
         section: 'traces',
         parent: '/traces',
     },
@@ -122,18 +123,30 @@ export type Crumb = {
     to?: string
 }
 
-/** The section above a detail page, then the page itself, as breadcrumbs. */
-export function breadcrumbTrail(route: RouteDef): Crumb[] {
+/**
+ * The section above a detail page, then the page itself, as breadcrumbs. A page that has named
+ * itself (`title`) is called that instead of by its route's title.
+ */
+export function breadcrumbTrail(
+    route: RouteDef,
+    title: string | null = null,
+): Crumb[] {
     const parent = routeTable.find(
         (candidate) => candidate.path === route.parent,
     )
 
     return parent
-        ? [{ title: parent.title, to: parent.path }, { title: route.title }]
-        : [{ title: route.title }]
+        ? [
+              { title: parent.title, to: parent.path },
+              { title: title ?? route.title },
+          ]
+        : [{ title: title ?? route.title }]
 }
 
-/** The text of the browser tab for a route. */
-export function documentTitle(route: RouteDef): string {
-    return `${route.title} · Trail`
+/** The text of the browser tab for a route, or for the name the page gave itself. */
+export function documentTitle(
+    route: RouteDef,
+    title: string | null = null,
+): string {
+    return `${title ?? route.title} · Trail`
 }

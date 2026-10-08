@@ -1,5 +1,10 @@
 import { apiRequest } from '@/api/client'
-import type { BookmarkResponse, Status, TraceListResponse } from '@/api/types'
+import type {
+    BookmarkResponse,
+    Status,
+    TraceDetailResponse,
+    TraceListResponse,
+} from '@/api/types'
 import type { TimeRangePreset } from '@/lib/time-range'
 
 /** The values `sort` takes on `GET /traces`; a leading `-` sorts descending. */
@@ -38,8 +43,27 @@ export function fetchTraces(
     return apiRequest<TraceListResponse>('/traces', { params, signal })
 }
 
-const bookmarkPath = (id: string) =>
-    `/traces/${encodeURIComponent(id)}/bookmark`
+/**
+ * The query keys of everything about runs, shared by the features that read or write them.
+ * Every cached list starts with `list`, every cached run with `detail(id)`.
+ */
+export const traceKeys = {
+    all: ['traces'] as const,
+    list: ['traces', 'list'] as const,
+    detail: (id: string) => ['traces', 'detail', id] as const,
+}
+
+const tracePath = (id: string) => `/traces/${encodeURIComponent(id)}`
+
+/** One run with its spans, usage breakdown and coverage. Rejects with a 404 `ApiError` for an unknown run. */
+export function fetchTrace(
+    id: string,
+    signal?: AbortSignal,
+): Promise<TraceDetailResponse> {
+    return apiRequest<TraceDetailResponse>(tracePath(id), { signal })
+}
+
+const bookmarkPath = (id: string) => `${tracePath(id)}/bookmark`
 
 /** Bookmarks a run. Idempotent: answers `bookmarked: true` whether or not it was already. */
 export function bookmarkTrace(id: string): Promise<BookmarkResponse> {

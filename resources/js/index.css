@@ -257,3 +257,13 @@
         }
     }
 }
+
+/* A row of the execution tree that is off screen is not laid out or painted; the size it is
+   given until it is seen keeps the scrollbar steady. Paint containment clips a row's focus ring
+   to its box, so rows draw it inside. */
+@layer components {
+    .span-row {
+        content-visibility: auto;
+        contain-intrinsic-size: auto 3.25rem;
+    }
+}

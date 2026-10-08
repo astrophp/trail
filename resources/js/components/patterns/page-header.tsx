@@ -3,6 +3,8 @@ import { cn } from '@/lib/utils'
 
 type PageHeaderProps = {
     title: string
+    /** Sits before the title, on its line. Decoration or a labelled icon: the title is still the heading. */
+    icon?: ReactNode
     description?: ReactNode
     /** Controls that belong to the page as a whole, shown at the end of the row. */
     children?: ReactNode
@@ -12,6 +14,7 @@ type PageHeaderProps = {
 /** The heading of a page: its title, an optional description, and optional actions. */
 export function PageHeader({
     title,
+    icon,
     description,
     children,
     className,
@@ -25,13 +28,16 @@ export function PageHeader({
             )}
         >
             <div className="flex min-w-0 flex-col gap-1.75">
-                {/* Focusable by script only: the app moves focus here after a page change. */}
-                <h1
-                    tabIndex={-1}
-                    className="rounded-sm text-title-compact outline-none focus-visible:ring-3 focus-visible:ring-ring/50 md:text-title"
-                >
-                    {title}
-                </h1>
+                <div className="flex min-w-0 items-center gap-2.5">
+                    {icon}
+                    {/* Focusable by script only: the app moves focus here after a page change. */}
+                    <h1
+                        tabIndex={-1}
+                        className="rounded-sm text-title-compact outline-none focus-visible:ring-3 focus-visible:ring-ring/50 md:text-title"
+                    >
+                        {title}
+                    </h1>
+                </div>
                 {description ? (
                     <p className="text-ui text-muted-foreground">
                         {description}

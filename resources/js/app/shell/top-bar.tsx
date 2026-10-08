@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button'
 import { Kbd } from '@/components/ui/kbd'
 import { SidebarTrigger, useSidebar } from '@/components/ui/sidebar'
 import { useBoot } from '@/hooks/use-boot'
+import { useCurrentPageTitle } from '@/hooks/use-page-title'
 import { useTimeRangeLink } from '@/hooks/use-time-range'
 
 export function TopBar({ triggerRef }: { triggerRef: Ref<HTMLButtonElement> }) {
@@ -22,7 +23,7 @@ export function TopBar({ triggerRef }: { triggerRef: Ref<HTMLButtonElement> }) {
     const { pathname } = useLocation()
     const { openMobile } = useSidebar()
     const linkTo = useTimeRangeLink()
-    const trail = breadcrumbTrail(resolveRoute(pathname))
+    const trail = breadcrumbTrail(resolveRoute(pathname), useCurrentPageTitle())
 
     return (
         <header className="sticky top-0 z-10 flex h-13.5 shrink-0 items-center justify-between gap-4 border-b bg-background px-3.75 xs:px-4.5 md:h-14.25 md:px-5.75 wide:px-6.5 roomy:px-8">

@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { bookmarkTrace, fetchTraces, unbookmarkTrace } from '@/api/traces'
+import {
+    bookmarkTrace,
+    fetchTrace,
+    fetchTraces,
+    traceKeys,
+    unbookmarkTrace,
+} from '@/api/traces'
 import { contractFixture } from '@/test/contract-fixture'
 
 // The boot object is read on the first request and kept, so it is set up once here.
@@ -23,6 +29,46 @@ const lastCall = () => {
 
     return { url, init, headers: init.headers as Record<string, string> }
 }
+
+describe('fetchTrace', () => {
+    it('asks for one run by its id, escaped', async () => {
+        await fetchTrace('0199c2f4-6a1e')
+        expect(lastCall().url).toBe('/trail/api/traces/0199c2f4-6a1e')
+        expect(lastCall().init.method).toBe('GET')
+
+        await fetchTrace('a/b c')
+        expect(lastCall().url).toBe('/trail/api/traces/a%2Fb%20c')
+    })
+
+    it('passes the abort signal on', async () => {
+        const controller = new AbortController()
+
+        await fetchTrace('x', controller.signal)
+
+        expect(lastCall().init.signal).toBe(controller.signal)
+    })
+
+    it('rejects with the status of a 404', async () => {
+        fetchMock.mockResolvedValueOnce(
+            new Response(JSON.stringify({ message: 'No run.' }), {
+                status: 404,
+            }),
+        )
+
+        await expect(fetchTrace('ghost')).rejects.toMatchObject({
+            status: 404,
+            message: 'No run.',
+        })
+    })
+})
+
+describe('traceKeys', () => {
+    it('nests the lists and the details under one root', () => {
+        expect(traceKeys.all).toEqual(['traces'])
+        expect(traceKeys.list).toEqual(['traces', 'list'])
+        expect(traceKeys.detail('abc')).toEqual(['traces', 'detail', 'abc'])
+    })
+})
 
 describe('fetchTraces', () => {
     it('sends the filters that are set, as the API names them, and leaves out the rest', async () => {

@@ -36,6 +36,18 @@ describe('PageHeader', () => {
         ).toBeInTheDocument()
     })
 
+    it('shows an icon before the title', () => {
+        render(<PageHeader title="Traces" icon={<svg aria-label="Runs" />} />)
+
+        const icon = screen.getByLabelText('Runs')
+        const heading = screen.getByRole('heading', { level: 1 })
+
+        expect(
+            icon.compareDocumentPosition(heading) &
+                Node.DOCUMENT_POSITION_FOLLOWING,
+        ).toBeTruthy()
+    })
+
     it('accepts a className', () => {
         const { container } = render(
             <PageHeader title="Traces" className="extra" />,
