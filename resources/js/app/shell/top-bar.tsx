@@ -53,6 +53,8 @@ export function TopBar({ triggerRef }: { triggerRef: Ref<HTMLButtonElement> }) {
                                     {crumb.to ? (
                                         <BreadcrumbLink asChild>
                                             <Link
+                                                // Shortened with an ellipsis within the room left, never over the separator.
+                                                className="block truncate"
                                                 to={
                                                     // A run opened from a list leads back to that view of it.
                                                     back?.pathname === crumb.to

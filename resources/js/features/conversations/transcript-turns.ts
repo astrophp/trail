@@ -1,4 +1,4 @@
-import type { Message, TranscriptResponse, Turn } from '@/api/types'
+import type { Message, Turn } from '@/api/types'
 
 /** A loaded turn with its place in the whole conversation. */
 export type NumberedTurn = {
@@ -8,36 +8,15 @@ export type NumberedTurn = {
 }
 
 /**
- * The loaded windows as one list of turns, oldest first, each numbered by its place in the whole
- * conversation: the count of turns before the earliest window (`window.older`, counted by the
- * database), plus its index among the loaded turns, plus one. A turn two windows both hold is
- * listed once.
+ * The loaded turns, oldest first, each numbered by its place in the whole conversation: the count
+ * of turns before the first one loaded (`older`, counted by the database), plus its index among
+ * those loaded, plus one.
  */
 export function numberTurns(
-    pages: readonly TranscriptResponse[],
+    turns: readonly Turn[],
+    older: number,
 ): NumberedTurn[] {
-    if (pages.length === 0) {
-        return []
-    }
-
-    const seen = new Set<string>()
-    const turns: Turn[] = []
-
-    // The later window wins: it was asked for last.
-    for (const page of [...pages].reverse()) {
-        for (const turn of [...page.data.turns].reverse()) {
-            if (!seen.has(turn.trace.id)) {
-                seen.add(turn.trace.id)
-                turns.push(turn)
-            }
-        }
-    }
-
-    turns.reverse()
-
-    const before = pages[0].window.older
-
-    return turns.map((turn, index) => ({ turn, number: before + index + 1 }))
+    return turns.map((turn, index) => ({ turn, number: older + index + 1 }))
 }
 
 /** The prompt of a turn, or `undefined` when it starts at a tool result. */

@@ -1,9 +1,11 @@
 import { MessageSquareIcon, UserIcon } from 'lucide-react'
+import { Link } from 'react-router'
 import type { TraceDetailResponse } from '@/api/types'
 import { CopyButton } from '@/components/patterns/copy-button'
 import { KeyValue } from '@/components/patterns/key-value'
 import { KeyValueList } from '@/components/patterns/key-value-list'
 import { notify } from '@/components/patterns/notify'
+import { CopyLinkButton } from '@/components/patterns/copy-link-button'
 import { PageHeader } from '@/components/patterns/page-header'
 import { AgentIcon } from '@/components/telemetry/agent-icon'
 import { BookmarkToggle } from '@/components/telemetry/bookmark-toggle'
@@ -20,9 +22,12 @@ import { UserLabel } from '@/components/telemetry/user-label'
 import { TraceId } from '@/components/telemetry/trace-id'
 import { Separator } from '@/components/ui/separator'
 import { BackLink } from '@/features/trace/back-link'
-import { CopyLinkButton } from '@/features/trace/copy-link-button'
 import type { Shown } from '@/features/trace/shown-selection'
+import { traceParams } from '@/features/trace/trace-params'
+import { conversationTurnPath } from '@/lib/conversation-path'
 import { formatCount } from '@/lib/format'
+import { tracePagePath } from '@/lib/trace-page-path'
+import { writeState } from '@/lib/url-state'
 import { cn } from '@/lib/utils'
 
 type TraceHeaderProps = {
@@ -33,6 +38,20 @@ type TraceHeaderProps = {
     shown: Shown
     onBookmarkChange: (bookmarked: boolean) => void
     className?: string
+}
+
+/**
+ * The address of this run as it is on screen: the span, the tab and the view, and nothing of the
+ * page it was opened from.
+ */
+function ownLink(traceId: string, shown: Shown): string {
+    const query = writeState(
+        traceParams,
+        new URLSearchParams(),
+        shown,
+    ).toString()
+
+    return `${tracePagePath(traceId)}${query === '' ? '' : `?${query}`}`
 }
 
 /** One figure of the strip: a quiet label over a large value, with a rule before it when the strip is a row. */
@@ -98,7 +117,10 @@ export function TraceHeader({
                     </span>
                 }
             >
-                <CopyLinkButton traceId={trace.id} shown={shown} />
+                <CopyLinkButton
+                    to={ownLink(trace.id, shown)}
+                    hideWordsWhenNarrow
+                />
                 <BookmarkToggle
                     trace={trace}
                     onPressedChange={onBookmarkChange}
@@ -145,9 +167,16 @@ export function TraceHeader({
                                     className="size-3.5 shrink-0"
                                 />
                                 <span className="sr-only">Conversation</span>
-                                <span className="font-mono text-xs wrap-anywhere">
+                                <Link
+                                    to={conversationTurnPath(
+                                        trace.conversation_id,
+                                        trace.id,
+                                    )}
+                                    title="Open the conversation at this run"
+                                    className="rounded-sm font-mono text-xs wrap-anywhere underline-offset-4 hover:text-foreground hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                                >
                                     {trace.conversation_id}
-                                </span>
+                                </Link>
                             </span>
                         )}
                     </div>

@@ -531,7 +531,7 @@ describe('the states with filters', () => {
 
         expect(
             within(card).getByText(
-                'Try removing a filter or searching for something else.',
+                'Try removing a filter, widening the time range or searching for something else.',
             ),
         ).toBeVisible()
         expect(
@@ -625,5 +625,102 @@ describe('the states with filters', () => {
 
         await loaded()
         expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    })
+})
+
+describe('the conversation filter', () => {
+    const id = 'support/ada 1042'
+    const encoded = 'support%2Fada+1042'
+
+    it('reads the conversation from the URL, asks the API for it and shows its chip', async () => {
+        const fetchMock = mockApi()
+        renderApp(`/traces?conversation=${encoded}`)
+        await loaded()
+
+        expect(paramsOf(lastTraceUrl(fetchMock)).conversation).toBe(id)
+        expect(chips().getByText(`Conversation: ${id}`)).toBeVisible()
+    })
+
+    it('shortens a long id in the chip, as the conversation page does', async () => {
+        const long = 'conversation-with-a-very-long-id-0123456789'
+
+        renderApp(`/traces?conversation=${long}`)
+        await loaded()
+
+        expect(chips().getByText('Conversation: conversa…6789')).toBeVisible()
+        expect(chips().queryByText(`Conversation: ${long}`)).toBeNull()
+    })
+
+    it('sends no conversation without one in the URL, and none for an empty one', async () => {
+        const fetchMock = mockApi()
+        renderApp('/traces?conversation=')
+        await loaded()
+
+        expect(paramsOf(lastTraceUrl(fetchMock))).not.toHaveProperty(
+            'conversation',
+        )
+        noChips()
+    })
+
+    it('combines with the other filters', async () => {
+        const fetchMock = mockApi()
+        renderApp(`/traces?status=failed&conversation=${encoded}`)
+        await loaded()
+
+        expect(paramsOf(lastTraceUrl(fetchMock))).toMatchObject({
+            status: 'failed',
+            conversation: id,
+        })
+    })
+
+    it('removes the filter with its chip, back on page 1, in one history entry', async () => {
+        const fetchMock = mockApi()
+        renderApp(`/traces?conversation=${encoded}&page=2&sort=-duration`)
+        await loaded()
+
+        const entries = window.history.length
+
+        await userEvent.click(
+            screen.getByRole('button', {
+                name: `Remove filter: Conversation: ${id}`,
+            }),
+        )
+
+        await expectSearch('?sort=-duration')
+        expect(window.history.length).toBe(entries + 1)
+        await waitFor(() =>
+            expect(paramsOf(lastTraceUrl(fetchMock))).not.toHaveProperty(
+                'conversation',
+            ),
+        )
+        expect(paramsOf(lastTraceUrl(fetchMock)).page).toBe('1')
+        noChips()
+
+        await travel('back')
+        await expectSearch(`?conversation=${encoded}&page=2&sort=-duration`)
+        expect(chips().getByText(`Conversation: ${id}`)).toBeVisible()
+    })
+
+    it('is cleared by "Clear all" with the others', async () => {
+        renderApp(`/traces?status=failed&conversation=${encoded}&range=7d`)
+        await loaded()
+
+        await userEvent.click(screen.getByRole('button', { name: 'Clear all' }))
+
+        await expectSearch('?range=7d')
+        noChips()
+    })
+
+    it('is part of the CSV export of the view', async () => {
+        renderApp(`/traces?conversation=${encoded}`)
+        await loaded()
+
+        const href =
+            screen.getByRole('link', { name: /Export/ }).getAttribute('href') ??
+            ''
+
+        expect(new URL(href, 'http://x').searchParams.get('conversation')).toBe(
+            id,
+        )
     })
 })

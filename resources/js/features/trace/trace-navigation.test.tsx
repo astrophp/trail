@@ -173,7 +173,7 @@ describe('the way back', () => {
         ['%2F%2Fevil.example', 'evil'],
         ['/unknown-page', 'unknown-page'],
         ['/traces?from=%2Ftraces&x=nested', 'nested'],
-        [`/traces?x=${'a'.repeat(2000)}`, 'aaaa'],
+        [`/traces?x=${'a'.repeat(4100)}`, 'aaaa'],
     ])(
         'ignores a hostile context (%s) and echoes it nowhere',
         async (from, trace) => {

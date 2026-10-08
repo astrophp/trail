@@ -1,7 +1,7 @@
 import type { Conversation } from '@/api/types'
 import { RowLink } from '@/components/patterns/row-link'
 import { conversationPath } from '@/lib/conversation-path'
-import { longestWholeId } from '@/features/conversations/conversation-id'
+import { longestWholeId } from '@/lib/conversation-id'
 import { formatCount, shortId } from '@/lib/format'
 
 /**

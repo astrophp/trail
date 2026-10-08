@@ -10,6 +10,7 @@ import {
 import { statusFilterLabel } from '@/features/traces/trace-status'
 import { useListState } from '@/hooks/use-list-state'
 import { useTimeRange } from '@/hooks/use-time-range'
+import { conversationIdText } from '@/lib/conversation-id'
 
 /**
  * The list's view, read from the URL and written to it: the time range, sort, page and filters.
@@ -65,6 +66,13 @@ export function useTraceList() {
         activeFilters.push({
             key: 'provider',
             label: `Provider: ${state.provider}`,
+        })
+    }
+
+    if (state.conversation !== '') {
+        activeFilters.push({
+            key: 'conversation',
+            label: `Conversation: ${conversationIdText(state.conversation)}`,
         })
     }
 

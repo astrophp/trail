@@ -30,6 +30,17 @@ async function open(
     return fetchMock
 }
 
+/** Where a link goes: its path, and its query read back (so `from` is as the run's page decodes it). */
+function target(link: HTMLElement) {
+    const url = new URL(link.getAttribute('href') ?? '', 'http://x')
+
+    return {
+        path: url.pathname,
+        span: url.searchParams.get('span'),
+        from: url.searchParams.get('from'),
+    }
+}
+
 const turn = (number: number) =>
     screen.getByRole('article', { name: `Turn ${number}` })
 // A turn's heading is read out as "Turn 3" and shown as "#3".
@@ -120,8 +131,14 @@ describe('the conversation page', () => {
         expect(meta).toHaveTextContent('1.7k')
         expect(meta).toHaveTextContent('$0.0078')
         expect(
-            within(turn(1)).getByRole('link', { name: /Inspect trace/ }),
-        ).toHaveAttribute('href', '/trail/traces/t1')
+            target(
+                within(turn(1)).getByRole('link', { name: /Inspect trace/ }),
+            ),
+        ).toEqual({
+            path: '/trail/traces/t1',
+            span: null,
+            from: '/conversations/transcript?id=support%2Fada+1042&turn=t1',
+        })
     })
 
     it('shows the span count of a turn under its own label', async () => {
@@ -393,10 +410,14 @@ describe('jumping to a turn', () => {
         expect(items[1]).toHaveTextContent('Failed')
     })
 
-    it('scrolls to the turn and moves focus to its heading', async () => {
+    it('scrolls to the turn, moves focus to its heading and writes the turn to the address without a history entry', async () => {
         const scroll = vi.spyOn(Element.prototype, 'scrollIntoView')
 
         await open()
+
+        const push = vi.spyOn(window.history, 'pushState')
+        const replace = vi.spyOn(window.history, 'replaceState')
+        const entries = window.history.length
 
         await userEvent.click(
             within(
@@ -406,7 +427,15 @@ describe('jumping to a turn', () => {
 
         expect(scroll).toHaveBeenCalled()
         expect(heading('#3')).toHaveFocus()
-        expect(window.location.search).not.toContain('turn')
+        await waitFor(() =>
+            expect(
+                new URLSearchParams(window.location.search).get('turn'),
+            ).toBe(transcriptFixture.data.turns[2].trace.id),
+        )
+        // Back leaves the page: the jump replaced the entry.
+        expect(push).not.toHaveBeenCalled()
+        expect(replace).toHaveBeenCalled()
+        expect(window.history.length).toBe(entries)
     })
 })
 
@@ -416,7 +445,12 @@ describe('tool chips', () => {
 
         const chip = within(turn(1)).getByRole('link', { name: /lookup_order/ })
 
-        expect(chip).toHaveAttribute('href', '/trail/traces/t1?span=t1-s03')
+        // The way back from the run's page is this conversation at this turn.
+        expect(target(chip)).toEqual({
+            path: '/trail/traces/t1',
+            span: 't1-s03',
+            from: '/conversations/transcript?id=support%2Fada+1042&turn=t1',
+        })
         expect(chip).toHaveTextContent('Completed')
         expect(chip).toHaveTextContent('121 ms')
     })
@@ -428,7 +462,11 @@ describe('tool chips', () => {
             name: /ShippingAgent/,
         })
 
-        expect(chip).toHaveAttribute('href', '/trail/traces/t1?span=t1-s05')
+        expect(target(chip)).toEqual({
+            path: '/trail/traces/t1',
+            span: 't1-s05',
+            from: '/conversations/transcript?id=support%2Fada+1042&turn=t1',
+        })
         expect(chip).toHaveTextContent('Completed')
         expect(chip).toHaveTextContent('1.85s')
         expect(
@@ -1300,7 +1338,7 @@ describe('earlier turns and a refetch', () => {
             .getAllByRole('article')
             .map((a) => a.querySelector('h2 .sr-only')?.textContent)
 
-    it('asks again for every window loaded when the data is refetched, so no newer turn is lost', async () => {
+    it('keeps the windows loaded when the data is refetched, asking only for what may have changed', async () => {
         const client = testQueryClient()
         const fetchMock = mockTranscript((url) =>
             json(queryOf(url).has('before') ? earlier() : newest()),
@@ -1314,16 +1352,22 @@ describe('earlier turns and a refetch', () => {
         const before = transcriptUrls(fetchMock).length
 
         await client.invalidateQueries()
+        // Nothing is running, so the newest window is asked for what comes after it, and the
+        // newest turn for the conversation's figures; the earlier window is not asked for again.
         await waitFor(() =>
             expect(transcriptUrls(fetchMock).length).toBe(before + 2),
         )
 
-        const again = transcriptUrls(fetchMock).slice(before)
+        const again = transcriptUrls(fetchMock)
+            .slice(before)
+            .map((url) => [queryOf(url).get('turn'), queryOf(url).get('after')])
 
-        expect(again.map((url) => queryOf(url).get('before'))).toEqual([
-            'c',
-            null,
-        ])
+        expect(again).toEqual(
+            expect.arrayContaining([
+                ['d', null],
+                [null, 'd'],
+            ]),
+        )
         expect(numbers()).toEqual(['Turn 11', 'Turn 12', 'Turn 13', 'Turn 14'])
         expect(button()).toHaveTextContent('Show earlier turns (10)')
     })
@@ -1362,32 +1406,6 @@ describe('earlier turns and a refetch', () => {
         )
         expect(screen.queryByRole('alert')).toBeNull()
         expect(screen.queryByRole('button', { name: /^Try again/ })).toBeNull()
-    })
-
-    it('drops the place it held when a load failed, so a later change of the first turn moves nothing', async () => {
-        const client = testQueryClient()
-        const scrollBy = vi.fn()
-        let first = 'c'
-
-        window.scrollBy = scrollBy
-        mockTranscript((url) =>
-            queryOf(url).has('before')
-                ? json({ message: 'Database unavailable.' }, 500)
-                : json(windowOf([turnOf(first), turnOf('d')], { older: 12 })),
-        )
-        renderApp(route(), {}, client)
-        await screen.findAllByRole('article', { name: /^Turn / })
-        await userEvent.click(button())
-        await screen.findByRole('alert')
-
-        first = 'x'
-        await client.invalidateQueries()
-        await waitFor(() =>
-            expect(document.getElementById('turn-x')).not.toBeNull(),
-        )
-
-        expect(heading('#13')).not.toHaveFocus()
-        expect(scrollBy).not.toHaveBeenCalled()
     })
 })
 

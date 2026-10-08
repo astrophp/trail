@@ -2,14 +2,18 @@ import { RotateCwIcon } from 'lucide-react'
 import { Notice } from '@/components/patterns/notice'
 import { Button } from '@/components/ui/button'
 import { formatCount } from '@/lib/format'
+import { cn } from '@/lib/utils'
 
-type EarlierTurnsProps = {
-    /** How many turns came before the first one shown: the database's count, not the length of any list. */
-    older: number
+type MoreTurnsProps = {
+    /** Which side of the turns shown the others are on. */
+    direction: 'earlier' | 'later'
+    /** How many turns lie that way: the database's count, not the length of any list. */
+    count: number
     loading: boolean
     /** A load failed; the turns already shown stay. `null` when none did. */
     failure: { error: unknown } | null
     onLoad: () => void
+    className?: string
 }
 
 function reason(error: unknown): string | undefined {
@@ -19,29 +23,31 @@ function reason(error: unknown): string | undefined {
 }
 
 /**
- * The way to the turns before the first one shown. It is offered only while there are some, and
- * says how many. A failed load is said above the button, which stays where it is (and keeps focus)
- * and becomes the retry.
+ * The way to the turns before the first one shown, or after the last. It is offered only while
+ * there are some, and says how many. A failed load is said above the button, which stays where it
+ * is (and keeps focus) and becomes the retry.
  */
-export function EarlierTurns({
-    older,
+export function MoreTurns({
+    direction,
+    count,
     loading,
     failure,
     onLoad,
-}: EarlierTurnsProps) {
-    if (older <= 0) {
+    className,
+}: MoreTurnsProps) {
+    if (count <= 0) {
         return null
     }
 
     return (
         <div
-            data-slot="earlier-turns"
-            className="flex flex-col items-start gap-3 pb-6"
+            data-slot={`${direction}-turns`}
+            className={cn('flex flex-col items-start gap-3', className)}
         >
             {failure === null ? null : (
                 <Notice
                     tone="danger"
-                    title="Earlier turns could not be loaded"
+                    title={`${direction === 'earlier' ? 'Earlier' : 'Later'} turns could not be loaded`}
                     className="w-full"
                 >
                     {reason(failure.error)}
@@ -69,10 +75,10 @@ export function EarlierTurns({
                     />
                 ) : null}
                 {loading
-                    ? 'Loading earlier turns…'
+                    ? `Loading ${direction} turns…`
                     : failure === null
-                      ? `Show earlier turns (${formatCount(older)})`
-                      : `Try again (${formatCount(older)} earlier ${older === 1 ? 'turn' : 'turns'})`}
+                      ? `Show ${direction} turns (${formatCount(count)})`
+                      : `Try again (${formatCount(count)} ${direction} ${count === 1 ? 'turn' : 'turns'})`}
             </Button>
         </div>
     )

@@ -34,6 +34,7 @@ export type TraceListParams = {
     search?: string
     agent?: string
     provider?: string
+    conversation?: string
     bookmarked?: boolean
 }
 
@@ -69,6 +70,9 @@ export const traceKeys = {
     /** A run's neighbours in one view of the list; the page is no part of the view. */
     neighbours: (id: string, params: TraceListParams) =>
         ['traces', 'neighbours', id, withoutPage(params)] as const,
+    /** A run's neighbours among the turns of its own conversation. */
+    conversationNeighbours: (id: string) =>
+        ['traces', 'neighbours', id, 'conversation'] as const,
     /** The key of every bookmark write, so a reader can tell that one is under way. */
     bookmark: ['bookmark'] as const,
 }
@@ -102,6 +106,20 @@ export function fetchNeighbours(
 ): Promise<TraceNeighboursResponse> {
     return apiRequest<TraceNeighboursResponse>(`${tracePath(id)}/neighbours`, {
         params: withoutPage(params),
+        signal,
+    })
+}
+
+/**
+ * The turns just before and after this run in its own conversation, in the order of the
+ * transcript. No range, filter or sort is sent: the conversation is whole.
+ */
+export function fetchConversationNeighbours(
+    id: string,
+    signal?: AbortSignal,
+): Promise<TraceNeighboursResponse> {
+    return apiRequest<TraceNeighboursResponse>(`${tracePath(id)}/neighbours`, {
+        params: { within: 'conversation' },
         signal,
     })
 }

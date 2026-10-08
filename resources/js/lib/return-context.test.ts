@@ -81,14 +81,72 @@ describe('parseReturn', () => {
     })
 
     it('rejects a value over the length limit', () => {
-        expect(parseReturn(`/traces?x=${'a'.repeat(2000)}`, allowed)).toBeNull()
+        expect(parseReturn(`/traces?x=${'a'.repeat(4100)}`, allowed)).toBeNull()
         expect(
             parseReturn(`/traces?x=${'a'.repeat(100)}`, allowed),
+        ).not.toBeNull()
+        // Past the old limit of 2000, and still read.
+        expect(
+            parseReturn(`/traces?x=${'a'.repeat(3000)}`, allowed),
         ).not.toBeNull()
     })
 
     it('accepts only the paths it is told about', () => {
         expect(parseReturn('/traces', ['/agents/:agent'])).toBeNull()
         expect(parseReturn('/traces', [])).toBeNull()
+    })
+})
+
+describe('a return to a conversation', () => {
+    const pages = ['/traces', '/conversations/transcript']
+    const from = (id: string, turn: string) =>
+        returnTo(
+            '/conversations/transcript',
+            new URLSearchParams({ id, turn }).toString(),
+        )
+
+    it.each([
+        ['a slash', 'support/ada'],
+        ['a space', 'support ada 1042'],
+        ['non-ASCII characters', 'günlük/日本語/😀'],
+        ['reserved characters', 'a&b=c?d#e%f+g'],
+    ])('reads back an id with %s as it was', (_name, id) => {
+        const target = parseReturn(from(id, 'run-1'), pages)
+
+        expect(target?.pathname).toBe('/conversations/transcript')
+        expect(new URLSearchParams(target?.search)).toEqual(
+            new URLSearchParams({ id, turn: 'run-1' }),
+        )
+    })
+
+    it.each([
+        ['three-byte characters', '日'.repeat(255)],
+        ['four-byte characters', '😀'.repeat(255)],
+    ])('reads back the longest id there is: 255 %s', (_name, id) => {
+        const value = from(id, '0199c2f4-6a1e-7c3b-9a55-0e8a4c1d2f30')
+
+        // Past the 2000 characters the value was once limited to.
+        expect(value.length).toBeGreaterThan(2000)
+        expect(
+            new URLSearchParams(parseReturn(value, pages)?.search).get('id'),
+        ).toBe(id)
+    })
+
+    it.each([
+        [
+            'an address outside the dashboard',
+            'https://evil.example/conversations/transcript',
+        ],
+        [
+            'a protocol-relative address',
+            '//evil.example/conversations/transcript?id=x',
+        ],
+        ['a page that is no known route', '/conversations/other?id=x'],
+        [
+            'a conversation page below another path',
+            '/conversations/transcript/x?id=x',
+        ],
+    ])('still refuses %s', (_name, value) => {
+        expect(parseReturn(value, pages)).toBeNull()
     })
 })

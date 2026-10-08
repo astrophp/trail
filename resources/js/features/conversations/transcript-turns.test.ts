@@ -3,17 +3,14 @@ import {
     numberTurns,
     promptStart,
 } from '@/features/conversations/transcript-turns'
-import { message, turnOf, windowOf } from '@/test/transcript-api'
+import { message, turnOf } from '@/test/transcript-api'
 
 describe('numberTurns', () => {
-    it('numbers from the turns before the earliest window', () => {
-        const pages = [
-            windowOf([turnOf('a'), turnOf('b')], { older: 10 }),
-            windowOf([turnOf('c')], { older: 12 }),
-        ]
-
+    it('numbers from the turns before the first one loaded', () => {
         expect(
-            numberTurns(pages).map((n) => [n.turn.trace.id, n.number]),
+            numberTurns([turnOf('a'), turnOf('b'), turnOf('c')], 10).map(
+                (n) => [n.turn.trace.id, n.number],
+            ),
         ).toEqual([
             ['a', 11],
             ['b', 12],
@@ -21,21 +18,12 @@ describe('numberTurns', () => {
         ])
     })
 
-    it('lists a turn that two windows hold once', () => {
-        const pages = [
-            windowOf([turnOf('a'), turnOf('b')], { older: 0 }),
-            windowOf([turnOf('b'), turnOf('c')], { older: 1 }),
-        ]
-
-        expect(numberTurns(pages).map((n) => n.turn.trace.id)).toEqual([
-            'a',
-            'b',
-            'c',
-        ])
+    it('starts at 1 when nothing came before', () => {
+        expect(numberTurns([turnOf('a')], 0)[0].number).toBe(1)
     })
 
-    it('is empty with no window', () => {
-        expect(numberTurns([])).toEqual([])
+    it('is empty with no turn', () => {
+        expect(numberTurns([], 5)).toEqual([])
     })
 })
 
