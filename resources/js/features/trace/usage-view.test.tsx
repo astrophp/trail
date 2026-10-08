@@ -63,13 +63,14 @@ async function openUsage(detail: ReturnType<typeof makeDetail>, search = '') {
     renderApp(`/traces/${id}?view=usage${search}`)
     await appReady()
 
-    return screen.findByRole('region', { name: 'Token breakdown' })
+    return screen.findByRole('region', { name: 'Tokens and cost' })
 }
 
 const tokens = () =>
-    within(screen.getByRole('region', { name: 'Token breakdown' }))
-const cost = () =>
-    within(screen.getByRole('region', { name: 'Estimated cost' }))
+    within(screen.getByRole('region', { name: 'Tokens and cost' }))
+const cost = tokens
+const costRow = () =>
+    cost().getByText('Estimated cost', { selector: 'dt' }).parentElement!
 const table = () =>
     within(screen.getByRole('table', { name: 'Steps and embeddings' }))
 const bodyRows = () =>
@@ -141,6 +142,10 @@ describe('the usage tab: totals', () => {
         expect(tokens().getByText('3,333')).toBeInTheDocument()
         expect(tokens().getByText('99,999')).toBeInTheDocument()
         expect(cost().getByText(formatCost(0.5))).toBeInTheDocument()
+        expect(screen.getAllByText(formatCost(0.5))).toHaveLength(1)
+        expect(
+            tokens().getByText('Estimated cost', { selector: 'dt' }),
+        ).toBeInTheDocument()
         expect(screen.queryByText('30')).not.toBeInTheDocument()
         expect(screen.queryByText(formatCost(0.03))).not.toBeInTheDocument()
     })
@@ -166,9 +171,9 @@ describe('the usage tab: totals', () => {
             }),
         )
 
-        expect(tokens().getAllByText('Pending')).toHaveLength(6)
+        expect(tokens().getAllByText('Pending')).toHaveLength(7)
         expect(tokens().queryByText('555')).not.toBeInTheDocument()
-        expect(cost().getByText('Pending')).toBeInTheDocument()
+        expect(within(costRow()).getByText('Pending')).toBeInTheDocument()
         expect(screen.queryByText(formatCost(0.77))).not.toBeInTheDocument()
         expect(
             cost().getByText(
@@ -586,7 +591,7 @@ describe('the usage tab: usage by span', () => {
 
         expect(
             screen.getByText(
-                'This table covers the first 2,000 spans. The totals above cover the whole run.',
+                'This table covers the first 2,000 spans. The totals cover the whole run.',
             ),
         ).toBeInTheDocument()
         expect(bodyRows()).toHaveLength(1)
@@ -989,9 +994,9 @@ describe('the usage tab: a run still running', () => {
             }),
         )
 
-        expect(tokens().getAllByText('Pending')).toHaveLength(6)
+        expect(tokens().getAllByText('Pending')).toHaveLength(7)
         expect(tokens().queryByText('321')).toBeNull()
-        expect(cost().getByText('Pending')).toBeInTheDocument()
+        expect(within(costRow()).getByText('Pending')).toBeInTheDocument()
 
         const rows = bodyRows()
 

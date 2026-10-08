@@ -69,7 +69,7 @@ describe('the run views', () => {
     })
 
     it.each([
-        ['Usage', 'usage', { name: 'Token breakdown' }],
+        ['Usage', 'usage', { name: 'Tokens and cost' }],
         ['Metadata', 'metadata', { name: 'Recorded attributes' }],
     ])(
         'writes the %s view to the URL by replacing the entry',

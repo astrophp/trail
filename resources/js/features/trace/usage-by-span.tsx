@@ -9,6 +9,7 @@ type UsageBySpanProps = {
     spanLimit: SpanLimit
     attempts: number
     onOpenSpan: (id: string) => void
+    className?: string
 }
 
 /** What each step and embedding used and cost, with the way to its span. */
@@ -17,13 +18,14 @@ export function UsageBySpan({
     spanLimit,
     attempts,
     onOpenSpan,
+    className,
 }: UsageBySpanProps) {
     return (
-        <RunPanel title="Usage by span">
+        <RunPanel title="Usage by span" className={className}>
             {spanLimit.truncated ? (
                 <Notice
                     tone="warning"
-                    title={`This table covers the first ${formatCount(spanLimit.limit)} spans. The totals above cover the whole run.`}
+                    title={`This table covers the first ${formatCount(spanLimit.limit)} spans. The totals cover the whole run.`}
                 />
             ) : null}
             {usage.rows.length === 0 ? (

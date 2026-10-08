@@ -1,6 +1,5 @@
 import { useMemo } from 'react'
 import type { SpanLimit, TraceDetailResponse } from '@/api/types'
-import { CostPanel } from '@/features/trace/cost-panel'
 import { TokenTotals } from '@/features/trace/token-totals'
 import { UsageBySpan } from '@/features/trace/usage-by-span'
 
@@ -20,20 +19,20 @@ export function UsageView({ data, spanLimit, onOpenSpan }: UsageViewProps) {
     )
 
     return (
-        <div className="flex flex-col gap-6">
-            <div className="grid gap-6 md:grid-cols-2">
-                <TokenTotals usage={usage.totals.usage} />
-                <CostPanel
-                    cost={usage.totals.cost}
-                    rows={usage.rows}
-                    spanLimit={spanLimit}
-                />
-            </div>
+        <div className="grid items-start gap-6 md:grid-cols-3">
+            <TokenTotals
+                usage={usage.totals.usage}
+                cost={usage.totals.cost}
+                rows={usage.rows}
+                spanLimit={spanLimit}
+                className="md:col-span-1"
+            />
             <UsageBySpan
                 usage={usage}
                 spanLimit={spanLimit}
                 attempts={attempts}
                 onOpenSpan={onOpenSpan}
+                className="md:col-span-2"
             />
         </div>
     )
