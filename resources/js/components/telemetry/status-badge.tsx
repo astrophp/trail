@@ -60,6 +60,10 @@ type StatusBadgeProps = {
     status: Status
     /** Sits on a soft tint of the status colour, as a pill. */
     tinted?: boolean
+    /** Only the icon is drawn; the words stay for assistive technology (and as a tooltip). */
+    iconOnly?: boolean
+    /** Words to use in place of the status's own, such as "2 running". */
+    label?: string
     className?: string
 }
 
@@ -67,14 +71,18 @@ type StatusBadgeProps = {
 export function StatusBadge({
     status,
     tinted = false,
+    iconOnly = false,
+    label: customLabel,
     className,
 }: StatusBadgeProps) {
-    const { label, Icon } = statuses[status]
+    const { label: ownLabel, Icon } = statuses[status]
+    const label = customLabel ?? ownLabel
 
     return (
         <span
             data-slot="status-badge"
             data-status={status}
+            title={iconOnly ? label : undefined}
             className={cn(badge({ status, tinted }), className)}
         >
             <Icon
@@ -83,7 +91,7 @@ export function StatusBadge({
                     status === 'running' && 'motion-safe:animate-spin',
                 )}
             />
-            {label}
+            {iconOnly ? <span className="sr-only">{label}</span> : label}
         </span>
     )
 }

@@ -1,0 +1,373 @@
+{
+  "description": "Which tool span ran each tool call a step asked for. A case is the spans of one turn, the status of the turn, and for some messages of its transcript (named by the span that stores them and the path in it) the span each tool call is linked to, in order, or null. Every turn has a root agent span r, a first step s1 that asks for the calls, and a second step s2 whose stored input holds the calls again after the prompt. A span with no parent is a child of r; sequence is the order spans were recorded in.",
+  "cases": [
+    {
+      "name": "equal arguments under different key order link",
+      "spans": [
+        {"id": "r", "type": "agent", "sequence": 1, "input": {"prompt": "p"}},
+        {"id": "s1", "type": "step", "sequence": 2, "input": {"messages": [{"role": "user", "content": "p"}], "messages_offset": 0}, "output": {"text": "", "tool_calls": [{"id": "c1", "name": "lookup", "arguments": {"a": 1, "b": {"x": 1, "y": 2}}}]}},
+        {"id": "t1", "type": "tool", "sequence": 3, "name": "lookup", "input": {"arguments": {"b": {"y": 2, "x": 1}, "a": 1}}},
+        {"id": "s2", "type": "step", "sequence": 4, "input": {"messages": [{"role": "assistant", "content": "", "tool_calls": [{"id": "c1", "name": "lookup", "arguments": {"a": 1, "b": {"x": 1, "y": 2}}}]}], "messages_offset": 1}, "output": {"text": "done", "tool_calls": []}}
+      ],
+      "expect": {"s2:input.messages.0": ["t1"]}
+    },
+    {
+      "name": "same-name calls link by position with equal arguments",
+      "spans": [
+        {"id": "r", "type": "agent", "sequence": 1, "input": {"prompt": "p"}},
+        {"id": "s1", "type": "step", "sequence": 2, "input": {"messages": [{"role": "user", "content": "p"}], "messages_offset": 0}, "output": {"text": "", "tool_calls": [{"id": "c1", "name": "lookup", "arguments": {"q": "a"}}, {"id": "c2", "name": "lookup", "arguments": {"q": "b"}}]}},
+        {"id": "t1", "type": "tool", "sequence": 3, "name": "lookup", "input": {"arguments": {"q": "a"}}},
+        {"id": "t2", "type": "tool", "sequence": 4, "name": "lookup", "input": {"arguments": {"q": "b"}}},
+        {"id": "s2", "type": "step", "sequence": 5, "input": {"messages": [{"role": "assistant", "content": "", "tool_calls": [{"id": "c1", "name": "lookup", "arguments": {"q": "a"}}, {"id": "c2", "name": "lookup", "arguments": {"q": "b"}}]}], "messages_offset": 1}, "output": {"text": "done", "tool_calls": []}}
+      ],
+      "expect": {"s2:input.messages.0": ["t1", "t2"]}
+    },
+    {
+      "name": "a unique equal-arguments match links although the position does not",
+      "spans": [
+        {"id": "r", "type": "agent", "sequence": 1, "input": {"prompt": "p"}},
+        {"id": "s1", "type": "step", "sequence": 2, "input": {"messages": [{"role": "user", "content": "p"}], "messages_offset": 0}, "output": {"text": "", "tool_calls": [{"id": "c1", "name": "lookup", "arguments": {"q": "b"}}]}},
+        {"id": "t1", "type": "tool", "sequence": 3, "name": "lookup", "input": {"arguments": {"q": "a"}}},
+        {"id": "t2", "type": "tool", "sequence": 4, "name": "lookup", "input": {"arguments": {"q": "b"}}},
+        {"id": "s2", "type": "step", "sequence": 5, "input": {"messages": [{"role": "assistant", "content": "", "tool_calls": [{"id": "c1", "name": "lookup", "arguments": {"q": "b"}}]}], "messages_offset": 1}, "output": {"text": "done", "tool_calls": []}}
+      ],
+      "expect": {"s2:input.messages.0": ["t2"]}
+    },
+    {
+      "name": "two equal candidates give no link",
+      "spans": [
+        {"id": "r", "type": "agent", "sequence": 1, "input": {"prompt": "p"}},
+        {"id": "s1", "type": "step", "sequence": 2, "input": {"messages": [{"role": "user", "content": "p"}], "messages_offset": 0}, "output": {"text": "", "tool_calls": [{"id": "c1", "name": "lookup", "arguments": {"q": "b"}}]}},
+        {"id": "t1", "type": "tool", "sequence": 3, "name": "lookup", "input": {"arguments": {"q": "a"}}},
+        {"id": "t2", "type": "tool", "sequence": 4, "name": "lookup", "input": {"arguments": {"q": "b"}}},
+        {"id": "t3", "type": "tool", "sequence": 5, "name": "lookup", "input": {"arguments": {"q": "b"}}},
+        {"id": "s2", "type": "step", "sequence": 6, "input": {"messages": [{"role": "assistant", "content": "", "tool_calls": [{"id": "c1", "name": "lookup", "arguments": {"q": "b"}}]}], "messages_offset": 1}, "output": {"text": "done", "tool_calls": []}}
+      ],
+      "expect": {"s2:input.messages.0": [null]}
+    },
+    {
+      "name": "a candidate with no stored input gives no link",
+      "spans": [
+        {"id": "r", "type": "agent", "sequence": 1, "input": {"prompt": "p"}},
+        {"id": "s1", "type": "step", "sequence": 2, "input": {"messages": [{"role": "user", "content": "p"}], "messages_offset": 0}, "output": {"text": "", "tool_calls": [{"id": "c1", "name": "lookup", "arguments": {"q": "a"}}, {"id": "c2", "name": "search", "arguments": {"q": "a"}}]}},
+        {"id": "t1", "type": "tool", "sequence": 3, "name": "lookup", "input": null},
+        {"id": "t2", "type": "tool", "sequence": 4, "name": "search", "input": {}},
+        {"id": "s2", "type": "step", "sequence": 5, "input": {"messages": [{"role": "assistant", "content": "", "tool_calls": [{"id": "c1", "name": "lookup", "arguments": {"q": "a"}}, {"id": "c2", "name": "search", "arguments": {"q": "a"}}]}], "messages_offset": 1}, "output": {"text": "done", "tool_calls": []}}
+      ],
+      "expect": {"s2:input.messages.0": [null, null]}
+    },
+    {
+      "name": "the tools of a delegated agent are never candidates",
+      "spans": [
+        {"id": "r", "type": "agent", "sequence": 1, "input": {"prompt": "p"}},
+        {"id": "s1", "type": "step", "sequence": 2, "input": {"messages": [{"role": "user", "content": "p"}], "messages_offset": 0}, "output": {"text": "", "tool_calls": [{"id": "c1", "name": "lookup", "arguments": {"q": "a"}}]}},
+        {"id": "t0", "type": "tool", "sequence": 3, "name": "Researcher", "input": {"arguments": {"task": "dig"}}},
+        {"id": "a2", "type": "agent", "sequence": 4, "parent": "t0", "name": "Researcher", "input": {"prompt": "dig"}},
+        {"id": "t1", "type": "tool", "sequence": 5, "parent": "a2", "name": "lookup", "input": {"arguments": {"q": "a"}}},
+        {"id": "s2", "type": "step", "sequence": 6, "input": {"messages": [{"role": "assistant", "content": "", "tool_calls": [{"id": "c1", "name": "lookup", "arguments": {"q": "a"}}]}], "messages_offset": 1}, "output": {"text": "done", "tool_calls": []}}
+      ],
+      "expect": {"s2:input.messages.0": [null]}
+    },
+    {
+      "name": "the tools of an earlier attempt are never candidates",
+      "spans": [
+        {"id": "r", "type": "agent", "sequence": 1, "attempt": 2, "input": {"prompt": "p"}},
+        {"id": "e1", "type": "step", "sequence": 2, "attempt": 1, "input": {"messages": [{"role": "user", "content": "p"}], "messages_offset": 0}, "output": {"text": "", "tool_calls": [{"id": "c1", "name": "lookup", "arguments": {"q": "a"}}]}},
+        {"id": "e2", "type": "tool", "sequence": 3, "attempt": 1, "name": "lookup", "input": {"arguments": {"q": "a"}}},
+        {"id": "s1", "type": "step", "sequence": 4, "attempt": 2, "input": {"messages": [{"role": "user", "content": "p"}], "messages_offset": 0}, "output": {"text": "", "tool_calls": [{"id": "c1", "name": "lookup", "arguments": {"q": "a"}}]}},
+        {"id": "s2", "type": "step", "sequence": 5, "attempt": 2, "input": {"messages": [{"role": "assistant", "content": "", "tool_calls": [{"id": "c1", "name": "lookup", "arguments": {"q": "a"}}]}], "messages_offset": 1}, "output": {"text": "done", "tool_calls": []}}
+      ],
+      "expect": {"s2:input.messages.0": [null]}
+    },
+    {
+      "name": "a tool of another attempt is not a candidate even when it was recorded in the step's window",
+      "spans": [
+        {"id": "r", "type": "agent", "sequence": 1, "attempt": 2, "input": {"prompt": "p"}},
+        {"id": "s1", "type": "step", "sequence": 2, "attempt": 2, "input": {"messages": [{"role": "user", "content": "p"}], "messages_offset": 0}, "output": {"text": "", "tool_calls": [{"id": "c1", "name": "lookup", "arguments": {"q": "a"}}]}},
+        {"id": "late", "type": "tool", "sequence": 3, "attempt": 1, "name": "lookup", "input": {"arguments": {"q": "a"}}},
+        {"id": "s2", "type": "step", "sequence": 4, "attempt": 2, "input": {"messages": [{"role": "assistant", "content": "", "tool_calls": [{"id": "c1", "name": "lookup", "arguments": {"q": "a"}}]}], "messages_offset": 1}, "output": {"text": "done", "tool_calls": []}}
+      ],
+      "expect": {"s2:input.messages.0": [null]}
+    },
+    {
+      "name": "a tool recorded before the step that asked for it is not a candidate",
+      "spans": [
+        {"id": "r", "type": "agent", "sequence": 1, "input": {"prompt": "p"}},
+        {"id": "t1", "type": "tool", "sequence": 2, "name": "lookup", "input": {"arguments": {"q": "a"}}},
+        {"id": "s1", "type": "step", "sequence": 3, "input": {"messages": [{"role": "user", "content": "p"}], "messages_offset": 0}, "output": {"text": "", "tool_calls": [{"id": "c1", "name": "lookup", "arguments": {"q": "a"}}]}},
+        {"id": "s2", "type": "step", "sequence": 4, "input": {"messages": [{"role": "assistant", "content": "", "tool_calls": [{"id": "c1", "name": "lookup", "arguments": {"q": "a"}}]}], "messages_offset": 1}, "output": {"text": "done", "tool_calls": []}}
+      ],
+      "expect": {"s2:input.messages.0": [null]}
+    },
+    {
+      "name": "a tool recorded after the next step started is not a candidate of the step before",
+      "spans": [
+        {"id": "r", "type": "agent", "sequence": 1, "input": {"prompt": "p"}},
+        {"id": "s1", "type": "step", "sequence": 2, "input": {"messages": [{"role": "user", "content": "p"}], "messages_offset": 0}, "output": {"text": "", "tool_calls": [{"id": "c1", "name": "lookup", "arguments": {"q": "a"}}]}},
+        {"id": "s2", "type": "step", "sequence": 3, "input": {"messages": [{"role": "assistant", "content": "", "tool_calls": [{"id": "c1", "name": "lookup", "arguments": {"q": "a"}}]}], "messages_offset": 1}, "output": {"text": "done", "tool_calls": []}},
+        {"id": "t1", "type": "tool", "sequence": 4, "name": "lookup", "input": {"arguments": {"q": "a"}}}
+      ],
+      "expect": {"s2:input.messages.0": [null]}
+    },
+    {
+      "name": "arguments cut at the call give no link",
+      "spans": [
+        {"id": "r", "type": "agent", "sequence": 1, "input": {"prompt": "p"}},
+        {"id": "s1", "type": "step", "sequence": 2, "truncated": true, "truncated_paths": {"output.tool_calls.0.arguments.q": 9000}, "input": {"messages": [{"role": "user", "content": "p"}], "messages_offset": 0}, "output": {"text": "", "tool_calls": [{"id": "c1", "name": "lookup", "arguments": {"q": "aaaa"}}]}},
+        {"id": "t1", "type": "tool", "sequence": 3, "name": "lookup", "input": {"arguments": {"q": "aaaa"}}},
+        {"id": "s2", "type": "step", "sequence": 4, "input": {"messages": [{"role": "assistant", "content": "", "tool_calls": [{"id": "c1", "name": "lookup", "arguments": {"q": "aaaa"}}]}], "messages_offset": 1}, "output": {"text": "done", "tool_calls": []}}
+      ],
+      "expect": {"s2:input.messages.0": [null]}
+    },
+    {
+      "name": "arguments cut at the tool give no link",
+      "spans": [
+        {"id": "r", "type": "agent", "sequence": 1, "input": {"prompt": "p"}},
+        {"id": "s1", "type": "step", "sequence": 2, "input": {"messages": [{"role": "user", "content": "p"}], "messages_offset": 0}, "output": {"text": "", "tool_calls": [{"id": "c1", "name": "lookup", "arguments": {"q": "aaaa"}}]}},
+        {"id": "t1", "type": "tool", "sequence": 3, "name": "lookup", "truncated": true, "truncated_paths": {"input.arguments.q": 9000}, "input": {"arguments": {"q": "aaaa"}}},
+        {"id": "s2", "type": "step", "sequence": 4, "input": {"messages": [{"role": "assistant", "content": "", "tool_calls": [{"id": "c1", "name": "lookup", "arguments": {"q": "aaaa"}}]}], "messages_offset": 1}, "output": {"text": "done", "tool_calls": []}}
+      ],
+      "expect": {"s2:input.messages.0": [null]}
+    },
+    {
+      "name": "a cut that says nowhere where it was gives no link",
+      "spans": [
+        {"id": "r", "type": "agent", "sequence": 1, "input": {"prompt": "p"}},
+        {"id": "s1", "type": "step", "sequence": 2, "input": {"messages": [{"role": "user", "content": "p"}], "messages_offset": 0}, "output": {"text": "", "tool_calls": [{"id": "c1", "name": "lookup", "arguments": {"q": "a"}}]}},
+        {"id": "t1", "type": "tool", "sequence": 3, "name": "lookup", "truncated": true, "input": {"arguments": {"q": "a"}}},
+        {"id": "s2", "type": "step", "sequence": 4, "input": {"messages": [{"role": "assistant", "content": "", "tool_calls": [{"id": "c1", "name": "lookup", "arguments": {"q": "a"}}]}], "messages_offset": 1}, "output": {"text": "done", "tool_calls": []}}
+      ],
+      "expect": {"s2:input.messages.0": [null]}
+    },
+    {
+      "name": "a cut elsewhere in the span does not stop a link",
+      "spans": [
+        {"id": "r", "type": "agent", "sequence": 1, "input": {"prompt": "p"}},
+        {"id": "s1", "type": "step", "sequence": 2, "truncated": true, "truncated_paths": {"output.text": 9000, "output.tool_calls.10.arguments": 9000, "input.messages.0.content": 20000}, "input": {"messages": [{"role": "user", "content": "p"}], "messages_offset": 0}, "output": {"text": "", "tool_calls": [{"id": "c1", "name": "lookup", "arguments": {"q": "a"}}, {"id": "c2", "name": "lookup", "arguments": {"q": "b"}}]}},
+        {"id": "t1", "type": "tool", "sequence": 3, "name": "lookup", "input": {"arguments": {"q": "a"}}},
+        {"id": "t2", "type": "tool", "sequence": 4, "name": "lookup", "input": {"arguments": {"q": "b"}}},
+        {"id": "s2", "type": "step", "sequence": 5, "input": {"messages": [{"role": "assistant", "content": "", "tool_calls": [{"id": "c1", "name": "lookup", "arguments": {"q": "a"}}, {"id": "c2", "name": "lookup", "arguments": {"q": "b"}}]}], "messages_offset": 1}, "output": {"text": "done", "tool_calls": []}}
+      ],
+      "expect": {"s2:input.messages.0": ["t1", "t2"]}
+    },
+    {
+      "name": "redacted arguments give no link",
+      "spans": [
+        {"id": "r", "type": "agent", "sequence": 1, "input": {"prompt": "p"}},
+        {"id": "s1", "type": "step", "sequence": 2, "redacted": true, "input": {"messages": [{"role": "user", "content": "p"}], "messages_offset": 0}, "output": {"text": "", "tool_calls": [{"id": "c1", "name": "login", "arguments": {"password": "[redacted]"}}, {"id": "c2", "name": "login", "arguments": {"password": "[redacted]"}}]}},
+        {"id": "t1", "type": "tool", "sequence": 3, "name": "login", "redacted": true, "input": {"arguments": {"password": "[redacted]"}}},
+        {"id": "t2", "type": "tool", "sequence": 4, "name": "login", "redacted": true, "input": {"arguments": {"password": "[redacted]"}}},
+        {"id": "s2", "type": "step", "sequence": 5, "input": {"messages": [{"role": "assistant", "content": "", "tool_calls": [{"id": "c1", "name": "login", "arguments": {"password": "[redacted]"}}, {"id": "c2", "name": "login", "arguments": {"password": "[redacted]"}}]}], "messages_offset": 1}, "output": {"text": "done", "tool_calls": []}}
+      ],
+      "expect": {"s2:input.messages.0": [null, null]}
+    },
+    {
+      "name": "redaction elsewhere in the span does not stop a link",
+      "spans": [
+        {"id": "r", "type": "agent", "sequence": 1, "input": {"prompt": "p"}},
+        {"id": "s1", "type": "step", "sequence": 2, "redacted": true, "input": {"messages": [{"role": "user", "content": "my key is [redacted]"}], "messages_offset": 0}, "output": {"text": "", "tool_calls": [{"id": "c1", "name": "lookup", "arguments": {"q": "a"}}]}},
+        {"id": "t1", "type": "tool", "sequence": 3, "name": "lookup", "redacted": true, "input": {"arguments": {"q": "a"}}},
+        {"id": "s2", "type": "step", "sequence": 4, "input": {"messages": [{"role": "assistant", "content": "", "tool_calls": [{"id": "c1", "name": "lookup", "arguments": {"q": "a"}}]}], "messages_offset": 1}, "output": {"text": "done", "tool_calls": []}}
+      ],
+      "expect": {"s2:input.messages.0": ["t1"]}
+    },
+    {
+      "name": "1 equals 1.0",
+      "spans": [
+        {"id": "r", "type": "agent", "sequence": 1, "input": {"prompt": "p"}},
+        {"id": "s1", "type": "step", "sequence": 2, "input": {"messages": [{"role": "user", "content": "p"}], "messages_offset": 0}, "output": {"text": "", "tool_calls": [{"id": "c1", "name": "lookup", "arguments": {"n": 1}}]}},
+        {"id": "t1", "type": "tool", "sequence": 3, "name": "lookup", "input": {"arguments": {"n": 1.0}}},
+        {"id": "s2", "type": "step", "sequence": 4, "input": {"messages": [{"role": "assistant", "content": "", "tool_calls": [{"id": "c1", "name": "lookup", "arguments": {"n": 1}}]}], "messages_offset": 1}, "output": {"text": "done", "tool_calls": []}}
+      ],
+      "expect": {"s2:input.messages.0": ["t1"]}
+    },
+    {
+      "name": "1 does not equal the string 1",
+      "spans": [
+        {"id": "r", "type": "agent", "sequence": 1, "input": {"prompt": "p"}},
+        {"id": "s1", "type": "step", "sequence": 2, "input": {"messages": [{"role": "user", "content": "p"}], "messages_offset": 0}, "output": {"text": "", "tool_calls": [{"id": "c1", "name": "lookup", "arguments": {"n": 1}}]}},
+        {"id": "t1", "type": "tool", "sequence": 3, "name": "lookup", "input": {"arguments": {"n": "1"}}},
+        {"id": "s2", "type": "step", "sequence": 4, "input": {"messages": [{"role": "assistant", "content": "", "tool_calls": [{"id": "c1", "name": "lookup", "arguments": {"n": 1}}]}], "messages_offset": 1}, "output": {"text": "done", "tool_calls": []}}
+      ],
+      "expect": {"s2:input.messages.0": [null]}
+    },
+    {
+      "name": "an empty object equals an empty list",
+      "spans": [
+        {"id": "r", "type": "agent", "sequence": 1, "input": {"prompt": "p"}},
+        {"id": "s1", "type": "step", "sequence": 2, "input": {"messages": [{"role": "user", "content": "p"}], "messages_offset": 0}, "output": {"text": "", "tool_calls": [{"id": "c1", "name": "ping", "arguments": {}}]}},
+        {"id": "t1", "type": "tool", "sequence": 3, "name": "ping", "input": {"arguments": []}},
+        {"id": "s2", "type": "step", "sequence": 4, "input": {"messages": [{"role": "assistant", "content": "", "tool_calls": [{"id": "c1", "name": "ping", "arguments": {}}]}], "messages_offset": 1}, "output": {"text": "done", "tool_calls": []}}
+      ],
+      "expect": {"s2:input.messages.0": ["t1"]}
+    },
+    {
+      "name": "a list does not equal a map",
+      "spans": [
+        {"id": "r", "type": "agent", "sequence": 1, "input": {"prompt": "p"}},
+        {"id": "s1", "type": "step", "sequence": 2, "input": {"messages": [{"role": "user", "content": "p"}], "messages_offset": 0}, "output": {"text": "", "tool_calls": [{"id": "c1", "name": "lookup", "arguments": {"q": ["a"]}}]}},
+        {"id": "t1", "type": "tool", "sequence": 3, "name": "lookup", "input": {"arguments": {"q": {"x": "a"}}}},
+        {"id": "s2", "type": "step", "sequence": 4, "input": {"messages": [{"role": "assistant", "content": "", "tool_calls": [{"id": "c1", "name": "lookup", "arguments": {"q": ["a"]}}]}], "messages_offset": 1}, "output": {"text": "done", "tool_calls": []}}
+      ],
+      "expect": {"s2:input.messages.0": [null]}
+    },
+    {
+      "name": "null arguments differ from absent arguments",
+      "spans": [
+        {"id": "r", "type": "agent", "sequence": 1, "input": {"prompt": "p"}},
+        {"id": "s1", "type": "step", "sequence": 2, "input": {"messages": [{"role": "user", "content": "p"}], "messages_offset": 0}, "output": {"text": "", "tool_calls": [{"id": "c1", "name": "alpha", "arguments": null}, {"id": "c2", "name": "beta"}, {"id": "c3", "name": "gamma", "arguments": null}]}},
+        {"id": "t1", "type": "tool", "sequence": 3, "name": "alpha", "input": {}},
+        {"id": "t2", "type": "tool", "sequence": 4, "name": "beta", "input": {"arguments": null}},
+        {"id": "t3", "type": "tool", "sequence": 5, "name": "gamma", "input": {"arguments": null}},
+        {"id": "s2", "type": "step", "sequence": 6, "input": {"messages": [{"role": "assistant", "content": "", "tool_calls": [{"id": "c1", "name": "alpha", "arguments": null}, {"id": "c2", "name": "beta"}, {"id": "c3", "name": "gamma", "arguments": null}]}], "messages_offset": 1}, "output": {"text": "done", "tool_calls": []}}
+      ],
+      "expect": {"s2:input.messages.0": [null, null, "t3"]}
+    },
+    {
+      "name": "a duplicate call id links the call but gives no link by id",
+      "spans": [
+        {"id": "r", "type": "agent", "sequence": 1, "input": {"prompt": "p"}},
+        {"id": "s1", "type": "step", "sequence": 2, "input": {"messages": [{"role": "user", "content": "p"}], "messages_offset": 0}, "output": {"text": "", "tool_calls": [{"id": "c1", "name": "lookup", "arguments": {"q": "a"}}, {"id": "c1", "name": "lookup", "arguments": {"q": "b"}}]}},
+        {"id": "t1", "type": "tool", "sequence": 3, "name": "lookup", "input": {"arguments": {"q": "a"}}},
+        {"id": "t2", "type": "tool", "sequence": 4, "name": "lookup", "input": {"arguments": {"q": "b"}}},
+        {"id": "s2", "type": "step", "sequence": 5, "input": {"messages": [{"role": "assistant", "content": "", "tool_calls": [{"id": "c1", "name": "lookup", "arguments": {"q": "a"}}, {"id": "c1", "name": "lookup", "arguments": {"q": "b"}}]}], "messages_offset": 1}, "output": {"text": "done", "tool_calls": []}}
+      ],
+      "expect": {"s2:input.messages.0": [null, null]}
+    },
+    {
+      "name": "an id repeated in two steps gives no link by id",
+      "spans": [
+        {"id": "r", "type": "agent", "sequence": 1, "input": {"prompt": "p"}},
+        {"id": "s1", "type": "step", "sequence": 2, "input": {"messages": [{"role": "user", "content": "p"}], "messages_offset": 0}, "output": {"text": "", "tool_calls": [{"id": "c1", "name": "lookup", "arguments": {"q": "a"}}]}},
+        {"id": "t1", "type": "tool", "sequence": 3, "name": "lookup", "input": {"arguments": {"q": "a"}}},
+        {"id": "s2", "type": "step", "sequence": 4, "input": {"messages": [{"role": "assistant", "content": "", "tool_calls": [{"id": "c1", "name": "lookup", "arguments": {"q": "a"}}]}], "messages_offset": 1}, "output": {"text": "", "tool_calls": [{"id": "c1", "name": "lookup", "arguments": {"q": "b"}}]}},
+        {"id": "t2", "type": "tool", "sequence": 5, "name": "lookup", "input": {"arguments": {"q": "b"}}}
+      ],
+      "expect": {"s2:input.messages.0": [null], "s2:output": ["t2"]}
+    },
+    {
+      "name": "a null call id links the call but gives no link by id",
+      "spans": [
+        {"id": "r", "type": "agent", "sequence": 1, "input": {"prompt": "p"}},
+        {"id": "s1", "type": "step", "sequence": 2, "input": {"messages": [{"role": "user", "content": "p"}], "messages_offset": 0}, "output": {"text": "", "tool_calls": [{"id": null, "name": "lookup", "arguments": {"q": "a"}}]}},
+        {"id": "t1", "type": "tool", "sequence": 3, "name": "lookup", "input": {"arguments": {"q": "a"}}},
+        {"id": "s2", "type": "step", "sequence": 4, "input": {"messages": [{"role": "assistant", "content": "", "tool_calls": [{"id": null, "name": "lookup", "arguments": {"q": "a"}}]}], "messages_offset": 1}, "output": {"text": "done", "tool_calls": []}}
+      ],
+      "expect": {"s2:input.messages.0": [null]}
+    },
+    {
+      "name": "a call without a string name never links",
+      "spans": [
+        {"id": "r", "type": "agent", "sequence": 1, "input": {"prompt": "p"}},
+        {"id": "s1", "type": "step", "sequence": 2, "input": {"messages": [{"role": "user", "content": "p"}], "messages_offset": 0}, "output": {"text": "", "tool_calls": [{"id": "c1", "name": null, "arguments": {"q": "a"}}, "stray"]}},
+        {"id": "t1", "type": "tool", "sequence": 3, "name": "lookup", "input": {"arguments": {"q": "a"}}},
+        {"id": "s2", "type": "step", "sequence": 4, "input": {"messages": [{"role": "assistant", "content": "", "tool_calls": [{"id": "c1", "name": null, "arguments": {"q": "a"}}, "stray"]}], "messages_offset": 1}, "output": {"text": "done", "tool_calls": []}}
+      ],
+      "expect": {"s2:input.messages.0": [null, null]}
+    },
+    {
+      "name": "the last step's calls link directly even when their ids repeat",
+      "spans": [
+        {"id": "r", "type": "agent", "sequence": 1, "input": {"prompt": "p"}},
+        {"id": "s1", "type": "step", "sequence": 2, "input": {"messages": [{"role": "user", "content": "p"}], "messages_offset": 0}, "output": {"text": "", "tool_calls": [{"id": "c1", "name": "lookup", "arguments": {"q": "a"}}, {"id": "c1", "name": "lookup", "arguments": {"q": "b"}}, {"id": null, "name": "search", "arguments": {"q": "c"}}]}},
+        {"id": "t1", "type": "tool", "sequence": 3, "name": "lookup", "input": {"arguments": {"q": "a"}}},
+        {"id": "t2", "type": "tool", "sequence": 4, "name": "lookup", "input": {"arguments": {"q": "b"}}},
+        {"id": "t3", "type": "tool", "sequence": 5, "name": "search", "input": {"arguments": {"q": "c"}}}
+      ],
+      "expect": {"s1:output": ["t1", "t2", "t3"]}
+    },
+    {
+      "name": "the last step's calls link by position, then by unique arguments",
+      "spans": [
+        {"id": "r", "type": "agent", "sequence": 1, "input": {"prompt": "p"}},
+        {"id": "s1", "type": "step", "sequence": 2, "input": {"messages": [{"role": "user", "content": "p"}], "messages_offset": 0}, "output": {"text": "", "tool_calls": [{"id": "c1", "name": "lookup", "arguments": {"q": "a"}}, {"id": "c2", "name": "lookup", "arguments": {"q": "c"}}, {"id": "c3", "name": "lookup", "arguments": {"q": "b"}}]}},
+        {"id": "t1", "type": "tool", "sequence": 3, "name": "lookup", "input": {"arguments": {"q": "a"}}},
+        {"id": "t2", "type": "tool", "sequence": 4, "name": "lookup", "input": {"arguments": {"q": "b"}}},
+        {"id": "t3", "type": "tool", "sequence": 5, "name": "lookup", "input": {"arguments": {"q": "c"}}}
+      ],
+      "expect": {"s1:output": ["t1", "t3", "t2"]}
+    },
+    {
+      "name": "each step links only the tools recorded between it and the next step",
+      "spans": [
+        {"id": "r", "type": "agent", "sequence": 1, "input": {"prompt": "p"}},
+        {"id": "s1", "type": "step", "sequence": 2, "input": {"messages": [{"role": "user", "content": "p"}], "messages_offset": 0}, "output": {"text": "", "tool_calls": [{"id": "c1", "name": "lookup", "arguments": {"q": "a"}}]}},
+        {"id": "t1", "type": "tool", "sequence": 3, "name": "lookup", "input": {"arguments": {"q": "a"}}},
+        {"id": "s2", "type": "step", "sequence": 4, "input": {"messages": [{"role": "assistant", "content": "", "tool_calls": [{"id": "c1", "name": "lookup", "arguments": {"q": "a"}}]}, {"role": "tool_result", "content": null, "tool_results": [{"id": "c1", "name": "lookup", "result": "x"}]}], "messages_offset": 1}, "output": {"text": "", "tool_calls": [{"id": "c2", "name": "lookup", "arguments": {"q": "a"}}]}},
+        {"id": "t2", "type": "tool", "sequence": 5, "name": "lookup", "input": {"arguments": {"q": "a"}}},
+        {"id": "s3", "type": "step", "sequence": 6, "input": {"messages": [{"role": "assistant", "content": "", "tool_calls": [{"id": "c2", "name": "lookup", "arguments": {"q": "a"}}]}, {"role": "tool_result", "content": null, "tool_results": [{"id": "c2", "name": "lookup", "result": "x"}]}], "messages_offset": 3}, "output": {"text": "done", "tool_calls": []}}
+      ],
+      "expect": {"s2:input.messages.0": ["t1"], "s3:input.messages.0": ["t2"]}
+    },
+    {
+      "name": "a call equal to an earlier one has no span of its own when one span ran",
+      "spans": [
+        {"id": "r", "type": "agent", "sequence": 1, "input": {"prompt": "p"}},
+        {"id": "s1", "type": "step", "sequence": 2, "input": {"messages": [{"role": "user", "content": "p"}], "messages_offset": 0}, "output": {"text": "", "tool_calls": [{"id": "c1", "name": "lookup", "arguments": {"q": "x"}}, {"id": "c2", "name": "lookup", "arguments": {"q": "x"}}]}},
+        {"id": "t1", "type": "tool", "sequence": 3, "name": "lookup", "input": {"arguments": {"q": "x"}}},
+        {"id": "s2", "type": "step", "sequence": 4, "input": {"messages": [{"role": "assistant", "content": "", "tool_calls": [{"id": "c1", "name": "lookup", "arguments": {"q": "x"}}, {"id": "c2", "name": "lookup", "arguments": {"q": "x"}}]}], "messages_offset": 1}, "output": {"text": "done", "tool_calls": []}}
+      ],
+      "expect": {"s2:input.messages.0": ["t1", null]}
+    },
+    {
+      "name": "a span taken by the unique-arguments pass is not taken again",
+      "spans": [
+        {"id": "r", "type": "agent", "sequence": 1, "input": {"prompt": "p"}},
+        {"id": "s1", "type": "step", "sequence": 2, "input": {"messages": [{"role": "user", "content": "p"}], "messages_offset": 0}, "output": {"text": "", "tool_calls": [{"id": "c1", "name": "lookup", "arguments": {"q": "z"}}, {"id": "c2", "name": "lookup", "arguments": {"q": "x"}}, {"id": "c3", "name": "lookup", "arguments": {"q": "x"}}]}},
+        {"id": "t1", "type": "tool", "sequence": 3, "name": "lookup", "input": {"arguments": {"q": "x"}}},
+        {"id": "s2", "type": "step", "sequence": 4, "input": {"messages": [{"role": "assistant", "content": "", "tool_calls": [{"id": "c1", "name": "lookup", "arguments": {"q": "z"}}, {"id": "c2", "name": "lookup", "arguments": {"q": "x"}}, {"id": "c3", "name": "lookup", "arguments": {"q": "x"}}]}], "messages_offset": 1}, "output": {"text": "done", "tool_calls": []}}
+      ],
+      "expect": {"s2:input.messages.0": [null, "t1", null]}
+    },
+    {
+      "name": "the literal redaction marker in the arguments of a span that was not redacted links",
+      "spans": [
+        {"id": "r", "type": "agent", "sequence": 1, "input": {"prompt": "p"}},
+        {"id": "s1", "type": "step", "sequence": 2, "input": {"messages": [{"role": "user", "content": "p"}], "messages_offset": 0}, "output": {"text": "", "tool_calls": [{"id": "c1", "name": "lookup", "arguments": {"q": "[redacted]"}}]}},
+        {"id": "t1", "type": "tool", "sequence": 3, "name": "lookup", "input": {"arguments": {"q": "[redacted]"}}},
+        {"id": "s2", "type": "step", "sequence": 4, "input": {"messages": [{"role": "assistant", "content": "", "tool_calls": [{"id": "c1", "name": "lookup", "arguments": {"q": "[redacted]"}}]}], "messages_offset": 1}, "output": {"text": "done", "tool_calls": []}}
+      ],
+      "expect": {"s2:input.messages.0": ["t1"]}
+    },
+    {
+      "name": "a cut at the whole input of the tool gives no link",
+      "spans": [
+        {"id": "r", "type": "agent", "sequence": 1, "input": {"prompt": "p"}},
+        {"id": "s1", "type": "step", "sequence": 2, "input": {"messages": [{"role": "user", "content": "p"}], "messages_offset": 0}, "output": {"text": "", "tool_calls": [{"id": "c1", "name": "lookup", "arguments": {"q": "a"}}]}},
+        {"id": "t1", "type": "tool", "sequence": 3, "name": "lookup", "truncated": true, "truncated_paths": {"input": 9000}, "input": {"arguments": {"q": "a"}}},
+        {"id": "s2", "type": "step", "sequence": 4, "input": {"messages": [{"role": "assistant", "content": "", "tool_calls": [{"id": "c1", "name": "lookup", "arguments": {"q": "a"}}]}], "messages_offset": 1}, "output": {"text": "done", "tool_calls": []}}
+      ],
+      "expect": {"s2:input.messages.0": [null]}
+    },
+    {
+      "name": "a cut at the whole list of calls gives no link",
+      "spans": [
+        {"id": "r", "type": "agent", "sequence": 1, "input": {"prompt": "p"}},
+        {"id": "s1", "type": "step", "sequence": 2, "truncated": true, "truncated_paths": {"output.tool_calls": 40}, "input": {"messages": [{"role": "user", "content": "p"}], "messages_offset": 0}, "output": {"text": "", "tool_calls": [{"id": "c1", "name": "lookup", "arguments": {"q": "a"}}]}},
+        {"id": "t1", "type": "tool", "sequence": 3, "name": "lookup", "input": {"arguments": {"q": "a"}}},
+        {"id": "s2", "type": "step", "sequence": 4, "input": {"messages": [{"role": "assistant", "content": "", "tool_calls": [{"id": "c1", "name": "lookup", "arguments": {"q": "a"}}]}], "messages_offset": 1}, "output": {"text": "done", "tool_calls": []}}
+      ],
+      "expect": {"s2:input.messages.0": [null]}
+    },
+    {
+      "name": "a span that lists as many cuts as it keeps gives no link, since it may have lost more",
+      "spans": [
+        {"id": "r", "type": "agent", "sequence": 1, "input": {"prompt": "p"}},
+        {"id": "s1", "type": "step", "sequence": 2, "input": {"messages": [{"role": "user", "content": "p"}], "messages_offset": 0}, "output": {"text": "", "tool_calls": [{"id": "c1", "name": "lookup", "arguments": {"q": "a"}}]}},
+        {"id": "t1", "type": "tool", "sequence": 3, "name": "lookup", "truncated": true, "truncated_paths": {"output.row.0": 900, "output.row.1": 900, "output.row.2": 900, "output.row.3": 900, "output.row.4": 900, "output.row.5": 900, "output.row.6": 900, "output.row.7": 900, "output.row.8": 900, "output.row.9": 900, "output.row.10": 900, "output.row.11": 900, "output.row.12": 900, "output.row.13": 900, "output.row.14": 900, "output.row.15": 900, "output.row.16": 900, "output.row.17": 900, "output.row.18": 900, "output.row.19": 900, "output.row.20": 900, "output.row.21": 900, "output.row.22": 900, "output.row.23": 900, "output.row.24": 900, "output.row.25": 900, "output.row.26": 900, "output.row.27": 900, "output.row.28": 900, "output.row.29": 900, "output.row.30": 900, "output.row.31": 900, "output.row.32": 900, "output.row.33": 900, "output.row.34": 900, "output.row.35": 900, "output.row.36": 900, "output.row.37": 900, "output.row.38": 900, "output.row.39": 900, "output.row.40": 900, "output.row.41": 900, "output.row.42": 900, "output.row.43": 900, "output.row.44": 900, "output.row.45": 900, "output.row.46": 900, "output.row.47": 900, "output.row.48": 900, "output.row.49": 900}, "input": {"arguments": {"q": "a"}}},
+        {"id": "s2", "type": "step", "sequence": 4, "input": {"messages": [{"role": "assistant", "content": "", "tool_calls": [{"id": "c1", "name": "lookup", "arguments": {"q": "a"}}]}], "messages_offset": 1}, "output": {"text": "done", "tool_calls": []}}
+      ],
+      "expect": {"s2:input.messages.0": [null]}
+    },
+    {
+      "name": "a span that lists fewer cuts than it keeps links when none is in the arguments",
+      "spans": [
+        {"id": "r", "type": "agent", "sequence": 1, "input": {"prompt": "p"}},
+        {"id": "s1", "type": "step", "sequence": 2, "input": {"messages": [{"role": "user", "content": "p"}], "messages_offset": 0}, "output": {"text": "", "tool_calls": [{"id": "c1", "name": "lookup", "arguments": {"q": "a"}}]}},
+        {"id": "t1", "type": "tool", "sequence": 3, "name": "lookup", "truncated": true, "truncated_paths": {"output.row.0": 900, "output.row.1": 900, "output.row.2": 900, "output.row.3": 900, "output.row.4": 900, "output.row.5": 900, "output.row.6": 900, "output.row.7": 900, "output.row.8": 900, "output.row.9": 900, "output.row.10": 900, "output.row.11": 900, "output.row.12": 900, "output.row.13": 900, "output.row.14": 900, "output.row.15": 900, "output.row.16": 900, "output.row.17": 900, "output.row.18": 900, "output.row.19": 900, "output.row.20": 900, "output.row.21": 900, "output.row.22": 900, "output.row.23": 900, "output.row.24": 900, "output.row.25": 900, "output.row.26": 900, "output.row.27": 900, "output.row.28": 900, "output.row.29": 900, "output.row.30": 900, "output.row.31": 900, "output.row.32": 900, "output.row.33": 900, "output.row.34": 900, "output.row.35": 900, "output.row.36": 900, "output.row.37": 900, "output.row.38": 900, "output.row.39": 900, "output.row.40": 900, "output.row.41": 900, "output.row.42": 900, "output.row.43": 900, "output.row.44": 900, "output.row.45": 900, "output.row.46": 900, "output.row.47": 900, "output.row.48": 900}, "input": {"arguments": {"q": "a"}}},
+        {"id": "s2", "type": "step", "sequence": 4, "input": {"messages": [{"role": "assistant", "content": "", "tool_calls": [{"id": "c1", "name": "lookup", "arguments": {"q": "a"}}]}], "messages_offset": 1}, "output": {"text": "done", "tool_calls": []}}
+      ],
+      "expect": {"s2:input.messages.0": ["t1"]}
+    }
+  ]
+}

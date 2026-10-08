@@ -122,6 +122,34 @@ export type TraceListResponse = {
     slow_threshold_ms: number | null
 }
 
+/**
+ * One conversation, as the list returns it: the runs that carry one conversation id, whole (every
+ * figure covers all of its turns, whatever time range listed it). `agents` and `users` are capped
+ * (5 and 3); `agent_count` and `user_count` are the real numbers.
+ */
+export type Conversation = {
+    id: string
+    turns: StatusCounts
+    agents: string[]
+    agent_count: number
+    users: User[]
+    user_count: number
+    usage: Usage
+    cost: Cost
+    prompt_excerpt: string | null
+    first_activity_at: string
+    last_activity_at: string
+}
+
+export type ConversationCounts = { all: number; failed: number }
+
+export type ConversationListResponse = {
+    data: Conversation[]
+    pagination: Pagination
+    range: Range
+    counts: ConversationCounts
+}
+
 /** The answer to a bookmark write: the run's bookmark state after it. */
 export type BookmarkResponse = {
     data: { trace_id: string; bookmarked: boolean }

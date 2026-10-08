@@ -30,7 +30,7 @@ final class TraceDetailResource
      *
      * @return list<array{tool_call_id: string, tool: string, arguments: mixed, reason: ?string}>
      */
-    private static function pendingApprovals(mixed $stored): array
+    public static function pendingApprovals(mixed $stored): array
     {
         $approvals = [];
 
@@ -53,7 +53,7 @@ final class TraceDetailResource
     /**
      * @return list<string>
      */
-    private static function strings(mixed $stored): array
+    public static function strings(mixed $stored): array
     {
         return is_array($stored) ? array_values(array_filter($stored, is_string(...))) : [];
     }

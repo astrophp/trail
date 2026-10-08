@@ -39,6 +39,12 @@ function spanTypes(Trace $trace): array
     return $trace->spans()->orderBy('sequence')->get()->map(fn (Span $span) => $span->type->value)->all();
 }
 
+/** The turns of a conversation in the order they started; runs that started in the same millisecond keep the order of their ids, which are time-ordered. */
+function inOrder(Collection $traces): Collection
+{
+    return $traces->sortBy([['started_at', 'asc'], ['id', 'asc']])->values();
+}
+
 /** What each scenario must have recorded: [outcome, the checks on the traces and their number]. */
 function expectations(): array
 {
@@ -134,6 +140,58 @@ function expectations(): array
                 ->and($traces->pluck('user_id')->unique()->all())->toBe([(string) $customer->getKey()])
                 ->and($traces->pluck('user_type')->unique()->all())->toBe([User::class]);
         }],
+        'long-conversation' => [Outcome::Ok, 4, function (Collection $traces) {
+            $customer = User::query()->where('email', 'priya@northwind.test')->sole();
+            $tools = Span::query()->where('type', SpanType::Tool)->get();
+
+            expect($traces->pluck('conversation_id')->unique()->all())->toHaveCount(1)->not->toContain(null)
+                ->and($traces->pluck('user_id')->unique()->all())->toBe([(string) $customer->getKey()])
+                ->and($traces->every(fn (Trace $trace) => $trace->status === Status::Completed))->toBeTrue()
+                ->and($tools)->toHaveCount(1)
+                ->and($tools->sole()->name)->toBe('lookup_order')
+                ->and($tools->sole()->trace_id)->toBe(inOrder($traces)[1]->id);
+        }],
+        'conversation-failover' => [Outcome::Ok, 2, function (Collection $traces) {
+            [$first, $second] = inOrder($traces)->all();
+            $steps = $second->spans()->where('type', SpanType::Step)->orderBy('sequence')->get();
+
+            expect($traces->pluck('conversation_id')->unique()->all())->toHaveCount(1)->not->toContain(null)
+                ->and($first->recovered)->toBeFalse()
+                ->and($second->status)->toBe(Status::Completed)
+                ->and($second->recovered)->toBeTrue()
+                ->and($steps->map(fn (Span $step) => [$step->attempt, $step->status])->all())->toBe([[1, Status::Failed], [2, Status::Completed]]);
+        }],
+        'conversation-approval' => [Outcome::Ok, 2, function (Collection $traces) {
+            [$paused, $resumed] = inOrder($traces)->all();
+
+            // Nothing but the conversation links the two runs.
+            expect($paused->status)->toBe(Status::AwaitingApproval)
+                ->and($paused->metadata['pending_approvals'][0]['tool'])->toBe('issue_refund')
+                ->and($resumed->status)->toBe(Status::Completed)
+                ->and($resumed->id)->not->toBe($paused->id)
+                ->and($traces->pluck('conversation_id')->unique()->all())->toHaveCount(1)->not->toContain(null);
+        }],
+        'conversation-delegation' => [Outcome::Ok, 2, function (Collection $traces) {
+            [$first, $second] = inOrder($traces)->all();
+            $agents = $second->spans()->where('type', SpanType::Agent)->orderBy('sequence')->get();
+
+            expect($traces->pluck('conversation_id')->unique()->all())->toHaveCount(1)->not->toContain(null)
+                ->and($first->spans()->where('type', SpanType::Agent)->count())->toBe(1)
+                ->and($second->status)->toBe(Status::Completed)
+                ->and($agents)->toHaveCount(2)
+                ->and($agents[1]->name)->toBe('PolicyResearcher')
+                ->and($agents[1]->parent_id)->toBe($second->spans()->where('type', SpanType::Tool)->sole()->id);
+        }],
+        'conversation-failure' => [Outcome::FailedAsExpected, 2, function (Collection $traces) {
+            [$first, $second] = inOrder($traces)->all();
+            $customer = User::query()->where('email', 'marcus@northwind.test')->sole();
+
+            expect($traces->pluck('conversation_id')->unique()->all())->toHaveCount(1)->not->toContain(null)
+                ->and($traces->pluck('user_id')->unique()->all())->toBe([(string) $customer->getKey()])
+                ->and($first->status)->toBe(Status::Completed)
+                ->and($second->status)->toBe(Status::Failed)
+                ->and($second->issue_kind)->toBe(IssueKind::RateLimited);
+        }],
         'embeddings-in-tool' => [Outcome::Ok, 1, function (Collection $traces) {
             $trace = $traces->sole();
             $tool = $trace->spans()->where('type', SpanType::Tool)->sole();
@@ -196,7 +254,7 @@ function expectations(): array
     ];
 }
 
-it('has a scenario for each of the sixteen runs', function () {
+it('has a scenario for each of the runs it records', function () {
     expect(array_keys(app(Registry::class)->all()))->toBe(array_keys(expectations()));
 });
 
@@ -217,9 +275,9 @@ it('records the run of the scenario', function (string $key) {
 it('runs every scenario one after the other in one process', function () {
     $results = app(ScenarioRunner::class)->runAll();
 
-    expect($results)->toHaveCount(16)
+    expect($results)->toHaveCount(21)
         ->and(array_filter($results, fn ($result) => $result->outcome === Outcome::Error))->toBe([])
-        ->and(Trace::query()->count())->toBe(17);
+        ->and(Trace::query()->count())->toBe(29);
 });
 
 it('leaves the HTTP client and its script as it found them', function () {
@@ -279,7 +337,7 @@ describe('the landing page', function () {
     it('runs every scenario with Run all', function () {
         $this->post('/run')->assertRedirect('/');
 
-        expect(Trace::query()->count())->toBe(17);
+        expect(Trace::query()->count())->toBe(29);
     });
 
     it('answers 404 for a scenario that does not exist', function () {

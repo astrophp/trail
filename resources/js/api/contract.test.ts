@@ -3,6 +3,9 @@ import { z } from 'zod'
 import type {
     AgentSubtotal,
     BookmarkResponse,
+    Conversation,
+    ConversationCounts,
+    ConversationListResponse,
     Cost,
     CostState,
     Coverage,
@@ -332,6 +335,29 @@ const traceListResponse = z.strictObject({
     slow_threshold_ms: nullable(z.number()),
 })
 
+const conversation = z.strictObject({
+    id: z.string(),
+    turns: statusCounts,
+    agents: z.array(z.string()),
+    agent_count: count,
+    users: z.array(user),
+    user_count: count,
+    usage,
+    cost,
+    prompt_excerpt: nullable(z.string()),
+    first_activity_at: timestamp,
+    last_activity_at: timestamp,
+})
+
+const conversationCounts = z.strictObject({ all: count, failed: count })
+
+const conversationListResponse = z.strictObject({
+    data: z.array(conversation),
+    pagination,
+    range,
+    counts: conversationCounts,
+})
+
 const bookmarkResponse = z.strictObject({
     data: z.strictObject({ trace_id: z.string(), bookmarked: z.boolean() }),
 })
@@ -366,6 +392,15 @@ describe('types', () => {
         expectTypeOf<
             z.infer<typeof bookmarkResponse>
         >().toEqualTypeOf<BookmarkResponse>()
+        expectTypeOf<
+            z.infer<typeof conversation>
+        >().toEqualTypeOf<Conversation>()
+        expectTypeOf<
+            z.infer<typeof conversationCounts>
+        >().toEqualTypeOf<ConversationCounts>()
+        expectTypeOf<
+            z.infer<typeof conversationListResponse>
+        >().toEqualTypeOf<ConversationListResponse>()
         expectTypeOf<
             z.infer<typeof traceNeighbours>
         >().toEqualTypeOf<TraceNeighbours>()
@@ -516,6 +551,35 @@ describe('tests/Contract/traces.json', () => {
     it('has a bookmarked run and an embedding', () => {
         expect(traces.some((t) => t.bookmarked)).toBe(true)
         expect(traces.some((t) => t.type === 'embedding')).toBe(true)
+    })
+})
+
+describe('tests/Contract/conversations.json', () => {
+    const parsed = conversationListResponse.safeParse(
+        contractFixture('conversations'),
+    )
+
+    it('is what the API types describe', () => {
+        expect(parsed.error?.issues).toBeUndefined()
+    })
+
+    const rows = parsed.data?.data ?? []
+
+    it('has a conversation in more than one cost state and one usage state', () => {
+        expect(new Set(rows.map((c) => c.cost.state)).size).toBeGreaterThan(1)
+        expect(new Set(rows.map((c) => c.usage.state)).size).toBeGreaterThan(1)
+    })
+
+    it('has conversations with one user, several and none', () => {
+        expect(
+            rows.some((c) => c.user_count === 0 && c.users.length === 0),
+        ).toBe(true)
+        expect(rows.some((c) => c.users.length === 1)).toBe(true)
+        expect(rows.some((c) => c.users.length > 1)).toBe(true)
+    })
+
+    it('counts the conversations the way its pagination does', () => {
+        expect(parsed.data?.counts.all).toBe(parsed.data?.pagination.total)
     })
 })
 

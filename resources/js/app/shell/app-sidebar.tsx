@@ -18,7 +18,6 @@ import {
     useSidebar,
 } from '@/components/ui/sidebar'
 import { useBoot } from '@/hooks/use-boot'
-import { useTimeRangeLink } from '@/hooks/use-time-range'
 
 const capitalise = (text: string) =>
     text.charAt(0).toUpperCase() + text.slice(1)
@@ -30,7 +29,6 @@ export function AppSidebar() {
     const current = resolveRoute(pathname).section
     const inFlight = useInFlightCount()
     const inFlightId = useId()
-    const linkTo = useTimeRangeLink()
 
     // Following a link closes the drawer, even one to the page already open: the
     // location key is new on every navigation, the path is not.
@@ -49,7 +47,7 @@ export function AppSidebar() {
             <div className="flex size-full min-h-0 flex-col px-2.25 pt-6.25 pb-3.5 wide:px-3.5">
                 <SidebarHeader className="gap-0 p-0">
                     <Link
-                        to={linkTo('/')}
+                        to="/"
                         aria-label="Trail overview"
                         className="mb-6 flex items-center gap-2 rounded-lg pl-3.25 outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
                     >
@@ -99,7 +97,7 @@ export function AppSidebar() {
                                                     className="h-9.25 gap-2.5 rounded-lg px-3 py-2.5 text-xs text-muted-foreground hover:bg-accent hover:text-foreground active:bg-accent active:text-foreground wide:text-ui data-active:font-[550] data-active:hover:bg-sidebar-accent data-active:hover:text-sidebar-accent-foreground data-active:active:bg-sidebar-accent data-active:active:text-sidebar-accent-foreground [&_svg]:size-4.25"
                                                 >
                                                     <Link
-                                                        to={linkTo(path)}
+                                                        to={path}
                                                         aria-describedby={
                                                             section ===
                                                                 'traces' &&

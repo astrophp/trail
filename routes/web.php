@@ -1,6 +1,7 @@
 <?php
 
 use Astro\Trail\Http\Controllers\Api\ConversationIndexController;
+use Astro\Trail\Http\Controllers\Api\ConversationTranscriptController;
 use Astro\Trail\Http\Controllers\Api\MetaController;
 use Astro\Trail\Http\Controllers\Api\TraceBookmarkController;
 use Astro\Trail\Http\Controllers\Api\TraceExportController;
@@ -16,6 +17,8 @@ use Illuminate\Support\Facades\Route;
 Route::prefix('api')->middleware([RespondWithJson::class, Authorize::class])->group(function () {
     Route::get('meta', MetaController::class)->name('trail.api.meta');
     Route::get('conversations', ConversationIndexController::class)->name('trail.api.conversations.index');
+    // The conversation's id travels in the query: it can hold any character, a slash among them.
+    Route::get('conversations/transcript', ConversationTranscriptController::class)->name('trail.api.conversations.transcript');
     Route::get('traces', TraceIndexController::class)->name('trail.api.traces.index');
     // Above the detail route, or "export" would be read as a run's id.
     Route::get('traces/export', TraceExportController::class)->name('trail.api.traces.export');

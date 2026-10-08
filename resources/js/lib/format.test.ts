@@ -247,4 +247,16 @@ describe('shortId', () => {
         expect(shortId('0123456789abc')).toBe('0123456789abc')
         expect(shortId('0123456789abcd')).toBe('01234567…abcd')
     })
+
+    it('leaves an id of up to the given length whole', () => {
+        expect(shortId('0123456789abcdef', 16)).toBe('0123456789abcdef')
+        expect(shortId('0123456789abcdefg', 16)).toBe('01234567…defg')
+    })
+
+    it('counts and cuts by character, so a surrogate pair is never split', () => {
+        const id = '😀'.repeat(8) + 'mid' + '😀'.repeat(4)
+
+        expect(shortId(id)).toBe('😀'.repeat(8) + '…' + '😀'.repeat(4))
+        expect(shortId('😀'.repeat(13))).toBe('😀'.repeat(13))
+    })
 })
