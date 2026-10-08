@@ -648,6 +648,9 @@ describe('access', function () {
             ->and($content)->toContain('run-a');
 
         $this->actingAs(new GenericUser(['id' => 2, 'email' => 'other@example.com']))->get('/trail/api/traces/export')->assertForbidden();
+
+        // Rolling back this test's migrations asks for confirmation in production.
+        $this->app['env'] = 'testing';
     });
 });
 
