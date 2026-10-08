@@ -3,8 +3,10 @@ import type {
     PendingApproval,
     Coverage,
     Span,
+    SpanLimit,
     Trace,
     TraceDetailResponse,
+    TraceUsageBreakdown,
 } from '@/api/types'
 import { contractFixture } from '@/test/contract-fixture'
 import { json, mockApi, type Handler } from '@/test/traces-api'
@@ -115,6 +117,11 @@ type DetailOptions = {
     pendingApprovals?: PendingApproval[]
     /** Parts of the run's coverage to replace; the fixture's otherwise. */
     coverage?: Partial<Coverage>
+    /** Parts of the usage breakdown (totals, rows) to replace; the fixture's otherwise. */
+    usage?: Partial<Pick<TraceUsageBreakdown, 'totals' | 'rows'>>
+    /** The tool calls an earlier pause settled; none by default. */
+    resolvedToolCallIds?: string[]
+    spanLimit?: Partial<SpanLimit>
 }
 
 /** A trace response for the given spans, on the fixture's run with the given fields replaced. */
@@ -125,6 +132,9 @@ export function makeDetail({
     error = null,
     pendingApprovals = [],
     coverage,
+    usage,
+    resolvedToolCallIds = [],
+    spanLimit,
 }: DetailOptions): TraceDetailResponse {
     const base = detailFixture.data
 
@@ -141,11 +151,13 @@ export function makeDetail({
                 ...base.detail,
                 error,
                 pending_approvals: pendingApprovals,
+                resolved_tool_call_ids: resolvedToolCallIds,
             },
             spans,
             coverage: { ...base.coverage, ...coverage },
             usage: {
                 ...base.usage,
+                ...usage,
                 agents:
                     agents ??
                     spans
@@ -158,7 +170,12 @@ export function makeDetail({
                         })),
             },
         },
-        span_limit: { limit: 2000, total: spans.length, truncated: false },
+        span_limit: {
+            limit: 2000,
+            total: spans.length,
+            truncated: false,
+            ...spanLimit,
+        },
     }
 }
 

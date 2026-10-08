@@ -89,7 +89,12 @@ const messageItems = () =>
     )
 const params = () => new URLSearchParams(window.location.search)
 const openTab = (name: string) =>
-    userEvent.click(screen.getByRole('tab', { name }))
+    userEvent.click(
+        within(screen.getByRole('tablist', { name: 'Evidence' })).getByRole(
+            'tab',
+            { name },
+        ),
+    )
 const group = (name: string) => panel().getByRole('group', { name })
 
 function root(overrides: Partial<Span> = {}) {
