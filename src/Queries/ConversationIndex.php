@@ -30,6 +30,13 @@ final class ConversationIndex
     ];
 
     /**
+     * The number of a conversation's turns that are failed or incomplete: the one definition of a
+     * failed conversation, for the filter and for the count. A running turn past the cutoff is
+     * incomplete, by the same expression the status counts use. Bound by failedBindings().
+     */
+    private const FAILED_TURNS = 'sum(case when status in (?, ?) or (status = ? and created_at < ?) then 1 else 0 end)';
+
+    /**
      * The conversation ids of one page, in the list's order. An id is one of the group's spellings,
      * which only matters on a database that compares text without regard to case.
      *
@@ -64,11 +71,9 @@ final class ConversationIndex
      */
     public function counts(TimeRange $range, ConversationFilters $filters): array
     {
-        [$failed, $bindings] = $this->failedTurns();
-
         $grouped = $this->grouped($range, $filters, false)
             ->select('conversation_id')
-            ->selectRaw("case when {$failed} > 0 then 1 else 0 end as has_failure", $bindings);
+            ->selectRaw('case when '.self::FAILED_TURNS.' > 0 then 1 else 0 end as has_failure', $this->failedBindings());
 
         $row = $grouped->newQuery()
             ->fromSub($grouped, 'conversations')
@@ -108,9 +113,7 @@ final class ConversationIndex
         }
 
         if ($filters->failed && $applyFailed) {
-            [$failed, $bindings] = $this->failedTurns();
-
-            $query->havingRaw("{$failed} > 0", $bindings);
+            $query->havingRaw(self::FAILED_TURNS.' > 0', $this->failedBindings());
         }
 
         if ($filters->search !== null) {
@@ -126,18 +129,11 @@ final class ConversationIndex
     }
 
     /**
-     * The number of a conversation's turns that are failed or incomplete: the one definition of a
-     * failed conversation, for the filter and for the count. A running turn past the cutoff is
-     * incomplete, by the same expression the status counts use.
-     *
-     * @return array{string, list<mixed>}
+     * @return list<string>
      */
-    private function failedTurns(): array
+    private function failedBindings(): array
     {
-        return [
-            'sum(case when status in (?, ?) or (status = ? and created_at < ?) then 1 else 0 end)',
-            [Status::Failed->value, Status::Incomplete->value, Status::Running->value, StaleRuns::cutoffColumn()],
-        ];
+        return [Status::Failed->value, Status::Incomplete->value, Status::Running->value, StaleRuns::cutoffColumn()];
     }
 
     /**
