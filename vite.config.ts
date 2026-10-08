@@ -47,6 +47,8 @@ export default defineConfig({
     },
     test: {
         environment: 'jsdom',
+        // Room for a render under load; see `asyncUtilTimeout` in the test setup.
+        testTimeout: 15_000,
         setupFiles: ['resources/js/test/setup.ts'],
         include: ['resources/js/**/*.test.{ts,tsx}'],
     },

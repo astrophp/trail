@@ -1,9 +1,16 @@
 import '@testing-library/jest-dom/vitest'
-import { cleanup } from '@testing-library/react'
+import { cleanup, configure } from '@testing-library/react'
 import { afterEach, beforeEach, expect, vi } from 'vitest'
 import { contractFixture } from '@/test/contract-fixture'
 
 afterEach(cleanup)
+
+// `findBy` and `waitFor` give up after 1,000 ms by default, which a busy machine (a CI runner
+// running many test files at once) can spend before the first render of the app. A wait only
+// lasts as long as the thing it waits for, so a longer limit costs nothing when the machine is
+// idle. It stays below the test timeout in the Vite config, so a wait that never ends still fails
+// with its own message instead of a bare timeout.
+configure({ asyncUtilTimeout: 5000 })
 
 // jsdom has no matchMedia; this default reports "no match" and never fires.
 beforeEach(() => {
