@@ -141,7 +141,7 @@ describe('matchToolCalls', () => {
         ).toEqual([null])
     })
 
-    it('makes no link when two unpaired spans equal the arguments and position cannot tell them apart', () => {
+    it("takes the span at its position when two spans hold the call's arguments", () => {
         const spans = [
             step(),
             tool('x', 3, 'search', { q: 'A' }),
@@ -149,13 +149,13 @@ describe('matchToolCalls', () => {
             next(5),
         ]
 
-        // One call of the name, two equal candidates: the positional one is taken, the other left.
+        // One call of the name, two equal candidates: the first by position, with equal arguments.
         expect(
             ids(matchToolCalls(spans[0], [call('search', { q: 'A' })], spans)),
         ).toEqual(['x'])
     })
 
-    it('takes a span that stored no input by position when the counts of the name are equal', () => {
+    it('makes no link to spans that stored no input, whatever the counts of the name', () => {
         const spans = [
             step(),
             tool('one', 3, 'search'),
@@ -171,21 +171,126 @@ describe('matchToolCalls', () => {
                     spans,
                 ),
             ),
-        ).toEqual(['one', 'two'])
+        ).toEqual([null, null])
+        expect(
+            ids(
+                matchToolCalls(
+                    spans[0],
+                    [call('search', { q: 'A' })],
+                    [spans[0], tool('only', 3, 'search'), spans[3]],
+                ),
+            ),
+        ).toEqual([null])
     })
 
-    it('makes no link for spans that stored no input when the counts of the name differ', () => {
-        const spans = [step(), tool('one', 3, 'search'), next(4)]
+    it('makes no link for arguments that were redacted, even though the marker is equal', () => {
+        const spans = [
+            step(2, { redacted: true }),
+            tool(
+                't',
+                3,
+                'login',
+                { password: '[redacted]' },
+                { redacted: true },
+            ),
+            next(4),
+        ]
 
         expect(
             ids(
                 matchToolCalls(
                     spans[0],
-                    [call('search', { q: 'A' }), call('search', { q: 'B' })],
+                    [call('login', { password: '[redacted]' })],
                     spans,
                 ),
             ),
-        ).toEqual([null, null])
+        ).toEqual([null])
+    })
+
+    it('links arguments that hold the marker in a span that was not redacted', () => {
+        const spans = [
+            step(),
+            tool('t', 3, 'lookup', { q: '[redacted]' }),
+            next(4),
+        ]
+
+        expect(
+            ids(
+                matchToolCalls(
+                    spans[0],
+                    [call('lookup', { q: '[redacted]' })],
+                    spans,
+                ),
+            ),
+        ).toEqual(['t'])
+    })
+
+    it('makes no link when the call or the tool span was cut where its arguments are', () => {
+        const spans = [
+            step(2, {
+                truncated: true,
+                truncated_paths: { 'output.tool_calls.0.arguments.q': 9000 },
+            }),
+            tool('t', 3, 'lookup', { q: 'a' }),
+            next(4),
+        ]
+        const cutTool = [
+            step(),
+            tool(
+                'c',
+                3,
+                'lookup',
+                { q: 'a' },
+                {
+                    truncated: true,
+                    truncated_paths: { 'input.arguments.q': 9000 },
+                },
+            ),
+            next(4),
+        ]
+
+        expect(
+            ids(matchToolCalls(spans[0], [call('lookup', { q: 'a' })], spans)),
+        ).toEqual([null])
+        expect(
+            ids(
+                matchToolCalls(
+                    cutTool[0],
+                    [call('lookup', { q: 'a' })],
+                    cutTool,
+                ),
+            ),
+        ).toEqual([null])
+    })
+
+    it('makes no link when a span was cut and does not say where', () => {
+        const spans = [
+            step(),
+            tool('t', 3, 'lookup', { q: 'a' }, { truncated: true }),
+            next(4),
+        ]
+
+        expect(
+            ids(matchToolCalls(spans[0], [call('lookup', { q: 'a' })], spans)),
+        ).toEqual([null])
+    })
+
+    it('still links when the cut is elsewhere in the span', () => {
+        const spans = [
+            step(2, {
+                truncated: true,
+                truncated_paths: {
+                    'output.text': 9000,
+                    'output.tool_calls.10.arguments': 9,
+                },
+            }),
+            tool('t', 3, 'lookup', { q: 'a' }),
+            next(4),
+        ]
+
+        expect(
+            ids(matchToolCalls(spans[0], [call('lookup', { q: 'a' })], spans)),
+        ).toEqual(['t'])
     })
 
     it('keeps the attempts of a failover apart', () => {
@@ -257,7 +362,7 @@ describe('matchToolCalls', () => {
         ).toEqual([null, 't'])
     })
 
-    it('links nothing for a call that stored no arguments to compare, unless the span stored none either and the counts agree', () => {
+    it('links nothing for a call that stored no arguments to compare', () => {
         const spans = [step(), tool('t', 3, 'search', { q: 1 }), next(4)]
 
         expect(ids(matchToolCalls(spans[0], [call('search')], spans))).toEqual([

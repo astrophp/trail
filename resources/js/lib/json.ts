@@ -122,6 +122,15 @@ export function splitOnMarker(text: string, marker: string): TextPart[] {
     return parts
 }
 
+function isEmptyContainer(value: JsonValue): boolean {
+    return (
+        isContainer(value) &&
+        (Array.isArray(value)
+            ? value.length === 0
+            : Object.keys(value).length === 0)
+    )
+}
+
 /**
  * Whether two stored values are the same JSON: strings, numbers, booleans and null by value,
  * arrays element by element, objects key by key in any order. A key whose value is `undefined`
@@ -147,6 +156,12 @@ export function jsonEqual(
     }
 
     if (Array.isArray(a) || Array.isArray(b)) {
+        // The server stores payloads as decoded PHP arrays, where an empty object and an empty list
+        // are the same value; a non-empty list never equals a map.
+        if (isEmptyContainer(a) && isEmptyContainer(b)) {
+            return true
+        }
+
         return (
             Array.isArray(a) &&
             Array.isArray(b) &&

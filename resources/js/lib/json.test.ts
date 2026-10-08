@@ -170,8 +170,14 @@ describe('jsonEqual', () => {
         expect(jsonEqual([1], [1, 2])).toBe(false)
     })
 
-    it('does not equate an array with an object, or a missing value with anything', () => {
-        expect(jsonEqual([], {})).toBe(false)
+    it('equates an empty array and an empty object, as the server does, and no other array with an object', () => {
+        expect(jsonEqual([], {})).toBe(true)
+        expect(jsonEqual({}, [])).toBe(true)
+        expect(jsonEqual([], { a: 1 })).toBe(false)
+        expect(jsonEqual([[]], [{}])).toBe(true)
+    })
+
+    it('does not equate a non-empty array with an object, or a missing value with anything', () => {
         expect(jsonEqual({ 0: 'a' }, ['a'])).toBe(false)
         expect(jsonEqual(undefined, undefined)).toBe(true)
         expect(jsonEqual(undefined, null)).toBe(false)
