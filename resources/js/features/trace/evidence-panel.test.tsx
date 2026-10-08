@@ -788,9 +788,13 @@ describe('the ancestors of a span', () => {
     })
 })
 
-/** Words that would claim a call started, ran, failed or was never recorded; an unlinked call carries none. */
+/**
+ * Words that would claim a state for a call: that it started, ran, failed, was skipped, is waiting
+ * or was not recorded. An unlinked call carries none of them. The span's own status badge (Completed,
+ * Running) is outside the call, so the words for it are left out.
+ */
 const statusWords =
-    /not started|no tool span was recorded|did not run|never ran|didn't run|not run/i
+    /not started|no tool span|did not run|never ran|didn't run|not run|\bran\b|failed|failure|skipped|not recorded|not captured|pending|waiting|approval|incomplete|cancel/i
 
 describe('the link from a step to the tools it ran', () => {
     const calls = (...names: string[]): JsonValue => ({
@@ -1831,7 +1835,7 @@ describe('tool calls and the tools that ran them', () => {
         expect(panel().queryByText(statusWords)).not.toBeInTheDocument()
     })
 
-    it('says waiting for approval for a call the run waits on, and nothing for another', async () => {
+    it('shows a call the run waits on for approval as asked, with no status and no link', async () => {
         await open(
             [
                 root(),
@@ -1856,18 +1860,18 @@ describe('tool calls and the tools that ran them', () => {
             },
         )
 
-        expect(panel().getAllByText('Waiting for approval')).toHaveLength(1)
-        expect(
-            callItem('call 2 refund arguments').getByText(
-                'Waiting for approval',
-            ),
-        ).toBeInTheDocument()
-        expect(
-            callItem('call 1 refund arguments').queryByText(
-                'Waiting for approval',
-            ),
-        ).not.toBeInTheDocument()
-        expect(panel().queryByText(statusWords)).not.toBeInTheDocument()
+        for (const label of [
+            'call 1 refund arguments',
+            'call 2 refund arguments',
+        ]) {
+            expect(callItem(label).getByText('refund')).toBeInTheDocument()
+            expect(
+                callItem(label).queryByRole('button', openSpanLink),
+            ).not.toBeInTheDocument()
+            expect(
+                callItem(label).queryByText(statusWords),
+            ).not.toBeInTheDocument()
+        }
     })
 
     it('makes no claim about a call whose name cannot be read', async () => {

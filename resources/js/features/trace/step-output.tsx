@@ -11,13 +11,11 @@ import { stepOutput } from '@/components/telemetry/payload-shape'
 import { PayloadSection } from '@/components/telemetry/payload-section'
 import { SectionLabel } from '@/components/telemetry/section-label'
 import { ToolCallItem } from '@/features/trace/tool-call-item'
-import type { RunContext } from '@/features/trace/tool-call-status'
 import { WholeOutput } from '@/features/trace/whole-output'
 
 type StepOutputProps = {
     span: Span
     tree: SpanTree
-    run: RunContext
     onSelect: (id: string) => void
 }
 
@@ -30,7 +28,7 @@ function siblingsOf(tree: SpanTree, span: Span): Span[] {
 }
 
 /** What a model step answered: its text, the tool calls it asked for, why it stopped, and any structured output. */
-export function StepOutput({ span, tree, run, onSelect }: StepOutputProps) {
+export function StepOutput({ span, tree, onSelect }: StepOutputProps) {
     const shape = stepOutput(span.output)
 
     if (shape.kind === 'none') {
@@ -71,7 +69,6 @@ export function StepOutput({ span, tree, run, onSelect }: StepOutputProps) {
                         <ToolCallItem
                             key={index}
                             span={span}
-                            run={run}
                             index={index}
                             repeated={
                                 requested[index].name !== null &&
