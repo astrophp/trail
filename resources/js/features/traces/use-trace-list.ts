@@ -3,13 +3,11 @@ import type { TraceSort } from '@/api/traces'
 import {
     traceFilterKeys,
     traceListParams,
-    type TraceFilterKey,
-} from '@/features/traces/trace-list-params'
-import {
-    statusFilterLabel,
     type StatusFilter,
-} from '@/features/traces/trace-status'
-import type { TraceView } from '@/features/traces/use-traces'
+    type TraceFilterKey,
+    type TraceListView,
+} from '@/api/trace-list-view'
+import { statusFilterLabel } from '@/features/traces/trace-status'
 import { useUrlState, type SetUrlState } from '@/hooks/use-url-state'
 import { useTimeRange } from '@/hooks/use-time-range'
 
@@ -66,7 +64,7 @@ export function useTraceList() {
 
     const clearAll = useCallback(() => clear([...traceFilterKeys]), [clear])
 
-    const view: TraceView = { range, ...state }
+    const view: TraceListView = { range, ...state }
     // The filters that are on, in one place: the chips show them and `hasFilters` follows.
     const activeFilters: { key: TraceFilterKey; label: string }[] = []
 

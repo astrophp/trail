@@ -1,14 +1,10 @@
 import { useCallback } from 'react'
 import { useUrlState } from '@/hooks/use-url-state'
-import {
-    defaultTimeRange,
-    timeRangePresets,
-    type TimeRangePreset,
-} from '@/lib/time-range'
-import { enumParam, intParam, writeState } from '@/lib/url-state'
+import { timeRangeParam, type TimeRangePreset } from '@/lib/time-range'
+import { intParam, writeState } from '@/lib/url-state'
 
 const params = {
-    range: enumParam(timeRangePresets, defaultTimeRange),
+    range: timeRangeParam,
     // The convention: every list keeps its page under `page`.
     page: intParam(1, { min: 1 }),
 }
