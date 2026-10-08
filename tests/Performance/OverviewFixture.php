@@ -22,6 +22,9 @@ final class OverviewFixture
     /** The agent that holds about a tenth of the rows. */
     public const SCOPED_AGENT = 'BillingAssistant';
 
+    /** The issue kinds failed runs are given, the first ones most often. */
+    private const ISSUE_KINDS = ['rate_limited', 'rate_limited', 'rate_limited', 'provider_overloaded', 'provider_connection', 'insufficient_credits', 'tool_error', 'tool_error', 'exception', 'exception', 'exception', 'abandoned'];
+
     /** @var array<string, int> agent name => share in per mille */
     private const AGENTS = [
         'SupportAssistant' => 350,
@@ -86,6 +89,10 @@ final class OverviewFixture
                 'type' => mt_rand(0, 99) < 8 ? 'embedding' : 'agent',
                 'name' => $names[mt_rand(0, 999)],
                 'status' => $status,
+                // From the row's index and not the random stream, so the rows the overview reads are the same as before.
+                'issue_kind' => $status === 'failed' && $index % 9 !== 0 ? self::ISSUE_KINDS[($index * 7) % count(self::ISSUE_KINDS)] : null,
+                'child_failed' => ($status === 'completed' && $index % 40 === 0) || ($status === 'failed' && $index % 5 === 0),
+                'recovered' => $index % 60 === 0,
                 'input_tokens' => $tokens[0],
                 'output_tokens' => $tokens[1],
                 'cache_read_tokens' => $tokens[2],

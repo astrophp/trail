@@ -208,6 +208,41 @@ export type OverviewResponse = {
     previous_range: PreviousRange
 }
 
+export type AttentionKind =
+    | 'failed'
+    | 'incomplete'
+    | 'awaiting_approval'
+    | 'child_failed'
+    | 'unpriced'
+    | 'recovered'
+
+/** The failed runs of one issue kind. `filters` are the list's parameters that keep them. */
+export type AttentionRow = {
+    issue_kind: IssueKind
+    count: number
+    latest_at: string
+    filters: Record<string, string>
+}
+
+/**
+ * A kind of run that needs a look. `count` is the `pagination.total` of the runs list with
+ * `filters` and the same time range. Only `failed` has a `breakdown`; its rows can add up to
+ * less than `count`, since a failed run without an issue kind is in no row.
+ */
+export type AttentionItem = {
+    kind: AttentionKind
+    count: number
+    latest_at: string
+    filters: Record<string, string>
+    breakdown: AttentionRow[]
+}
+
+/** An empty `data` is a range with nothing to look at. */
+export type AttentionResponse = {
+    data: AttentionItem[]
+    range: Range
+}
+
 /** The answer to a bookmark write: the run's bookmark state after it. */
 export type BookmarkResponse = {
     data: { trace_id: string; bookmarked: boolean }

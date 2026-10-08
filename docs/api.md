@@ -646,6 +646,66 @@ buckets. It takes a time range and nothing else: any other parameter is ignored.
 - It is read in one grouped query over the runs, plus one read for each period that has a
   percentile (at most two), whatever the range.
 
+### `GET /api/overview/attention`
+
+The short list of what in a time range someone should look at, each item pointing at its evidence
+on the runs list. It takes a time range and nothing else: any other parameter is ignored.
+
+```json
+{
+  "data": [
+    {
+      "kind": "failed",
+      "count": 13,
+      "latest_at": "2026-01-01T12:00:00.000Z",
+      "filters": { "status": "failed" },
+      "breakdown": [
+        { "issue_kind": "rate_limited", "count": 9, "latest_at": "2026-01-01T12:00:00.000Z", "filters": { "status": "failed", "issue_kind": "rate_limited" } }
+      ]
+    },
+    { "kind": "incomplete", "count": 3, "latest_at": "2026-01-01T11:20:00.000Z", "filters": { "status": "incomplete" }, "breakdown": [] }
+  ],
+  "range": { "preset": "24h", "from": "…", "to": "…" }
+}
+```
+
+There are six kinds. Each is in `data` at most once, and `data` lists them in this order, most
+pressing first. A kind with no run in the range is absent, so a range with nothing to look at is
+`"data": []`, which is an answer and not an error.
+
+| `kind` | Counts the runs of the range that | `filters` |
+| -- | -- | -- |
+| `failed` | show the status `failed` | `{ "status": "failed" }` |
+| `incomplete` | show the status `incomplete`, a stale running run included | `{ "status": "incomplete" }` |
+| `awaiting_approval` | show the status `awaiting_approval` | `{ "status": "awaiting_approval" }` |
+| `child_failed` | completed although a sub-agent failed | `{ "status": "completed", "child_failed": "1" }` |
+| `unpriced` | have at least one step that reported usage and could not be priced | `{ "unpriced": "1" }` |
+| `recovered` | were recovered by a provider failover | `{ "recovered": "1" }` |
+
+- `count` is a number of runs, and it is never `0`: an item exists only for a count above `0`.
+  `GET /api/traces` with the item's `filters` and the same time range has exactly `count` as its
+  `pagination.total`. That holds for every item and every breakdown row.
+- `filters` maps parameter names of `GET /api/traces` to the strings to send. It is never a URL:
+  the client adds the time range.
+- The kinds overlap, and a run is counted in each kind it is of. A run that failed and could not be
+  priced is in `failed` and in `unpriced`; a run that failed and was recovered by a failover first
+  is in `failed` and in `recovered`. A run that failed with a sub-agent that failed is `failed` and
+  not `child_failed`, which counts only runs that completed. A running run that is not stale is in
+  no kind.
+- The stale rule of [Status](#status) applies to every count as the list applies it: a run still
+  marked running after `stale_after` seconds is in `incomplete`, and its issue kind is `abandoned`.
+  It is not in `failed`.
+- `latest_at` is when the latest of those runs started, the greatest `started_at` among them, so a
+  run outside the range never moves it. It is never `null`.
+- `breakdown` is `[]` for every kind except `failed`. For `failed` it has a row for each issue kind
+  that at least one failed run has, ordered by `count` descending and, among equal counts, in the
+  order of the issue kinds in [The trace](#the-trace). A row is `{ issue_kind, count, latest_at,
+  filters }`, its `filters` those of the item with `issue_kind` added. A failed run without an
+  issue kind is in the item's `count` and in no row, since the list has no filter for a missing
+  issue kind: the rows can add up to less than `count`, and `failed` can have a `count` and a
+  `breakdown` of `[]`.
+- It is read in one query over the runs, whatever the range, and no span is read.
+
 ### `GET /api/conversations`
 
 The conversations in a time range: recorded runs grouped by their conversation id, filtered,
