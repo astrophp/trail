@@ -12,11 +12,6 @@ export const maxFailedRefreshes = 3
 /** Answers that will not change by asking again: the run is gone, or the session or access is. */
 const final = new Set([401, 403, 404, 419])
 
-/** Whether an error says the run does not exist: a 404 for this id. */
-export function isNotFound(error: unknown): boolean {
-    return error instanceof ApiError && error.status === 404
-}
-
 /** The failed refreshes in a row, by run; a run is absent while its last refresh worked. */
 const failures = new Map<string, number>()
 
@@ -69,14 +64,15 @@ export const failedRefreshes = (id: string) => failures.get(id) ?? 0
  * saved, so that an answer from before the press cannot undo it. TanStack Query pauses the
  * interval in a hidden tab. A refresh that fails keeps the last data, and is not repeated within
  * its tick: only a first load retries. Pass `refresh: false` for a reader that only wants the
- * data, so the same run is not asked for twice.
+ * data, so the same run is not asked for twice; `enabled: false` asks for nothing at all.
  */
-export function useTrace(id: string, { refresh = true } = {}) {
+export function useTrace(id: string, { refresh = true, enabled = true } = {}) {
     const queryClient = useQueryClient()
     const saving = useIsMutating({ mutationKey: traceKeys.bookmark }) > 0
     const loaded = queryClient.getQueryData(traceKeys.detail(id)) !== undefined
 
     return useQuery({
+        enabled,
         queryKey: traceKeys.detail(id),
         queryFn: async ({ signal }) => {
             try {
@@ -110,6 +106,11 @@ export function useTrace(id: string, { refresh = true } = {}) {
                 : false
         },
     })
+}
+
+/** Forgets every run's failed refreshes: for tests, which share this module. */
+export function forgetRefreshFailures(): void {
+    failures.clear()
 }
 
 /** Asks for the run again now and, if refreshing had stopped, lets it go on. */

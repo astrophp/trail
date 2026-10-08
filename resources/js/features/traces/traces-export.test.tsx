@@ -1,0 +1,52 @@
+import { screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { describe, expect, it } from 'vitest'
+import { renderApp } from '@/test/render-app'
+import { loaded, mockApi, paramsOf } from '@/test/traces-api'
+
+const exportLink = () => screen.getByRole('link', { name: 'Export' })
+
+describe('exporting the view', () => {
+    it('is a download link to the export of the view on screen, without its page', async () => {
+        mockApi()
+        renderApp('/traces?range=7d&sort=-cost&page=2&agent=SupportAssistant')
+        await loaded()
+
+        const link = exportLink()
+        const href = link.getAttribute('href')
+
+        expect(href).toMatch(/^\/trail\/api\/traces\/export\?/)
+        expect(link.tagName).toBe('A')
+        expect(link).toHaveAttribute('download')
+        expect(link).toHaveAttribute(
+            'title',
+            'Export this view as CSV (up to 10,000 runs)',
+        )
+        expect(paramsOf(href ?? '')).toEqual({
+            range: '7d',
+            sort: '-cost',
+            agent: 'SupportAssistant',
+        })
+    })
+
+    it('follows the filters', async () => {
+        mockApi()
+        renderApp('/traces')
+        await loaded()
+
+        expect(paramsOf(exportLink().getAttribute('href') ?? '')).toEqual({
+            range: '24h',
+            sort: '-started_at',
+        })
+
+        await userEvent.click(screen.getByRole('tab', { name: /Failed/ }))
+
+        await waitFor(() =>
+            expect(paramsOf(exportLink().getAttribute('href') ?? '')).toEqual({
+                range: '24h',
+                sort: '-started_at',
+                status: 'failed',
+            }),
+        )
+    })
+})

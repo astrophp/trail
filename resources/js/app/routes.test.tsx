@@ -12,6 +12,7 @@ describe('resolveRoute', () => {
         ['/', 'overview', 'Overview'],
         ['/traces', 'traces', 'Traces'],
         ['/traces/abc', 'traces', 'Trace'],
+        ['/traces/compare', 'traces', 'Compare'],
         ['/conversations', 'conversations', 'Conversations'],
         ['/conversations/c1', 'conversations', 'Conversation'],
         ['/agents', 'agents', 'Agents'],
@@ -42,6 +43,10 @@ describe('breadcrumbTrail', () => {
         expect(breadcrumbTrail(resolveRoute('/traces/abc'))).toEqual([
             { title: 'Traces', to: '/traces' },
             { title: 'Trace' },
+        ])
+        expect(breadcrumbTrail(resolveRoute('/traces/compare'))).toEqual([
+            { title: 'Traces', to: '/traces' },
+            { title: 'Compare' },
         ])
         expect(breadcrumbTrail(resolveRoute('/agents/x'))).toEqual([
             { title: 'Agents', to: '/agents' },

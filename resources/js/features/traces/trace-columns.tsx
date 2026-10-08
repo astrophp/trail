@@ -12,6 +12,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { OutcomeCell } from '@/features/traces/outcome-cell'
 import { RunCell } from '@/features/traces/run-cell'
+import { SelectPage } from '@/features/traces/select-page'
 
 // The id of a sortable column is the API's name for the field it sorts by (see trace-sort.ts).
 // A column needs an accessor to be sortable at all; the server sorts, so the values are never read.
@@ -23,9 +24,10 @@ export const traceColumns: DataTableColumn<Trace>[] = [
         enableSorting: true,
         meta: {
             rowHeader: true,
-            // The cell is three lines (the name, the prompt and the id) beside the bookmark's gutter.
+            lead: <SelectPage />,
+            // The cell is three lines (the name, the prompt and the id) beside the checkbox and the bookmark's gutter.
             skeleton: (
-                <div className="flex w-46.5 flex-col gap-2 py-1.5 pl-6.5 md:w-66.5">
+                <div className="flex w-51.5 flex-col gap-2 py-1.5 pl-11.5 md:w-71.5">
                     <Skeleton className={cn(skeletonBarClass, 'h-3.5 w-3/4')} />
                     <Skeleton className={cn(skeletonBarClass, 'h-3 w-full')} />
                     <Skeleton className={cn(skeletonBarClass, 'h-3 w-1/2')} />

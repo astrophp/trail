@@ -1,12 +1,13 @@
 import { useMemo } from 'react'
 import { useSearchParams } from 'react-router'
+import { comparePath } from '@/lib/compare-path'
 import { parseReturn, type ReturnTarget } from '@/lib/return-context'
 
 /**
- * The list pages a detail page can be opened from, as route patterns. Conversations and agents
- * join this list when they have a page that lists runs.
+ * The pages a run can be opened from, as route patterns. Conversations and agents join this list
+ * when they have a page that lists runs.
  */
-const returnRoutes = ['/traces']
+const returnRoutes = ['/traces', comparePath]
 
 /** The list a detail page leads back to when it was not opened from one. */
 const fallback = '/traces'
@@ -34,6 +35,12 @@ export function useBackLink(): {
     const target = useReturnTarget()
     const from = target === null ? null : `${target.pathname}${target.search}`
 
-    // The only list there is for now; each list will bring its own words.
-    return { to: from ?? fallback, label: 'Back to traces', from }
+    const comparison = target?.pathname === comparePath
+
+    // Each list will bring its own words. A comparison has no neighbours: `from` is for lists.
+    return {
+        to: from ?? fallback,
+        label: comparison ? 'Back to comparison' : 'Back to traces',
+        from: comparison ? null : from,
+    }
 }

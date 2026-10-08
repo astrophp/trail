@@ -52,6 +52,19 @@ function queryString(params: RequestOptions['params']): string {
     return text === '' ? '' : `?${text}`
 }
 
+/** Whether an error says the thing asked for does not exist: a 404. */
+export function isNotFound(error: unknown): boolean {
+    return error instanceof ApiError && error.status === 404
+}
+
+/** The URL of an API path with its query: for a request, and for a link the browser follows itself. */
+export function apiUrl(
+    path: string,
+    params?: RequestOptions['params'],
+): string {
+    return `${boot().apiPath}${path}${queryString(params)}`
+}
+
 /** The body of a response: whether there was none, and what it parses to (`undefined` when it is not JSON). */
 async function readBody(
     response: Response,
@@ -91,7 +104,7 @@ export async function apiRequest<T>(
     path: string,
     { method = 'GET', params, body, signal }: RequestOptions = {},
 ): Promise<T> {
-    const { apiPath, csrfToken } = boot()
+    const { csrfToken } = boot()
     const headers: Record<string, string> = { Accept: 'application/json' }
 
     if (method !== 'GET') {
@@ -107,7 +120,7 @@ export async function apiRequest<T>(
     let response: Response
 
     try {
-        response = await fetch(`${apiPath}${path}${queryString(params)}`, {
+        response = await fetch(apiUrl(path, params), {
             method,
             headers,
             body: body === undefined ? undefined : JSON.stringify(body),
