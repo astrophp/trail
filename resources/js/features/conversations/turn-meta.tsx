@@ -1,5 +1,6 @@
 import { Link } from 'react-router'
 import type { Trace } from '@/api/types'
+import { CopyLinkButton } from '@/components/patterns/copy-link-button'
 import { CostValue } from '@/components/telemetry/cost-value'
 import { DurationValue } from '@/components/telemetry/duration-value'
 import { TokenValue } from '@/components/telemetry/token-value'
@@ -22,8 +23,15 @@ function Fact({
     )
 }
 
-/** The quiet line under a turn: how long it took, its tokens and cost, its spans, and the way to its trace. */
-export function TurnMeta({ trace, number }: { trace: Trace; number: number }) {
+type TurnMetaProps = {
+    trace: Trace
+    number: number
+    /** The conversation's page at this turn: where the run's page leads back to, and what "Copy link" copies. */
+    pagePath: string
+}
+
+/** The quiet line under a turn: how long it took, its tokens and cost, its spans, the way to its trace and a link to the turn. */
+export function TurnMeta({ trace, number, pagePath }: TurnMetaProps) {
     return (
         <div
             data-slot="turn-meta"
@@ -45,14 +53,23 @@ export function TurnMeta({ trace, number }: { trace: Trace; number: number }) {
                     </span>
                 </Fact>
             </div>
-            <Button asChild variant="link" size="xs">
-                <Link
-                    to={tracePagePath(trace.id)}
-                    aria-label={`Inspect trace of turn ${formatCount(number)}`}
-                >
-                    Inspect trace
-                </Link>
-            </Button>
+            <div className="flex items-center gap-1">
+                <CopyLinkButton
+                    to={pagePath}
+                    label={`Copy link to turn ${formatCount(number)}`}
+                    variant="ghost"
+                    size="xs"
+                    className="text-muted-foreground"
+                />
+                <Button asChild variant="link" size="xs">
+                    <Link
+                        to={tracePagePath(trace.id, { from: pagePath })}
+                        aria-label={`Inspect trace of turn ${formatCount(number)}`}
+                    >
+                        Inspect trace
+                    </Link>
+                </Button>
+            </div>
         </div>
     )
 }

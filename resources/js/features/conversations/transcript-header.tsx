@@ -1,11 +1,14 @@
+import { Link } from 'react-router'
 import type { Conversation } from '@/api/types'
 import { CopyButton } from '@/components/patterns/copy-button'
 import { notify } from '@/components/patterns/notify'
 import { PageHeader } from '@/components/patterns/page-header'
 import { Timestamp } from '@/components/telemetry/timestamp'
 import { UserLabel } from '@/components/telemetry/user-label'
-import { conversationIdText } from '@/features/conversations/conversation-id'
+import { Button } from '@/components/ui/button'
+import { conversationIdText } from '@/lib/conversation-id'
 import { MoreCount } from '@/features/conversations/more-count'
+import { conversationRunsPath } from '@/lib/conversation-path'
 
 type TranscriptHeaderProps = {
     /** The conversation's id: the one the response returned, else the address's. */
@@ -67,6 +70,18 @@ export function TranscriptHeader({ id, conversation }: TranscriptHeaderProps) {
                     </span>
                 )
             }
-        />
+        >
+            {id === '' ? null : (
+                <Button asChild variant="outline" size="sm">
+                    <Link
+                        to={conversationRunsPath(id)}
+                        // The list has a time range of its own, which the link does not set.
+                        title="Opens Traces filtered to this conversation, within the time range Traces is set to"
+                    >
+                        View these runs in Traces
+                    </Link>
+                </Button>
+            )}
+        </PageHeader>
     )
 }

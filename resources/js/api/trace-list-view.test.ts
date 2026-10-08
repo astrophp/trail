@@ -15,6 +15,7 @@ const defaults: TraceListView = {
     search: '',
     agent: '',
     provider: '',
+    conversation: '',
     bookmarked: false,
 }
 
@@ -26,7 +27,7 @@ describe('readTraceListView', () => {
     it('reads the range, sort, page and each filter', () => {
         expect(
             read(
-                'range=7d&sort=-cost&page=3&status=failed&search=hello&agent=Support&provider=openai&bookmarked=1',
+                'range=7d&sort=-cost&page=3&status=failed&search=hello&agent=Support&provider=openai&conversation=support%2Fada+1042&bookmarked=1',
             ),
         ).toEqual({
             range: '7d',
@@ -36,6 +37,7 @@ describe('readTraceListView', () => {
             search: 'hello',
             agent: 'Support',
             provider: 'openai',
+            conversation: 'support/ada 1042',
             bookmarked: true,
         })
     })
@@ -88,6 +90,7 @@ describe('traceListApiParams', () => {
             search: '',
             agent: '',
             provider: '',
+            conversation: '',
             bookmarked: false,
         })
     })
@@ -99,12 +102,14 @@ describe('traceListApiParams', () => {
                 search: 'x',
                 agent: 'Support',
                 provider: 'openai',
+                conversation: 'c-1',
                 bookmarked: true,
             }),
         ).toMatchObject({
             search: 'x',
             agent: 'Support',
             provider: 'openai',
+            conversation: 'c-1',
             bookmarked: true,
         })
     })

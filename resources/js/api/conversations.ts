@@ -38,12 +38,25 @@ export function fetchConversations(
 }
 
 /**
- * A window of one conversation's turns, oldest first: the newest ones, or with `before` (a run's
- * id) the ones that started before that run. The id is any string the host application chose and
- * travels in the query. Rejects with a 404 `ApiError` for a conversation with no turns.
+ * What the transcript endpoint is asked for. At most one of `turn`, `before` and `after` (a run's
+ * id) is sent: `turn` ends the window at that run, `before` and `after` take the turns just
+ * before or after it. `limit` is how many turns (the endpoint's default and most is 10).
+ */
+export type TranscriptParams = {
+    id: string
+    turn?: string
+    before?: string
+    after?: string
+    limit?: number
+}
+
+/**
+ * A window of one conversation's turns, oldest first: the newest ones, or the ones an anchor
+ * chooses. The id is any string the host application chose and travels in the query. Rejects with
+ * a 404 `ApiError` for a conversation with no turns.
  */
 export function fetchTranscript(
-    params: { id: string; before?: string },
+    params: TranscriptParams,
     signal?: AbortSignal,
 ): Promise<TranscriptResponse> {
     return apiRequest<TranscriptResponse>('/conversations/transcript', {
@@ -56,6 +69,10 @@ export function fetchTranscript(
 export const conversationKeys = {
     all: ['conversations'] as const,
     list: ['conversations', 'list'] as const,
-    /** One conversation's transcript, whatever windows of it are loaded. */
-    transcript: (id: string) => ['conversations', 'transcript', id] as const,
+    /**
+     * One conversation's transcript as a page was opened on it: at the turn the address named (the
+     * newest turns when `anchor` is empty). The windows loaded since are part of the data.
+     */
+    transcript: (id: string, anchor = '') =>
+        ['conversations', 'transcript', id, anchor] as const,
 }

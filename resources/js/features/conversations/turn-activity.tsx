@@ -18,13 +18,20 @@ type TurnActivityProps = {
     number: number
     /** The tool calls are shown as chips. */
     tools: boolean
+    /** The conversation's page at this turn: where the run's page leads back to. */
+    pagePath: string
 }
 
 /**
  * What the agent did between the messages: its tool calls as chips, in order, and beneath them a
  * disclosure of every message of that activity as it was stored.
  */
-export function TurnActivity({ turn, number, tools }: TurnActivityProps) {
+export function TurnActivity({
+    turn,
+    number,
+    tools,
+    pagePath,
+}: TurnActivityProps) {
     const [open, setOpen] = useState(false)
     const messages = activityOf(turn)
     const calls = messages.flatMap((message) => message.tool_calls ?? [])
@@ -44,7 +51,11 @@ export function TurnActivity({ turn, number, tools }: TurnActivityProps) {
                 <ul aria-label="Tool calls" className="flex flex-wrap gap-1.5">
                     {calls.map((call, index) => (
                         <li key={index} className="flex min-w-0">
-                            <ToolChip call={call} traceId={turn.trace.id} />
+                            <ToolChip
+                                call={call}
+                                traceId={turn.trace.id}
+                                from={pagePath}
+                            />
                         </li>
                     ))}
                 </ul>

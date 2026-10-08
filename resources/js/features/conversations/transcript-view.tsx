@@ -1,12 +1,13 @@
+import { useState } from 'react'
 import { ErrorState } from '@/components/patterns/error-state'
 import { LoadedTranscript } from '@/features/conversations/loaded-transcript'
-import { conversationIdText } from '@/features/conversations/conversation-id'
 import { TranscriptHeader } from '@/features/conversations/transcript-header'
 import { TranscriptNotFound } from '@/features/conversations/transcript-not-found'
 import { TranscriptSkeleton } from '@/features/conversations/transcript-skeleton'
 import { useTranscript } from '@/features/conversations/use-transcript'
 import { useFocusHandoff } from '@/hooks/use-focus-handoff'
 import { usePageTitle } from '@/hooks/use-page-title'
+import { conversationIdText } from '@/lib/conversation-id'
 import { cn } from '@/lib/utils'
 
 type TranscriptViewProps = {
@@ -15,25 +16,49 @@ type TranscriptViewProps = {
     /** Whether the tool calls of each turn are shown. */
     tools: boolean
     onToolsChange: (tools: boolean) => void
+    /** The turn the address names, by run id; empty for none. */
+    turn: string
+    /** Writes the turn the reader is at to the address, replacing its entry; empty drops it. */
+    onTurnChange: (turn: string) => void
     className?: string
 }
 
 /**
- * One conversation as a dialogue: the newest turns first loaded, earlier ones on request. Loads
- * the conversation itself, and says so when it is loading, could not be loaded, or does not exist
- * (an address without an id included, which asks for nothing).
+ * One conversation as a dialogue: the turns ending at the one the address names (the newest turns
+ * without one), earlier and later ones on request. Loads the conversation itself, and says so
+ * when it is loading, could not be loaded, or does not exist (an address without an id included,
+ * which asks for nothing). A conversation keeps nothing of the one before it.
  */
-export function TranscriptView({
+export function TranscriptView({ id, ...props }: TranscriptViewProps) {
+    return <Transcript key={id} id={id} {...props} />
+}
+
+function Transcript({
     id,
     tools,
     onToolsChange,
+    turn,
+    onTurnChange,
     className,
 }: TranscriptViewProps) {
-    const transcript = useTranscript(id)
+    // The window is chosen by the turn the page was opened on. A turn written later, by the page
+    // itself, is somewhere in what is loaded and loads nothing.
+    const [anchor, setAnchor] = useState(turn)
+    const transcript = useTranscript(id, anchor)
     const { conversation } = transcript
     // The id the response returns is the conversation's own spelling; until then, the address's.
     const shownId = conversation?.id ?? id
     const ready = conversation !== undefined && !transcript.notFound
+    // Back or Forward to a turn the loaded turns do not hold: the window ending at it is loaded.
+    const elsewhere =
+        ready &&
+        turn !== '' &&
+        turn !== anchor &&
+        !transcript.turns.some((item) => item.turn.trace.id === turn)
+
+    if (elsewhere) {
+        setAnchor(turn)
+    }
 
     // The breadcrumb and the tab are called after the conversation while it is there to show.
     usePageTitle(
@@ -58,16 +83,33 @@ export function TranscriptView({
                 <TranscriptNotFound />
             ) : ready ? (
                 <LoadedTranscript
-                    // A conversation keeps nothing of the one before it.
-                    key={conversation.id}
+                    // The window the page opened on is the page's: a new one starts it afresh.
+                    key={anchor}
                     conversation={conversation}
                     turns={transcript.turns}
-                    older={transcript.older}
+                    earlier={{
+                        count: transcript.older,
+                        loading: transcript.loadingEarlier,
+                        failure: transcript.earlierFailure,
+                        onLoad: transcript.loadEarlier,
+                    }}
+                    later={{
+                        count: transcript.newer,
+                        loading: transcript.loadingLater,
+                        failure: transcript.laterFailure,
+                        onLoad: transcript.loadLater,
+                    }}
                     tools={tools}
                     onToolsChange={onToolsChange}
-                    loadingEarlier={transcript.loadingEarlier}
-                    earlierFailure={transcript.olderFailure}
-                    onLoadEarlier={transcript.loadEarlier}
+                    turn={turn}
+                    missing={
+                        transcript.missing !== null &&
+                        transcript.missing === turn
+                    }
+                    onTurnChange={onTurnChange}
+                    refreshing={transcript.refreshing}
+                    refreshFailed={transcript.refreshFailed}
+                    onRetryRefresh={transcript.retryRefresh}
                 />
             ) : transcript.failed ? (
                 <ErrorState
