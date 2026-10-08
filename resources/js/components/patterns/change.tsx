@@ -13,7 +13,7 @@ type ChangeProps = {
     previous: number | null
     /** Whether more is better, worse or neither; it only decides the colour. */
     polarity: Polarity
-    /** Said when there is nothing to compare with. */
+    /** Said only when `previous` is `null`: the earlier period has no data. A previous value of 0 is data. */
     noPreviousLabel?: string
     /** Muted text after the figure, such as "vs previous 24h". */
     caption?: ReactNode
@@ -39,6 +39,13 @@ type ChangeProps = {
 )
 
 const minus = '−'
+
+// Sums of decimals carry noise of about 1e-16 of their size (0.1 + 0.2 is not 0.3); a
+// difference that small is the same value, not a change.
+const sameWithinRounding = 1e-12
+
+// Beyond this a percentage stops being informative and its digits only get in the way.
+const largestShown = 999.9
 
 // Fixed locale: the same text for every viewer, whatever their browser language.
 const oneDecimal = new Intl.NumberFormat('en-US', {
@@ -67,7 +74,7 @@ function isNumber(value: number | null): value is number {
 /**
  * How a value moved since the previous period: an arrow, a signed figure and the same in words
  * for a screen reader, so direction never rests on colour. Nothing is drawn without a current
- * value, and a missing or zero previous value is said, not turned into a percentage.
+ * value, a missing previous value is said, and a previous value of 0 is shown as "from 0" rather than as a percentage.
  */
 export function Change({
     current,
@@ -112,7 +119,11 @@ export function Change({
 
     const difference = current - previous
 
-    if (difference === 0) {
+    if (
+        difference === 0 ||
+        Math.abs(difference) <=
+            sameWithinRounding * Math.max(Math.abs(current), Math.abs(previous))
+    ) {
         return root(
             'neutral',
             <>
@@ -158,9 +169,10 @@ export function Change({
 
     // A figure made here. Percentage points are read in full where "pp" would be unclear.
     const percentage = (value: number, unit: 'percent' | 'points') => {
-        const text = oneDecimal.format(value)
-        const tiny = text === '0.0'
-        const shown = tiny ? '0.1' : text
+        const huge = !Number.isFinite(value) || value > largestShown
+        const text = huge ? '0.0' : oneDecimal.format(value)
+        const tiny = !huge && text === '0.0'
+        const shown = huge ? '999' : tiny ? '0.1' : text
         const short = unit === 'percent' ? `${shown}%` : `${shown} pp`
         const long =
             unit === 'percent' ? `${shown}%` : `${shown} percentage points`
@@ -168,12 +180,18 @@ export function Change({
         return drawn(
             <span className="tabular-nums">
                 <span aria-hidden="true">
-                    {tiny ? `<${short}` : `${sign}${short}`}
+                    {huge
+                        ? `>${short}`
+                        : tiny
+                          ? `<${short}`
+                          : `${sign}${short}`}
                 </span>
                 <span className="sr-only">
-                    {tiny
-                        ? `${direction} by less than ${long}`
-                        : `${direction} ${long}`}
+                    {huge
+                        ? `${direction} by more than ${long}`
+                        : tiny
+                          ? `${direction} by less than ${long}`
+                          : `${direction} ${long}`}
                 </span>
             </span>,
         )
@@ -186,9 +204,16 @@ export function Change({
             return percentage(size * 100, 'points')
         case 'relative':
             if (previous === 0) {
-                return renderDifference ? absolute(renderDifference) : unknown
+                return renderDifference
+                    ? absolute(renderDifference)
+                    : drawn(
+                          <span>
+                              <span className="sr-only">{direction} </span>
+                              from 0
+                          </span>,
+                      )
             }
 
-            return percentage((size / Math.abs(previous)) * 100, 'percent')
+            return percentage((size * 100) / Math.abs(previous), 'percent')
     }
 }

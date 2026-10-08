@@ -7,9 +7,9 @@ type MetricProps = {
     label: string
     /** The value, drawn as given: the caller passes a component that knows how to format it. */
     children: ReactNode
-    /** How the value moved, usually a `Change`. Under the value. */
+    /** How the value moved, usually a `Change`. Under the value. Not interactive: the metric's link covers it. */
     change?: ReactNode
-    /** A small secondary line beside the change, such as "27 failed". */
+    /** A small secondary line beside the change, such as "27 failed". Not interactive: the metric's link covers it. */
     detail?: ReactNode
     /** Makes the whole metric a link to the evidence behind it. */
     to?: ComponentProps<typeof RowLink>['to']
@@ -58,9 +58,10 @@ export function Metric({
             >
                 {children}
             </dd>
-            {change ? <dd className="mt-1.5">{change}</dd> : null}
+            {/* A `Change` that has nothing to say renders nothing: the empty `dd` must not take a gap. */}
+            {change ? <dd className="mt-1.5 empty:hidden">{change}</dd> : null}
             {detail ? (
-                <dd className="mt-1.5 text-caption text-muted-foreground">
+                <dd className="mt-1.5 text-caption text-muted-foreground empty:hidden">
                     {detail}
                 </dd>
             ) : null}

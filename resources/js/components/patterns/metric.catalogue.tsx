@@ -38,6 +38,27 @@ export const catalogue: CatalogueEntry = {
             ),
         },
         {
+            name: 'A change with nothing to say takes no room',
+            Component: () => (
+                <MetricStrip className="max-w-xs">
+                    <Metric
+                        label="Failed"
+                        change={
+                            <Change
+                                mode="relative"
+                                polarity="up-is-bad"
+                                current={null}
+                                previous={12}
+                            />
+                        }
+                        detail="2.1% of runs"
+                    >
+                        Not captured
+                    </Metric>
+                </MetricStrip>
+            ),
+        },
+        {
             name: 'A link (hover it, Tab to it: the whole metric is the target)',
             Component: () => (
                 <MemoryRouter>

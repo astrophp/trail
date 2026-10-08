@@ -2,6 +2,7 @@ import { render, screen } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { MemoryRouter } from 'react-router'
 import { describe, expect, it } from 'vitest'
+import { Change } from '@/components/patterns/change'
 import { Metric } from '@/components/patterns/metric'
 import { MetricStrip } from '@/components/patterns/metric-strip'
 
@@ -142,5 +143,54 @@ describe('Metric', () => {
         )
 
         expect(group(container)).toHaveClass('extra')
+    })
+
+    it('hides the wrapper of a change that renders nothing, and not one that renders', () => {
+        const { container, rerender } = renderMetric(
+            <Metric
+                label="Failed"
+                change={
+                    <Change
+                        mode="relative"
+                        polarity="neutral"
+                        current={null}
+                        previous={4}
+                    />
+                }
+            >
+                27
+            </Metric>,
+        )
+
+        const emptied = Array.from(group(container).querySelectorAll('dd'))
+
+        expect(emptied).toHaveLength(2)
+        expect(emptied[1]).toBeEmptyDOMElement()
+        expect(emptied[1]).toHaveClass('empty:hidden')
+
+        rerender(
+            <MemoryRouter>
+                <MetricStrip>
+                    <Metric
+                        label="Failed"
+                        change={
+                            <Change
+                                mode="relative"
+                                polarity="neutral"
+                                current={5}
+                                previous={4}
+                            />
+                        }
+                    >
+                        27
+                    </Metric>
+                </MetricStrip>
+            </MemoryRouter>,
+        )
+
+        const filled = Array.from(group(container).querySelectorAll('dd'))
+
+        expect(filled[1]).not.toBeEmptyDOMElement()
+        expect(filled[1]).toHaveTextContent('+25.0%')
     })
 })

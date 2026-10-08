@@ -105,7 +105,7 @@ describe('Change', () => {
         expect(slot(container)?.textContent).toBe('First period')
     })
 
-    it('does not turn a previous value of zero into a percentage when it cannot draw the difference', () => {
+    it('says "from 0" with the direction when the previous value is zero, never a percentage or "No earlier data"', () => {
         const { container } = render(
             <Change
                 mode="relative"
@@ -115,8 +115,49 @@ describe('Change', () => {
             />,
         )
 
-        expect(slot(container)?.textContent).toBe('No earlier data')
-        expect(container.textContent).not.toMatch(/Infinity|NaN|%/)
+        expect(slot(container)).toHaveAttribute('data-direction', 'up')
+        expect(slot(container)).toHaveAttribute('data-tone', 'bad')
+        expect(container.querySelectorAll('svg')).toHaveLength(1)
+        expect(screen.getByText('up')).toHaveClass('sr-only')
+        expect(slot(container)?.textContent).toBe('up from 0')
+        expect(container.textContent).not.toMatch(/Infinity|NaN|%|earlier/)
+    })
+
+    it('says "down from 0" for a fall from zero', () => {
+        const { container } = render(
+            <Change
+                mode="relative"
+                polarity="up-is-bad"
+                current={-3}
+                previous={0}
+            />,
+        )
+
+        expect(slot(container)?.textContent).toBe('down from 0')
+        expect(slot(container)).toHaveAttribute('data-tone', 'good')
+    })
+
+    it('keeps its "no earlier data" words for a previous value that is null, in every mode', () => {
+        const draw = () => 'x'
+
+        for (const props of [
+            { mode: 'relative' },
+            { mode: 'points' },
+            { mode: 'absolute', renderDifference: draw },
+        ] as const) {
+            const { container, unmount } = render(
+                <Change
+                    {...props}
+                    polarity="neutral"
+                    current={3}
+                    previous={null}
+                />,
+            )
+
+            expect(slot(container)?.textContent).toBe('No earlier data')
+            expect(container.querySelector('svg')).toBeNull()
+            unmount()
+        }
     })
 
     it('draws the difference itself when the previous value is zero and it is given a way to', () => {
@@ -429,5 +470,163 @@ describe('Change', () => {
         )
 
         expect(slot(container)).toHaveClass('extra')
+    })
+
+    it.each([
+        ['relative', undefined],
+        ['absolute', (size: number) => `${size}`],
+    ] as const)(
+        'reads 0.3 against 0.1 + 0.2 as no change in %s mode',
+        (mode, renderDifference) => {
+            const draw = vi.fn(renderDifference)
+            const { container } = render(
+                <Change
+                    {...({ mode, renderDifference: draw } as {
+                        mode: 'relative'
+                    })}
+                    polarity="neutral"
+                    current={0.3}
+                    previous={0.1 + 0.2}
+                />,
+            )
+
+            expect(slot(container)?.textContent).toBe('No change')
+            expect(draw).not.toHaveBeenCalled()
+        },
+    )
+
+    it('still reads a pair just outside the rounding tolerance as a change', () => {
+        const draw = vi.fn((size: number) => `${size}`)
+        const { container } = render(
+            <Change
+                mode="absolute"
+                polarity="neutral"
+                current={1 + 1e-11}
+                previous={1}
+                renderDifference={draw}
+            />,
+        )
+
+        expect(slot(container)).toHaveAttribute('data-direction', 'up')
+        expect(draw).toHaveBeenCalledTimes(1)
+
+        const { container: other } = render(
+            <Change
+                mode="relative"
+                polarity="neutral"
+                current={1 + 1e-11}
+                previous={1}
+            />,
+        )
+
+        expect(slot(other)?.textContent).toContain('<0.1%')
+    })
+
+    it.each([
+        ['0', '-0'],
+        ['-0', '0'],
+    ])('reads %s against %s as no change', (a, b) => {
+        const { container } = render(
+            <Change
+                mode="relative"
+                polarity="neutral"
+                current={Number(a)}
+                previous={Number(b)}
+            />,
+        )
+
+        expect(slot(container)?.textContent).toBe('No change')
+    })
+
+    it.each([
+        ['up', 500, 2, '>999%', 'up by more than 999%'],
+        ['down', -5000, 2, '>999%', 'down by more than 999%'],
+        ['up', 2, 5e-324, '>999%', 'up by more than 999%'],
+    ])(
+        'shows a ratio beyond 999.9 percent as ">999%%": %s %s from %s',
+        (direction, current, previous, visible, spoken) => {
+            const { container } = render(
+                <Change
+                    mode="relative"
+                    polarity="neutral"
+                    current={current}
+                    previous={previous}
+                />,
+            )
+
+            expect(screen.getByText(visible)).toHaveAttribute(
+                'aria-hidden',
+                'true',
+            )
+            expect(screen.getByText(spoken)).toHaveClass('sr-only')
+            expect(slot(container)).toHaveAttribute('data-direction', direction)
+            expect(container.textContent).not.toMatch(/∞|Infinity|NaN|\d{4}/)
+        },
+    )
+
+    it('still shows 999.8 percent as a figure', () => {
+        render(
+            <Change
+                mode="relative"
+                polarity="neutral"
+                current={1099.8}
+                previous={100}
+            />,
+        )
+
+        expect(screen.getByText('+999.8%')).toBeInTheDocument()
+        expect(screen.queryByText('>999%')).not.toBeInTheDocument()
+    })
+
+    it('shows a tiny difference in points as "<0.1 pp"', () => {
+        render(
+            <Change
+                mode="points"
+                polarity="neutral"
+                current={0.5004}
+                previous={0.5}
+            />,
+        )
+
+        expect(screen.getByText('<0.1 pp')).toBeInTheDocument()
+        expect(
+            screen.getByText('up by less than 0.1 percentage points'),
+        ).toHaveClass('sr-only')
+    })
+
+    it('rounds at the boundary: 0.05 percent is "+0.1%", 0.049 percent is "<0.1%"', () => {
+        const { unmount } = render(
+            <Change
+                mode="relative"
+                polarity="neutral"
+                current={10005}
+                previous={10000}
+            />,
+        )
+
+        expect(screen.getByText('+0.1%')).toBeInTheDocument()
+        unmount()
+
+        render(
+            <Change
+                mode="relative"
+                polarity="neutral"
+                current={100049}
+                previous={100000}
+            />,
+        )
+
+        expect(screen.getByText('<0.1%')).toBeInTheDocument()
+        expect(screen.queryByText('+0.1%')).not.toBeInTheDocument()
+    })
+
+    it('formats numbers in a fixed locale, whatever the browser language is', async () => {
+        vi.resetModules()
+        const spy = vi.spyOn(Intl, 'NumberFormat')
+
+        await import('@/components/patterns/change')
+
+        expect(spy).toHaveBeenCalledWith('en-US', expect.anything())
+        spy.mockRestore()
     })
 })

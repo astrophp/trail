@@ -12,16 +12,27 @@ describe('RankedList', () => {
     it('is an ordered list that keeps the order it is given', () => {
         const { container } = render(
             <RankedList>
+                <RankedListItem label="mini" value="$1" share={0.1} />
                 <RankedListItem label="gpt-5" value="$8" share={0.5} />
                 <RankedListItem label="claude" value="$3" share={0.2} />
-                <RankedListItem label="mini" value="$1" share={0.1} />
             </RankedList>,
         )
 
         expect(container.querySelector('ol')).not.toBeNull()
         expect(
             screen.getAllByRole('listitem').map((item) => item.textContent),
-        ).toEqual(['gpt-5$8', 'claude$3', 'mini$1'])
+        ).toEqual(['mini$1', 'gpt-5$8', 'claude$3'])
+    })
+
+    it('is a list by role, whatever the stylesheet does to list styles', () => {
+        const { container } = render(
+            <RankedList>
+                <RankedListItem label="a" value="1" share={null} />
+            </RankedList>,
+        )
+
+        expect(screen.getByRole('list')).toBe(container.querySelector('ol'))
+        expect(container.querySelector('ol')).toHaveAttribute('role', 'list')
     })
 
     it('draws a bar as wide as the share', () => {
