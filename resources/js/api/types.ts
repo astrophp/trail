@@ -150,6 +150,64 @@ export type ConversationListResponse = {
     counts: ConversationCounts
 }
 
+/** The period before the range: no preset, `from` included, `to` excluded. */
+export type PreviousRange = { from: string; to: string }
+
+export type ErrorRate = {
+    /** `failed / finished` as a fraction, `null` when nothing has finished. Incomplete runs are in `finished`, not in `failed`. */
+    rate: number | null
+    failed: number
+    finished: number
+}
+
+export type SummaryDuration = {
+    /** The mean over the runs that have a duration, `null` when none has. */
+    average_ms: number | null
+    /** The nearest-rank 95th percentile, `null` below `p95_minimum` measured runs. */
+    p95_ms: number | null
+    measured: number
+    not_measured: number
+    p95_minimum: number
+}
+
+/** The figures of a set of runs: a range, the period before it, later one agent. */
+export type Summary = {
+    runs: StatusCounts
+    error_rate: ErrorRate
+    duration: SummaryDuration
+    usage: Usage
+    usage_coverage: { reported: number; not_reported: number }
+    cost: Cost
+    cost_coverage: { unpriced_runs: number; runs_without_amount: number }
+}
+
+export type BucketUnit = '5m' | 'hour' | 'day'
+
+/** The part of a clock bucket inside the range. `to` is excluded. */
+export type SeriesBucket = {
+    from: string
+    to: string
+    /** `false` when the bucket was cut at either end of the range. */
+    full: boolean
+    /** `true` only for the last bucket of a range that has not ended, while the clock bucket is still open. */
+    in_progress: boolean
+    runs: StatusCounts
+    duration: { average_ms: number | null; measured: number }
+    cost: Cost
+    unpriced_runs: number
+}
+
+export type OverviewResponse = {
+    data: {
+        summary: Summary
+        /** `null` when the previous period holds no runs. */
+        previous: Summary | null
+        series: { bucket: BucketUnit; buckets: SeriesBucket[] }
+    }
+    range: Range
+    previous_range: PreviousRange
+}
+
 /** The answer to a bookmark write: the run's bookmark state after it. */
 export type BookmarkResponse = {
     data: { trace_id: string; bookmarked: boolean }
