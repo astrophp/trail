@@ -351,4 +351,16 @@ export default defineConfig(
         files: ['resources/js/components/ui/**/*.{ts,tsx}'],
         rules: { 'no-restricted-syntax': ['error', noDefaultExport] },
     },
+
+    // 4. components/ui/chart.tsx is vendored as the shadcn CLI wrote it; Recharts 3's types leave `any` in tooltip and legend payloads, so these type-aware rules cannot hold there.
+    {
+        files: ['resources/js/components/ui/chart.tsx'],
+        rules: {
+            '@typescript-eslint/restrict-template-expressions': 'off',
+            '@typescript-eslint/no-unsafe-assignment': 'off',
+            '@typescript-eslint/no-unsafe-member-access': 'off',
+            '@typescript-eslint/no-unsafe-argument': 'off',
+            '@typescript-eslint/no-unnecessary-type-assertion': 'off',
+        },
+    },
 )
