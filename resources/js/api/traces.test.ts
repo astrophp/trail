@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
     bookmarkTrace,
+    fetchNeighbours,
     fetchTrace,
     fetchTraces,
     traceKeys,
@@ -67,6 +68,37 @@ describe('traceKeys', () => {
         expect(traceKeys.all).toEqual(['traces'])
         expect(traceKeys.list).toEqual(['traces', 'list'])
         expect(traceKeys.detail('abc')).toEqual(['traces', 'detail', 'abc'])
+    })
+})
+
+describe('fetchNeighbours', () => {
+    it('asks for the neighbours of one run in the view, without the page', async () => {
+        await fetchNeighbours('a/b', {
+            range: '7d',
+            sort: '-cost',
+            page: 3,
+            status: 'failed',
+            search: 'refund',
+            bookmarked: true,
+        })
+
+        expect(lastCall().url).toBe(
+            '/trail/api/traces/a%2Fb/neighbours?range=7d&sort=-cost&status=failed&search=refund&bookmarked=1',
+        )
+    })
+
+    it('has a key per run and view, whatever the page', () => {
+        const view = { range: '7d', sort: '-cost' } as const
+
+        expect(traceKeys.neighbours('abc', { ...view, page: 2 })).toEqual(
+            traceKeys.neighbours('abc', { ...view, page: 5 }),
+        )
+        expect(traceKeys.neighbours('abc', view)).not.toEqual(
+            traceKeys.neighbours('abd', view),
+        )
+        expect(traceKeys.neighbours('abc', view)).not.toEqual(
+            traceKeys.neighbours('abc', { ...view, sort: 'cost' }),
+        )
     })
 })
 

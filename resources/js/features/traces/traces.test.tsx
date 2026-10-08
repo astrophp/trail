@@ -181,17 +181,29 @@ describe('the Traces page', () => {
         for (const trace of fixture.data) {
             expect(
                 within(rowOf(trace.id)).getByRole('link', { name: trace.name }),
-            ).toHaveAttribute('href', `/trail/traces/${trace.id}`)
+            ).toHaveAttribute(
+                'href',
+                `/trail/traces/${trace.id}?from=%2Ftraces`,
+            )
         }
     })
 
-    it('keeps the time range on the link to a run', async () => {
-        renderApp('/traces?range=7d&sort=-cost')
+    it('tells the run the whole view of the list it was opened from, and no range of its own', async () => {
+        renderApp(
+            '/traces?range=7d&status=failed&search=refund&agent=Bare&provider=openai&bookmarked=1&sort=-cost&page=2',
+        )
         await loaded()
 
-        expect(
-            within(rowOf('trace-bare')).getByRole('link', { name: 'Bare' }),
-        ).toHaveAttribute('href', '/trail/traces/trace-bare?range=7d')
+        const href = within(rowOf('trace-bare'))
+            .getByRole('link', { name: 'Bare' })
+            .getAttribute('href')
+        const url = new URL(href ?? '', 'http://x')
+
+        expect(url.pathname).toBe('/trail/traces/trace-bare')
+        expect([...url.searchParams.keys()]).toEqual(['from'])
+        expect(url.searchParams.get('from')).toBe(
+            '/traces?range=7d&status=failed&search=refund&agent=Bare&provider=openai&bookmarked=1&sort=-cost&page=2',
+        )
     })
 })
 

@@ -4,7 +4,6 @@ import { SplitView } from '@/components/patterns/split-view'
 import type { SpanTree } from '@/features/trace/build-span-tree'
 import { EvidencePanel } from '@/features/trace/evidence-panel'
 import { ExecutionPane } from '@/features/trace/execution-pane'
-import { resolveSelection } from '@/features/trace/resolve-selection'
 import { timingAxis } from '@/features/trace/timing-axis'
 import { traceParams } from '@/features/trace/trace-params'
 import type { SetUrlState } from '@/hooks/use-url-state'
@@ -13,20 +12,29 @@ type ExecutionViewProps = {
     data: TraceDetailResponse['data']
     /** The run's spans as a tree; see `buildSpanTree`. */
     tree: SpanTree
+    /** The span that is selected (see `shownSelection`); `null` for a run without spans. */
+    selectedId: string | null
     /** The span the URL asks for, by id; empty when it names none. */
     span: string
     /** The evidence tab the URL asks for. */
     tab: string
     setParams: SetUrlState<typeof traceParams>
+    /** A span chosen in the tree. */
+    onSelect: (id: string) => void
+    /** The evidence's own back action on a narrow screen. */
+    onBack: () => void
 }
 
 /** The workbench: in one card the execution tree and the evidence for the selected span. */
 export function ExecutionView({
     data,
     tree,
+    selectedId,
     span: requested,
     tab,
     setParams,
+    onSelect,
+    onBack,
 }: ExecutionViewProps) {
     const { trace, detail, spans, usage, coverage } = data
     const axisMs = useMemo(
@@ -37,21 +45,17 @@ export function ExecutionView({
         () => new Map(usage.agents.map((agent) => [agent.span_id, agent])),
         [usage.agents],
     )
-    const selectedId = useMemo(
-        () => resolveSelection(tree, requested, trace.status),
-        [tree, requested, trace.status],
-    )
     const selected = selectedId === null ? undefined : tree.byId.get(selectedId)
     // The span a person opened from inside the panel, whose heading takes focus when it appears.
     // A span chosen in the tree is never one: focus stays on the tree row.
     const [focusSpan, setFocusSpan] = useState<string | null>(null)
-    // Selecting a span or a tab must not bury the list under history entries.
+    // Selecting a span or a tab must not bury the list under history entries (see `useSpanSelection`).
     const select = useCallback(
         (id: string) => {
             setFocusSpan(null)
-            setParams({ span: id }, { replace: true })
+            onSelect(id)
         },
-        [setParams],
+        [onSelect],
     )
     const selectFromPanel = useCallback(
         (id: string) => {
@@ -79,10 +83,6 @@ export function ExecutionView({
         },
         [setParams],
     )
-    const back = useCallback(
-        () => setParams({ span: '' }, { replace: true }),
-        [setParams],
-    )
 
     return (
         <SplitView
@@ -90,9 +90,13 @@ export function ExecutionView({
             primaryLabel="Execution tree"
             secondaryLabel="Span evidence"
             backLabel="Execution tree"
-            // On a narrow screen the evidence shows once a span is named in the URL.
-            detailOpen={requested !== ''}
-            onBack={back}
+            // On a narrow screen the evidence shows once a span is requested that the run has; a
+            // running run may still record it, so the request stands until it settles.
+            detailOpen={
+                requested !== '' &&
+                (tree.byId.has(requested) || trace.status === 'running')
+            }
+            onBack={onBack}
             defaultSize={55}
             className="overflow-hidden rounded-lg border bg-card md:h-[70dvh] md:min-h-96"
             primary={

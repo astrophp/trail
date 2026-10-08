@@ -1,5 +1,4 @@
-import { ArrowLeftIcon, MessageSquareIcon, UserIcon } from 'lucide-react'
-import { Link } from 'react-router'
+import { MessageSquareIcon, UserIcon } from 'lucide-react'
 import type { TraceDetailResponse } from '@/api/types'
 import { CopyButton } from '@/components/patterns/copy-button'
 import { KeyValue } from '@/components/patterns/key-value'
@@ -19,9 +18,10 @@ import { TokenValue } from '@/components/telemetry/token-value'
 import { TraceFlags } from '@/components/telemetry/trace-flags'
 import { UserLabel } from '@/components/telemetry/user-label'
 import { TraceId } from '@/components/telemetry/trace-id'
-import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
-import { useTimeRangeLink } from '@/hooks/use-time-range'
+import { BackLink } from '@/features/trace/back-link'
+import { CopyLinkButton } from '@/features/trace/copy-link-button'
+import type { Shown } from '@/features/trace/shown-selection'
 import { formatCount } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
@@ -29,6 +29,8 @@ type TraceHeaderProps = {
     trace: TraceDetailResponse['data']['trace']
     /** How the run failed, shown right under the header; `null` when it was not recorded. */
     error: TraceDetailResponse['data']['detail']['error']
+    /** What is on screen, which "Copy link" copies the address of. */
+    shown: Shown
     onBookmarkChange: (bookmarked: boolean) => void
     className?: string
 }
@@ -46,27 +48,16 @@ const figure = 'text-heading tabular-nums'
 export function TraceHeader({
     trace,
     error,
+    shown,
     onBookmarkChange,
     className,
 }: TraceHeaderProps) {
-    const linkTo = useTimeRangeLink()
-
     return (
         <header
             data-slot="trace-header"
             className={cn('flex flex-col gap-4', className)}
         >
-            <Button
-                asChild
-                variant="ghost"
-                size="xs"
-                className="-ms-2 self-start text-muted-foreground"
-            >
-                <Link to={linkTo('/traces')}>
-                    <ArrowLeftIcon aria-hidden="true" />
-                    Back to traces
-                </Link>
-            </Button>
+            <BackLink className="-ms-2 self-start" />
             <PageHeader
                 title={trace.name}
                 // The bookmark stays beside the title on a narrow screen; the id wraps instead.
@@ -107,6 +98,7 @@ export function TraceHeader({
                     </span>
                 }
             >
+                <CopyLinkButton traceId={trace.id} shown={shown} />
                 <BookmarkToggle
                     trace={trace}
                     onPressedChange={onBookmarkChange}

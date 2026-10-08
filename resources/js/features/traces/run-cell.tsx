@@ -1,4 +1,5 @@
 import { useContext } from 'react'
+import { useLocation } from 'react-router'
 import type { Trace } from '@/api/types'
 import { RowLink } from '@/components/patterns/row-link'
 import { AgentIcon } from '@/components/telemetry/agent-icon'
@@ -6,11 +7,15 @@ import { BookmarkToggle } from '@/components/telemetry/bookmark-toggle'
 import { TraceId } from '@/components/telemetry/trace-id'
 import { TableBusyContext } from '@/features/traces/table-busy'
 import { useBookmark } from '@/features/traces/use-bookmark'
-import { useTimeRangeLink } from '@/hooks/use-time-range'
+import { returnTo } from '@/lib/return-context'
 
-/** Who ran, what it was asked, and which run it is. The name leads to the run. */
+/**
+ * Who ran, what it was asked, and which run it is. The name leads to the run, which is told the
+ * whole view of the list it was opened from (range, filters, sort and page) in `from`.
+ */
 export function RunCell({ trace }: { trace: Trace }) {
-    const linkTo = useTimeRangeLink()
+    const { pathname, search } = useLocation()
+    const from = new URLSearchParams({ from: returnTo(pathname, search) })
     const bookmark = useBookmark(trace.id)
     const busy = useContext(TableBusyContext)
 
@@ -28,7 +33,7 @@ export function RunCell({ trace }: { trace: Trace }) {
                 <div className="flex min-w-0 items-center gap-2">
                     <AgentIcon type={trace.type} />
                     <RowLink
-                        to={linkTo(`/traces/${trace.id}`)}
+                        to={`/traces/${encodeURIComponent(trace.id)}?${from.toString()}`}
                         className="truncate"
                     >
                         {trace.name}

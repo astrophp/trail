@@ -685,7 +685,13 @@ describe('the selected tab', () => {
         expect(tabNames()).toEqual(['Input', 'Metadata', 'Raw'])
         expect(activeTabName()).toBe('Input')
         expect(screen.queryByRole('alert')).not.toBeInTheDocument()
-        expect(params().get('tab')).toBe('output')
+        // Said once, and taken out of the URL.
+        expect(
+            screen.getByText(
+                'That tab is not available for this span. Showing Input.',
+            ),
+        ).toBeVisible()
+        await waitFor(() => expect(params().has('tab')).toBe(false))
     })
 
     it('ignores a tab that is not one of the four', async () => {
@@ -1521,7 +1527,9 @@ describe('the link back to the list', () => {
             window.innerWidth = width
             await open([root()])
 
-            const link = screen.getByRole('link', { name: 'Back to traces' })
+            const [link] = screen.getAllByRole('link', {
+                name: 'Back to traces',
+            })
             const name = screen.getByRole('heading', { level: 1 })
 
             expect(link).toHaveAttribute('href', '/trail/traces')
@@ -1532,12 +1540,14 @@ describe('the link back to the list', () => {
         },
     )
 
-    it('keeps the time range', async () => {
+    it('does not carry the time range, which a run has none of', async () => {
         await open([root()], { search: '?range=7d&span=root' })
 
-        expect(
-            screen.getByRole('link', { name: 'Back to traces' }),
-        ).toHaveAttribute('href', '/trail/traces?range=7d')
+        for (const link of screen.getAllByRole('link', {
+            name: 'Back to traces',
+        })) {
+            expect(link).toHaveAttribute('href', '/trail/traces')
+        }
     })
 })
 

@@ -59,7 +59,8 @@ function storedSize(key: string): number | null {
  *
  * Both panes are always in the page in the same structure (the one that is not shown is `hidden`),
  * so opening the detail or crossing the breakpoint never loses what is inside them. In single-pane
- * mode focus moves to the pane that appears. Give the component a height for the panes to scroll
+ * mode focus moves to the pane that appears (without scrolling), and the detail's top is
+ * scrolled into view when it opens. Give the component a height for the panes to scroll
  * in; the divider spans it. It assumes a left-to-right layout: the primary pane is on the left.
  */
 export function SplitView({
@@ -105,6 +106,11 @@ export function SplitView({
         const pane = detailOpen ? secondaryPane : primaryPane
 
         pane.current?.focus({ preventScroll: true })
+
+        // The detail opens where the person is scrolled in the primary pane: show its top.
+        if (detailOpen) {
+            pane.current?.scrollIntoView({ block: 'start' })
+        }
     }, [detailOpen, compact])
 
     function commit(next: number) {
@@ -254,7 +260,9 @@ export function SplitView({
                 tabIndex={-1}
                 className={cn(
                     'min-w-0 outline-none',
-                    compact ? 'flex flex-col gap-2' : 'flex-1 overflow-auto',
+                    compact
+                        ? 'flex scroll-mt-16 flex-col gap-2'
+                        : 'flex-1 overflow-auto',
                 )}
             >
                 {compact && (

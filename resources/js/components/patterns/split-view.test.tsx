@@ -558,6 +558,24 @@ describe('SplitView, single pane', () => {
             expect(pane('Span details')).toHaveFocus()
         })
 
+        it('scrolls the top of the detail into view when it opens, and not for the list', () => {
+            const scroll = vi.fn()
+            Element.prototype.scrollIntoView = scroll
+            const { update } = renderSplit()
+
+            update({ detailOpen: true })
+
+            expect(scroll).toHaveBeenCalledTimes(1)
+            expect(scroll).toHaveBeenCalledWith({ block: 'start' })
+            expect(scroll.mock.contexts[0]).toBe(pane('Span details'))
+
+            update({ detailOpen: false })
+
+            expect(scroll).toHaveBeenCalledTimes(1)
+
+            Element.prototype.scrollIntoView = () => {}
+        })
+
         it('moves back to the list when the detail closes', () => {
             const { update } = renderSplit({ detailOpen: true })
 

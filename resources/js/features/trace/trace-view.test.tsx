@@ -792,9 +792,11 @@ describe('loading, failing and not finding a run', () => {
         expect(calls).toBe(2)
     })
 
-    it('says a run is not found, with a way back to the list that keeps the range', async () => {
+    it('says a run is not found, with a way back to the list', async () => {
         mockTraceApi({})
-        renderApp('/traces/ghost?range=7d')
+        renderApp(
+            `/traces/ghost?from=${encodeURIComponent('/traces?range=7d&status=failed')}`,
+        )
         await appReady()
 
         expect(
@@ -806,7 +808,7 @@ describe('loading, failing and not finding a run', () => {
         ).not.toBeInTheDocument()
         expect(
             screen.getByRole('link', { name: 'Back to traces' }),
-        ).toHaveAttribute('href', '/trail/traces?range=7d')
+        ).toHaveAttribute('href', '/trail/traces?range=7d&status=failed')
     })
 })
 
