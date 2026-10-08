@@ -19,20 +19,20 @@ export function UsageView({ data, spanLimit, onOpenSpan }: UsageViewProps) {
     )
 
     return (
-        <div className="grid items-start gap-6 md:grid-cols-3">
+        <div className="grid items-start gap-6 roomy:grid-cols-4">
             <TokenTotals
                 usage={usage.totals.usage}
                 cost={usage.totals.cost}
                 rows={usage.rows}
                 spanLimit={spanLimit}
-                className="md:col-span-1"
+                className="roomy:col-span-1"
             />
             <UsageBySpan
                 usage={usage}
                 spanLimit={spanLimit}
                 attempts={attempts}
                 onOpenSpan={onOpenSpan}
-                className="md:col-span-2"
+                className="min-w-0 roomy:col-span-3"
             />
         </div>
     )
