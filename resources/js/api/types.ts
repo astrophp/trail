@@ -2,7 +2,10 @@
 // exactly as sent. api/contract.test.ts checks these types against the output
 // of the PHP resources.
 
+import type { JsonObject, JsonValue } from '@/lib/json'
 import type { TimeRangePreset } from '@/lib/time-range'
+
+export type { JsonObject, JsonValue } from '@/lib/json'
 
 export type Status =
     'running' | 'completed' | 'failed' | 'incomplete' | 'awaiting_approval'
@@ -123,17 +126,6 @@ export type TraceListResponse = {
 export type BookmarkResponse = {
     data: { trace_id: string; bookmarked: boolean }
 }
-
-/** JSON as the server decoded it from a stored payload. Its shape is the agent's, not Trail's. */
-export type JsonValue =
-    | string
-    | number
-    | boolean
-    | null
-    | JsonValue[]
-    | { [key: string]: JsonValue }
-
-export type JsonObject = { [key: string]: JsonValue }
 
 export type SpanType = 'agent' | 'step' | 'tool' | 'embedding'
 

@@ -99,6 +99,42 @@ describe('CopyButton', () => {
         expect(onCopied).not.toHaveBeenCalled()
     })
 
+    it('computes the text when pressed, not when rendered', async () => {
+        const writeText = stubClipboard(() => Promise.resolve())
+        const text = vi.fn(() => 'computed')
+        render(<CopyButton text={text} label="Copy run id" />)
+
+        expect(text).not.toHaveBeenCalled()
+
+        await press()
+
+        expect(text).toHaveBeenCalledTimes(1)
+        expect(writeText).toHaveBeenCalledWith('computed')
+    })
+
+    it('reports a text function that throws', async () => {
+        const writeText = stubClipboard(() => Promise.resolve())
+        const onCopied = vi.fn()
+        const onFailed = vi.fn()
+        render(
+            <CopyButton
+                text={() => {
+                    throw new Error('too deep')
+                }}
+                label="Copy run id"
+                onCopied={onCopied}
+                onFailed={onFailed}
+            />,
+        )
+
+        await press()
+
+        expect(onFailed).toHaveBeenCalledTimes(1)
+        expect(onCopied).not.toHaveBeenCalled()
+        expect(writeText).not.toHaveBeenCalled()
+        expect(button()).not.toHaveAttribute('data-copied')
+    })
+
     it('works without callbacks and accepts a className', async () => {
         stubClipboard(() => Promise.resolve())
         render(<CopyButton text="abc" label="Copy run id" className="extra" />)
