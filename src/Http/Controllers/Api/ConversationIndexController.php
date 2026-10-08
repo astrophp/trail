@@ -19,13 +19,14 @@ class ConversationIndexController
         $filters = ConversationFilters::fromRequest($request);
         $page = Page::fromRequest($request);
 
-        $total = $index->count($range, $filters);
+        $counts = $index->counts($range, $filters);
         $summaries = $conversations->summaries($index->ids($range, $filters, $page));
 
         return response()->json([
             'data' => ConversationResource::of($summaries)->collection($summaries),
-            'pagination' => $page->envelope($total),
+            'pagination' => $page->envelope($filters->failed ? $counts['failed'] : $counts['all']),
             'range' => $range->toArray(),
+            'counts' => $counts,
         ]);
     }
 }

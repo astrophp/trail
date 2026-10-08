@@ -55,19 +55,37 @@ final class ConversationIndex
     }
 
     /**
-     * How many conversations the list shows in all.
+     * How many conversations the range, the agent, the user and the search leave, and how many of
+     * those have a failed or incomplete turn. Neither number depends on the failed filter, so they
+     * describe the same view whichever tab is selected; the list shows one of them. Read in a single
+     * query over one row for each conversation, which is flagged when it has such a turn.
+     *
+     * @return array{all: int, failed: int}
      */
-    public function count(TimeRange $range, ConversationFilters $filters): int
+    public function counts(TimeRange $range, ConversationFilters $filters): array
     {
-        $grouped = $this->grouped($range, $filters)->select('conversation_id');
+        [$failed, $bindings] = $this->failedTurns();
 
-        return $grouped->newQuery()->fromSub($grouped, 'conversations')->count();
+        $grouped = $this->grouped($range, $filters, false)
+            ->select('conversation_id')
+            ->selectRaw("case when {$failed} > 0 then 1 else 0 end as has_failure", $bindings);
+
+        $row = $grouped->newQuery()
+            ->fromSub($grouped, 'conversations')
+            ->selectRaw('count(*) as total, sum(has_failure) as failures')
+            ->first();
+
+        return [
+            'all' => is_numeric($row?->total) ? (int) $row->total : 0,
+            'failed' => is_numeric($row?->failures) ? (int) $row->failures : 0,
+        ];
     }
 
     /**
-     * One row for each conversation that passes the range and the filters.
+     * One row for each conversation that passes the range and the filters. The failed filter is
+     * left out when the counts ask for it, since they count what it would keep.
      */
-    private function grouped(TimeRange $range, ConversationFilters $filters): Builder
+    private function grouped(TimeRange $range, ConversationFilters $filters, bool $applyFailed = true): Builder
     {
         $table = (new Trace)->getTable();
 
@@ -89,12 +107,10 @@ final class ConversationIndex
             $query->havingRaw('sum(case when user_id = ? then 1 else 0 end) > 0', [$filters->userId]);
         }
 
-        if ($filters->failed) {
-            // A running turn past the cutoff is incomplete, by the same expression the status counts use.
-            $query->havingRaw(
-                'sum(case when status in (?, ?) or (status = ? and created_at < ?) then 1 else 0 end) > 0',
-                [Status::Failed->value, Status::Incomplete->value, Status::Running->value, StaleRuns::cutoffColumn()],
-            );
+        if ($filters->failed && $applyFailed) {
+            [$failed, $bindings] = $this->failedTurns();
+
+            $query->havingRaw("{$failed} > 0", $bindings);
         }
 
         if ($filters->search !== null) {
@@ -107,6 +123,21 @@ final class ConversationIndex
         }
 
         return $query;
+    }
+
+    /**
+     * The number of a conversation's turns that are failed or incomplete: the one definition of a
+     * failed conversation, for the filter and for the count. A running turn past the cutoff is
+     * incomplete, by the same expression the status counts use.
+     *
+     * @return array{string, list<mixed>}
+     */
+    private function failedTurns(): array
+    {
+        return [
+            'sum(case when status in (?, ?) or (status = ? and created_at < ?) then 1 else 0 end)',
+            [Status::Failed->value, Status::Incomplete->value, Status::Running->value, StaleRuns::cutoffColumn()],
+        ];
     }
 
     /**

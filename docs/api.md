@@ -376,9 +376,16 @@ id in the direction of the sort, so a page never repeats or skips a conversation
 {
   "data": [{ "id": "…" }],
   "pagination": { "page": 1, "per_page": 25, "total": 12, "last_page": 1 },
-  "range": { "preset": "24h", "from": "…", "to": "…" }
+  "range": { "preset": "24h", "from": "…", "to": "…" },
+  "counts": { "all": 12, "failed": 3 }
 }
 ```
+
+- `counts` counts the conversations that pass the range and every filter except `failed`, so the
+  numbers describe the same view as the rows whichever tab is selected. `failed` is how many of
+  them have at least one failed or incomplete turn, a stale running turn included: the conversations
+  the `failed` filter keeps. `pagination.total` is one of them, `counts.failed` when `failed` is
+  applied and `counts.all` otherwise. Both are integers, `0` for an empty view.
 
 Each item is the conversation of [The conversation](#the-conversation). The response is read in a
 fixed number of queries whatever the size of the page, plus one lookup of the users for each user

@@ -52,6 +52,7 @@ it('answers an empty database', function () {
         'data' => [],
         'pagination' => ['page' => 1, 'per_page' => 25, 'total' => 0, 'last_page' => 1],
         'range' => ['preset' => '24h', 'from' => '2026-01-01T12:00:00.000Z', 'to' => '2026-01-02T12:00:00.000Z'],
+        'counts' => ['all' => 0, 'failed' => 0],
     ]);
 });
 
@@ -356,6 +357,70 @@ describe('filters', function () {
 
     it('applies the filters to the total', function () {
         expect(conversationsAt($this, 'failed=1&per_page=1')['pagination'])->toBe(['page' => 1, 'per_page' => 1, 'total' => 3, 'last_page' => 3]);
+    });
+});
+
+describe('counts', function () {
+    beforeEach(function () {
+        turn('ok', '2026-01-02 10:00:00', ['name' => 'Alpha', 'user_id' => '1', 'user_type' => 'T']);
+        turn('bad', '2026-01-02 10:00:00', ['name' => 'Alpha', 'user_id' => '2', 'user_type' => 'T', 'status' => Status::Failed, 'prompt_excerpt' => 'needle']);
+        turn('incomplete', '2026-01-02 10:00:00', ['name' => 'Beta', 'user_id' => '1', 'user_type' => 'T', 'status' => Status::Incomplete]);
+        turn('fresh', '2026-01-02 10:00:00', ['name' => 'Beta', 'status' => Status::Running, 'created_at' => '2026-01-02 11:59:00']);
+        turn('stale', '2026-01-02 10:00:00', ['name' => 'Beta', 'status' => Status::Running, 'created_at' => '2026-01-02 08:00:00']);
+    });
+
+    it('counts the view and the failed conversations in it', function () {
+        expect(conversationsAt($this)['counts'])->toBe(['all' => 5, 'failed' => 3]);
+    });
+
+    it('is the same object with and without the failed filter', function () {
+        expect(conversationsAt($this, 'failed=1')['counts'])->toBe(conversationsAt($this)['counts'])
+            ->and(conversationsAt($this, 'failed=1&agent=Beta')['counts'])->toBe(conversationsAt($this, 'agent=Beta')['counts']);
+    });
+
+    it('respects the agent, the user and the search', function (string $query, array $expected) {
+        expect(conversationsAt($this, $query)['counts'])->toBe($expected);
+    })->with([
+        'agent' => ['agent=Alpha', ['all' => 2, 'failed' => 1]],
+        'user' => ['user_id=1', ['all' => 2, 'failed' => 1]],
+        'user and type' => ['user_id=2&user_type=T', ['all' => 1, 'failed' => 1]],
+        'search' => ['search=needle', ['all' => 1, 'failed' => 1]],
+        'agent and user' => ['agent=Beta&user_id=1', ['all' => 1, 'failed' => 1]],
+    ]);
+
+    it('respects the range', function () {
+        turn('earlier', '2025-12-20 10:00:00', ['status' => Status::Failed]);
+
+        expect(conversationsAt($this)['counts'])->toBe(['all' => 5, 'failed' => 3])
+            ->and(conversationsAt($this, 'from=2025-12-19T00:00:00Z&to=2025-12-21T00:00:00Z')['counts'])->toBe(['all' => 1, 'failed' => 1]);
+    });
+
+    it('counts a conversation as failed for a stale running turn only', function () {
+        expect(listedConversations($this, 'failed=1&search=stale'))->toBe(['stale'])
+            ->and(listedConversations($this, 'failed=1&search=fresh'))->toBe([])
+            ->and(conversationsAt($this, 'search=stale')['counts'])->toBe(['all' => 1, 'failed' => 1])
+            ->and(conversationsAt($this, 'search=fresh')['counts'])->toBe(['all' => 1, 'failed' => 0]);
+    });
+
+    it('counts a conversation whose failed turn is outside the range when another turn is inside', function () {
+        turn('whole', '2025-12-20 10:00:00', ['status' => Status::Failed]);
+        turn('whole', '2026-01-02 09:00:00');
+
+        expect(conversationsAt($this)['counts'])->toBe(['all' => 6, 'failed' => 4]);
+    });
+
+    it('makes the total the count of the rows listed', function () {
+        expect(conversationsAt($this)['pagination']['total'])->toBe(5)
+            ->and(conversationsAt($this, 'failed=1')['pagination']['total'])->toBe(3)
+            ->and(conversationsAt($this, 'failed=0')['pagination']['total'])->toBe(5)
+            ->and(conversationsAt($this, 'failed=1&agent=Alpha')['pagination']['total'])->toBe(1);
+    });
+
+    it('is zero for an empty view and keeps its counts on a page past the end', function () {
+        expect(conversationsAt($this, 'search=nothing-matches')['counts'])->toBe(['all' => 0, 'failed' => 0])
+            ->and(conversationsAt($this, 'failed=1&search=nothing-matches')['counts'])->toBe(['all' => 0, 'failed' => 0])
+            ->and(conversationsAt($this, 'per_page=2&page=9')['counts'])->toBe(['all' => 5, 'failed' => 3])
+            ->and(conversationsAt($this, 'failed=1&per_page=2&page=9')['data'])->toBe([]);
     });
 });
 
