@@ -1,11 +1,11 @@
 import { InfoIcon } from 'lucide-react'
 import type { Coverage, Span } from '@/api/types'
-import { isAbsent } from '@/features/trace/payload-access'
-import { agentInput } from '@/features/trace/payload-shape'
-import { PayloadSection } from '@/features/trace/payload-section'
+import { isAbsent } from '@/lib/payload-access'
+import { agentInput } from '@/components/telemetry/payload-shape'
+import { PayloadSection } from '@/components/telemetry/payload-section'
 import { SystemPrompt } from '@/features/trace/system-prompt'
 import { noSystemPromptWords } from '@/features/trace/system-prompt-gap'
-import { WholeInput } from '@/features/trace/whole-input'
+import { WholeInput } from '@/components/telemetry/whole-input'
 
 type AgentInputProps = { span: Span; coverage: Coverage }
 

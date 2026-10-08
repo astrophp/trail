@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import type { Span } from '@/api/types'
-import { StoredPayload } from '@/features/trace/stored-payload'
+import { StoredPayload } from '@/components/telemetry/stored-payload'
 import type { JsonValue } from '@/lib/json'
 
 type NamedPayloadProps = {

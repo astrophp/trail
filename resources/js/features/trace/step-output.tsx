@@ -6,10 +6,10 @@ import {
     matchToolCalls,
     type RequestedCall,
 } from '@/features/trace/match-tool-calls'
-import { asObject, isAbsent } from '@/features/trace/payload-access'
-import { stepOutput } from '@/features/trace/payload-shape'
-import { PayloadSection } from '@/features/trace/payload-section'
-import { SectionLabel } from '@/features/trace/section-label'
+import { asObject, isAbsent } from '@/lib/payload-access'
+import { stepOutput } from '@/components/telemetry/payload-shape'
+import { PayloadSection } from '@/components/telemetry/payload-section'
+import { SectionLabel } from '@/components/telemetry/section-label'
 import { ToolCallItem } from '@/features/trace/tool-call-item'
 import type { RunContext } from '@/features/trace/tool-call-status'
 import { WholeOutput } from '@/features/trace/whole-output'

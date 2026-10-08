@@ -1,5 +1,5 @@
 import type { Span } from '@/api/types'
-import { asObject } from '@/features/trace/payload-access'
+import { asObject } from '@/lib/payload-access'
 import { jsonEqual, type JsonValue } from '@/lib/json'
 
 /** What a step asked for in one tool call: the tool's name and arguments, `null`/`undefined` where unreadable. */

@@ -2,8 +2,8 @@ import type { Span } from '@/api/types'
 import { KeyValue } from '@/components/patterns/key-value'
 import { KeyValueList } from '@/components/patterns/key-value-list'
 import { isContainer, type JsonObject } from '@/lib/json'
-import { SectionLabel } from '@/features/trace/section-label'
-import { StoredPayload } from '@/features/trace/stored-payload'
+import { SectionLabel } from '@/components/telemetry/section-label'
+import { StoredPayload } from '@/components/telemetry/stored-payload'
 
 type StepOptionsProps = {
     span: Pick<Span, 'truncated_paths'>

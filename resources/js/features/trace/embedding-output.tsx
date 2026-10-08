@@ -2,7 +2,10 @@ import type { Span } from '@/api/types'
 import { KeyValue } from '@/components/patterns/key-value'
 import { KeyValueList } from '@/components/patterns/key-value-list'
 import { EmbeddingUsage } from '@/features/trace/embedding-usage'
-import { embeddingInput, embeddingOutput } from '@/features/trace/payload-shape'
+import {
+    embeddingInput,
+    embeddingOutput,
+} from '@/components/telemetry/payload-shape'
 import { WholeOutput } from '@/features/trace/whole-output'
 import { formatCount } from '@/lib/format'
 

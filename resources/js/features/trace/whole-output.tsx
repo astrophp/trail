@@ -1,5 +1,5 @@
 import type { Span } from '@/api/types'
-import { StoredPayload } from '@/features/trace/stored-payload'
+import { StoredPayload } from '@/components/telemetry/stored-payload'
 
 type WholeOutputProps = { span: Span }
 

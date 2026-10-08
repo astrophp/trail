@@ -5,7 +5,7 @@ import {
     isAbsent,
     isNumberOrAbsent,
     isTextOrAbsent,
-} from '@/features/trace/payload-access'
+} from '@/lib/payload-access'
 import type { JsonObject, JsonValue } from '@/lib/json'
 
 /**

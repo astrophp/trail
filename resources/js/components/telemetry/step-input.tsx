@@ -1,10 +1,10 @@
 import type { Span } from '@/api/types'
-import { MessageItem } from '@/features/trace/message-item'
-import { stepInput } from '@/features/trace/payload-shape'
-import { PayloadSection } from '@/features/trace/payload-section'
-import { SectionLabel } from '@/features/trace/section-label'
-import { StepOptions } from '@/features/trace/step-options'
-import { WholeInput } from '@/features/trace/whole-input'
+import { MessageItem } from '@/components/telemetry/message-item'
+import { stepInput } from '@/components/telemetry/payload-shape'
+import { PayloadSection } from '@/components/telemetry/payload-section'
+import { SectionLabel } from '@/components/telemetry/section-label'
+import { StepOptions } from '@/components/telemetry/step-options'
+import { WholeInput } from '@/components/telemetry/whole-input'
 import { formatCount } from '@/lib/format'
 
 type StepInputProps = { span: Span }

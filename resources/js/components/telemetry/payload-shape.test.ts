@@ -9,7 +9,7 @@ import {
     toolInput,
     toolOutput,
     type Shape,
-} from '@/features/trace/payload-shape'
+} from '@/components/telemetry/payload-shape'
 
 const kind = (shape: Shape<unknown>) => shape.kind
 
