@@ -206,3 +206,24 @@ export const detailUrls = (fetchMock: ReturnType<typeof mockApi>) =>
     fetchMock.mock.calls
         .map(([url]) => url)
         .filter((url) => /\/api\/traces\/[^/?]+$/.test(url))
+
+/**
+ * A handler that answers its requests in turn: the first request gets the first answer, and so on,
+ * the last answer repeating. An answer is a response body, a status to fail with, or a function
+ * (`() => Promise<Response>`) for anything else, such as a request that never gets one.
+ */
+export function answerInTurn(
+    ...answers: (TraceDetailResponse | number | Handler)[]
+): Handler {
+    let asked = 0
+
+    return (url, init) => {
+        const answer = answers[Math.min(asked++, answers.length - 1)]
+
+        return typeof answer === 'function'
+            ? answer(url, init)
+            : typeof answer === 'number'
+              ? json({ message: 'No.' }, answer)
+              : json(answer)
+    }
+}

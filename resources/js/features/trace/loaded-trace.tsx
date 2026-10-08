@@ -1,8 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { SpanLimit, TraceDetailResponse } from '@/api/types'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { buildSpanTree } from '@/features/trace/build-span-tree'
 import { ExecutionView } from '@/features/trace/execution-view'
 import { RunMetadata } from '@/features/trace/run-metadata'
+import { RunNotices } from '@/features/trace/run-notices'
 import { tabList, tabTrigger } from '@/features/trace/tab-styles'
 import { TraceHeader } from '@/features/trace/trace-header'
 import {
@@ -10,6 +12,7 @@ import {
     viewIds,
     type ViewId,
 } from '@/features/trace/trace-params'
+import type { Refreshing } from '@/features/trace/use-trace'
 import { UsageView } from '@/features/trace/usage-view'
 import { useUrlState } from '@/hooks/use-url-state'
 import { cn } from '@/lib/utils'
@@ -17,6 +20,11 @@ import { cn } from '@/lib/utils'
 type LoadedTraceProps = {
     data: TraceDetailResponse['data']
     spanLimit: SpanLimit
+    /** Seconds after which an open run counts as abandoned, when known. */
+    staleAfter?: number
+    /** Whether the run is refreshing by itself; see `refreshing`. */
+    refreshing: Refreshing
+    onRetryRefresh: () => void
     onBookmarkChange: (bookmarked: boolean) => void
 }
 
@@ -30,9 +38,14 @@ const viewLabels: Record<ViewId, string> = {
 export function LoadedTrace({
     data,
     spanLimit,
+    staleAfter,
+    refreshing,
+    onRetryRefresh,
     onBookmarkChange,
 }: LoadedTraceProps) {
-    const { trace, detail } = data
+    const { trace, detail, spans } = data
+    // Built once per response, for the notices and the execution view.
+    const tree = useMemo(() => buildSpanTree(spans), [spans])
     const [{ view, span, tab }, setParams] = useUrlState(traceParams)
     const selectView = useCallback(
         (next: string) => {
@@ -84,6 +97,16 @@ export function LoadedTrace({
                 error={detail.error}
                 onBookmarkChange={onBookmarkChange}
             />
+            <RunNotices
+                data={data}
+                tree={tree}
+                spanLimit={spanLimit}
+                staleAfter={staleAfter}
+                refreshing={refreshing}
+                onRetryRefresh={onRetryRefresh}
+                onShowSpan={openSpan}
+                onShowMetadata={() => selectView('metadata')}
+            />
             <Tabs value={view} onValueChange={selectView} className="gap-6">
                 <TabsList
                     variant="line"
@@ -105,6 +128,7 @@ export function LoadedTrace({
                 >
                     <ExecutionView
                         data={data}
+                        tree={tree}
                         span={span}
                         tab={tab}
                         setParams={setParams}

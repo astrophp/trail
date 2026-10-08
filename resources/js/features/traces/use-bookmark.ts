@@ -3,7 +3,7 @@ import { bookmarkTrace, traceKeys, unbookmarkTrace } from '@/api/traces'
 import type { TraceDetailResponse, TraceListResponse } from '@/api/types'
 import { notify } from '@/components/patterns/notify'
 
-const mutationKey = ['bookmark'] as const
+const mutationKey = traceKeys.bookmark
 
 /** Runs whose presses overlapped: what to show after a failure is not known for them. */
 const overlapped = new Set<string>()
