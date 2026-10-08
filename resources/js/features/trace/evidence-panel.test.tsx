@@ -97,6 +97,19 @@ const openTab = (name: string) =>
     )
 const group = (name: string) => panel().getByRole('group', { name })
 
+/** Everything shown for one tool call: its name, its arguments and what sits beside the name. */
+const callItem = (name: string) => {
+    const item = group(name).closest<HTMLElement>('[data-slot="named-payload"]')
+
+    if (item === null) {
+        throw new Error(`No tool call is shown for ${name}.`)
+    }
+
+    return within(item)
+}
+
+const openSpanLink = { name: /^Open tool span/ }
+
 function root(overrides: Partial<Span> = {}) {
     return makeAgentSpan('root', { sequence: 1, ...overrides })
 }
@@ -775,6 +788,10 @@ describe('the ancestors of a span', () => {
     })
 })
 
+/** Words that would claim a call started, ran, failed or was never recorded; an unlinked call carries none. */
+const statusWords =
+    /not started|no tool span was recorded|did not run|never ran|didn't run|not run/i
+
 describe('the link from a step to the tools it ran', () => {
     const calls = (...names: string[]): JsonValue => ({
         text: '',
@@ -791,8 +808,14 @@ describe('the link from a step to the tools it ran', () => {
             [
                 root(),
                 step('s0', 2, { output: calls('search', 'search') }),
-                tool('first', 3, { name: 'search' }),
-                tool('second', 4, { name: 'search' }),
+                tool('first', 3, {
+                    name: 'search',
+                    input: { arguments: { n: 0 } },
+                }),
+                tool('second', 4, {
+                    name: 'search',
+                    input: { arguments: { n: 1 } },
+                }),
                 step('s1', 5, { step_number: 1 }),
             ],
             { search: '?span=s0' },
@@ -810,12 +833,15 @@ describe('the link from a step to the tools it ran', () => {
         expect(selectedRow()).toEqual(['search, Completed'])
     })
 
-    it('says that no tool span was recorded for a call without one', async () => {
+    it('shows a call that no tool span confirms without a link and without a status', async () => {
         await open(
             [
                 root(),
                 step('s0', 2, { output: calls('search', 'refund') }),
-                tool('only', 3, { name: 'search' }),
+                tool('only', 3, {
+                    name: 'search',
+                    input: { arguments: { n: 0 } },
+                }),
             ],
             { search: '?span=s0' },
         )
@@ -824,8 +850,28 @@ describe('the link from a step to the tools it ran', () => {
             panel().getAllByRole('button', { name: 'Open tool span search' }),
         ).toHaveLength(1)
         expect(
-            panel().getAllByText('No tool span was recorded for this call'),
-        ).toHaveLength(1)
+            callItem('refund arguments').queryByRole('button', openSpanLink),
+        ).not.toBeInTheDocument()
+        expect(
+            callItem('refund arguments').queryByText(statusWords),
+        ).not.toBeInTheDocument()
+    })
+
+    it('does not link a span that stored no input to a call by its position', async () => {
+        await open(
+            [
+                root(),
+                step('s0', 2, { output: calls('search') }),
+                tool('bare', 3, { name: 'search' }),
+            ],
+            { search: '?span=s0' },
+        )
+
+        expect(group('search arguments')).toBeInTheDocument()
+        expect(
+            panel().queryByRole('button', { name: /^Open tool span/ }),
+        ).not.toBeInTheDocument()
+        expect(panel().queryByText(statusWords)).not.toBeInTheDocument()
     })
 
     it('keeps the attempts of a failover apart when both called the same tool', async () => {
@@ -833,9 +879,17 @@ describe('the link from a step to the tools it ran', () => {
             [
                 root(),
                 step('a1s0', 2, { attempt: 1, output: calls('search') }),
-                tool('a1t', 3, { attempt: 1, name: 'search' }),
+                tool('a1t', 3, {
+                    attempt: 1,
+                    name: 'search',
+                    input: { arguments: { n: 0 } },
+                }),
                 step('a2s0', 4, { attempt: 2, output: calls('search') }),
-                tool('a2t', 5, { attempt: 2, name: 'search' }),
+                tool('a2t', 5, {
+                    attempt: 2,
+                    name: 'search',
+                    input: { arguments: { n: 0 } },
+                }),
             ],
             { search: '?span=a2s0' },
         )
@@ -1694,9 +1748,8 @@ describe('tool calls and the tools that ran them', () => {
         })),
         finish_reason: 'tool_use',
     })
-    const none = 'No tool span was recorded for this call'
 
-    it('links nothing when the arguments of the only candidate differ', async () => {
+    it('links nothing when the arguments of the only candidate differ, and shows the call as asked', async () => {
         await open(
             [
                 root(),
@@ -1714,10 +1767,11 @@ describe('tool calls and the tools that ran them', () => {
             { search: '?span=s0&tab=output' },
         )
 
+        expect(group('search arguments')).toBeInTheDocument()
         expect(
             panel().queryByRole('button', { name: /^Open tool span/ }),
         ).not.toBeInTheDocument()
-        expect(panel().getByText(none)).toBeInTheDocument()
+        expect(panel().queryByText(statusWords)).not.toBeInTheDocument()
     })
 
     it('links the call that ran by its arguments when an earlier call of the same tool did not', async () => {
@@ -1741,7 +1795,19 @@ describe('tool calls and the tools that ran them', () => {
         expect(
             panel().getAllByRole('button', { name: /^Open tool span/ }),
         ).toHaveLength(1)
-        expect(panel().getAllByText(none)).toHaveLength(1)
+        expect(
+            callItem('call 1 search arguments').queryByRole(
+                'button',
+                openSpanLink,
+            ),
+        ).not.toBeInTheDocument()
+        expect(
+            callItem('call 2 search arguments').getByRole(
+                'button',
+                openSpanLink,
+            ),
+        ).toBeInTheDocument()
+        expect(panel().queryByText(statusWords)).not.toBeInTheDocument()
 
         await userEvent.click(
             panel().getByRole('button', { name: /^Open tool span/ }),
@@ -1750,7 +1816,7 @@ describe('tool calls and the tools that ran them', () => {
         expect(params().get('span')).toBe('only')
     })
 
-    it('says not started yet while the run is running', async () => {
+    it('says nothing about whether a call started while the run is running', async () => {
         await open(
             [
                 root({ status: 'running', duration_ms: null, ended_at: null }),
@@ -1761,10 +1827,11 @@ describe('tool calls and the tools that ran them', () => {
             { search: '?span=s0&tab=output', trace: { status: 'running' } },
         )
 
-        expect(panel().getByText('Not started yet')).toBeInTheDocument()
+        expect(group('search arguments')).toBeInTheDocument()
+        expect(panel().queryByText(statusWords)).not.toBeInTheDocument()
     })
 
-    it('says waiting for approval for a call the run waits on, and nothing recorded for another', async () => {
+    it('says waiting for approval for a call the run waits on, and nothing for another', async () => {
         await open(
             [
                 root(),
@@ -1790,7 +1857,17 @@ describe('tool calls and the tools that ran them', () => {
         )
 
         expect(panel().getAllByText('Waiting for approval')).toHaveLength(1)
-        expect(panel().getAllByText(none)).toHaveLength(1)
+        expect(
+            callItem('call 2 refund arguments').getByText(
+                'Waiting for approval',
+            ),
+        ).toBeInTheDocument()
+        expect(
+            callItem('call 1 refund arguments').queryByText(
+                'Waiting for approval',
+            ),
+        ).not.toBeInTheDocument()
+        expect(panel().queryByText(statusWords)).not.toBeInTheDocument()
     })
 
     it('makes no claim about a call whose name cannot be read', async () => {
@@ -1808,8 +1885,7 @@ describe('tool calls and the tools that ran them', () => {
             { search: '?span=s0&tab=output' },
         )
 
-        expect(panel().queryByText(none)).not.toBeInTheDocument()
-        expect(panel().queryByText('Not started yet')).not.toBeInTheDocument()
+        expect(panel().queryByText(statusWords)).not.toBeInTheDocument()
         expect(
             panel().queryByRole('button', { name: /^Open tool span/ }),
         ).not.toBeInTheDocument()

@@ -71,7 +71,6 @@ export function StepOutput({ span, tree, run, onSelect }: StepOutputProps) {
                         <ToolCallItem
                             key={index}
                             span={span}
-                            tree={tree}
                             run={run}
                             index={index}
                             repeated={

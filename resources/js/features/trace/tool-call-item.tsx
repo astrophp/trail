@@ -1,6 +1,5 @@
 import type { Span } from '@/api/types'
 import { Button } from '@/components/ui/button'
-import type { SpanTree } from '@/features/trace/build-span-tree'
 import { NamedPayload } from '@/components/telemetry/named-payload'
 import { asObject } from '@/lib/payload-access'
 import {
@@ -11,7 +10,6 @@ import type { JsonValue } from '@/lib/json'
 
 type ToolCallItemProps = {
     span: Span
-    tree: SpanTree
     run: RunContext
     /** Its place among the calls the step requested, from 0. */
     index: number
@@ -24,13 +22,12 @@ type ToolCallItemProps = {
 }
 
 /**
- * One tool call a step asked for: the tool, its arguments, and the span that ran it. Without a span
- * it says what is known (not started, waiting for approval, nothing recorded); a call whose name
- * cannot be read makes no claim.
+ * One tool call a step asked for: the tool, its arguments, and the span the arguments confirm ran
+ * it. Without a span the call is shown as it was asked, with no status and no link; the only words
+ * are that the run is waiting for its approval, when the run records that.
  */
 export function ToolCallItem({
     span,
-    tree,
     run,
     index,
     repeated,
@@ -42,6 +39,7 @@ export function ToolCallItem({
     const name = typeof object?.name === 'string' ? object.name : null
     const id = typeof object?.id === 'string' ? object.id : null
     const shown = name ?? 'Unnamed'
+    const waiting = name === null ? null : unlinkedCallWords(id, run)
 
     return (
         <NamedPayload
@@ -65,9 +63,9 @@ export function ToolCallItem({
                 >
                     Open tool span
                 </Button>
-            ) : name === null ? null : (
+            ) : waiting === null ? null : (
                 <span className="text-caption text-muted-foreground">
-                    {unlinkedCallWords(span, tree, id, run)}
+                    {waiting}
                 </span>
             )}
         </NamedPayload>
