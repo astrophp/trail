@@ -1,0 +1,218 @@
+// The numbers of a `TimeSeriesChart`, prepared once. The chart, its tooltip and its data table all
+// read this one structure, so they cannot disagree. Nothing here formats a value or a date.
+
+/** The theme tokens a series can be drawn in. Light and dark come from the tokens. */
+export type ChartColor =
+    | 'chart-1'
+    | 'chart-2'
+    | 'chart-3'
+    | 'chart-4'
+    | 'chart-5'
+    | 'destructive'
+    | 'warning'
+    | 'success'
+    | 'info'
+
+const colorVariables: Record<ChartColor, string> = {
+    'chart-1': 'var(--chart-1)',
+    'chart-2': 'var(--chart-2)',
+    'chart-3': 'var(--chart-3)',
+    'chart-4': 'var(--chart-4)',
+    'chart-5': 'var(--chart-5)',
+    destructive: 'var(--destructive)',
+    warning: 'var(--warning)',
+    success: 'var(--success)',
+    info: 'var(--info)',
+}
+
+/** The CSS variable of a token, for a `ChartConfig` colour. */
+export function chartColorVariable(color: ChartColor): string {
+    return colorVariables[color]
+}
+
+export type ChartBucket = {
+    /** Unique among the buckets. */
+    key: string
+    from: Date
+    to: Date
+    /** The bucket is still filling: its values are not final. */
+    inProgress: boolean
+}
+
+export type ChartSeries = {
+    /** Unique among the series. Passed back to `formatValue`. */
+    key: string
+    label: string
+    color: ChartColor
+    /** One value per bucket, in the buckets' order. `null` is not captured, and is not 0. */
+    values: (number | null)[]
+}
+
+export type ChartRow = {
+    /** The bucket's key. */
+    key: string
+    bucket: ChartBucket
+    /** The full label of the bucket. */
+    label: string
+    /** The short label for the x axis. */
+    tick: string
+    inProgress: boolean
+    /** One value per series, in the series' order. */
+    values: (number | null)[]
+}
+
+export type ChartModel = {
+    rows: ChartRow[]
+    series: ChartSeries[]
+    /**
+     * `empty`: no buckets, or no value in any of them. `zero`: values exist and every one is 0.
+     * `data`: something to draw.
+     */
+    status: 'empty' | 'zero' | 'data'
+    /** The y axis: where it ends, and where its ticks are. Always starts at 0. */
+    axis: { top: number; ticks: number[] }
+}
+
+/** A value the chart can draw. NaN and the infinities are treated as not captured. */
+function usable(value: number | null | undefined): number | null {
+    return typeof value === 'number' && Number.isFinite(value) ? value : null
+}
+
+/**
+ * Rounded tick positions from 0 to the first multiple of a round step at or above `max`.
+ * A maximum of 0 (or less) gives an axis from 0 to 1, so it has height and two different ticks.
+ */
+export function niceAxis(
+    max: number,
+    targetTicks = 4,
+): { top: number; ticks: number[] } {
+    if (!(max > 0) || !Number.isFinite(max)) {
+        return { top: 1, ticks: [0, 1] }
+    }
+
+    const rough = max / targetTicks
+    const magnitude = 10 ** Math.floor(Math.log10(rough))
+    const residual = rough / magnitude
+    const factor = [1, 2, 2.5, 5, 10].find((candidate) => residual <= candidate)
+    const step = (factor ?? 10) * magnitude
+    const count = Math.max(1, Math.ceil(max / step - 1e-9))
+    // Twelve significant digits: 3 × 0.1 is 0.3, not 0.30000000000000004.
+    const at = (index: number) => Number((index * step).toPrecision(12))
+    const ticks = Array.from({ length: count + 1 }, (_, index) => at(index))
+
+    return { top: at(count), ticks }
+}
+
+/**
+ * Prepares the rows and the axis. `stacked` adds a bucket's series up for the height of the axis
+ * (bars); otherwise the tallest single value sets it (a line).
+ */
+export function buildChartModel(input: {
+    buckets: ChartBucket[]
+    series: ChartSeries[]
+    stacked: boolean
+    formatBucket: (bucket: ChartBucket) => string
+    formatTick: (bucket: ChartBucket, index: number) => string
+}): ChartModel {
+    const { buckets, series, stacked, formatBucket, formatTick } = input
+
+    const rows = buckets.map((bucket, index): ChartRow => ({
+        key: bucket.key,
+        bucket,
+        label: formatBucket(bucket),
+        tick: formatTick(bucket, index),
+        inProgress: bucket.inProgress,
+        values: series.map((one) => usable(one.values[index])),
+    }))
+
+    const heights = rows.map((row) => {
+        const present = row.values.filter(
+            (value): value is number => value !== null,
+        )
+
+        if (present.length === 0) {
+            return null
+        }
+
+        return stacked
+            ? present.reduce((sum, value) => sum + value, 0)
+            : Math.max(...present)
+    })
+    const known = heights.filter((height): height is number => height !== null)
+
+    if (known.length === 0) {
+        return { rows, series, status: 'empty', axis: niceAxis(0) }
+    }
+
+    // A value below 0 is not expected; it never lowers the axis, which starts at 0.
+    const tallest = Math.max(0, ...known)
+
+    return {
+        rows,
+        series,
+        status: tallest === 0 && allEqual(rows, 0) ? 'zero' : 'data',
+        axis: niceAxis(tallest),
+    }
+}
+
+/** Whether every captured value is exactly `target`. */
+function allEqual(rows: ChartRow[], target: number): boolean {
+    return rows.every((row) =>
+        row.values.every((value) => value === null || value === target),
+    )
+}
+
+/**
+ * Which ticks of the x axis to label so that labels never touch: every n-th bucket, counted back
+ * from the last one (the newest is always labelled). A slot is as wide as the longest label.
+ * Returns the indexes, in order.
+ */
+export function thinTicks(
+    labels: string[],
+    width: number,
+    options: { characterWidth?: number; gap?: number } = {},
+): number[] {
+    const { characterWidth = 7, gap = 12 } = options
+
+    if (labels.length === 0) {
+        return []
+    }
+
+    const longest = Math.max(...labels.map((label) => label.length), 1)
+    const slot = longest * characterWidth + gap
+    const fit = Math.max(1, Math.floor(width / slot))
+    const every = Math.max(1, Math.ceil(labels.length / fit))
+    const last = labels.length - 1
+
+    return labels
+        .map((_, index) => index)
+        .filter((index) => (last - index) % every === 0)
+}
+
+/**
+ * A line drawn in two parts, so the part that is not final can look different. `solid` holds the
+ * complete buckets. `pending` holds the in-progress values and the complete value just before
+ * each one, so the dashed segment starts where the solid line stops. Everything else is `null`.
+ */
+export function splitInProgress(
+    values: (number | null)[],
+    inProgress: boolean[],
+): { solid: (number | null)[]; pending: (number | null)[] } {
+    return {
+        solid: values.map((value, index) => (inProgress[index] ? null : value)),
+        pending: values.map((value, index) => {
+            if (value === null) {
+                return null
+            }
+
+            if (inProgress[index]) {
+                return value
+            }
+
+            // The complete bucket before an in-progress one, only when that one has a value.
+            return inProgress[index + 1] && values[index + 1] !== null
+                ? value
+                : null
+        }),
+    }
+}
