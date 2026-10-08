@@ -300,6 +300,19 @@ describe('stepping through the list', () => {
         )
     })
 
+    it('carries the slow filter into the neighbours request', async () => {
+        const fetchMock = serve()
+        await open(
+            `/traces/run-a?${new URLSearchParams({ from: '/traces?range=7d&slow=1&page=2' })}`,
+        )
+
+        await waitFor(() =>
+            expect(neighbourCalls(fetchMock)).toEqual([
+                '/trail/api/traces/run-a/neighbours?range=7d&sort=-started_at&slow=1',
+            ]),
+        )
+    })
+
     it('has both steps off while the answer is loading', async () => {
         const answer = deferred()
         serve({ neighbours: { 'run-a': answer.promise } })

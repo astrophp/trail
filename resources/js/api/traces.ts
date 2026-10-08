@@ -24,7 +24,7 @@ export type TraceSort = (typeof traceSorts)[number]
 
 /**
  * What the list endpoint is asked for. Only the range is required. An unset filter is not
- * sent; `bookmarked: false` is not sent either.
+ * sent; `bookmarked: false` and `slow: false` are not sent either.
  */
 export type TraceListParams = {
     range: TimeRangePreset
@@ -36,6 +36,8 @@ export type TraceListParams = {
     provider?: string
     conversation?: string
     bookmarked?: boolean
+    /** Only the runs at or above the 95th percentile of the range's durations. */
+    slow?: boolean
 }
 
 /** What `GET /traces/export` is asked for: a view of the list, or just the given `ids`. */

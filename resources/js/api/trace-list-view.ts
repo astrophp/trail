@@ -28,7 +28,7 @@ export const defaultTraceSort: TraceSort = '-started_at'
 
 /**
  * What the list keeps in the URL besides the time range. The names are the API's own
- * (`status`, `search`, `agent`, `provider`, `conversation`, `bookmarked`, `sort`, `page`); an empty
+ * (`status`, `search`, `agent`, `provider`, `conversation`, `bookmarked`, `slow`, `sort`, `page`); an empty
  * `agent`, `provider` or `conversation` means all.
  */
 export const traceListParams = {
@@ -40,6 +40,7 @@ export const traceListParams = {
     provider: stringParam(),
     conversation: stringParam(),
     bookmarked: boolParam(),
+    slow: boolParam(),
 }
 
 /** The params that are filters: changing any of them starts a new result list on page 1. */
@@ -50,6 +51,7 @@ export const traceFilterKeys = [
     'provider',
     'conversation',
     'bookmarked',
+    'slow',
 ] as const satisfies readonly (keyof typeof traceListParams)[]
 
 export type TraceFilterKey = (typeof traceFilterKeys)[number]
@@ -65,6 +67,7 @@ export type TraceListView = {
     provider: string
     conversation: string
     bookmarked: boolean
+    slow: boolean
 }
 
 /** The list view a query string describes; a missing or invalid value is the list's default. */
@@ -87,5 +90,6 @@ export function traceListApiParams(view: TraceListView): TraceListParams {
         provider: view.provider,
         conversation: view.conversation,
         bookmarked: view.bookmarked,
+        slow: view.slow,
     }
 }
