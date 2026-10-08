@@ -125,6 +125,16 @@ final readonly class SpanResource
      */
     private static function truncatedPaths(mixed $paths): object
     {
+        return (object) self::truncatedLengths($paths);
+    }
+
+    /**
+     * The original lengths of the cut payload paths a span's metadata holds, by path.
+     *
+     * @return array<string, int>
+     */
+    public static function truncatedLengths(mixed $paths): array
+    {
         $lengths = [];
 
         if (is_array($paths)) {
@@ -135,6 +145,6 @@ final readonly class SpanResource
             }
         }
 
-        return (object) $lengths;
+        return $lengths;
     }
 }
