@@ -49,6 +49,18 @@ describe('breadcrumbTrail', () => {
         ])
     })
 
+    it('calls the page by the name it gave itself', () => {
+        expect(
+            breadcrumbTrail(resolveRoute('/traces/abc'), 'Agent · 019a3f2c'),
+        ).toEqual([
+            { title: 'Traces', to: '/traces' },
+            { title: 'Agent · 019a3f2c' },
+        ])
+        expect(breadcrumbTrail(resolveRoute('/usage'), 'Last week')).toEqual([
+            { title: 'Last week' },
+        ])
+    })
+
     it('is the page alone for not found', () => {
         expect(breadcrumbTrail(notFoundRoute)).toEqual([
             { title: 'Page not found' },
@@ -61,6 +73,12 @@ describe('documentTitle', () => {
         expect(documentTitle(resolveRoute('/'))).toBe('Overview · Trail')
         expect(documentTitle(resolveRoute('/traces/abc'))).toBe('Trace · Trail')
         expect(documentTitle(notFoundRoute)).toBe('Page not found · Trail')
+    })
+
+    it('names the page by the name it gave itself', () => {
+        expect(
+            documentTitle(resolveRoute('/traces/abc'), 'Agent · 019a3f2c'),
+        ).toBe('Agent · 019a3f2c · Trail')
     })
 })
 

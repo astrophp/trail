@@ -1,8 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { bookmarkTrace, unbookmarkTrace } from '@/api/traces'
-import type { TraceListResponse } from '@/api/types'
+import { bookmarkTrace, traceKeys, unbookmarkTrace } from '@/api/traces'
+import type { TraceDetailResponse, TraceListResponse } from '@/api/types'
 import { notify } from '@/components/patterns/notify'
-import { traceListKey } from '@/features/traces/use-traces'
 
 const mutationKey = ['bookmark'] as const
 
@@ -11,17 +10,19 @@ const overlapped = new Set<string>()
 
 /**
  * Bookmarks and un-bookmarks one run. The press shows at once in every cached list that holds the
- * run, and the server has the last word: the screen never shows a state the server does not have.
+ * run and in the run's cached detail, and the server has the last word: the screen never shows
+ * a state the server does not have.
  *
  * - Presses on one run are sent one after the other, in the order made, so the server ends in the
- *   state of the last press. A response never writes to the lists.
+ *   state of the last press. A response never writes to the cache.
  * - A failed press is undone at once only when it is the run's only press in flight and none
  *   overlapped it before: then the state before the press is known. Otherwise nothing is guessed.
  *   Either way a toast says it failed.
  * - When the last pending bookmark write settles, whatever happened, every trace list is fetched
  *   again. That corrects a list a refetch overwrote with the old state between the press and the
  *   response, an overlapped failure, and the lists of bookmarked runs (a run un-bookmarked there
- *   stays on screen until then).
+ *   stays on screen until then). The run's detail is fetched again when its own last press settles,
+ *   for the same reasons.
  */
 export function useBookmark(traceId: string) {
     const queryClient = useQueryClient()
@@ -32,9 +33,22 @@ export function useBookmark(traceId: string) {
             predicate: (mutation) => mutation.options.scope?.id === scope,
         })
 
-    const show = (bookmarked: boolean) =>
+    const show = (bookmarked: boolean) => {
+        queryClient.setQueryData<TraceDetailResponse>(
+            traceKeys.detail(traceId),
+            (detail) =>
+                detail
+                    ? {
+                          ...detail,
+                          data: {
+                              ...detail.data,
+                              trace: { ...detail.data.trace, bookmarked },
+                          },
+                      }
+                    : detail,
+        )
         queryClient.setQueriesData<TraceListResponse>(
-            { queryKey: traceListKey },
+            { queryKey: traceKeys.list },
             (list) =>
                 list?.data.some((trace) => trace.id === traceId)
                     ? {
@@ -47,6 +61,7 @@ export function useBookmark(traceId: string) {
                       }
                     : list,
         )
+    }
 
     const { mutate } = useMutation({
         mutationKey,
@@ -60,11 +75,21 @@ export function useBookmark(traceId: string) {
             }
 
             // A fetch under way may carry the state from before this press. Only lists that have
-            // rows are cancelled: cancelling a first load would leave it with nothing to show.
-            await queryClient.cancelQueries({
-                queryKey: traceListKey,
-                predicate: (query) => query.state.data !== undefined,
-            })
+            // rows are cancelled (as is the run's detail, when it has data): cancelling a first load would
+            // leave it with nothing to show.
+            const hasData = (query: { state: { data: unknown } }) =>
+                query.state.data !== undefined
+
+            await Promise.all([
+                queryClient.cancelQueries({
+                    queryKey: traceKeys.list,
+                    predicate: hasData,
+                }),
+                queryClient.cancelQueries({
+                    queryKey: traceKeys.detail(traceId),
+                    predicate: hasData,
+                }),
+            ])
             show(bookmarked)
         },
         onError: (_error, bookmarked) => {
@@ -78,10 +103,13 @@ export function useBookmark(traceId: string) {
         onSettled: () => {
             if (pressesOnRun() <= 1) {
                 overlapped.delete(traceId)
+                void queryClient.invalidateQueries({
+                    queryKey: traceKeys.detail(traceId),
+                })
             }
 
             if (queryClient.isMutating({ mutationKey }) <= 1) {
-                void queryClient.invalidateQueries({ queryKey: traceListKey })
+                void queryClient.invalidateQueries({ queryKey: traceKeys.list })
             }
         },
     })

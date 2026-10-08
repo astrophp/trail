@@ -1,6 +1,10 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
-import { fetchTraces, type TraceListParams } from '@/api/traces'
-import type { TraceSort } from '@/api/traces'
+import {
+    fetchTraces,
+    traceKeys,
+    type TraceListParams,
+    type TraceSort,
+} from '@/api/traces'
 import type { TimeRangePreset } from '@/lib/time-range'
 import type { StatusFilter } from '@/features/traces/trace-status'
 
@@ -15,9 +19,6 @@ export type TraceView = {
     provider: string
     bookmarked: boolean
 }
-
-/** Every cached list starts with this; the view follows. */
-export const traceListKey = ['traces', 'list'] as const
 
 /** What to ask the API for: filters left at "all" are not sent. */
 function toParams(view: TraceView): TraceListParams {
@@ -39,7 +40,7 @@ function toParams(view: TraceView): TraceListParams {
  */
 export function useTraces(view: TraceView) {
     return useQuery({
-        queryKey: [...traceListKey, view],
+        queryKey: [...traceKeys.list, view],
         queryFn: ({ signal }) => fetchTraces(toParams(view), signal),
         placeholderData: keepPreviousData,
     })

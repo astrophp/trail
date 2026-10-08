@@ -8,6 +8,7 @@ import { ErrorBoundary } from '@/components/patterns/error-boundary'
 import { ErrorState } from '@/components/patterns/error-state'
 import { SidebarProvider, useSidebar } from '@/components/ui/sidebar'
 import { useDocumentTitle } from '@/hooks/use-document-title'
+import { PageTitleProvider, useCurrentPageTitle } from '@/hooks/use-page-title'
 import { focusPageHeading } from '@/lib/focus-page-heading'
 
 /**
@@ -90,7 +91,9 @@ function Frame() {
     const main = useRef<HTMLElement>(null)
     const trigger = useRef<HTMLButtonElement>(null)
 
-    useDocumentTitle(documentTitle(resolveRoute(pathname)))
+    const pageTitle = useCurrentPageTitle()
+
+    useDocumentTitle(documentTitle(resolveRoute(pathname), pageTitle))
     useFocusPageHeading(main)
     useIgnoreSidebarShortcut()
     useReturnFocusToTrigger(trigger)
@@ -146,7 +149,9 @@ export function AppShell() {
                 } as React.CSSProperties
             }
         >
-            <Frame />
+            <PageTitleProvider>
+                <Frame />
+            </PageTitleProvider>
         </SidebarProvider>
     )
 }
