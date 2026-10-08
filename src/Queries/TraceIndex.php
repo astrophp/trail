@@ -316,7 +316,7 @@ final class TraceIndex
      */
     private function search(Builder $query, string $term): void
     {
-        $pattern = '%'.str_replace(['!', '%', '_'], ['!!', '!%', '!_'], mb_strtolower($term)).'%';
+        $pattern = Contains::pattern($term);
 
         $query->where(function (Builder $query) use ($pattern) {
             foreach (self::SEARCHED as $condition) {

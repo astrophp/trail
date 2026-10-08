@@ -224,6 +224,47 @@ function traceContractDataset(): void
 }
 
 /**
+ * Conversations of every kind the list tells apart: one with a turn still running, one priced in
+ * part, one with two users, and one with nothing captured.
+ */
+function conversationContractDataset(): void
+{
+    DB::table('users')->insert([
+        ['id' => 7, 'name' => 'Ada', 'email' => 'ada@example.test', 'password' => 'x'],
+        ['id' => 8, 'name' => 'Grace', 'email' => 'grace@example.test', 'password' => 'x'],
+    ]);
+
+    $turn = fn (string $id, string $conversation, string $started, array $attributes = []) => Rows::trace([...[
+        'id' => $id, 'name' => 'SupportAssistant', 'status' => Status::Completed, 'conversation_id' => $conversation, 'started_at' => $started,
+    ], ...$attributes]);
+
+    // A turn still running: usage and cost are what has been recorded so far.
+    $turn('turn-p1', 'conversation-pending', '2026-01-02 11:00:00', [
+        'input_tokens' => 1200, 'output_tokens' => 310, 'cost' => 0.00825, 'prompt_excerpt' => 'Where is my order?', 'user_id' => '7', 'user_type' => User::class,
+    ]);
+    $turn('turn-p2', 'conversation-pending', '2026-01-02 11:55:00', [
+        'status' => Status::Running, 'input_tokens' => 300, 'cost' => 0.0012, 'prompt_excerpt' => 'And the invoice?', 'user_id' => '7', 'user_type' => User::class,
+    ]);
+
+    // One turn priced, one not.
+    $turn('turn-q1', 'conversation-partial', '2026-01-02 10:00:00', [
+        'name' => 'TicketTriage', 'input_tokens' => 800, 'output_tokens' => 120, 'cost' => 0.004, 'span_count' => 3, 'prompt_excerpt' => 'Close this ticket',
+    ]);
+    $turn('turn-q2', 'conversation-partial', '2026-01-02 10:30:00', [
+        'name' => 'TicketTriage', 'status' => Status::Failed, 'input_tokens' => 90, 'unpriced_span_count' => 1, 'prompt_excerpt' => 'Reopen it',
+    ]);
+
+    // Two users and two agents, the first turn before the range.
+    $turn('turn-u1', 'conversation-shared', '2025-12-31 09:00:00', ['name' => 'Refunds', 'user_id' => '8', 'user_type' => User::class, 'prompt_excerpt' => 'Refund order 1042']);
+    $turn('turn-u2', 'conversation-shared', '2026-01-02 09:00:00', [
+        'user_id' => '7', 'user_type' => User::class, 'status' => Status::AwaitingApproval, 'prompt_excerpt' => 'Approve it',
+    ]);
+
+    // Nothing but the row's own fields.
+    $turn('turn-n1', 'conversation-bare', '2026-01-02 08:00:00', ['name' => 'Bare']);
+}
+
+/**
  * @param  array<string, mixed>|object  $body  decoded as objects where an empty object must stay one
  */
 function assertContract(string $name, array|object $body): void
@@ -265,6 +306,12 @@ it('sends the trace response the dashboard expects', function () {
 
     // Decoded as objects: the span's truncated paths are an empty object when nothing was cut.
     assertContract('trace', json_decode($response->getContent(), false, flags: JSON_THROW_ON_ERROR));
+});
+
+it('sends the conversations response the dashboard expects', function () {
+    conversationContractDataset();
+
+    assertContract('conversations', $this->getJson('/trail/api/conversations')->assertOk()->json());
 });
 
 it('sends the bookmark response the dashboard expects', function () {

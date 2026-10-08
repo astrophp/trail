@@ -1,5 +1,6 @@
 <?php
 
+use Astro\Trail\Http\Controllers\Api\ConversationIndexController;
 use Astro\Trail\Http\Controllers\Api\MetaController;
 use Astro\Trail\Http\Controllers\Api\TraceBookmarkController;
 use Astro\Trail\Http\Controllers\Api\TraceExportController;
@@ -14,6 +15,7 @@ use Illuminate\Support\Facades\Route;
 // RespondWithJson comes first, so the access check's own 403 and 404 are JSON as well.
 Route::prefix('api')->middleware([RespondWithJson::class, Authorize::class])->group(function () {
     Route::get('meta', MetaController::class)->name('trail.api.meta');
+    Route::get('conversations', ConversationIndexController::class)->name('trail.api.conversations.index');
     Route::get('traces', TraceIndexController::class)->name('trail.api.traces.index');
     // Above the detail route, or "export" would be read as a run's id.
     Route::get('traces/export', TraceExportController::class)->name('trail.api.traces.export');
