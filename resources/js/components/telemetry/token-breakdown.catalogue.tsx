@@ -1,3 +1,4 @@
+import { KeyValueList } from '@/components/patterns/key-value-list'
 import { TokenBreakdown } from '@/components/telemetry/token-breakdown'
 import type { Usage } from '@/api/types'
 import type { CatalogueEntry } from '@/catalogue/types'
@@ -41,8 +42,28 @@ const usages: [string, Usage][] = [
 
 export const catalogue: CatalogueEntry = {
     title: 'Token breakdown',
-    specimens: usages.map(([name, usage]) => ({
-        name,
-        Component: () => <TokenBreakdown usage={usage} className="max-w-xs" />,
-    })),
+    specimens: [
+        ...usages.map(([name, usage]) => ({
+            name,
+            Component: () => (
+                <TokenBreakdown usage={usage} className="max-w-xs" />
+            ),
+        })),
+        ...usages.map(([name, usage]) => ({
+            name: `${name}, as table rows`,
+            Component: () => (
+                <KeyValueList layout="rows" className="max-w-xl">
+                    <TokenBreakdown usage={usage} layout="rows" />
+                </KeyValueList>
+            ),
+        })),
+        {
+            name: "An agent's own tokens, as table rows",
+            Component: () => (
+                <KeyValueList layout="rows" className="max-w-xl">
+                    <TokenBreakdown usage={usages[0][1]} layout="rows" own />
+                </KeyValueList>
+            ),
+        },
+    ],
 }

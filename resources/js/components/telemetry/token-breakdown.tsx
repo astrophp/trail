@@ -1,4 +1,5 @@
 import type { Usage } from '@/api/types'
+import { KeyValue } from '@/components/patterns/key-value'
 import { formatCount } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
@@ -12,6 +13,13 @@ type Row = {
 
 type TokenBreakdownProps = {
     usage: Usage
+    /**
+     * `block` is a small list of its own. `rows` is a run of `KeyValue` rows, to place inside a
+     * `KeyValueList layout="rows"` beside other facts, with the parts indented under their row.
+     */
+    layout?: 'block' | 'rows'
+    /** In `rows`: the figures are an agent's own steps, and the labels say so. */
+    own?: boolean
     className?: string
 }
 
@@ -21,7 +29,12 @@ type TokenBreakdownProps = {
  * shows the API's numbers and adds nothing up. A count that was not reported says so, and while the
  * call is pending nothing is shown as a number.
  */
-export function TokenBreakdown({ usage, className }: TokenBreakdownProps) {
+export function TokenBreakdown({
+    usage,
+    layout = 'block',
+    own = false,
+    className,
+}: TokenBreakdownProps) {
     const rows: Row[] = [
         { label: 'Input', count: usage.input_tokens },
         { label: 'cache read', count: usage.cache_read_tokens, part: true },
@@ -30,6 +43,33 @@ export function TokenBreakdown({ usage, className }: TokenBreakdownProps) {
         { label: 'reasoning', count: usage.reasoning_tokens, part: true },
         { label: 'Total', count: usage.total_tokens, total: true },
     ]
+
+    const words = (row: Row) =>
+        usage.state === 'pending'
+            ? undefined
+            : row.count === null
+              ? undefined
+              : formatCount(row.count)
+
+    if (layout === 'rows') {
+        const tokens = (label: string) =>
+            own ? `Own ${label.toLowerCase()} tokens` : `${label} tokens`
+
+        return rows.map((row) => (
+            <KeyValue
+                key={row.label}
+                label={
+                    row.part
+                        ? `${row.label[0].toUpperCase()}${row.label.slice(1)}`
+                        : tokens(row.label)
+                }
+                nested={row.part}
+                missing={usage.state === 'pending' ? 'Pending' : 'Not reported'}
+            >
+                {words(row)}
+            </KeyValue>
+        ))
+    }
 
     return (
         <dl

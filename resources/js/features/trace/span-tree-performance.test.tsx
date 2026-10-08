@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { AgentSubtotal, Span } from '@/api/types'
 import { buildSpanTree } from '@/features/trace/build-span-tree'
 import { SpanTree } from '@/features/trace/span-tree'
+import { useTreeView } from '@/features/trace/use-tree-view'
 import { makeAgentSpan, makeStepSpan, makeToolSpan } from '@/test/trace-api'
 
 // Every render of a row asks for its title, so the calls count the rows that rendered.
@@ -51,13 +52,16 @@ function Run() {
     const tree = useMemo(() => buildSpanTree(spans), [])
     const agents = useMemo(() => new Map<string, AgentSubtotal>(), [])
     const [selected, setSelected] = useState('root')
+    const view = useTreeView(tree, selected)
 
     return (
         <SpanTree
             tree={tree}
+            view={view}
             selectedId={selected}
             onSelect={setSelected}
             agents={agents}
+            axisMs={null}
         />
     )
 }

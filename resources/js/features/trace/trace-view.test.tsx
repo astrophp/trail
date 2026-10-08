@@ -627,7 +627,7 @@ describe('other shapes of run', () => {
         expect(screen.queryByText(/^Attempt \d+ of/)).not.toBeInTheDocument()
     })
 
-    it('labels the attempts of a failover run and restarts the step numbers in each', async () => {
+    it('groups the steps of a failover run under attempt rows and restarts the step numbers in each', async () => {
         mockTraceApi({
             [id]: makeDetail({
                 trace: { id },
@@ -663,16 +663,15 @@ describe('other shapes of run', () => {
                 .map((item) => item.getAttribute('aria-label')),
         ).toEqual([
             'SupportAssistant, Completed',
+            'Attempt 1 of 2',
             'Model step 1, Failed',
+            'Attempt 2 of 2',
             'Model step 1, Completed',
             'Model step 2, Completed',
         ])
         expect(
-            within(row('Model step 1, Failed')).getByText('Attempt 1 of 2'),
-        ).toBeInTheDocument()
-        expect(
-            within(row('Model step 2, Completed')).getByText('Attempt 2 of 2'),
-        ).toBeInTheDocument()
+            within(screen.getByRole('tree')).queryByText(/^Attempt \d of 2$/),
+        ).not.toBeInTheDocument()
     })
 
     it("labels an agent's tokens and cost as its own, and a step's as plain", async () => {

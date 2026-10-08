@@ -101,3 +101,24 @@ describe('resolveSelection', () => {
         expect(resolveSelection(buildSpanTree([]), '', 'failed')).toBeNull()
     })
 })
+
+describe('resolveSelection with attempt rows', () => {
+    const failover = buildSpanTree([
+        makeAgentSpan('root', { sequence: 1 }),
+        makeStepSpan('a', { sequence: 2, parent_id: 'root', attempt: 1 }),
+        makeStepSpan('b', {
+            sequence: 3,
+            parent_id: 'root',
+            attempt: 2,
+            status: 'failed',
+        }),
+    ])
+
+    it('never selects an attempt row, whether the URL names one or the failure is found', () => {
+        expect(resolveSelection(failover, 'attempt:root:1', 'completed')).toBe(
+            'root',
+        )
+        expect(resolveSelection(failover, '', 'failed')).toBe('b')
+        expect(resolveSelection(failover, 'a', 'completed')).toBe('a')
+    })
+})

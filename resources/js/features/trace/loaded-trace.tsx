@@ -6,6 +6,7 @@ import { ExecutionPane } from '@/features/trace/execution-pane'
 import { EvidencePanel } from '@/features/trace/evidence-panel'
 import { resolveSelection } from '@/features/trace/resolve-selection'
 import { TraceHeader } from '@/features/trace/trace-header'
+import { timingAxis } from '@/features/trace/timing-axis'
 import { traceParams } from '@/features/trace/trace-params'
 import { useUrlState } from '@/hooks/use-url-state'
 
@@ -20,6 +21,10 @@ export function LoadedTrace({ data, onBookmarkChange }: LoadedTraceProps) {
     const [{ span: requested, tab }, setParams] = useUrlState(traceParams)
     // Built once per response, not per render.
     const tree = useMemo(() => buildSpanTree(spans), [spans])
+    const axisMs = useMemo(
+        () => timingAxis(trace.duration_ms, spans),
+        [trace.duration_ms, spans],
+    )
     const agents = useMemo(
         () => new Map(usage.agents.map((agent) => [agent.span_id, agent])),
         [usage.agents],
@@ -97,6 +102,8 @@ export function LoadedTrace({ data, onBookmarkChange }: LoadedTraceProps) {
                         selectedId={selectedId}
                         onSelect={select}
                         agents={agents}
+                        axisMs={axisMs}
+                        timing={coverage.timing}
                     />
                 }
                 secondary={

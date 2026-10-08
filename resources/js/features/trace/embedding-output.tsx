@@ -22,7 +22,7 @@ export function EmbeddingOutput({ span }: EmbeddingOutputProps) {
 
     return (
         <div className="flex flex-col gap-6">
-            <KeyValueList columns="two">
+            <KeyValueList layout="rows">
                 <KeyValue label="Embeddings">
                     {shape.value.count === null
                         ? null

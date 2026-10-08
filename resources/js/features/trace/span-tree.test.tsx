@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { AgentSubtotal, Span } from '@/api/types'
 import { buildSpanTree } from '@/features/trace/build-span-tree'
 import { SpanTree } from '@/features/trace/span-tree'
+import { useTreeView } from '@/features/trace/use-tree-view'
 import { formatCost } from '@/lib/format'
 import {
     detailFixture,
@@ -19,10 +20,17 @@ type HarnessProps = {
     initial?: string
     agents?: AgentSubtotal[]
     onSelect?: (id: string) => void
+    axisMs?: number | null
 }
 
 /** The tree with a selection of its own, as the page keeps one in the URL. */
-function Harness({ spans, initial, agents = [], onSelect }: HarnessProps) {
+function Harness({
+    spans,
+    initial,
+    agents = [],
+    onSelect,
+    axisMs = 5_000,
+}: HarnessProps) {
     const tree = useMemo(() => buildSpanTree(spans), [spans])
     const byAgent = useMemo(
         () => new Map(agents.map((agent) => [agent.span_id, agent])),
@@ -32,15 +40,19 @@ function Harness({ spans, initial, agents = [], onSelect }: HarnessProps) {
         initial ?? tree.roots[0]?.span.id ?? null,
     )
 
+    const view = useTreeView(tree, selected)
+
     return (
         <SpanTree
             tree={tree}
+            view={view}
             selectedId={selected}
             onSelect={(id) => {
                 setSelected(id)
                 onSelect?.(id)
             }}
             agents={byAgent}
+            axisMs={axisMs}
         />
     )
 }
@@ -226,16 +238,32 @@ describe('the execution tree', () => {
         ).not.toBeInTheDocument()
     })
 
-    it('labels attempts only when the run made more than one', () => {
+    it('labels attempts only on rows outside attempt groups, and only when the run made more than one', () => {
         const { unmount } = render(<Harness spans={plain} />)
 
         expect(screen.queryByText(/Attempt/)).not.toBeInTheDocument()
 
         unmount()
-        render(<Harness spans={failover} />)
+        render(
+            <Harness
+                spans={[
+                    makeAgentSpan('root', { sequence: 1 }),
+                    makeStepSpan('s1', {
+                        sequence: 2,
+                        parent_id: 'root',
+                        step_number: 0,
+                    }),
+                    makeToolSpan('lone', {
+                        sequence: 3,
+                        parent_id: null,
+                        attempt: 2,
+                    }),
+                ]}
+            />,
+        )
 
-        expect(screen.getAllByText('Attempt 1 of 2')).toHaveLength(2)
-        expect(screen.getAllByText('Attempt 2 of 2')).toHaveLength(2)
+        // No agent has children on two attempts, so there are no groups and the label stays.
+        expect(screen.getByText('Attempt 2 of 2')).toBeInTheDocument()
     })
 
     it('numbers steps per attempt and never across attempts', () => {
@@ -243,7 +271,9 @@ describe('the execution tree', () => {
 
         expect(names()).toEqual([
             'SupportAssistant, Completed',
+            'Attempt 1 of 2',
             'Model step 1, Failed',
+            'Attempt 2 of 2',
             'Model step 1, Completed',
             'Model step 2, Completed',
         ])
@@ -391,12 +421,17 @@ function RerenderHarness({ selected }: { selected: string }) {
     const tree = useMemo(() => buildSpanTree(delegation), [])
     const agents = useMemo(() => new Map<string, AgentSubtotal>(), [])
 
+    const selectedId = selected === 'root' ? 'a1' : selected
+    const view = useTreeView(tree, selectedId)
+
     return (
         <SpanTree
             tree={tree}
-            selectedId={selected === 'root' ? 'a1' : selected}
+            view={view}
+            selectedId={selectedId}
             onSelect={() => {}}
             agents={agents}
+            axisMs={null}
         />
     )
 }

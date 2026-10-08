@@ -1,6 +1,7 @@
 import { render, screen, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import type { Usage } from '@/api/types'
+import { KeyValueList } from '@/components/patterns/key-value-list'
 import { TokenBreakdown } from '@/components/telemetry/token-breakdown'
 import { formatCount } from '@/lib/format'
 
@@ -109,5 +110,75 @@ describe('TokenBreakdown', () => {
         )
 
         expect(container.firstElementChild).toHaveClass('extra')
+    })
+
+    describe('as rows', () => {
+        const inList = (usage: Usage, own = false) =>
+            render(
+                <KeyValueList layout="rows">
+                    <TokenBreakdown usage={usage} layout="rows" own={own} />
+                </KeyValueList>,
+            )
+        const cell = (label: string) =>
+            screen.getByText(label, { selector: 'dt' })
+                .nextElementSibling as HTMLElement
+
+        it('renders each count as a key-value row, the parts indented, adding nothing up', () => {
+            inList(reported)
+
+            expect(cell('Input tokens')).toHaveTextContent(formatCount(1200))
+            expect(cell('Cache read')).toHaveTextContent(formatCount(800))
+            expect(cell('Cache write')).toHaveTextContent(formatCount(100))
+            expect(cell('Output tokens')).toHaveTextContent(formatCount(310))
+            expect(cell('Reasoning')).toHaveTextContent(formatCount(90))
+            expect(cell('Total tokens')).toHaveTextContent(formatCount(1510))
+            expect(screen.getByText('Cache read')).toHaveClass(
+                'group-data-[layout=rows]/kvl:ps-4',
+            )
+            expect(document.querySelectorAll('dt')).toHaveLength(6)
+        })
+
+        it('says Not reported for a count that was not reported, and Pending while pending', () => {
+            const { unmount } = inList({
+                ...reported,
+                cache_write_tokens: null,
+            })
+
+            expect(cell('Cache write')).toHaveTextContent('Not reported')
+            expect(cell('Input tokens')).toHaveTextContent(formatCount(1200))
+
+            unmount()
+            inList({ ...reported, state: 'pending' })
+
+            for (const label of [
+                'Input tokens',
+                'Cache read',
+                'Total tokens',
+            ]) {
+                expect(cell(label)).toHaveTextContent('Pending')
+            }
+        })
+
+        it('shows a real zero as a zero', () => {
+            inList({ ...reported, reasoning_tokens: 0 })
+
+            expect(cell('Reasoning')).toHaveTextContent('0')
+            expect(cell('Reasoning')).not.toHaveTextContent('Not reported')
+        })
+
+        it("labels the main rows as an agent's own when asked", () => {
+            inList(reported, true)
+
+            expect(
+                screen.getByText('Own input tokens', { selector: 'dt' }),
+            ).toBeInTheDocument()
+            expect(
+                screen.getByText('Own output tokens', { selector: 'dt' }),
+            ).toBeInTheDocument()
+            expect(
+                screen.getByText('Own total tokens', { selector: 'dt' }),
+            ).toBeInTheDocument()
+            expect(screen.getByText('Cache read')).toBeInTheDocument()
+        })
     })
 })

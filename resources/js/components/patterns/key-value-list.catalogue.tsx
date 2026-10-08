@@ -27,6 +27,27 @@ export const catalogue: CatalogueEntry = {
             ),
         },
         {
+            name: 'Rows: a label column and a value column',
+            Component: () => (
+                <KeyValueList layout="rows" className="max-w-xl">
+                    <KeyValue
+                        label="Span id"
+                        copy="019a3f2c-7d10-7e55-a1b2-3c4d5e6f7a8b"
+                    >
+                        <span className="font-mono">
+                            019a3f2c-7d10-7e55-a1b2-3c4d5e6f7a8b
+                        </span>
+                    </KeyValue>
+                    <KeyValue label="Provider">openai</KeyValue>
+                    <KeyValue label="Input tokens">1,200</KeyValue>
+                    <KeyValue label="Cache read" nested>
+                        800
+                    </KeyValue>
+                    <KeyValue label="Responding model" missing="Pending" />
+                </KeyValueList>
+            ),
+        },
+        {
             name: 'With a copy button',
             Component: () => (
                 <KeyValueList>

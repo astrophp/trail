@@ -1,4 +1,6 @@
 import type { Span } from '@/api/types'
+import { KeyValue } from '@/components/patterns/key-value'
+import { KeyValueList } from '@/components/patterns/key-value-list'
 import { CostValue } from '@/components/telemetry/cost-value'
 import { TokenBreakdown } from '@/components/telemetry/token-breakdown'
 import { SectionLabel } from '@/features/trace/section-label'
@@ -14,11 +16,12 @@ export function EmbeddingUsage({ span }: EmbeddingUsageProps) {
     return (
         <section data-slot="embedding-usage" className="flex flex-col gap-3">
             <SectionLabel>Usage</SectionLabel>
-            <TokenBreakdown usage={span.usage} className="max-w-sm" />
-            <p className="text-ui">
-                <span className="text-muted-foreground">Cost </span>
-                <CostValue cost={span.cost} className="inline" />
-            </p>
+            <KeyValueList layout="rows">
+                <TokenBreakdown usage={span.usage} layout="rows" />
+                <KeyValue label="Cost">
+                    <CostValue cost={span.cost} />
+                </KeyValue>
+            </KeyValueList>
         </section>
     )
 }

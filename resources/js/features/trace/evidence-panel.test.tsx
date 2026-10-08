@@ -1387,46 +1387,43 @@ describe('the metadata and raw tabs', () => {
         expect(group('stored metadata')).toBeInTheDocument()
     })
 
-    it('shows the token breakdown of a step with the API numbers', async () => {
+    it('shows the token rows of a step with the API numbers, in the same table', async () => {
         await open(details(), { search: '?span=s1&tab=metadata' })
 
-        const breakdown = within(
-            document.querySelector(
-                '[data-slot="token-breakdown"]',
-            ) as HTMLElement,
-        )
-
-        expect(breakdown.getByText(formatCount(1200))).toBeInTheDocument()
-        expect(breakdown.getByText('of which cache read')).toBeInTheDocument()
-        expect(breakdown.getByText('Not reported')).toBeInTheDocument()
-        expect(breakdown.getByText(formatCount(1510))).toBeInTheDocument()
-    })
-
-    it('says None for the parent of the root, and labels the breakdown of an agent as its own', async () => {
-        await open([root()], { search: '?tab=metadata' })
+        const list = panel()
 
         expect(
-            (panel().getByText('Parent span id').closest('div') as HTMLElement)
-                .textContent,
-        ).toContain('None')
+            list.getByText('Input tokens', { selector: 'dt' })
+                .nextElementSibling,
+        ).toHaveTextContent(formatCount(1200))
+        expect(list.getByText('Cache read')).toBeInTheDocument()
+        expect(list.getAllByText('Not reported').length).toBeGreaterThan(0)
+        expect(
+            list.getByText('Total tokens', { selector: 'dt' })
+                .nextElementSibling,
+        ).toHaveTextContent(formatCount(1510))
+    })
+
+    it('leaves out the parent of the root, and labels the tokens of an agent as its own', async () => {
+        await open([root()], { search: '?tab=metadata' })
+
+        expect(panel().queryByText('Parent span id')).not.toBeInTheDocument()
         expect(
             panel().queryByRole('button', { name: 'Copy Parent span id' }),
         ).not.toBeInTheDocument()
-        expect(
-            document.querySelector('[data-slot="token-breakdown"]'),
-        ).toBeInTheDocument()
-        expect(panel().getByText('Own token breakdown')).toBeInTheDocument()
+        expect(panel().getByText('Own input tokens')).toBeInTheDocument()
+        expect(panel().getByText('Own cost')).toBeInTheDocument()
     })
 
-    it('shows no breakdown and no model for a tool', async () => {
+    it('shows no token rows and no model for a tool', async () => {
         await open([root(), tool('t1', 2, { input: { arguments: {} } })], {
             search: '?span=t1&tab=metadata',
         })
 
-        expect(
-            document.querySelector('[data-slot="token-breakdown"]'),
-        ).not.toBeInTheDocument()
-        expect(panel().getAllByText('Not applicable').length).toBeGreaterThan(0)
+        expect(panel().getByText('Parent span id')).toBeInTheDocument()
+        expect(panel().queryByText(/tokens/)).not.toBeInTheDocument()
+        expect(panel().queryByText('Requested model')).not.toBeInTheDocument()
+        expect(panel().queryByText('Not applicable')).not.toBeInTheDocument()
     })
 
     it('shows the whole span in the raw tab', async () => {
@@ -2047,9 +2044,14 @@ describe('the usage of an embedding', () => {
         expect(
             panel().getByRole('heading', { name: 'Usage' }),
         ).toBeInTheDocument()
-        expect(
-            document.querySelector('[data-slot="token-breakdown"]'),
-        ).toBeInTheDocument()
+        const usage = within(
+            document.querySelector(
+                '[data-slot="embedding-usage"]',
+            ) as HTMLElement,
+        )
+
+        expect(usage.getByText('Input tokens')).toBeInTheDocument()
+        expect(usage.getByText('Total tokens')).toBeInTheDocument()
         expect(
             document.querySelector(
                 '[data-slot="embedding-usage"] [data-slot="cost-value"]',
@@ -2058,9 +2060,7 @@ describe('the usage of an embedding', () => {
 
         await openTab('Metadata')
 
-        expect(
-            document.querySelector('[data-slot="token-breakdown"]'),
-        ).toBeInTheDocument()
+        expect(panel().getByText('Input tokens')).toBeInTheDocument()
     })
 
     it('is on the output tab when the input has nothing to show', async () => {

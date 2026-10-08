@@ -52,4 +52,34 @@ describe('KeyValueList', () => {
 
         expect(container.querySelector('dl')).toHaveClass('extra')
     })
+
+    it('is a table of rows in the rows layout, whatever columns it is given', () => {
+        const { container } = render(
+            <KeyValueList layout="rows" columns="two">
+                <KeyValue label="a">1</KeyValue>
+                <KeyValue label="b">2</KeyValue>
+            </KeyValueList>,
+        )
+
+        const list = container.querySelector('dl')
+
+        expect(list).toHaveAttribute('data-layout', 'rows')
+        expect(list).toHaveClass('flex', 'flex-col')
+        expect(list).not.toHaveClass('grid')
+        expect(list).not.toHaveClass('md:grid-cols-2')
+    })
+
+    it('stays a grid of stacked pairs by default', () => {
+        const { container } = render(
+            <KeyValueList>
+                <KeyValue label="a">1</KeyValue>
+            </KeyValueList>,
+        )
+
+        expect(container.querySelector('dl')).toHaveAttribute(
+            'data-layout',
+            'stack',
+        )
+        expect(container.querySelector('dl')).toHaveClass('grid')
+    })
 })
