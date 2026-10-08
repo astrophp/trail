@@ -356,6 +356,31 @@ function transcriptContractDataset(): void
 }
 
 /**
+ * The runs of the shared dataset plus what the overview needs on top of them: a run that is
+ * really stale, twenty runs with a duration so that the 95th percentile is computed, and the
+ * period before the range, with runs in it.
+ */
+function overviewContractDataset(): void
+{
+    contractDataset();
+
+    Rows::trace([
+        'id' => 'trace-abandoned', 'name' => 'Retired', 'status' => Status::Running, 'started_at' => '2026-01-02 05:30:00',
+        'created_at' => Carbon::now()->subHours(3),
+    ]);
+
+    foreach (range(1, 20) as $i) {
+        Rows::trace([
+            'id' => sprintf('trace-latency-%02d', $i), 'name' => 'Latency', 'status' => Status::Completed, 'duration_ms' => $i * 100,
+            'input_tokens' => 10, 'output_tokens' => 5, 'cost' => 0.001, 'started_at' => '2026-01-02 08:00:00',
+        ]);
+    }
+
+    Rows::trace(['id' => 'trace-before-1', 'name' => 'Latency', 'status' => Status::Completed, 'duration_ms' => 700.5, 'input_tokens' => 50, 'cost' => 0.0123456789, 'started_at' => '2026-01-01 09:00:00']);
+    Rows::trace(['id' => 'trace-before-2', 'name' => 'Latency', 'status' => Status::Failed, 'duration_ms' => 90.25, 'unpriced_span_count' => 1, 'started_at' => '2026-01-01 09:30:00']);
+}
+
+/**
  * @param  array<string, mixed>|object  $body  decoded as objects where an empty object must stay one
  */
 function assertContract(string $name, array|object $body): void
@@ -412,6 +437,14 @@ it('sends the conversation transcript response the dashboard expects', function 
     $response = $this->getJson('/trail/api/conversations/transcript?id='.rawurlencode('support/ada 1042'))->assertOk();
 
     assertContract('conversation', json_decode($response->getContent(), false, flags: JSON_THROW_ON_ERROR));
+});
+
+it('sends the overview response the dashboard expects', function () {
+    // Not on an edge of the clock, so the first bucket is cut and the last one is still open.
+    Carbon::setTestNow('2026-01-02 12:20:00');
+    overviewContractDataset();
+
+    assertContract('overview', $this->getJson('/trail/api/overview')->assertOk()->json());
 });
 
 it('sends the bookmark response the dashboard expects', function () {

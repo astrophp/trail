@@ -3,6 +3,7 @@
 use Astro\Trail\Http\Controllers\Api\ConversationIndexController;
 use Astro\Trail\Http\Controllers\Api\ConversationTranscriptController;
 use Astro\Trail\Http\Controllers\Api\MetaController;
+use Astro\Trail\Http\Controllers\Api\OverviewController;
 use Astro\Trail\Http\Controllers\Api\TraceBookmarkController;
 use Astro\Trail\Http\Controllers\Api\TraceExportController;
 use Astro\Trail\Http\Controllers\Api\TraceIndexController;
@@ -16,6 +17,7 @@ use Illuminate\Support\Facades\Route;
 // RespondWithJson comes first, so the access check's own 403 and 404 are JSON as well.
 Route::prefix('api')->middleware([RespondWithJson::class, Authorize::class])->group(function () {
     Route::get('meta', MetaController::class)->name('trail.api.meta');
+    Route::get('overview', OverviewController::class)->name('trail.api.overview');
     Route::get('conversations', ConversationIndexController::class)->name('trail.api.conversations.index');
     // The conversation's id travels in the query: it can hold any character, a slash among them.
     Route::get('conversations/transcript', ConversationTranscriptController::class)->name('trail.api.conversations.transcript');

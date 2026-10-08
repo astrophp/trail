@@ -18,15 +18,22 @@ import type {
     JsonValue,
     Meta,
     MetaResponse,
+    OverviewResponse,
     Pagination,
+    PreviousRange,
     PendingApproval,
     Range,
     Span,
     SpanCost,
     SpanLimit,
     SpanType,
+    BucketUnit,
+    ErrorRate,
+    SeriesBucket,
     Status,
     StatusCounts,
+    Summary,
+    SummaryDuration,
     Trace,
     TraceDetail,
     TraceDetailResponse,
@@ -373,6 +380,62 @@ const conversationListResponse = z.strictObject({
     counts: conversationCounts,
 })
 
+const errorRate = z.strictObject({
+    rate: nullable(z.number()),
+    failed: count,
+    finished: count,
+})
+
+const summary = z.strictObject({
+    runs: statusCounts,
+    error_rate: errorRate,
+    duration: z.strictObject({
+        average_ms: nullable(z.number()),
+        p95_ms: nullable(z.number()),
+        measured: count,
+        not_measured: count,
+        p95_minimum: count,
+    }),
+    usage,
+    usage_coverage: z.strictObject({ reported: count, not_reported: count }),
+    cost,
+    cost_coverage: z.strictObject({
+        unpriced_runs: count,
+        runs_without_amount: count,
+    }),
+})
+
+const bucketUnits = ['5m', 'hour', 'day'] as const
+
+const seriesBucket = z.strictObject({
+    from: timestamp,
+    to: timestamp,
+    full: z.boolean(),
+    in_progress: z.boolean(),
+    runs: statusCounts,
+    duration: z.strictObject({
+        average_ms: nullable(z.number()),
+        measured: count,
+    }),
+    cost,
+    unpriced_runs: count,
+})
+
+const previousRange = z.strictObject({ from: timestamp, to: timestamp })
+
+const overviewResponse = z.strictObject({
+    data: z.strictObject({
+        summary,
+        previous: nullable(summary),
+        series: z.strictObject({
+            bucket: z.enum(bucketUnits),
+            buckets: z.array(seriesBucket),
+        }),
+    }),
+    range,
+    previous_range: previousRange,
+})
+
 const messageParts = ['prompt', 'response', 'activity'] as const
 const toolCallLinks = [
     'linked',
@@ -537,6 +600,21 @@ describe('types', () => {
         expectTypeOf<
             z.infer<typeof conversationListResponse>
         >().toEqualTypeOf<ConversationListResponse>()
+        expectTypeOf<z.infer<typeof errorRate>>().toEqualTypeOf<ErrorRate>()
+        expectTypeOf<
+            z.infer<typeof summary>['duration']
+        >().toEqualTypeOf<SummaryDuration>()
+        expectTypeOf<z.infer<typeof summary>>().toEqualTypeOf<Summary>()
+        expectTypeOf<
+            z.infer<typeof seriesBucket>
+        >().toEqualTypeOf<SeriesBucket>()
+        expectTypeOf<
+            z.infer<typeof previousRange>
+        >().toEqualTypeOf<PreviousRange>()
+        expectTypeOf<
+            z.infer<typeof overviewResponse>
+        >().toEqualTypeOf<OverviewResponse>()
+        expectTypeOf<(typeof bucketUnits)[number]>().toEqualTypeOf<BucketUnit>()
         expectTypeOf<
             z.infer<typeof traceNeighbours>
         >().toEqualTypeOf<TraceNeighbours>()
@@ -740,6 +818,49 @@ describe('tests/Contract/conversations.json', () => {
 
     it('counts the conversations the way its pagination does', () => {
         expect(parsed.data?.counts.all).toBe(parsed.data?.pagination.total)
+    })
+})
+
+describe('tests/Contract/overview.json', () => {
+    const parsed = overviewResponse.safeParse(contractFixture('overview'))
+
+    it('is what the API types describe', () => {
+        expect(parsed.error?.issues).toBeUndefined()
+    })
+
+    const data = parsed.data?.data
+    const buckets = data?.series.buckets ?? []
+
+    it('sums up the range and the period before it', () => {
+        expect(data?.summary.runs.all).toBeGreaterThan(0)
+        expect(data?.previous?.runs.all).toBeGreaterThan(0)
+        expect(parsed.data?.previous_range.to).toBe(parsed.data?.range.from)
+    })
+
+    it('has a percentile and a missing one', () => {
+        expect(data?.summary.duration.p95_ms).not.toBeNull()
+        expect(data?.previous?.duration.p95_ms).toBeNull()
+    })
+
+    it('has a series cut at both ends, the last bucket still open', () => {
+        expect(buckets[0]?.full).toBe(false)
+        expect(buckets.at(-1)?.full).toBe(false)
+        expect(buckets.map((bucket) => bucket.in_progress)).toEqual([
+            ...buckets.slice(0, -1).map(() => false),
+            true,
+        ])
+        expect(buckets[0]?.from).toBe(parsed.data?.range.from)
+        expect(buckets.at(-1)?.to).toBe(parsed.data?.range.to)
+    })
+
+    it('has buckets with runs and buckets without', () => {
+        expect(buckets.some((bucket) => bucket.runs.all === 0)).toBe(true)
+        expect(buckets.some((bucket) => bucket.runs.all > 0)).toBe(true)
+    })
+
+    it('adds up to its summary', () => {
+        const total = buckets.reduce((sum, bucket) => sum + bucket.runs.all, 0)
+        expect(total).toBe(data?.summary.runs.all)
     })
 })
 

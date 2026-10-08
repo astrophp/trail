@@ -174,6 +174,55 @@ One run, as every endpoint returns it:
 - `issue_kind` is `rate_limited`, `provider_overloaded`, `provider_connection`,
   `insufficient_credits`, `tool_error`, `exception`, `abandoned` or `null`.
 
+## The summary
+
+What a set of runs adds up to, as every endpoint returns it: the runs of a time range, the runs of
+the period before it, and later the runs of one agent. Only the runs that started in the set count.
+
+```json
+{
+  "runs": { "all": 52, "completed": 37, "failed": 9, "incomplete": 3, "running": 2, "awaiting_approval": 1 },
+  "error_rate": { "rate": 0.1836734694, "failed": 9, "finished": 49 },
+  "duration": { "average_ms": 1840.412, "p95_ms": 9200, "measured": 49, "not_measured": 3, "p95_minimum": 20 },
+  "usage": {
+    "state": "pending",
+    "input_tokens": 1, "output_tokens": 1, "cache_read_tokens": null, "cache_write_tokens": null,
+    "reasoning_tokens": null, "total_tokens": 2
+  },
+  "usage_coverage": { "reported": 48, "not_reported": 4 },
+  "cost": { "state": "pending", "amount": 11.48 },
+  "cost_coverage": { "unpriced_runs": 8, "runs_without_amount": 5 }
+}
+```
+
+- `runs` has the keys of a list's `status_counts`, counted by the status each run shows, so a stale
+  running run is `incomplete` and is not `running`. For any range it equals the `status_counts` of
+  `GET /api/traces` with no filter.
+- `error_rate.finished` is `completed + failed + incomplete`, and `rate` is `failed / finished` as a
+  fraction rounded to 10 places. Incomplete runs are in `finished` and not in `failed`: a run that
+  stopped without an answer is not known to have failed. Running runs and runs awaiting approval
+  are in neither. `rate` is `null`, never `0`, when `finished` is `0`.
+- `duration` covers the runs that have a `duration_ms`, whatever their status. `measured` is how
+  many have one and `not_measured` how many do not, so `measured + not_measured` is `runs.all`.
+  `average_ms` is their mean, rounded to 3 decimals, and `null` when `measured` is `0`. `p95_ms` is
+  the nearest-rank 95th percentile of their durations: with `measured` runs ordered by duration, the
+  one at rank `ceil(0.95 * measured)`. It is `null` when `measured` is below `p95_minimum`, which is
+  `20`: below that the nearest-rank percentile is simply the slowest run.
+- Each count of `usage` is the sum of the runs that reported it, and `null` when none did. Its
+  `state` is `pending` when `runs.running` is above `0`, else `reported` when any count is not
+  `null`, else `not_reported`. `total_tokens` follows the rule of a run's.
+  `usage_coverage.reported` is the number of runs with at least one count, and `not_reported` is
+  `runs.all - reported`.
+- `cost.amount` is the sum of the runs' cost, `null` when no run has one. Its `state` follows a
+  run's, from the number of steps across the runs that reported usage and could not be priced:
+  `pending` when `runs.running` is above `0` (the amount is what has been recorded so far),
+  else `estimated`, `partial`, `unpriced` or `not_captured`.
+  `cost_coverage.unpriced_runs` is the number of runs with at least one such step, exactly the runs
+  the list keeps with `unpriced=1`, and `runs_without_amount` the number of runs whose cost is `null`.
+- Money: in [`GET /api/overview`](#get-apioverview) the amount of the range is the sums of its
+  buckets added as floating-point numbers and rounded to 10 decimal places. The amount of the
+  previous period is one sum from the database, rounded the same way.
+
 ## The conversation
 
 The runs that carry the same conversation id, as every endpoint returns them. A run in a
@@ -521,6 +570,81 @@ What the dashboard needs around every page. Takes a time range, which applies to
 - `filters` lists what was observed in the range, sorted by name, at most 100 of each. `agents`
   are the names of runs; `providers` and `models` come from every step of a run, not only the
   first, since one run can use several models.
+
+### `GET /api/overview`
+
+The summary of a time range, the same summary of the period just before it, and the range cut into
+buckets. It takes a time range and nothing else: any other parameter is ignored.
+
+```json
+{
+  "data": {
+    "summary": { "runs": { "all": 52 } },
+    "previous": null,
+    "series": {
+      "bucket": "hour",
+      "buckets": [
+        {
+          "from": "2026-01-01T12:23:00.000Z", "to": "2026-01-01T13:00:00.000Z",
+          "full": false, "in_progress": false,
+          "runs": { "all": 0, "completed": 0, "failed": 0, "incomplete": 0, "running": 0, "awaiting_approval": 0 },
+          "duration": { "average_ms": null, "measured": 0 },
+          "cost": { "state": "not_captured", "amount": null },
+          "unpriced_runs": 0
+        }
+      ]
+    }
+  },
+  "range": { "preset": "24h", "from": "…", "to": "…" },
+  "previous_range": { "from": "…", "to": "…" }
+}
+```
+
+- `summary` is [The summary](#the-summary) of the runs that started in the range.
+- `previous_range` is the window of the same length that ends where the range starts, `from`
+  included and `to` excluded. It has no `preset` and is always present. `previous` is the summary
+  of its runs, and `null` when it holds no runs at all, so that nothing is compared with nothing. A
+  run that starts exactly where the range starts is in the range, not in the previous window.
+- `series.bucket` is the length of a bucket: `5m`, `hour` or `day`. For a preset it is `5m` for
+  `1h`, `hour` for `24h` and `day` for `7d`. For an explicit range it follows the range's length:
+
+  | Range | `bucket` | Buckets at most |
+  | -- | -- | -- |
+  | up to 2 hours | `5m` | 25 |
+  | up to 48 hours | `hour` | 49 |
+  | up to 92 days | `day` | 94 |
+
+  A longer range is a 422 on `from`: "The range is too long: at most 92 days."
+- Buckets follow the clock of the application's timezone (`app.timezone`): a `5m` bucket starts at
+  a multiple of 5 minutes, an `hour` bucket on the hour and a `day` bucket at midnight. A `day`
+  bucket is a calendar day, so across a clock change one is 23 or 25 hours long, and a range of
+  92 times 24 hours that begins late on the day before the clock goes forward touches 94 days.
+- The application stores local times, so in the hour a clock is set back two instants share one
+  stored time. That hour is a single bucket whatever the unit, longer than its unit: for `5m` and
+  `hour` buckets it runs from the start of the first pass to the end of the second, and its runs are
+  every run stored with a time in that hour. A range, or a previous window, whose boundary falls
+  inside that hour splits its runs by their stored time, as every time range of this API does. When
+  the clock skips an hour, `hour` buckets have no bucket for it.
+- Every bucket of the range is present, in order and without gaps. `from` and `to` are the part of
+  the clock bucket inside the range, `from` included and `to` excluded: the first bucket is cut at
+  the range's start and the last at its end. They are the bounds its runs were counted over, so
+  `GET /api/traces` with `from` and `to` set to them has the bucket's `runs` as its `status_counts`.
+  A range that ends exactly on a bucket edge has no bucket after it, so a `24h` range read on the
+  hour has 24 buckets and otherwise 25; a `1h` range has 12 or 13 and a `7d` range 7 or 8.
+- `full` is `false` for a bucket cut at either end. `in_progress` is `true` when the current time
+  is inside the bucket's clock span, from its start to its end before the range cut it. At most
+  one bucket is in progress. It is the last bucket of a range that ends now, no bucket of a range
+  that ended before the current clock bucket began, and no bucket of a range that starts in the
+  future; the last bucket of a range that ended a few minutes ago can still be in progress, and so
+  can one in the middle of a range that ends in the future.
+- A bucket has `runs` (the keys of a list's `status_counts`, the stale rule applied), `duration`
+  (`average_ms`, `null` when `measured` is `0`, and `measured`), `cost` (the cost of
+  [The summary](#the-summary) over the bucket's runs, `pending` when one of them is running) and
+  `unpriced_runs`. A bucket without runs has every count `0`, `average_ms` `null` and a `cost` that
+  is `not_captured`. There is no percentile and no token count per bucket.
+- The `runs` of all the buckets add up to `summary.runs`.
+- It is read in one grouped query over the runs, plus one read for each period that has a
+  percentile (at most two), whatever the range.
 
 ### `GET /api/conversations`
 
