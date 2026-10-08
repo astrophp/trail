@@ -21,6 +21,7 @@ import {
     searchBox,
     tab,
     traceFixture,
+    travel,
 } from '@/test/traces-api'
 
 beforeEach(() => {
@@ -275,7 +276,7 @@ describe('the filters drive the URL', () => {
         await expectSearch('?status=failed')
         expect(window.history.length).toBe(entries + 1)
 
-        act(() => window.history.back())
+        await travel('back')
         await expectSearch('?page=2')
         await waitFor(() =>
             expect(tab(/^All traces/)).toHaveAttribute('aria-selected', 'true'),
