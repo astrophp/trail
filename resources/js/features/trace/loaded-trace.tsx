@@ -1,9 +1,10 @@
-import { useCallback, useMemo } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import type { TraceDetailResponse } from '@/api/types'
+import { SplitView } from '@/components/patterns/split-view'
 import { buildSpanTree } from '@/features/trace/build-span-tree'
+import { ExecutionPane } from '@/features/trace/execution-pane'
+import { EvidencePanel } from '@/features/trace/evidence-panel'
 import { resolveSelection } from '@/features/trace/resolve-selection'
-import { SpanFacts } from '@/features/trace/span-facts'
-import { SpanTree } from '@/features/trace/span-tree'
 import { TraceHeader } from '@/features/trace/trace-header'
 import { traceParams } from '@/features/trace/trace-params'
 import { useUrlState } from '@/hooks/use-url-state'
@@ -13,10 +14,10 @@ type LoadedTraceProps = {
     onBookmarkChange: (bookmarked: boolean) => void
 }
 
-/** A run that has loaded: its header, the execution tree and the selected span's facts. */
+/** A run that has loaded: its header, and in one card the execution tree and the evidence for the selected span. */
 export function LoadedTrace({ data, onBookmarkChange }: LoadedTraceProps) {
-    const { trace, detail, spans, usage } = data
-    const [{ span: requested }, setParams] = useUrlState(traceParams)
+    const { trace, detail, spans, usage, coverage } = data
+    const [{ span: requested, tab }, setParams] = useUrlState(traceParams)
     // Built once per response, not per render.
     const tree = useMemo(() => buildSpanTree(spans), [spans])
     const agents = useMemo(
@@ -28,9 +29,45 @@ export function LoadedTrace({ data, onBookmarkChange }: LoadedTraceProps) {
         [tree, requested, trace.status],
     )
     const selected = selectedId === null ? undefined : tree.byId.get(selectedId)
-    // Selecting a span must not bury the list under history entries.
+    // The span a person opened from inside the panel, whose heading takes focus when it appears.
+    // A span chosen in the tree is never one: focus stays on the tree row.
+    const [focusSpan, setFocusSpan] = useState<string | null>(null)
+    // Selecting a span or a tab must not bury the list under history entries.
     const select = useCallback(
-        (id: string) => setParams({ span: id }, { replace: true }),
+        (id: string) => {
+            setFocusSpan(null)
+            setParams({ span: id }, { replace: true })
+        },
+        [setParams],
+    )
+    const selectFromPanel = useCallback(
+        (id: string) => {
+            setParams({ span: id }, { replace: true })
+            setFocusSpan(id)
+        },
+        [setParams],
+    )
+    const focusHandled = useCallback(() => setFocusSpan(null), [])
+    const run = useMemo(
+        () => ({
+            status: trace.status,
+            pendingApprovals: detail.pending_approvals,
+        }),
+        [trace.status, detail.pending_approvals],
+    )
+    const selectTab = useCallback(
+        (next: string) => {
+            // The select only offers tabs; a value it does not know is left out of the URL.
+            const known = traceParams.tab.parse(next)
+
+            if (known !== undefined) {
+                setParams({ tab: known }, { replace: true })
+            }
+        },
+        [setParams],
+    )
+    const back = useCallback(
+        () => setParams({ span: '' }, { replace: true }),
         [setParams],
     )
 
@@ -41,25 +78,46 @@ export function LoadedTrace({ data, onBookmarkChange }: LoadedTraceProps) {
                 error={detail.error}
                 onBookmarkChange={onBookmarkChange}
             />
-            <div className="grid items-start gap-4 wide:grid-cols-5">
-                <SpanTree
-                    // A new run starts expanded.
-                    key={trace.id}
-                    tree={tree}
-                    selectedId={selectedId}
-                    onSelect={select}
-                    agents={agents}
-                    className="wide:col-span-3"
-                />
-                {selected ? (
-                    <SpanFacts
-                        span={selected.span}
-                        attempts={tree.attempts}
-                        subtotal={agents.get(selected.span.id)}
-                        className="wide:col-span-2"
+            <SplitView
+                storageKey="trace-split"
+                primaryLabel="Execution tree"
+                secondaryLabel="Span evidence"
+                backLabel="Execution tree"
+                // On a narrow screen the evidence shows once a span is named in the URL.
+                detailOpen={requested !== ''}
+                onBack={back}
+                defaultSize={55}
+                className="overflow-hidden rounded-lg border bg-card md:h-[70dvh] md:min-h-96"
+                primary={
+                    <ExecutionPane
+                        // A new run starts expanded.
+                        key={trace.id}
+                        tree={tree}
+                        spanCount={trace.span_count}
+                        selectedId={selectedId}
+                        onSelect={select}
+                        agents={agents}
                     />
-                ) : null}
-            </div>
+                }
+                secondary={
+                    selected ? (
+                        <EvidencePanel
+                            // Each span starts with its own viewers closed.
+                            key={selected.span.id}
+                            span={selected.span}
+                            tree={tree}
+                            subtotal={agents.get(selected.span.id)}
+                            coverage={coverage}
+                            run={run}
+                            tab={tab}
+                            onTabChange={selectTab}
+                            onSelect={selectFromPanel}
+                            focusHeading={focusSpan === selected.span.id}
+                            onFocusHandled={focusHandled}
+                        />
+                    ) : null
+                }
+            />
         </div>
     )
 }

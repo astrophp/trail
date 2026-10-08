@@ -204,10 +204,7 @@ export function SpanTree({
             role="tree"
             aria-label="Execution tree"
             data-slot="span-tree"
-            className={cn(
-                'overflow-hidden rounded-xl border bg-card',
-                className,
-            )}
+            className={cn('flex flex-col gap-0.5 p-2', className)}
         >
             {visible.map((node) => {
                 const id = node.span.id

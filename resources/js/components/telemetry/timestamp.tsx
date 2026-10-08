@@ -1,6 +1,7 @@
 import { useBoot } from '@/hooks/use-boot'
 import {
     formatClockTime,
+    formatDayAndClock,
     formatDateTime,
     formatRelativeTime,
     formatShortDate,
@@ -14,6 +15,11 @@ type TimestampProps = {
     at: string
     /** What "ago" is measured from. Tests pass a fixed time. */
     now?: Date
+    /**
+     * `stacked` is how long ago with the clock time under it; `inline` is the day and the clock
+     * time on one line (`Oct 7 \u00b7 14:03:22`), for a header that states when a run started.
+     */
+    layout?: 'stacked' | 'inline'
     className?: string
 }
 
@@ -22,7 +28,12 @@ type TimestampProps = {
  * zone. The full date and time with its zone are on hover and in the accessible text. It is
  * computed on render and does not tick: a page refreshes its data, and the time with it.
  */
-export function Timestamp({ at, now = new Date(), className }: TimestampProps) {
+export function Timestamp({
+    at,
+    now = new Date(),
+    layout = 'stacked',
+    className,
+}: TimestampProps) {
     const timeZone = resolveTimeZone(useBoot().timezone)
     const date = new Date(at)
 
@@ -39,6 +50,22 @@ export function Timestamp({ at, now = new Date(), className }: TimestampProps) {
 
     const absolute = formatDateTime(date, timeZone)
     const clock = formatClockTime(date, timeZone)
+
+    if (layout === 'inline') {
+        return (
+            <time
+                data-slot="timestamp"
+                dateTime={at}
+                title={absolute}
+                className={cn('tabular-nums', className)}
+            >
+                <span aria-hidden="true">
+                    {formatDayAndClock(date, timeZone)}
+                </span>
+                <span className="sr-only">{absolute}</span>
+            </time>
+        )
+    }
 
     return (
         <time

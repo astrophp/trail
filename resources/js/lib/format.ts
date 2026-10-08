@@ -238,6 +238,14 @@ export function formatShortDate(
     return zoneFormatter('shortDate', timeZone).format(at)
 }
 
+/** The day and the time of day on one line, always with the day: `Oct 7 · 14:03:22`. */
+export function formatDayAndClock(
+    at: Date,
+    timeZone: string | undefined,
+): string {
+    return `${formatShortDate(at, timeZone)} \u00b7 ${formatClockTime(at, timeZone)}`
+}
+
 /** Whether two instants fall on the same calendar day in a time zone. */
 export function isSameDay(
     a: Date,

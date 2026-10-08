@@ -1,11 +1,10 @@
 import { ModelLabel } from '@/components/telemetry/model-label'
-import type { Trace } from '@/api/types'
+import type { ComponentProps } from 'react'
 import type { CatalogueEntry } from '@/catalogue/types'
 
-const models: [
-    string,
-    Pick<Trace, 'provider' | 'model'> & Partial<Pick<Trace, 'streamed'>>,
-][] = [
+type Of = ComponentProps<typeof ModelLabel>['of']
+
+const models: [string, Of, boolean?][] = [
     [
         'Model and provider',
         { model: 'gpt-4o', provider: 'openai', streamed: false },
@@ -18,12 +17,33 @@ const models: [
     ['No provider', { model: 'gpt-4o', provider: null, streamed: true }],
     ['Span (no streamed field)', { model: 'gpt-4o', provider: 'openai' }],
     ['Neither', { model: null, provider: null, streamed: false }],
+    [
+        'Responding model differs',
+        {
+            model: 'claude-sonnet-4-5',
+            provider: 'anthropic',
+            responding_model: 'claude-sonnet-4-5-20250929',
+        },
+        true,
+    ],
+    [
+        'Responding model same',
+        { model: 'gpt-4o', provider: 'openai', responding_model: 'gpt-4o' },
+        true,
+    ],
+    [
+        'Responding model not captured',
+        { model: 'gpt-4o', provider: 'openai', responding_model: null },
+        true,
+    ],
 ]
 
 export const catalogue: CatalogueEntry = {
     title: 'Model label',
-    specimens: models.map(([name, of]) => ({
+    specimens: models.map(([name, of, expectResponding]) => ({
         name,
-        Component: () => <ModelLabel of={of} />,
+        Component: () => (
+            <ModelLabel of={of} expectResponding={expectResponding} />
+        ),
     })),
 }

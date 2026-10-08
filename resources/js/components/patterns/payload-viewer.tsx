@@ -14,6 +14,12 @@ type PayloadViewerProps = {
     value: JsonValue | undefined
     /** Names the payload, for example `arguments`: the group's name and the copy button's (`Copy arguments`). */
     label: string
+    /**
+     * Shows the viewer's own label row above the value: this text on the left, the copy button
+     * (and for a structured value the Tree/Raw switch) on the right. Without it the controls sit
+     * in a bare row, for a value that is already under a label of its own.
+     */
+    heading?: string
     redacted?: boolean
     truncated?: boolean
     /** How long the value was before it was cut short, in characters. */
@@ -28,6 +34,13 @@ type PayloadViewerProps = {
 const box =
     'rounded-lg border bg-muted px-3 py-2.5 font-mono text-caption leading-relaxed'
 
+/** The block of a value under its own heading: roomier, prose in the UI size, structure in monospace. */
+const roomyBox = 'rounded-lg border bg-muted p-4 leading-relaxed'
+const textBox = `${roomyBox} font-sans text-ui`
+const structuredBox = `${roomyBox} font-mono text-xs`
+
+const headingClass = 'text-xs font-medium text-muted-foreground'
+
 /**
  * One stored payload, shown as received: a string as text, an object or array as a tree with a
  * raw view next to it. Everything is text, never HTML, and a large value is revealed in steps.
@@ -35,6 +48,7 @@ const box =
 export function PayloadViewer({
     value,
     label,
+    heading,
     redacted,
     truncated,
     originalLength,
@@ -90,6 +104,7 @@ export function PayloadViewer({
                 className={cn('flex min-w-0 flex-col gap-2', className)}
             >
                 {notices}
+                {heading ? <h3 className={headingClass}>{heading}</h3> : null}
                 <p className="text-ui">
                     <span className="text-muted-foreground">Not captured</span>
                     {missingReason ? ` ${missingReason}` : null}
@@ -135,18 +150,24 @@ export function PayloadViewer({
                     className="min-w-0 gap-2"
                 >
                     <div className="flex items-center justify-between gap-2">
-                        <TabsList aria-label={`${label} view`}>
-                            <TabsTrigger value="tree">Tree</TabsTrigger>
-                            <TabsTrigger value="raw">Raw</TabsTrigger>
-                        </TabsList>
-                        {copy}
+                        {heading ? (
+                            <h3 className={headingClass}>{heading}</h3>
+                        ) : null}
+                        <div className="flex items-center gap-1">
+                            <TabsList aria-label={`${label} view`}>
+                                <TabsTrigger value="tree">Tree</TabsTrigger>
+                                <TabsTrigger value="raw">Raw</TabsTrigger>
+                            </TabsList>
+                            {heading ? copy : null}
+                        </div>
+                        {heading ? null : copy}
                     </div>
                     {/* Both panels stay mounted, so going back to the tree keeps what was opened. */}
                     <TabsContent
                         value="tree"
                         forceMount
                         hidden={view !== 'tree'}
-                        className={cn(box, 'min-w-0')}
+                        className={cn(heading ? structuredBox : box, 'min-w-0')}
                     >
                         <PayloadNode
                             value={value}
@@ -158,7 +179,7 @@ export function PayloadViewer({
                         value="raw"
                         forceMount
                         hidden={view !== 'raw'}
-                        className={cn(box, 'min-w-0')}
+                        className={cn(heading ? structuredBox : box, 'min-w-0')}
                     >
                         {raw === null ? null : 'text' in raw ? (
                             <CappedText
@@ -174,28 +195,50 @@ export function PayloadViewer({
                     </TabsContent>
                 </Tabs>
             ) : (
-                <div className="flex items-start gap-2">
-                    <div className={cn(box, 'min-w-0 flex-1')}>
-                        {typeof value === 'string' ? (
-                            value === '' ? (
-                                <span className="font-sans text-muted-foreground">
-                                    Empty text
-                                </span>
+                <>
+                    {heading ? (
+                        <div className="flex items-center justify-between gap-2">
+                            <h3 className={headingClass}>{heading}</h3>
+                            {copy}
+                        </div>
+                    ) : null}
+                    <div
+                        className={cn(
+                            'flex gap-2',
+                            heading ? 'flex-col' : 'items-start',
+                        )}
+                    >
+                        <div
+                            className={cn(
+                                heading
+                                    ? typeof value === 'string'
+                                        ? textBox
+                                        : structuredBox
+                                    : box,
+                                'min-w-0 flex-1',
+                            )}
+                        >
+                            {typeof value === 'string' ? (
+                                value === '' ? (
+                                    <span className="font-sans text-muted-foreground">
+                                        Empty text
+                                    </span>
+                                ) : (
+                                    <CappedText
+                                        text={value}
+                                        redactionMarker={redactionMarker}
+                                    />
+                                )
                             ) : (
-                                <CappedText
-                                    text={value}
+                                <PayloadNode
+                                    value={value}
                                     redactionMarker={redactionMarker}
                                 />
-                            )
-                        ) : (
-                            <PayloadNode
-                                value={value}
-                                redactionMarker={redactionMarker}
-                            />
-                        )}
+                            )}
+                        </div>
+                        {heading ? null : copy}
                     </div>
-                    {copy}
-                </div>
+                </>
             )}
         </div>
     )

@@ -13,18 +13,18 @@ export function TraceSkeleton() {
                 <Skeleton className="h-8 w-64" />
                 <Skeleton className="h-4 w-96 max-w-full" />
             </div>
-            <div className="grid grid-cols-2 gap-4 md:grid-cols-4 wide:grid-cols-6">
-                {Array.from({ length: 6 }, (_, index) => (
+            <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
+                {Array.from({ length: 5 }, (_, index) => (
                     <Skeleton key={index} className="h-10" />
                 ))}
             </div>
-            <div className="grid gap-4 wide:grid-cols-5">
-                <div className="flex flex-col gap-2 wide:col-span-3">
+            <div className="grid overflow-hidden rounded-lg border md:grid-cols-2">
+                <div className="flex flex-col gap-2 p-4">
                     {Array.from({ length: 6 }, (_, index) => (
                         <Skeleton key={index} className="h-12" />
                     ))}
                 </div>
-                <Skeleton className="h-64 wide:col-span-2" />
+                <Skeleton className="h-64 rounded-none" />
             </div>
         </div>
     )

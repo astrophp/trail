@@ -7,6 +7,7 @@ import {
     formatDuration,
     formatOffset,
     formatRelativeTime,
+    formatDayAndClock,
     formatShortDate,
     formatTokens,
     isSameDay,
@@ -163,6 +164,13 @@ describe('time of day and date', () => {
     it('shows the day in the given zone', () => {
         expect(formatShortDate(at, 'UTC')).toBe('Oct 7')
         expect(formatShortDate(at, 'Europe/Istanbul')).toBe('Oct 8')
+    })
+
+    it('shows the day and the clock time on one line, in the given zone', () => {
+        expect(formatDayAndClock(at, 'UTC')).toBe('Oct 7 \u00b7 21:03:22')
+        expect(formatDayAndClock(at, 'Europe/Istanbul')).toBe(
+            'Oct 8 \u00b7 00:03:22',
+        )
     })
 
     it.each([

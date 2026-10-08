@@ -65,6 +65,73 @@ describe('ModelLabel', () => {
         expect(screen.queryByText(/streamed/)).not.toBeInTheDocument()
     })
 
+    it('shows the responding model when it differs from the requested one', () => {
+        render(
+            <ModelLabel
+                of={{
+                    model: 'claude-sonnet-4-5',
+                    provider: 'anthropic',
+                    responding_model: 'claude-sonnet-4-5-20250929',
+                }}
+                expectResponding
+            />,
+        )
+
+        expect(screen.getByText('claude-sonnet-4-5')).toBeInTheDocument()
+        expect(screen.getByText(/^Responded as/)).toBeInTheDocument()
+        expect(screen.getByText('claude-sonnet-4-5-20250929')).toHaveClass(
+            'font-mono',
+        )
+    })
+
+    it('shows nothing more when the responding model is the requested one', () => {
+        render(
+            <ModelLabel
+                of={{
+                    model: 'gpt-4o',
+                    provider: 'openai',
+                    responding_model: 'gpt-4o',
+                }}
+                expectResponding
+            />,
+        )
+
+        expect(screen.getAllByText('gpt-4o')).toHaveLength(1)
+        expect(screen.queryByText(/Responded as/)).not.toBeInTheDocument()
+        expect(screen.queryByText(/not captured/)).not.toBeInTheDocument()
+    })
+
+    it('says the responding model was not captured when one was expected', () => {
+        render(
+            <ModelLabel
+                of={{
+                    model: 'gpt-4o',
+                    provider: 'openai',
+                    responding_model: null,
+                }}
+                expectResponding
+            />,
+        )
+
+        expect(
+            screen.getByText('Responding model not captured'),
+        ).toBeInTheDocument()
+    })
+
+    it('stays silent about a missing responding model when none was expected', () => {
+        render(
+            <ModelLabel
+                of={{
+                    model: 'gpt-4o',
+                    provider: 'openai',
+                    responding_model: null,
+                }}
+            />,
+        )
+
+        expect(screen.queryByText(/Responding model/)).not.toBeInTheDocument()
+    })
+
     it('accepts a className', () => {
         const { container } = render(
             <ModelLabel

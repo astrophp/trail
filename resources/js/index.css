@@ -264,6 +264,6 @@
 @layer components {
     .span-row {
         content-visibility: auto;
-        contain-intrinsic-size: auto 3.25rem;
+        contain-intrinsic-size: auto 3.125rem;
     }
 }

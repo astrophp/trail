@@ -5,6 +5,9 @@ type PageHeaderProps = {
     title: string
     /** Sits before the title, on its line. Decoration or a labelled icon: the title is still the heading. */
     icon?: ReactNode
+    /** Sits right after the title, on its line: a status or a tag about the page's subject. */
+    badge?: ReactNode
+    /** The line under the title. Inline content only: it is a paragraph. */
     description?: ReactNode
     /** Controls that belong to the page as a whole, shown at the end of the row. */
     children?: ReactNode
@@ -15,6 +18,7 @@ type PageHeaderProps = {
 export function PageHeader({
     title,
     icon,
+    badge,
     description,
     children,
     className,
@@ -28,7 +32,7 @@ export function PageHeader({
             )}
         >
             <div className="flex min-w-0 flex-col gap-1.75">
-                <div className="flex min-w-0 items-center gap-2.5">
+                <div className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1">
                     {icon}
                     {/* Focusable by script only: the app moves focus here after a page change. */}
                     <h1
@@ -37,6 +41,7 @@ export function PageHeader({
                     >
                         {title}
                     </h1>
+                    {badge}
                 </div>
                 {description ? (
                     <p className="text-ui text-muted-foreground">

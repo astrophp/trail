@@ -12,8 +12,14 @@ const statuses: Status[] = [
 
 export const catalogue: CatalogueEntry = {
     title: 'Status badge',
-    specimens: statuses.map((status) => ({
-        name: status,
-        Component: () => <StatusBadge status={status} />,
-    })),
+    specimens: statuses.flatMap((status) => [
+        {
+            name: status,
+            Component: () => <StatusBadge status={status} />,
+        },
+        {
+            name: `${status}, tinted`,
+            Component: () => <StatusBadge status={status} tinted />,
+        },
+    ]),
 }

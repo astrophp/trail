@@ -22,6 +22,17 @@ describe('TraceId', () => {
         )
     })
 
+    it('shows the whole id as visible text when asked, and lets it wrap', () => {
+        const { container } = render(<TraceId id={id} full />)
+
+        expect(screen.getByText(id)).not.toHaveClass('sr-only')
+        expect(screen.queryByText('019a3f2c…4d31')).not.toBeInTheDocument()
+        expect(container.firstElementChild).toHaveClass(
+            'font-mono',
+            'wrap-anywhere',
+        )
+    })
+
     it('is set in the mono family', () => {
         const { container } = render(<TraceId id={id} />)
 

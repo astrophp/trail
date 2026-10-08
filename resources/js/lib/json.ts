@@ -121,3 +121,44 @@ export function splitOnMarker(text: string, marker: string): TextPart[] {
 
     return parts
 }
+
+/**
+ * Whether two stored values are the same JSON: strings, numbers, booleans and null by value,
+ * arrays element by element, objects key by key in any order. A key whose value is `undefined`
+ * cannot occur in decoded JSON and is not treated as absent.
+ */
+export function jsonEqual(
+    a: JsonValue | undefined,
+    b: JsonValue | undefined,
+): boolean {
+    if (a === b) {
+        return true
+    }
+
+    if (
+        a === undefined ||
+        b === undefined ||
+        a === null ||
+        b === null ||
+        typeof a !== 'object' ||
+        typeof b !== 'object'
+    ) {
+        return false
+    }
+
+    if (Array.isArray(a) || Array.isArray(b)) {
+        return (
+            Array.isArray(a) &&
+            Array.isArray(b) &&
+            a.length === b.length &&
+            a.every((item, index) => jsonEqual(item, b[index]))
+        )
+    }
+
+    const keys = Object.keys(a)
+
+    return (
+        keys.length === Object.keys(b).length &&
+        keys.every((key) => Object.hasOwn(b, key) && jsonEqual(a[key], b[key]))
+    )
+}

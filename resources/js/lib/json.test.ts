@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+    jsonEqual,
     cutPoint,
     entriesOf,
     isContainer,
@@ -139,5 +140,41 @@ describe('splitOnMarker', () => {
         expect(splitOnMarker('abc', '')).toEqual([
             { text: 'abc', marker: false },
         ])
+    })
+})
+
+describe('jsonEqual', () => {
+    it('compares scalars by value and by type', () => {
+        expect(jsonEqual('a', 'a')).toBe(true)
+        expect(jsonEqual(1, 1)).toBe(true)
+        expect(jsonEqual(null, null)).toBe(true)
+        expect(jsonEqual(1, '1')).toBe(false)
+        expect(jsonEqual(0, false)).toBe(false)
+        expect(jsonEqual(null, 0)).toBe(false)
+    })
+
+    it('ignores the order of object keys, and not the order of array items', () => {
+        expect(jsonEqual({ a: 1, b: [1, 2] }, { b: [1, 2], a: 1 })).toBe(true)
+        expect(jsonEqual([1, 2], [2, 1])).toBe(false)
+    })
+
+    it('compares nested values and sizes', () => {
+        expect(
+            jsonEqual({ a: { b: [{ c: 1 }] } }, { a: { b: [{ c: 1 }] } }),
+        ).toBe(true)
+        expect(
+            jsonEqual({ a: { b: [{ c: 1 }] } }, { a: { b: [{ c: 2 }] } }),
+        ).toBe(false)
+        expect(jsonEqual({ a: 1 }, { a: 1, b: 2 })).toBe(false)
+        expect(jsonEqual({ a: 1, b: 2 }, { a: 1 })).toBe(false)
+        expect(jsonEqual([1], [1, 2])).toBe(false)
+    })
+
+    it('does not equate an array with an object, or a missing value with anything', () => {
+        expect(jsonEqual([], {})).toBe(false)
+        expect(jsonEqual({ 0: 'a' }, ['a'])).toBe(false)
+        expect(jsonEqual(undefined, undefined)).toBe(true)
+        expect(jsonEqual(undefined, null)).toBe(false)
+        expect(jsonEqual({ a: null }, {})).toBe(false)
     })
 })

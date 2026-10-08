@@ -37,6 +37,32 @@ export const catalogue: CatalogueEntry = {
             ),
         },
         {
+            name: 'With a heading: text',
+            Component: () => (
+                <PayloadViewer
+                    label="user prompt"
+                    heading="User prompt"
+                    value="Prepare a concise account briefing from the supplied activity."
+                />
+            ),
+        },
+        {
+            name: 'With a heading: structured',
+            Component: () => (
+                <PayloadViewer
+                    label="arguments"
+                    heading="Arguments"
+                    value={object}
+                />
+            ),
+        },
+        {
+            name: 'With a heading: not captured',
+            Component: () => (
+                <PayloadViewer label="result" heading="Result" value={null} />
+            ),
+        },
+        {
             name: 'Nested, deeper levels start collapsed',
             Component: () => <PayloadViewer label="arguments" value={nested} />,
         },
