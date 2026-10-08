@@ -276,6 +276,13 @@ it('sends the bookmark response the dashboard expects', function () {
     assertContract('bookmark', $response->assertOk()->json());
 });
 
+it('sends the neighbours response the dashboard expects', function () {
+    contractDataset();
+
+    // Newest first: the run just before it in the list is the later one, and the one after it the earlier.
+    assertContract('neighbours', $this->getJson('/trail/api/traces/trace-partial/neighbours')->assertOk()->json());
+});
+
 it('lists the values of the enums the dashboard mirrors', function () {
     assertContract('enums', [
         'status' => array_column(Status::cases(), 'value'),

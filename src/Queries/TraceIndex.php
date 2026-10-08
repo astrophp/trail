@@ -125,6 +125,88 @@ final class TraceIndex
     }
 
     /**
+     * The runs the list shows just before and just after a run, in the same view and sort. Null
+     * when there is no such run; a run the view does not hold has neither neighbour.
+     *
+     * Two reads at most beyond that: whether the run is in the view, then one row for each
+     * neighbour. The run's own sort value is compared inside the database, never bound from PHP,
+     * so equality and order are decided on the stored values and the column's collation.
+     *
+     * @return array{previous: ?string, next: ?string}|null
+     */
+    public function neighbours(string $id, TimeRange $range, TraceFilters $filters, ?float $slowThreshold): ?array
+    {
+        $sort = self::SORTS[$filters->sort];
+        $nullable = $sort['nulls'] !== null;
+
+        $pivot = $this->filtered($range, $filters, $slowThreshold, withStatus: true)
+            ->whereKey($id)
+            ->toBase()
+            ->select('id')
+            ->when($nullable, fn ($query) => $query->selectRaw('case when '.$sort['column'].' is null then 1 else 0 end as missing'))
+            ->first();
+
+        if ($pivot === null) {
+            return Trace::query()->whereKey($id)->exists() ? ['previous' => null, 'next' => null] : null;
+        }
+
+        // The id as stored, which a case-insensitive collation may spell differently from the request.
+        $pivotId = is_string($pivot->id) ? $pivot->id : $id;
+        $missing = $nullable && is_numeric($pivot->missing ?? null) && (int) $pivot->missing === 1;
+
+        return [
+            'previous' => $this->neighbour($range, $filters, $slowThreshold, $pivotId, $missing, after: false),
+            'next' => $this->neighbour($range, $filters, $slowThreshold, $pivotId, $missing, after: true),
+        ];
+    }
+
+    /**
+     * The first run strictly after (or before) the pivot in the list's order: runs with the value
+     * first, by the column in its direction, then the id in the same direction, then runs without.
+     */
+    private function neighbour(TimeRange $range, TraceFilters $filters, ?float $slowThreshold, string $pivotId, bool $missing, bool $after): ?string
+    {
+        $sort = self::SORTS[$filters->sort];
+        $nullable = $sort['nulls'] !== null;
+        $table = (new Trace)->getTable();
+        $column = $table.'.'.$sort['column'];
+        $key = $table.'.id';
+        // Past the pivot in the list's direction, or before it when looking back.
+        $beyond = $after === ! $filters->descending ? '>' : '<';
+
+        $value = fn () => Trace::query()->toBase()->from($table.' as pivot')->select('pivot.'.$sort['column'])->where('pivot.id', $pivotId);
+
+        $query = $this->filtered($range, $filters, $slowThreshold, withStatus: true);
+
+        $query->where(function (Builder $query) use ($nullable, $column, $key, $beyond, $value, $pivotId, $missing, $after) {
+            if ($missing) {
+                // Runs without the value form the last group, ordered by id.
+                $after
+                    ? $query->whereNull($column)->where($key, $beyond, $pivotId)
+                    : $query->whereNotNull($column)->orWhere(fn (Builder $tied) => $tied->whereNull($column)->where($key, $beyond, $pivotId));
+
+                return;
+            }
+
+            $query->where($column, $beyond, $value())
+                ->orWhere(fn (Builder $tied) => $tied->where($column, '=', $value())->where($key, $beyond, $pivotId));
+
+            if ($nullable && $after) {
+                $query->orWhereNull($column);
+            }
+        });
+
+        if ($sort['nulls'] !== null) {
+            $query->orderByRaw($sort['nulls'].($after ? '' : ' desc'));
+        }
+
+        $direction = $beyond === '>' ? 'asc' : 'desc';
+        $id = $query->orderBy($column, $direction)->orderBy($key, $direction)->limit(1)->value($key);
+
+        return is_string($id) ? $id : null;
+    }
+
+    /**
      * @return Builder<Trace>
      */
     private function filtered(TimeRange $range, TraceFilters $filters, ?float $slowThreshold, bool $withStatus): Builder

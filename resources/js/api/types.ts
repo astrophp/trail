@@ -124,6 +124,16 @@ export type BookmarkResponse = {
     data: { trace_id: string; bookmarked: boolean }
 }
 
+/** The runs the list shows just before and just after a run, in the view that was asked about. */
+export type TraceNeighbours = {
+    previous: string | null
+    next: string | null
+}
+
+export type TraceNeighboursResponse = {
+    data: TraceNeighbours
+}
+
 /** JSON as the server decoded it from a stored payload. Its shape is the agent's, not Trail's. */
 export type JsonValue =
     | string
