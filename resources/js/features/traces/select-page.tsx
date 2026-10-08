@@ -1,6 +1,6 @@
 import { useContext } from 'react'
 import { SelectCheckbox } from '@/features/traces/select-checkbox'
-import { TableBusyContext } from '@/features/traces/table-busy'
+import { TableBusyContext } from '@/components/patterns/table-busy'
 import { SelectionContext } from '@/features/traces/selection-context'
 
 /** The checkbox in the table's header: all the runs of the page on screen, or none. */

@@ -1,6 +1,6 @@
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import type { ComponentProps } from 'react'
+import { useContext, type ComponentProps } from 'react'
 import { MemoryRouter } from 'react-router'
 import { describe, expect, it, vi } from 'vitest'
 import {
@@ -9,6 +9,7 @@ import {
     type DataTableSort,
 } from '@/components/patterns/data-table'
 import { RowLink } from '@/components/patterns/row-link'
+import { TableBusyContext } from '@/components/patterns/table-busy'
 
 const onEdit = vi.fn()
 
@@ -438,6 +439,38 @@ describe('DataTable', () => {
             )
             expect(container.querySelector('tbody')).toHaveClass('opacity-60')
             expect(screen.getByRole('status')).toHaveTextContent('Loading')
+        })
+
+        it('tells the cells, through TableBusyContext, whether the rows are the previous view’s', () => {
+            function State() {
+                return (
+                    <span>
+                        {useContext(TableBusyContext) ? 'stale' : 'fresh'}
+                    </span>
+                )
+            }
+
+            const stateColumns: DataTableColumn<Fruit>[] = [
+                { id: 'state', header: 'State', cell: () => <State /> },
+            ]
+            const table = (busy: boolean) => (
+                <DataTable
+                    columns={stateColumns}
+                    data={fruit.slice(0, 1)}
+                    getRowId={(row) => row.id}
+                    sort={{ id: 'name', desc: false }}
+                    onSortChange={() => {}}
+                    caption="Fruit"
+                    busy={busy}
+                />
+            )
+            const { rerender } = render(table(false))
+
+            expect(screen.getByText('fresh')).toBeInTheDocument()
+
+            rerender(table(true))
+
+            expect(screen.getByText('stale')).toBeInTheDocument()
         })
 
         it('dims the footer with the rows', () => {
