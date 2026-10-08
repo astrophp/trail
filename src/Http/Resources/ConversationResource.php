@@ -56,10 +56,11 @@ final readonly class ConversationResource
             'turns' => $conversation->turns,
             'agents' => $conversation->agents,
             'agent_count' => $conversation->agentCount,
-            'users' => array_values(array_filter(array_map(
-                fn (array $user) => $this->users->get($user['type'], $user['id']),
+            'users' => array_map(
+                fn (array $user) => $this->users->get($user['type'], $user['id'])
+                    ?? ['id' => $user['id'], 'type' => $user['type'], 'name' => null, 'email' => null],
                 $conversation->users,
-            ))),
+            ),
             'user_count' => $conversation->userCount,
             'usage' => Usage::of(
                 $running,

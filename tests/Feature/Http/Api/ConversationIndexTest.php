@@ -148,13 +148,23 @@ it('lists the users of a conversation and counts all of them beyond the cap', fu
         ->and($data['c2']['user_count'])->toBe(0);
 });
 
-it('leaves out a user that can no longer be found without losing the count', function () {
+it('lists a user that can no longer be found with a null name and email, and counts it', function () {
     turn('c1', '2026-01-02 10:00:00', ['user_id' => '999', 'user_type' => User::class]);
 
     $row = conversationsAt($this)['data'][0];
 
     expect($row['users'])->toBe([['id' => '999', 'type' => User::class, 'name' => null, 'email' => null]])
         ->and($row['user_count'])->toBe(1);
+});
+
+it('keeps the milliseconds of the first and last activity', function () {
+    turn('c1', '2026-01-02 10:00:00.123');
+    turn('c1', '2026-01-02 11:00:00.456');
+
+    $row = conversationsAt($this)['data'][0];
+
+    expect($row['first_activity_at'])->toBe('2026-01-02T10:00:00.123Z')
+        ->and($row['last_activity_at'])->toBe('2026-01-02T11:00:00.456Z');
 });
 
 it('selects a conversation that started before the range, counts it whole and keeps its first activity', function () {
@@ -315,6 +325,15 @@ describe('filters', function () {
         'search in the user id' => ['search=9', ['c1', 'c2']],
         'an empty parameter is absent' => ['agent=&search=&failed=', ['c1', 'c2', 'c3', 'c4', 'c5', 'c6']],
     ]);
+
+    it('matches the user id and type on the same turn', function () {
+        // Turn (9, A) and turn (5, B) are two users: neither is user 9 of type B.
+        turn('mixed', '2026-01-02 10:00:00', ['user_id' => '9', 'user_type' => 'Type\\A']);
+        turn('mixed', '2026-01-02 10:01:00', ['user_id' => '5', 'user_type' => 'Type\\B']);
+
+        expect(listedConversations($this, 'user_id=9&user_type=Type%5CB'))->toBe(['c2'])
+            ->and(listedConversations($this, 'user_id=9&user_type=Type%5CA'))->toContain('mixed');
+    });
 
     it('combines filters with and', function () {
         expect(listedConversations($this, 'agent=Hidden&failed=1'))->toBe(['c1'])

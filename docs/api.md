@@ -211,9 +211,10 @@ conversation is one of its turns. A run without a conversation id is not in any 
   did. Only a turn starting counts as activity: neither is the end of a turn.
 - `prompt_excerpt` is that of the turn that started last, and of the one with the greatest id when
   two started together. It is `null` when that turn has none.
-- `id` is the id as stored. On a database that compares text without regard to case (MySQL by
-  default), ids that differ only in case are one conversation, and the spelling shown is that of
-  its latest turn. Elsewhere they are different conversations.
+- `id` is the id as stored. Ids, agent names and users are grouped, counted and ordered as the
+  database compares text: MySQL by default ignores case and accents, so there ids that differ only
+  so are one conversation (shown with the spelling of its latest turn), and `agent_count`,
+  `user_count` and the order of `agents` follow that comparison. Elsewhere they differ.
 
 ## The span
 

@@ -43,7 +43,8 @@ final class Conversations
             $row = $totals[$slot] ?? null;
             $last = $latest[$slot] ?? null;
 
-            // A conversation pruned between the list and this read has nothing left to describe.
+            // A conversation pruned between the list and this read has nothing left to describe. The page
+            // then holds one row fewer than the total counted, which is not worth a second read to hide.
             if ($row === null || $last === null) {
                 continue;
             }
