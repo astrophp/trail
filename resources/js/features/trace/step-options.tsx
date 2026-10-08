@@ -25,7 +25,7 @@ export function StepOptions({ span, options }: StepOptionsProps) {
     return (
         <section data-slot="step-options" className="flex flex-col gap-3">
             <SectionLabel>Options</SectionLabel>
-            <KeyValueList columns="two">
+            <KeyValueList layout="rows">
                 {set.map(([key, value]) => (
                     <KeyValue key={key} label={key}>
                         {isContainer(value) ? (
@@ -36,9 +36,7 @@ export function StepOptions({ span, options }: StepOptionsProps) {
                                 value={value}
                             />
                         ) : (
-                            <span className="font-mono text-xs">
-                                {String(value)}
-                            </span>
+                            <span className="font-mono">{String(value)}</span>
                         )}
                     </KeyValue>
                 ))}

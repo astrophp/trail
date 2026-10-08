@@ -140,4 +140,20 @@ describe('Timestamp', () => {
 
         expect(container.firstElementChild).toHaveClass('extra')
     })
+
+    it('shows the whole date and time on one line in the full layout, and how long ago on hover', () => {
+        render(
+            inZone(
+                'UTC',
+                <Timestamp at="2026-10-07T21:03:22Z" now={now} layout="full" />,
+            ),
+        )
+
+        const time = screen.getByText('Oct 7, 2026, 21:03:22 GMT')
+
+        expect(time.tagName).toBe('TIME')
+        expect(time).toHaveAttribute('title', '2m ago')
+        expect(time).toHaveAttribute('datetime', '2026-10-07T21:03:22Z')
+        expect(time.children).toHaveLength(0)
+    })
 })

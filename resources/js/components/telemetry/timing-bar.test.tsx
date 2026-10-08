@@ -91,7 +91,7 @@ describe('TimingBar', () => {
         expect(fill(container)).toHaveClass('min-w-1.5')
     })
 
-    it('draws a negative offset from the start but states it truthfully', () => {
+    it('draws only the part of a span inside the axis when it starts before it, and states the real start', () => {
         const { container } = render(
             <TimingBar
                 span={{ offset_ms: -12, duration_ms: 100, status: 'completed' }}
@@ -99,7 +99,7 @@ describe('TimingBar', () => {
             />,
         )
 
-        expect(fill(container)).toHaveStyle({ left: '0%', width: '10%' })
+        expect(fill(container)).toHaveStyle({ left: '0%', width: '8.8%' })
         expect(
             screen.getByRole('img', {
                 name: 'Starts at −12 ms, took 100 ms',
@@ -414,5 +414,61 @@ describe('TimingBar', () => {
 
         expect(screen.getByText('Not captured')).toBeInTheDocument()
         expect(root(container)).toHaveClass('extra')
+    })
+
+    it('puts an id on its root in every state, for a row to describe itself by', () => {
+        const running: Timing = { ...completed, status: 'running' }
+        const states: [Timing, number | null][] = [
+            [completed, 1000],
+            [running, 1000],
+            [running, null],
+            [{ ...completed, duration_ms: null }, 1000],
+            [completed, null],
+        ]
+
+        for (const [span, axisMs] of states) {
+            const { container, unmount } = render(
+                <TimingBar span={span} axisMs={axisMs} id="bar" />,
+            )
+
+            expect(root(container)).toHaveAttribute('id', 'bar')
+            unmount()
+        }
+    })
+
+    it('keeps an open bar visible, held to the right edge with a minimum width, near the end of the axis', () => {
+        for (const offset_ms of [960, 1000, 5000]) {
+            const { container, unmount } = render(
+                <TimingBar
+                    span={{ offset_ms, duration_ms: null, status: 'running' }}
+                    axisMs={1000}
+                />,
+            )
+
+            expect(root(container)).toHaveAttribute('data-state', 'open')
+            expect(fill(container)).toHaveClass('min-w-1.5')
+            expect(fill(container)).toHaveStyle({ right: '0px' })
+            expect(fill(container)!.style.left).toBe('')
+            unmount()
+        }
+    })
+
+    it('shows a span that ends before the axis starts as a minimum-width mark, not a long bar', () => {
+        const { container } = render(
+            <TimingBar
+                span={{
+                    offset_ms: -500,
+                    duration_ms: 100,
+                    status: 'completed',
+                }}
+                axisMs={1000}
+            />,
+        )
+
+        expect(fill(container)).toHaveStyle({ left: '0%', width: '0%' })
+        expect(fill(container)).toHaveClass('min-w-1.5')
+        expect(
+            screen.getByRole('img', { name: 'Starts at −500 ms, took 100 ms' }),
+        ).toBeInTheDocument()
     })
 })

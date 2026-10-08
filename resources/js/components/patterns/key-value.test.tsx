@@ -166,4 +166,22 @@ describe('KeyValue', () => {
 
         expect(screen.getByText('A'.repeat(300))).toHaveClass('wrap-anywhere')
     })
+
+    it('indents the label of a nested row, for the rows layout', () => {
+        render(
+            <dl>
+                <KeyValue label="Cache read" nested>
+                    3
+                </KeyValue>
+                <KeyValue label="Input">4</KeyValue>
+            </dl>,
+        )
+
+        expect(screen.getByText('Cache read')).toHaveClass(
+            'group-data-[layout=rows]/kvl:ps-4',
+        )
+        expect(screen.getByText('Input')).not.toHaveClass(
+            'group-data-[layout=rows]/kvl:ps-4',
+        )
+    })
 })

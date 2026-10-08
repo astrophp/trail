@@ -25,7 +25,7 @@ export function EmbeddingInput({ span }: EmbeddingInputProps) {
     return (
         <div className="flex flex-col gap-6">
             <div className="flex flex-col gap-3">
-                <KeyValueList columns="two">
+                <KeyValueList layout="rows">
                     <KeyValue label="Inputs">
                         {count === null ? null : formatCount(count)}
                     </KeyValue>

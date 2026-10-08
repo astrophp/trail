@@ -34,6 +34,8 @@ type TimingBarProps = {
     span: Pick<Span, 'offset_ms' | 'duration_ms' | 'status'>
     /** The length of the axis the bar is drawn on, in milliseconds. Decided by the caller. */
     axisMs: number | null
+    /** Lets a row name the bar in `aria-describedby`, which reads its sentence even where the bar is hidden. */
+    id?: string
     className?: string
 }
 
@@ -42,13 +44,16 @@ const percent = (value: number) => `${Number((value * 100).toFixed(6))}%`
 
 const clamp01 = (value: number) => Math.min(Math.max(value, 0), 1)
 
+// From this far along the axis an open bar is held to the right edge, where its minimum width shows.
+const nearEnd = 0.95
+
 /**
  * One span's position and length on a run's time axis, drawn only from its own offset and duration.
  * A span that is still running is open-ended; one without a duration has no bar at all, and neither
  * has one drawn on an axis that is not usable. A number that is not finite (or a negative duration)
  * is treated as not captured: it is never drawn and never written out.
  */
-export function TimingBar({ span, axisMs, className }: TimingBarProps) {
+export function TimingBar({ span, axisMs, id, className }: TimingBarProps) {
     const { status } = span
     const offset = Number.isFinite(span.offset_ms) ? span.offset_ms : null
     const duration =
@@ -68,6 +73,7 @@ export function TimingBar({ span, axisMs, className }: TimingBarProps) {
         if (axis === null || offset === null) {
             return (
                 <span
+                    id={id}
                     data-slot="timing-bar"
                     data-state="none"
                     title={text}
@@ -85,6 +91,7 @@ export function TimingBar({ span, axisMs, className }: TimingBarProps) {
 
         return (
             <span
+                id={id}
                 data-slot="timing-bar"
                 data-state="open"
                 role="img"
@@ -97,10 +104,14 @@ export function TimingBar({ span, axisMs, className }: TimingBarProps) {
                         data-slot="timing-bar-fill"
                         aria-hidden="true"
                         className={bar({ status })}
-                        style={{
-                            left: percent(clamp01(offset / axis)),
-                            right: 0,
-                        }}
+                        style={
+                            clamp01(offset / axis) >= nearEnd
+                                ? { right: 0 }
+                                : {
+                                      left: percent(clamp01(offset / axis)),
+                                      right: 0,
+                                  }
+                        }
                     />
                 </span>
                 <span className="text-caption whitespace-nowrap text-muted-foreground">
@@ -113,6 +124,7 @@ export function TimingBar({ span, axisMs, className }: TimingBarProps) {
     if (duration === null) {
         return (
             <span
+                id={id}
                 data-slot="timing-bar"
                 data-state="none"
                 title="Timing not captured"
@@ -135,6 +147,7 @@ export function TimingBar({ span, axisMs, className }: TimingBarProps) {
         // The span's own duration is known; there is just nothing to draw it on.
         return (
             <span
+                id={id}
                 data-slot="timing-bar"
                 data-state="none"
                 title={text}
@@ -147,17 +160,20 @@ export function TimingBar({ span, axisMs, className }: TimingBarProps) {
     }
 
     const left = clamp01(offset / axis)
+    // Only the part of the span inside the axis is drawn; the words still give its real start.
+    const inside = offset < 0 ? Math.max(duration + offset, 0) : duration
     // A span that starts at or past the end of the axis is held to its edge, not drawn outside it.
     const placement =
         left >= 1
             ? { right: 0, width: '0%' }
             : {
                   left: percent(left),
-                  width: percent(Math.min(duration / axis, 1 - left)),
+                  width: percent(Math.min(inside / axis, 1 - left)),
               }
 
     return (
         <span
+            id={id}
             data-slot="timing-bar"
             data-state="bar"
             role="img"

@@ -1,30 +1,82 @@
 import type { Span } from '@/api/types'
 
-/** One span in the tree: its children in `sequence` order, and where it stands among its siblings. */
+/**
+ * One span in the tree: its children in `sequence` order, and where it stands among its siblings.
+ * `children` are always the span's own children. `nested` is what hangs under its row: the same
+ * spans, or the attempt rows between an agent and its children after a failover.
+ */
 export type SpanNode = {
+    kind: 'span'
+    /** The span's id, so that a span and an attempt row can be told apart by one field. */
+    id: string
     span: Span
     children: SpanNode[]
-    /** 0 for a top-level span. */
+    nested: RowNode[]
+    /** 0 for a top-level span; an attempt row counts as a level, so the spans under it are one deeper. */
     depth: number
-    /** The id of the span this one hangs under; `null` at the top level. */
+    /** The id of the span this one hangs under; `null` at the top level. Never an attempt row. */
     parentId: string | null
+    /** The id of the row this one hangs under: `parentId`, or the attempt row it is grouped in. */
+    rowParentId: string | null
     /** Its place among its siblings, counted from 1, and how many siblings there are. */
+    position: number
+    setSize: number
+    /** Whether the span is under an attempt row, at any depth. */
+    inAttempt: boolean
+}
+
+/** How an attempt ended: it failed, or it produced the answer of the run. `null` when neither is known. */
+export type AttemptOutcome = 'failed' | 'answered' | null
+
+/**
+ * The row for one failover attempt of an agent. It is not a span: it has no evidence and cannot be
+ * selected, and `SpanTree.byId` does not know it. Its id is `attempt:{agent span id}:{attempt}`.
+ */
+export type AttemptNode = {
+    kind: 'attempt'
+    id: string
+    agentId: string
+    /** The stored attempt number of the spans it holds. */
+    attempt: number
+    /** The highest attempt among the agent's children. */
+    of: number
+    outcome: AttemptOutcome
+    /** The first failed child of the attempt, when it has one. */
+    failed: Span | null
+    nested: SpanNode[]
+    depth: number
+    parentId: string
+    rowParentId: string
     position: number
     setSize: number
 }
 
+export type RowNode = SpanNode | AttemptNode
+
 export type SpanTree = {
     /** The top-level spans, in `sequence` order. */
     roots: SpanNode[]
-    /** Every node in tree order (each span before its children). */
+    /** Every span node in tree order (each span before its children). */
     nodes: SpanNode[]
+    /** Every row in tree order: the span nodes and the attempt rows between them. */
+    rows: RowNode[]
     byId: ReadonlyMap<string, SpanNode>
+    /** Every row, spans and attempt rows, by id. */
+    rowById: ReadonlyMap<string, RowNode>
     /** The highest `attempt` among the spans: how many attempts the run made. */
     attempts: number
-    /** The nodes on screen when the spans in `collapsed` hide their children, in tree order. */
-    visible(collapsed: ReadonlySet<string>): SpanNode[]
-    /** The ids above a span, the top-level one first; empty for a top-level span or an unknown id. */
+    /**
+     * The rows on screen, in tree order. The rows in `collapsed` hide what is under them. With
+     * `keep`, only the rows in it are shown and nothing is collapsed: what a search leaves open.
+     */
+    visible(
+        collapsed: ReadonlySet<string>,
+        keep?: ReadonlySet<string> | null,
+    ): RowNode[]
+    /** The ids of the spans above a span, the top-level one first; empty for a top-level span or an unknown id. */
     ancestors(id: string): string[]
+    /** The ids of the rows above a row, attempt rows included, the top-level one first. */
+    rowAncestors(id: string): string[]
 }
 
 /**
@@ -41,13 +93,20 @@ export function buildSpanTree(spans: readonly Span[]): SpanTree {
     const rootSpans: Span[] = []
 
     for (const span of sorted) {
+        const children: SpanNode[] = []
+
         nodeOf.set(span.id, {
+            kind: 'span',
+            id: span.id,
             span,
-            children: [],
+            children,
+            nested: children,
             depth: 0,
             parentId: null,
+            rowParentId: null,
             position: 1,
             setSize: 1,
+            inAttempt: false,
         })
 
         const parent = span.parent_id
@@ -84,6 +143,7 @@ export function buildSpanTree(spans: readonly Span[]): SpanTree {
                 placed.add(child.id)
                 childNode.depth = node.depth + 1
                 childNode.parentId = node.span.id
+                childNode.rowParentId = node.span.id
                 childNode.position = index + 1
                 childNode.setSize = below.length
                 node.children.push(childNode)
@@ -107,40 +167,56 @@ export function buildSpanTree(spans: readonly Span[]): SpanTree {
         root.setSize = roots.length
     })
 
-    const nodes: SpanNode[] = []
-    const walk = [...roots].reverse()
+    groupAttempts(roots)
 
-    for (let node = walk.pop(); node; node = walk.pop()) {
-        nodes.push(node)
+    const rows: RowNode[] = []
+    const rowById = new Map<string, RowNode>(nodeOf)
+    const walk = [...roots].reverse() as RowNode[]
 
-        for (let i = node.children.length - 1; i >= 0; i--) {
-            walk.push(node.children[i])
+    for (let row = walk.pop(); row; row = walk.pop()) {
+        rows.push(row)
+        rowById.set(row.id, row)
+
+        for (let i = row.nested.length - 1; i >= 0; i--) {
+            walk.push(row.nested[i])
         }
     }
+
+    const nodes = rows.filter((row) => row.kind === 'span')
 
     return {
         roots,
         nodes,
+        rows,
         byId: nodeOf,
+        rowById,
         attempts: sorted.reduce(
             (most, span) => Math.max(most, span.attempt),
             0,
         ),
-        visible(collapsed) {
-            const shown: SpanNode[] = []
-            // While inside a collapsed span, the depth it sits at; nodes deeper than that are hidden.
+        visible(collapsed, keep = null) {
+            const shown: RowNode[] = []
+            // While inside a collapsed row, the depth it sits at; rows deeper than that are hidden.
             let hiddenBelow = Infinity
 
-            for (const node of nodes) {
-                if (node.depth > hiddenBelow) {
+            for (const row of rows) {
+                if (keep !== null) {
+                    if (keep.has(row.id)) {
+                        shown.push(row)
+                    }
+
+                    continue
+                }
+
+                if (row.depth > hiddenBelow) {
                     continue
                 }
 
                 hiddenBelow =
-                    collapsed.has(node.span.id) && node.children.length > 0
-                        ? node.depth
+                    collapsed.has(row.id) && row.nested.length > 0
+                        ? row.depth
                         : Infinity
-                shown.push(node)
+                shown.push(row)
             }
 
             return shown
@@ -158,5 +234,97 @@ export function buildSpanTree(spans: readonly Span[]): SpanTree {
 
             return above
         },
+        rowAncestors(id) {
+            const above: string[] = []
+
+            for (
+                let parent = rowById.get(id)?.rowParentId ?? null;
+                parent !== null;
+                parent = rowById.get(parent)?.rowParentId ?? null
+            ) {
+                above.unshift(parent)
+            }
+
+            return above
+        },
+    }
+}
+
+/** Moves a whole subtree one level down and marks it as being inside an attempt. */
+function sink(children: SpanNode[]) {
+    const stack = [...children]
+
+    for (let node = stack.pop(); node; node = stack.pop()) {
+        node.depth += 1
+        node.inAttempt = true
+        stack.push(...node.children)
+    }
+}
+
+/**
+ * Puts the children of every agent span whose children carry more than one distinct `attempt`
+ * under one attempt row per attempt, in order. An agent with one attempt is left alone. Each
+ * agent is judged on its own children, so a delegated agent with its own failover groups its own.
+ */
+function groupAttempts(roots: SpanNode[]) {
+    const stack = [...roots]
+
+    for (let node = stack.pop(); node; node = stack.pop()) {
+        stack.push(...node.children)
+
+        const numbers = [
+            ...new Set(node.children.map((child) => child.span.attempt)),
+        ].sort((a, b) => a - b)
+
+        if (node.span.type !== 'agent' || numbers.length < 2) {
+            continue
+        }
+
+        const last = numbers[numbers.length - 1]
+        const groups = numbers.map((attempt, index): AttemptNode => {
+            const held = node.children.filter(
+                (child) => child.span.attempt === attempt,
+            )
+            const failed =
+                held.find((child) => child.span.status === 'failed')?.span ??
+                null
+            let outcome: AttemptOutcome = null
+
+            if (attempt === last) {
+                outcome =
+                    node.span.status === 'completed'
+                        ? 'answered'
+                        : node.span.status === 'failed'
+                          ? 'failed'
+                          : null
+            } else if (failed !== null) {
+                outcome = 'failed'
+            }
+
+            held.forEach((child, position) => {
+                child.rowParentId = `attempt:${node.id}:${attempt}`
+                child.position = position + 1
+                child.setSize = held.length
+            })
+            sink(held)
+
+            return {
+                kind: 'attempt',
+                id: `attempt:${node.id}:${attempt}`,
+                agentId: node.id,
+                attempt,
+                of: last,
+                outcome,
+                failed,
+                nested: held,
+                depth: node.depth + 1,
+                parentId: node.id,
+                rowParentId: node.id,
+                position: index + 1,
+                setSize: numbers.length,
+            }
+        })
+
+        node.nested = groups
     }
 }

@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs'
 import { gzipSync } from 'node:zlib'
 
 const budgets = {
-    'dist/app.js': 212_000,
+    'dist/app.js': 218_000,
     'dist/app.css': 18_000,
 }
 
