@@ -51,6 +51,8 @@ export const traceKeys = {
     all: ['traces'] as const,
     list: ['traces', 'list'] as const,
     detail: (id: string) => ['traces', 'detail', id] as const,
+    /** The key of every bookmark write, so a reader can tell that one is under way. */
+    bookmark: ['bookmark'] as const,
 }
 
 const tracePath = (id: string) => `/traces/${encodeURIComponent(id)}`
