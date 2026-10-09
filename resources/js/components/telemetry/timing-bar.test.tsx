@@ -248,7 +248,6 @@ describe('TimingBar', () => {
             />,
         )
 
-        expect(screen.getByText('In progress')).toBeInTheDocument()
         expect(root(container)).toHaveAttribute('data-state', 'open')
         expect(fill(container)).toHaveStyle({ left: '25%', right: '0px' })
         expect(fill(container)!.style.width).toBe('')
@@ -259,6 +258,54 @@ describe('TimingBar', () => {
         ).toBeInTheDocument()
     })
 
+    it('draws a running span on the same full-width track as a finished one, with no words in the lane', () => {
+        const { container: done } = render(
+            <TimingBar span={completed} axisMs={1000} />,
+        )
+        const { container: live } = render(
+            <TimingBar
+                span={{ offset_ms: 100, duration_ms: null, status: 'running' }}
+                axisMs={1000}
+            />,
+        )
+
+        expect(root(live).tagName).toBe(root(done).tagName)
+        expect(root(live)).toHaveClass(
+            'relative',
+            'block',
+            'h-2',
+            'w-full',
+            'overflow-hidden',
+        )
+        expect(root(live)).not.toHaveClass('flex')
+        expect(root(live).children).toHaveLength(1)
+        expect(root(live).children[0]).toBe(fill(live))
+        expect(live.textContent).toBe('')
+        expect(screen.queryByText('In progress')).toBeNull()
+    })
+
+    it('starts a running bar exactly where a finished bar with the same offset starts', () => {
+        for (const offset_ms of [0, 100, 333.3, 949]) {
+            const { container: done, unmount: unmountDone } = render(
+                <TimingBar
+                    span={{ offset_ms, duration_ms: 50, status: 'completed' }}
+                    axisMs={1000}
+                />,
+            )
+            const { container: live, unmount: unmountLive } = render(
+                <TimingBar
+                    span={{ offset_ms, duration_ms: null, status: 'running' }}
+                    axisMs={1000}
+                />,
+            )
+
+            expect(fill(done)!.style.left).not.toBe('')
+            expect(fill(live)!.style.left).toBe(fill(done)!.style.left)
+            unmountDone()
+            unmountLive()
+        }
+    })
+
     it('ignores a duration held by a running span', () => {
         const { container } = render(
             <TimingBar
@@ -267,9 +314,28 @@ describe('TimingBar', () => {
             />,
         )
 
-        expect(screen.getByText('In progress')).toBeInTheDocument()
         expect(fill(container)!.style.width).toBe('')
         expect(container.innerHTML).not.toContain('40 ms')
+        expect(
+            screen.getByRole('img', { name: 'Starts at +0 ms, still running' }),
+        ).toBeInTheDocument()
+    })
+
+    it('names a running span without an offset "Still running", and draws no bar', () => {
+        const { container } = render(
+            <TimingBar
+                span={{
+                    offset_ms: Number.NaN,
+                    duration_ms: null,
+                    status: 'running',
+                }}
+                axisMs={1000}
+            />,
+        )
+
+        expect(root(container)).toHaveAttribute('title', 'Still running')
+        expect(root(container)).toHaveAttribute('data-state', 'none')
+        expect(fill(container)).toBeNull()
     })
 
     it.each([null, 0, Number.NaN])(
@@ -311,7 +377,7 @@ describe('TimingBar', () => {
         expectClean(container)
     })
 
-    it('animates a running bar only when motion is welcome', () => {
+    it('stripes only a running bar, and slides the stripes only when motion is welcome', () => {
         const { container } = render(
             <TimingBar
                 span={{ offset_ms: 0, duration_ms: null, status: 'running' }}
@@ -319,9 +385,31 @@ describe('TimingBar', () => {
             />,
         )
 
-        expect(screen.getByText('In progress')).toBeInTheDocument()
-        expect(fill(container)).toHaveClass('motion-safe:animate-pulse')
-        expect(fill(container)).not.toHaveClass('animate-pulse')
+        expect(fill(container)).toHaveClass(
+            'bg-stripes-info',
+            'motion-safe:animate-stripes',
+        )
+        expect(fill(container)).not.toHaveClass('animate-stripes')
+        expect(fill(container)!.className).not.toMatch(
+            /animate-pulse|bg-linear/,
+        )
+    })
+
+    it.each([
+        'completed',
+        'failed',
+        'incomplete',
+        'awaiting_approval',
+    ] as const)('does not stripe a %s bar', (status) => {
+        const { container } = render(
+            <TimingBar
+                span={{ offset_ms: 0, duration_ms: 10, status }}
+                axisMs={100}
+            />,
+        )
+
+        expect(fill(container)).not.toBeNull()
+        expect(fill(container)!.className).not.toMatch(/stripes/)
     })
 
     it('says a failed span failed, and draws it differently', () => {
@@ -437,7 +525,7 @@ describe('TimingBar', () => {
     })
 
     it('keeps an open bar visible, held to the right edge with a minimum width, near the end of the axis', () => {
-        for (const offset_ms of [960, 1000, 5000]) {
+        for (const offset_ms of [950, 960, 1000, 5000]) {
             const { container, unmount } = render(
                 <TimingBar
                     span={{ offset_ms, duration_ms: null, status: 'running' }}
@@ -446,7 +534,12 @@ describe('TimingBar', () => {
             )
 
             expect(root(container)).toHaveAttribute('data-state', 'open')
-            expect(fill(container)).toHaveClass('min-w-1.5')
+            expect(fill(container)).toHaveClass(
+                'min-w-1.5',
+                'bg-stripes-info',
+                'rounded-l-sm',
+            )
+            expect(fill(container)!.className).not.toMatch(/rounded-(sm|full)/)
             expect(fill(container)).toHaveStyle({ right: '0px' })
             expect(fill(container)!.style.left).toBe('')
             unmount()
