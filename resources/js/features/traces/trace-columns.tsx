@@ -96,9 +96,12 @@ export const traceColumns: DataTableColumn<Trace>[] = [
             // While the table scrolls sideways, the bookmark stays in view at the row's end.
             stickyEnd: true,
             skeleton: (
-                <Skeleton
-                    className={cn(skeletonBarClass, 'size-4 rounded-sm')}
-                />
+                // As wide as the loaded cell's own content, so no column moves when the rows arrive.
+                <div className="flex size-7 items-center justify-end">
+                    <Skeleton
+                        className={cn(skeletonBarClass, 'size-4 rounded-sm')}
+                    />
+                </div>
             ),
         },
         cell: ({ row }) => <BookmarkCell trace={row.original} />,

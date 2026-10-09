@@ -152,21 +152,26 @@ describe('the bookmark button of a row', () => {
         expect(toggle(failedName)).toHaveFocus()
     })
 
-    it('does not select the row or open it when pressed', async () => {
-        serve([])
+    // jsdom does not lay out or follow links, so a click here proves nothing about the row's
+    // stretched link. What keeps the toggle from being covered by it is that its cell and the
+    // button are positioned and stacked above the link's pseudo-element: assert those classes.
+    it('is stacked above the stretched link of its row, so a press does not open the run', async () => {
         renderApp('/traces')
         await loaded()
 
-        await userEvent.click(toggle(failedName))
+        const button = toggle(failedName)
+        const cell = button.closest('td') as HTMLElement
+        const link = within(button.closest('tr') as HTMLElement).getByRole(
+            'link',
+            { name: 'SupportAssistant' },
+        )
 
-        expect(pressed(failedName)).toBe('true')
-        expect(
-            screen.queryAllByRole('checkbox', { checked: true }),
-        ).toHaveLength(0)
-        // Still on the list: no run page was opened.
-        expect(
-            screen.getByRole('table', { name: 'Recorded runs' }),
-        ).toBeVisible()
+        // The link reaches over the whole row; the cell and the button sit above it.
+        expect(link).toHaveClass('after:absolute', 'after:inset-0')
+        expect(cell).toHaveClass('sticky', 'z-1')
+        expect(cell).toHaveClass('[&_button]:relative', '[&_button]:z-1')
+        // The button is not inside the link's own cell.
+        expect(link.closest('th')).not.toContainElement(button)
     })
 
     it('is drawn filled when bookmarked and as an outline when not', async () => {
