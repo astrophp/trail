@@ -1,11 +1,13 @@
 <?php
 
 use Astro\Trail\Pricing\PriceBook;
+use Astro\Trail\Pricing\PriceSource;
 use Astro\Trail\Pricing\Rate;
 use Astro\Trail\Tests\Fixtures\Pricing\FlakyResolver;
 use Astro\Trail\Tests\Fixtures\Storage\Rows;
 use Illuminate\Database\ConnectionResolverInterface;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Exceptions;
 
@@ -407,4 +409,90 @@ it('is a singleton that reads prices from the storage connection', function () {
         ->and(app(PriceBook::class)->rateFor('acme', 'tiny')?->input)->toBe(1.0);
 
     config(['trail.storage.connection' => null]);
+});
+
+it('says where a rate comes from', function () {
+    config(['trail.pricing' => ['openai' => ['gpt-5' => rate(1.0), 'gpt-5-mini' => rate(0.5)]]]);
+    Rows::price(['provider' => 'openai', 'model' => 'gpt-5-nano', 'input' => 0.1]);
+
+    $exact = book()->resolve('openai', 'gpt-5');
+    $saved = book()->resolve('openai', 'gpt-5-nano');
+    $prefix = book()->resolve('openai', 'gpt-5-mini-2025-08-07');
+    $none = book()->resolve('openai', 'gpt-4o');
+
+    expect($exact->source)->toBe(PriceSource::Config)
+        ->and($exact->rate?->model)->toBe('gpt-5')
+        ->and($saved->source)->toBe(PriceSource::Saved)
+        ->and($saved->rate?->custom)->toBeTrue()
+        ->and($prefix->source)->toBe(PriceSource::Prefix)
+        ->and($prefix->rate?->model)->toBe('gpt-5-mini')
+        ->and($none->source)->toBe(PriceSource::None)
+        ->and($none->rate)->toBeNull();
+});
+
+it('resolves a rate the way rateFor() does', function (string $model) {
+    config(['trail.pricing' => ['openai' => ['gpt-5' => rate(1.0), 'gpt-5-mini' => rate(0.5)]]]);
+    Rows::price(['provider' => 'openai', 'model' => 'gpt-5-nano', 'input' => 0.1]);
+
+    expect(book()->resolve('openai', $model)->rate)->toEqual(book()->rateFor('openai', $model));
+})->with(['gpt-5', 'gpt-5-2025-08-07', 'gpt-5-mini', 'gpt-5-mini-latest', 'gpt-5-nano', 'gpt-5-nano-001', 'gpt-5-turbo', 'gpt-4o']);
+
+it('says what a model would resolve to without its own saved row', function () {
+    config(['trail.pricing' => ['openai' => ['gpt-5' => rate(1.0)]]]);
+    Rows::price(['provider' => 'openai', 'model' => 'gpt-5', 'input' => 7]);
+    Rows::price(['provider' => 'openai', 'model' => 'gpt-5-2025-08-07', 'input' => 9]);
+    Rows::price(['provider' => 'openai', 'model' => 'gpt-5-2025-08-08', 'input' => 8]);
+
+    $config = book()->resolve('openai', 'gpt-5', withoutOwnRow: true);
+    $through = book()->resolve('openai', 'gpt-5-2025-08-07', withoutOwnRow: true);
+    $other = book()->resolve('openai', 'gpt-5-2025-08-08');
+
+    expect($config->source)->toBe(PriceSource::Config)
+        ->and($config->rate?->input)->toBe(1.0)
+        // The other models' saved rows still count: a version resolves through the saved one.
+        ->and($through->source)->toBe(PriceSource::Prefix)
+        ->and($through->rate?->input)->toBe(7.0)
+        ->and($through->rate?->custom)->toBeTrue()
+        ->and($other->source)->toBe(PriceSource::Saved)
+        ->and($other->rate?->input)->toBe(8.0)
+        ->and(book()->resolve('openai', 'gpt-5')->rate?->input)->toBe(7.0);
+});
+
+it('resolves to nothing without the saved row of a model that only a saved row lists', function () {
+    config(['trail.pricing' => []]);
+    Rows::price(['provider' => 'acme', 'model' => 'tiny', 'input' => 1]);
+
+    $resolution = book()->resolve('acme', 'tiny', withoutOwnRow: true);
+
+    expect($resolution->source)->toBe(PriceSource::None)
+        ->and($resolution->rate)->toBeNull();
+});
+
+it('knows when a saved rate was written, and a config rate was never', function () {
+    Carbon::setTestNow('2026-01-02 12:00:00.250');
+    config(['trail.pricing' => ['openai' => ['gpt-4o' => rate(1.0)]]]);
+    Rows::price(['provider' => 'openai', 'model' => 'gpt-5', 'input' => 1]);
+
+    expect(book()->rateFor('openai', 'gpt-5')?->savedAt?->format('Y-m-d\TH:i:s.v'))->toBe('2026-01-02T12:00:00.250')
+        ->and(book()->rateFor('openai', 'gpt-4o')?->savedAt)->toBeNull();
+
+    Carbon::setTestNow();
+});
+
+it('lists the models with whether a step or an embedding was recorded with each', function () {
+    config(['trail.pricing' => ['openai' => ['gpt-5' => rate(1.0), 'gpt-4o' => rate(2.0)]]]);
+    Rows::price(['provider' => 'acme', 'model' => 'tiny']);
+    Rows::price(['provider' => 'openai', 'model' => 'gpt-4o']);
+
+    $trace = Rows::trace();
+    Rows::span($trace, ['type' => 'step', 'provider' => 'openai', 'model' => 'gpt-5']);
+    Rows::span($trace, ['type' => 'embedding', 'provider' => 'voyageai', 'model' => 'voyage-4']);
+    Rows::span($trace, ['type' => 'tool', 'provider' => 'acme', 'model' => 'tiny']);
+
+    expect(book()->catalogue())->toBe([
+        ['provider' => 'acme', 'model' => 'tiny', 'observed' => false],
+        ['provider' => 'openai', 'model' => 'gpt-4o', 'observed' => false],
+        ['provider' => 'openai', 'model' => 'gpt-5', 'observed' => true],
+        ['provider' => 'voyageai', 'model' => 'voyage-4', 'observed' => true],
+    ]);
 });

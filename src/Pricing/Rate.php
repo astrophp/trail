@@ -2,6 +2,8 @@
 
 namespace Astro\Trail\Pricing;
 
+use DateTimeInterface;
+
 /**
  * USD per one million tokens. A null rate is unknown, not free.
  */
@@ -15,5 +17,7 @@ final readonly class Rate
         public ?float $cacheRead,
         public ?float $cacheWrite,
         public bool $custom,
+        /** When a saved rate was last written; null for a config rate. */
+        public ?DateTimeInterface $savedAt = null,
     ) {}
 }

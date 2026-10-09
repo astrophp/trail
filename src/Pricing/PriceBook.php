@@ -35,10 +35,20 @@ class PriceBook
 
     public function rateFor(string $provider, string $model): ?Rate
     {
-        $table = $this->table($provider);
+        return $this->resolve($provider, $model)->rate;
+    }
+
+    /**
+     * How a model's rate is found, and where it comes from. With $withoutOwnRow the model's own
+     * saved row is left out, which shows what a reset would return it to; other models' saved rows
+     * still count, since a prefix can resolve through one.
+     */
+    public function resolve(string $provider, string $model, bool $withoutOwnRow = false): Resolution
+    {
+        $table = $this->table($provider, $withoutOwnRow ? $model : null);
 
         if (isset($table[$model])) {
-            return $table[$model];
+            return new Resolution($table[$model], $table[$model]->custom ? PriceSource::Saved : PriceSource::Config);
         }
 
         $best = null;
@@ -59,7 +69,7 @@ class PriceBook
             }
         }
 
-        return $best;
+        return $best === null ? new Resolution(null, PriceSource::None) : new Resolution($best, PriceSource::Prefix);
     }
 
     /**
@@ -76,23 +86,37 @@ class PriceBook
      */
     public function knownModels(): array
     {
+        return array_map(
+            fn (array $entry) => ['provider' => $entry['provider'], 'model' => $entry['model']],
+            $this->catalogue(),
+        );
+    }
+
+    /**
+     * The same models as knownModels(), each with whether a step or an embedding was recorded with it.
+     *
+     * @return list<array{provider: string, model: string, observed: bool}>
+     */
+    public function catalogue(): array
+    {
         $known = [];
 
-        $add = function (string $provider, string $model) use (&$known): void {
-            $known[$provider."\0".$model] = ['provider' => $provider, 'model' => $model];
+        $add = function (string $provider, string $model, bool $observed) use (&$known): void {
+            $key = $provider."\0".$model;
+            $known[$key] = ['provider' => $provider, 'model' => $model, 'observed' => $observed || ($known[$key]['observed'] ?? false)];
         };
 
         $pricing = $this->config->get('trail.pricing');
 
         foreach (is_array($pricing) ? $pricing : [] as $provider => $models) {
             foreach (is_array($models) ? $models : [] as $model => $_) {
-                $add((string) $provider, (string) $model);
+                $add((string) $provider, (string) $model, false);
             }
         }
 
         foreach ($this->databaseRows() as $provider => $models) {
             foreach ($models as $model => $_) {
-                $add((string) $provider, (string) $model);
+                $add((string) $provider, (string) $model, false);
             }
         }
 
@@ -109,7 +133,7 @@ class PriceBook
 
             foreach ($observed as $row) {
                 if (is_string($row->provider) && is_string($row->model)) {
-                    $add($row->provider, $row->model);
+                    $add($row->provider, $row->model, true);
                 }
             }
         } catch (Throwable $e) {
@@ -124,9 +148,10 @@ class PriceBook
     }
 
     /**
+     * @param  ?string  $withoutSaved  a model whose saved row is left out
      * @return array<string, Rate>
      */
-    private function table(string $provider): array
+    private function table(string $provider, ?string $withoutSaved = null): array
     {
         $pricing = $this->config->get('trail.pricing');
         $entries = is_array($pricing) ? ($pricing[$provider] ?? null) : null;
@@ -138,7 +163,13 @@ class PriceBook
             }
         }
 
-        return array_replace($table, $this->databaseRows()[$provider] ?? []);
+        $saved = $this->databaseRows()[$provider] ?? [];
+
+        if ($withoutSaved !== null) {
+            unset($saved[$withoutSaved]);
+        }
+
+        return array_replace($table, $saved);
     }
 
     /**
@@ -192,7 +223,17 @@ class PriceBook
             $this->number($entry['cache_read'] ?? null),
             $this->number($entry['cache_write'] ?? null),
             $custom,
+            $custom ? $this->moment($entry['updated_at'] ?? null) : null,
         );
+    }
+
+    private function moment(mixed $value): ?Carbon
+    {
+        try {
+            return is_string($value) && $value !== '' ? Carbon::parse($value) : null;
+        } catch (Throwable) {
+            return null;
+        }
     }
 
     private function number(mixed $value): ?float
