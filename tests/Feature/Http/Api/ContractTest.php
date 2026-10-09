@@ -596,6 +596,20 @@ it('sends the usage breakdown response the dashboard expects', function () {
     assertContract('usage-breakdown', $this->getJson('/trail/api/usage/breakdown')->assertOk()->json());
 });
 
+it('sends the usage spend response the dashboard expects', function () {
+    // Prices of the models of the dataset, so that the projection does not move with the shipped defaults.
+    config(['trail.pricing' => [
+        'anthropic' => [
+            'claude-sonnet-4-5' => ['input' => 3.0, 'output' => 15.0, 'cache_read' => 0.3],
+            'claude-haiku-4-5' => ['input' => 1.0, 'output' => 5.0],
+        ],
+        'openai' => ['text-embedding-3-small' => ['input' => 0.02]],
+    ]]);
+    usageContractDataset();
+
+    assertContract('usage-spend', $this->getJson('/trail/api/usage/spend')->assertOk()->json());
+});
+
 it('sends the rows of the other views of the usage breakdown with the keys the dashboard expects', function () {
     usageContractDataset();
 

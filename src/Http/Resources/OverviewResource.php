@@ -28,7 +28,7 @@ final class OverviewResource
     /**
      * @return array<string, mixed>
      */
-    private static function bucket(OverviewBucket $bucket): array
+    public static function bucket(OverviewBucket $bucket): array
     {
         $figures = $bucket->figures;
 

@@ -17,6 +17,7 @@ use Astro\Trail\Http\Controllers\Api\TraceNeighboursController;
 use Astro\Trail\Http\Controllers\Api\TraceShowController;
 use Astro\Trail\Http\Controllers\Api\UsageBreakdownController;
 use Astro\Trail\Http\Controllers\Api\UsageController;
+use Astro\Trail\Http\Controllers\Api\UsageSpendController;
 use Astro\Trail\Http\Controllers\DashboardController;
 use Astro\Trail\Http\Middleware\Authorize;
 use Astro\Trail\Http\Middleware\RespondWithJson;
@@ -45,6 +46,7 @@ Route::prefix('api')->middleware([RespondWithJson::class, Authorize::class])->gr
 
     Route::get('usage', UsageController::class)->name('trail.api.usage');
     Route::get('usage/breakdown', UsageBreakdownController::class)->name('trail.api.usage.breakdown');
+    Route::get('usage/spend', UsageSpendController::class)->name('trail.api.usage.spend');
 
     // The model travels in the query: its id can hold any character, a slash among them.
     Route::get('prices', PriceIndexController::class)->name('trail.api.prices.index');
