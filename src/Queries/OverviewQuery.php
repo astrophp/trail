@@ -2,7 +2,6 @@
 
 namespace Astro\Trail\Queries;
 
-use Astro\Trail\Enums\Status;
 use Astro\Trail\Storage\Models\Trace;
 use Astro\Trail\Storage\StaleRuns;
 use Carbon\CarbonImmutable;
@@ -78,9 +77,6 @@ final class OverviewQuery
      */
     private function rows(TimeRange $range, TimeRange $previousRange, array $cuts, RunScope $scope): array
     {
-        $running = Status::Running->value;
-        $cutoff = StaleRuns::cutoffColumn();
-
         // A run belongs to the first slot whose end is after its start. The last bucket needs no test.
         $ends = [$range->from, ...array_map(fn (array $cut) => $cut['to'], array_slice($cuts, 0, -1))];
         $whens = [];
@@ -95,24 +91,8 @@ final class OverviewQuery
 
         $query = Trace::query()->toBase()
             ->selectRaw('case '.implode(' ', $whens).' else ? end as slot', $bindings)
-            ->selectRaw(self::count('status = ?').' as completed', [Status::Completed->value])
-            ->selectRaw(self::count('status = ?').' as failed', [Status::Failed->value])
-            ->selectRaw(self::count('status = ? or (status = ? and created_at < ?)').' as incomplete', [Status::Incomplete->value, $running, $cutoff])
-            ->selectRaw(self::count('status = ? and created_at >= ?').' as running', [$running, $cutoff])
-            ->selectRaw(self::count('status = ?').' as awaiting_approval', [Status::AwaitingApproval->value])
-            ->selectRaw('count(duration_ms) as measured')
-            ->selectRaw('sum(duration_ms) as duration_sum')
-            ->selectRaw('sum(input_tokens) as input_tokens')
-            ->selectRaw('sum(output_tokens) as output_tokens')
-            ->selectRaw('sum(cache_read_tokens) as cache_read_tokens')
-            ->selectRaw('sum(cache_write_tokens) as cache_write_tokens')
-            ->selectRaw('sum(reasoning_tokens) as reasoning_tokens')
-            ->selectRaw(self::count('input_tokens is not null or output_tokens is not null or cache_read_tokens is not null or cache_write_tokens is not null or reasoning_tokens is not null').' as reported')
-            ->selectRaw('sum(cost) as cost_sum')
-            ->selectRaw('sum(unpriced_span_count) as unpriced_spans')
-            ->selectRaw(self::count('unpriced_span_count > 0').' as unpriced_runs')
-            ->selectRaw(self::count('cost is null').' as without_amount')
             ->groupBy('slot');
+        RunFigures::select($query);
 
         (new TimeRange(null, $previousRange->from, $range->to))->apply($query, 'started_at');
         $scope->apply($query);
@@ -148,16 +128,5 @@ final class OverviewQuery
         $duration = $query->orderBy('duration_ms')->offset($rank - 1)->limit(1)->value('duration_ms');
 
         return is_numeric($duration) ? (float) $duration : null;
-    }
-
-    /**
-     * The sum of a condition: how many rows meet it.
-     *
-     * @param  literal-string  $condition
-     * @return literal-string
-     */
-    private static function count(string $condition): string
-    {
-        return 'sum(case when '.$condition.' then 1 else 0 end)';
     }
 }

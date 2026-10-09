@@ -9,18 +9,18 @@ use Astro\Trail\Http\Resources\TurnResource;
 use Astro\Trail\Queries\ConversationId;
 use Astro\Trail\Queries\Conversations;
 use Astro\Trail\Queries\ConversationTurns;
+use Astro\Trail\Queries\RawQuery;
 use Astro\Trail\Queries\TraceDetail;
 use Astro\Trail\Queries\TurnWindow;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Symfony\Component\HttpFoundation\HeaderUtils;
 
 class ConversationTranscriptController
 {
     public function __invoke(Request $request, Conversations $conversations, ConversationTurns $turns, TraceDetail $detail): JsonResponse
     {
         // An id the column could not hold is no conversation, and is not sent to the database.
-        $id = self::requestedId($request);
+        $id = RawQuery::string($request, 'id');
         abort_unless($id !== null && ConversationId::isPossible($id), 404);
 
         $window = TurnWindow::fromRequest($request);
@@ -79,17 +79,5 @@ class ConversationTranscriptController
                 'anchor' => $window->anchor === null ? null : ['param' => $window->anchor, 'id' => $anchored ?? $window->anchorId, 'found' => $anchored !== null],
             ],
         ]);
-    }
-
-    /**
-     * The id from the raw query string. The request's own query has been through the framework's
-     * middleware, which trims a value, and a conversation id may start or end with a space.
-     */
-    private static function requestedId(Request $request): ?string
-    {
-        $query = $request->server->get('QUERY_STRING');
-        $id = HeaderUtils::parseQuery(is_string($query) ? $query : '')['id'] ?? null;
-
-        return is_string($id) ? $id : null;
     }
 }

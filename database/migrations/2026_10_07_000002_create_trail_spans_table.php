@@ -54,6 +54,8 @@ return new class extends Migration
             $table->index(['trace_id', 'started_at']);
             $table->index(['provider', 'model', 'started_at']);
             $table->index(['status', 'created_at']);
+            // Finds the spans of one kind and name: the runs that called a tool, the delegated runs of an agent.
+            $table->index(['type', 'name', 'started_at']);
         });
     }
 

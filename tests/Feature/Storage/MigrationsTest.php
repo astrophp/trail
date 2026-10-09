@@ -67,6 +67,7 @@ it('creates the expected indexes', function (string $table, array $columns) {
     'spans trace' => ['trail_spans', ['trace_id', 'started_at']],
     'spans model' => ['trail_spans', ['provider', 'model', 'started_at']],
     'spans status' => ['trail_spans', ['status', 'created_at']],
+    'spans type and name' => ['trail_spans', ['type', 'name', 'started_at']],
 ]);
 
 it('keeps index names within the shortest identifier limit', function (string $table) {

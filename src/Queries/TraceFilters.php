@@ -38,6 +38,7 @@ final readonly class TraceFilters
         public ?string $search = null,
         public string $sort = 'started_at',
         public bool $descending = true,
+        public ?string $tool = null,
     ) {}
 
     /**
@@ -55,6 +56,7 @@ final readonly class TraceFilters
             'agent' => $string,
             'provider' => $string,
             'model' => $string,
+            'tool' => $string,
             'conversation' => $string,
             'user_id' => ['required_with:user_type', ...$string],
             'user_type' => $string,
@@ -91,6 +93,7 @@ final readonly class TraceFilters
             $text('search'),
             ltrim($sort, '-'),
             str_starts_with($sort, '-'),
+            tool: $text('tool'),
         );
     }
 }

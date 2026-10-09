@@ -47,6 +47,9 @@ export type TraceListParams = {
     search?: string
     agent?: string
     provider?: string
+    model?: string
+    /** Only the runs that called the tool, anywhere in the run. */
+    tool?: string
     conversation?: string
     /** Only the runs with that issue kind. */
     issue_kind?: IssueKind

@@ -245,6 +245,127 @@ export type AttentionResponse = {
     range: Range
 }
 
+/**
+ * What an agent did as runs of its own ("top level"): the figures of a summary without the
+ * percentile and the usage coverage. `last_activity_at` is when its latest run started.
+ */
+export type AgentTopLevel = {
+    runs: StatusCounts
+    error_rate: ErrorRate
+    duration: {
+        average_ms: number | null
+        measured: number
+        not_measured: number
+    }
+    usage: Usage
+    cost: Cost
+    cost_coverage: { unpriced_runs: number; runs_without_amount: number }
+    /** `null` only when the start time could not be read. */
+    last_activity_at: string | null
+}
+
+/**
+ * The times an agent was delegated to: its agent spans that have a parent. A delegated run is a
+ * span of the run that delegated, so it has no usage, cost or status of a whole run, and none is
+ * given here.
+ */
+export type AgentDelegated = {
+    all: number
+    failed: number
+    incomplete: number
+    /** `null` only when the start time could not be read. */
+    last_activity_at: string | null
+}
+
+/**
+ * One agent, as the list and the agent page return it. `top_level` is `null` when it has no run
+ * of its own in the range and `delegated` when it was not delegated to. `activity` counts its own
+ * runs in each bucket of the response's `buckets`, and is all zeros without runs of its own.
+ */
+export type Agent = {
+    name: string
+    agent_class: string | null
+    type: 'agent' | 'embedding'
+    top_level: AgentTopLevel | null
+    delegated: AgentDelegated | null
+    /** The later of the two; `null` when the agent has neither in the range. */
+    last_activity_at: string | null
+    activity: number[]
+}
+
+export type AgentBucketEdge = {
+    from: string
+    to: string
+    full: boolean
+    in_progress: boolean
+}
+
+export type AgentListResponse = {
+    data: Agent[]
+    pagination: Pagination
+    range: Range
+    buckets: { bucket: BucketUnit; edges: AgentBucketEdge[] }
+    /** `truncated` when more agents than `limit` were found and the rest were not read. */
+    agent_limit: { limit: number; truncated: boolean }
+}
+
+/** An agent's page: its figures as top-level runs, and what needs a look among those runs. */
+export type AgentResponse = {
+    data: {
+        agent: Agent
+        summary: Summary
+        previous: Summary | null
+        series: { bucket: BucketUnit; buckets: SeriesBucket[] }
+        attention: AttentionItem[]
+    }
+    range: Range
+    previous_range: PreviousRange
+}
+
+/** The model calls of an agent's runs; `filters` are the runs list's parameters that return exactly `runs`. */
+export type AgentModel = {
+    provider: string
+    model: string
+    /** The spans that called the model: steps, and embeddings calls. */
+    steps: number
+    runs: number
+    usage: Usage
+    cost: Cost
+    filters: Record<string, string>
+}
+
+export type AgentTool = {
+    name: string
+    calls: number
+    failed: number
+    runs: number
+    filters: Record<string, string>
+}
+
+/** A model used inside the agent's delegated runs. The list cannot filter on those, so it has no `filters`. */
+export type DelegatedModel = Omit<AgentModel, 'filters'>
+
+export type DelegatedTool = Omit<AgentTool, 'filters'>
+
+export type AgentBreakdownLimit = { limit: number; total: number }
+
+export type AgentBreakdownResponse = {
+    data: {
+        models: AgentModel[]
+        tools: AgentTool[]
+        delegated: { models: DelegatedModel[]; tools: DelegatedTool[] }
+    }
+    range: Range
+    limits: {
+        models: AgentBreakdownLimit
+        tools: AgentBreakdownLimit
+        delegated: {
+            models: AgentBreakdownLimit
+            tools: AgentBreakdownLimit
+        }
+    }
+}
+
 /** The answer to a bookmark write: the run's bookmark state after it. */
 export type BookmarkResponse = {
     data: { trace_id: string; bookmarked: boolean }
