@@ -80,7 +80,7 @@ describe('the estimated cost', () => {
 
         const cost = metric('Estimated cost')
 
-        expect(cost).toHaveTextContent(formatCost(11.48))
+        expect(cost).toHaveTextContent(formatCost(0.01315))
         expect(within(cost).getByText('So far')).toBeVisible()
     })
 
@@ -104,7 +104,7 @@ describe('the estimated cost', () => {
 
         const cost = metric('Estimated cost')
 
-        expect(cost).toHaveTextContent(formatCost(11.48))
+        expect(cost).toHaveTextContent(formatCost(0.01315))
         expect(within(cost).getByText(/^Partial/)).toBeVisible()
         expect(within(cost).queryByText('So far')).not.toBeInTheDocument()
     })
@@ -146,9 +146,9 @@ describe('the tokens', () => {
 
         const words = wordsOf('Total tokens')
 
-        expect(words[0]).toMatch(/7\.9M.*7,901,600 tokens.*Pending/)
+        expect(words[0]).toMatch(/2\.6k.*2,648 tokens.*Pending/)
         expect(words[1]?.replaceAll(', still running, so far', '')).toBe(
-            'Input 7,280,000 (of which 430,200 cached) · Output 621,600',
+            'Input 2,158 (of which 5 cached) · Output 490',
         )
     })
 
@@ -184,11 +184,9 @@ describe('the tokens', () => {
 
         const words = wordsOf('Total tokens')
 
-        expect(words[0]).toMatch(/7\.9M.*7,901,600 tokens/)
+        expect(words[0]).toMatch(/2\.6k.*2,648 tokens/)
         // The cached tokens are part of the input: they are said to be, and not added to it.
-        expect(words[1]).toBe(
-            'Input 7,280,000 (of which 430,200 cached) · Output 621,600',
-        )
+        expect(words[1]).toBe('Input 2,158 (of which 5 cached) · Output 490')
     })
 
     it('leaves the cached part out when no cache read was reported', async () => {
@@ -211,9 +209,7 @@ describe('the tokens', () => {
         renderApp('/usage')
         await totals()
 
-        expect(wordsOf('Total tokens')[1]).toBe(
-            'Input 7,280,000 · Output 621,600',
-        )
+        expect(wordsOf('Total tokens')[1]).toBe('Input 2,158 · Output 490')
     })
 
     it('says Not reported, not zero, when no count was reported', async () => {
@@ -251,12 +247,12 @@ describe('the strip', () => {
 
         const text = strip()?.textContent ?? ''
 
-        expect(text.match(/(?<!\d)8 (unpriced )?runs?(?![a-z])/g)).toHaveLength(
+        expect(text.match(/(?<!\d)1 (unpriced )?runs?(?![a-z])/g)).toHaveLength(
             1,
         )
         expect(text).not.toContain('unpriced runs')
-        expect(wordsOf('Pricing coverage')[0]).toBe('8 runs')
-        expect(metric('Estimated cost')).toHaveTextContent(formatCost(11.48))
+        expect(wordsOf('Pricing coverage')[0]).toBe('1 run')
+        expect(metric('Estimated cost')).toHaveTextContent(formatCost(0.01315))
     })
 })
 
@@ -267,8 +263,8 @@ describe('the pricing coverage', () => {
         await totals()
 
         expect(wordsOf('Pricing coverage')).toEqual([
-            '8 runs',
-            '11 steps · 24.8k tokens without a rate',
+            '1 run',
+            '1 step · 30 tokens without a rate',
         ])
         expect(
             within(metric('Pricing coverage'))
@@ -277,14 +273,37 @@ describe('the pricing coverage', () => {
         ).toBe('/trail/traces?range=7d&unpriced=1')
     })
 
+    it('speaks in the plural for several runs, steps and tokens', async () => {
+        mockApi(() =>
+            json(
+                usageWith(
+                    {
+                        cost_coverage: {
+                            unpriced_runs: 8,
+                            runs_without_amount: 5,
+                        },
+                    },
+                    { unpriced_steps: 11, unpriced_tokens: 24_800 },
+                ),
+            ),
+        )
+        renderApp('/usage')
+        await totals()
+
+        expect(wordsOf('Pricing coverage')).toEqual([
+            '8 runs',
+            '11 steps · 24.8k tokens without a rate',
+        ])
+    })
+
     it('leaves the tokens out when the unpriced steps reported none', async () => {
         mockApi(() => json(usageWith({}, { unpriced_tokens: null })))
         renderApp('/usage')
         await totals()
 
         expect(wordsOf('Pricing coverage')).toEqual([
-            '8 runs',
-            '11 steps without a rate',
+            '1 run',
+            '1 step without a rate',
         ])
         expect(metric('Pricing coverage')).not.toHaveTextContent(
             /tokens|Not captured|\b0\b/,
@@ -402,7 +421,7 @@ describe('while the totals load', () => {
         await waitFor(() =>
             expect(strip()?.closest('[aria-busy="true"]')).not.toBeNull(),
         )
-        expect(metric('Estimated cost')).toHaveTextContent(formatCost(11.48))
+        expect(metric('Estimated cost')).toHaveTextContent(formatCost(0.01315))
         expect(
             within(metric('Estimated cost'))
                 .getByRole('link')

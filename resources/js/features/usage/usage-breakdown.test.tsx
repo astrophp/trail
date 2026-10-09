@@ -14,26 +14,28 @@ import {
     breakdownOf,
     breakdownUrls,
     cellOf,
-    claude,
     dataRows,
     deferred,
+    embedding,
     expectSearch,
-    gpt,
+    gpt5,
+    haiku,
     header,
     hasColumn,
     json,
     lastBreakdownUrl,
-    llama,
     mockQuietApi,
-    modelRow,
     modelRows,
     paramsOf,
     rowOf,
     rowsLoaded,
+    sonnet,
+    sonnetSettled,
     sortButton,
     tab,
     table,
     travel,
+    unpricedModel,
 } from '@/test/usage-api'
 
 beforeEach(() => {
@@ -71,15 +73,15 @@ describe('the breakdown by model', () => {
         ])
         expect(tab('By model')).toHaveAttribute('aria-selected', 'true')
         expect(header('Model')).toBeInTheDocument()
-        expect(dataRows()).toHaveLength(3)
+        expect(dataRows()).toHaveLength(4)
 
         const row = rowOf('claude-sonnet-4-5')
 
         expect(row).toHaveTextContent('anthropic')
-        expect(cellOf(row, 'Runs')).toHaveTextContent('120')
-        expect(cellOf(row, 'Steps')).toHaveTextContent('310')
-        expect(cellOf(row, 'Input tokens')).toHaveTextContent('650,500')
-        expect(cellOf(row, 'Output tokens')).toHaveTextContent('136,500')
+        expect(cellOf(row, 'Runs')).toHaveTextContent('2')
+        expect(cellOf(row, 'Steps')).toHaveTextContent('3')
+        expect(cellOf(row, 'Input tokens')).toHaveTextContent('1,230')
+        expect(cellOf(row, 'Output tokens')).toHaveTextContent('310')
     })
 
     it('leads each row to the runs it counted, over the page’s range', async () => {
@@ -96,8 +98,11 @@ describe('the breakdown by model', () => {
         expect(hrefOfRow('claude-sonnet-4-5')).toBe(
             '/trail/traces?range=7d&provider=anthropic&model=claude-sonnet-4-5',
         )
-        expect(hrefOfRow('gpt-4.1')).toBe(
-            hrefFor('7d', { provider: 'openai', model: 'gpt-4.1' }),
+        expect(hrefOfRow('claude-haiku-4-5')).toBe(
+            hrefFor('7d', {
+                provider: 'anthropic',
+                model: 'claude-haiku-4-5',
+            }),
         )
     })
 })
@@ -151,7 +156,7 @@ describe('the other views', () => {
 
         expect(within(row).getByRole('link')).toHaveTextContent(/^anthropic$/)
         expect(hrefOfRow('anthropic')).toBe('/trail/traces?provider=anthropic')
-        expect(dataRows()).toHaveLength(3)
+        expect(dataRows()).toHaveLength(2)
     })
 
     it('shows no rows of the previous grouping while the next one loads', async () => {
@@ -278,87 +283,80 @@ describe('sorting', () => {
         await waitFor(() =>
             expect(table()).toHaveAttribute('aria-busy', 'true'),
         )
-        expect(dataRows()).toHaveLength(3)
+        expect(dataRows()).toHaveLength(4)
         expect(screen.getByText('Loading the breakdown')).toBeInTheDocument()
 
         next.resolve(
             new Response(
-                JSON.stringify(breakdownOf('model', [gpt, claude, llama])),
+                JSON.stringify(
+                    breakdownOf('model', [haiku, sonnet, embedding]),
+                ),
             ),
         )
         await waitFor(() => expect(table()).not.toHaveAttribute('aria-busy'))
         expect(within(dataRows()[0]).getByRole('link')).toHaveTextContent(
-            'gpt-4.1',
+            'claude-haiku-4-5',
         )
     })
 })
 
 describe('what a row says about its cost and coverage', () => {
+    const only = (...rows: (typeof sonnet)[]) =>
+        mockQuietApi(() => json(breakdownOf('model', rows)))
+
     it('labels a partly priced row through the cost component, and counts the steps left out', async () => {
-        mockQuietApi()
+        only(sonnetSettled)
         await open()
 
         const row = rowOf('claude-sonnet-4-5')
         const cost = cellOf(row, 'Est. cost')
 
-        expect(cost).toHaveTextContent(formatCost(3.7603))
+        expect(cost).toHaveTextContent(formatCost(0.00825))
         expect(cost).toHaveTextContent('Partial')
         expect(cellOf(row, 'Coverage')).toHaveTextContent(
-            '4 of 300 steps unpriced',
+            '1 of 2 steps unpriced',
         )
-        expect(cellOf(row, 'Coverage')).toHaveTextContent('9,100 tokens')
+        expect(cellOf(row, 'Coverage')).toHaveTextContent('30 tokens')
     })
 
     it('shows an unpriced row as Unpriced, never as a zero amount, and leaves the tokens out when they are not known', async () => {
-        mockQuietApi()
+        only(haiku, unpricedModel)
         await open()
 
-        const row = rowOf('llama-3.3')
+        const row = rowOf('text-embedding-3-small')
 
         expect(cellOf(row, 'Est. cost')).toHaveTextContent(/^Unpriced$/)
         expect(row).not.toHaveTextContent('$0')
         expect(cellOf(row, 'Coverage')).toHaveTextContent(
-            /^12 of 12 steps unpriced$/,
+            /^2 of 2 steps unpriced$/,
         )
+    })
+
+    it('shows a rate of zero as a priced amount of zero, not as unpriced', async () => {
+        only({ ...haiku, cost: { state: 'estimated', amount: 0 } })
+        await open()
+
+        const cost = cellOf(rowOf('claude-haiku-4-5'), 'Est. cost')
+
+        expect(cost).toHaveTextContent(formatCost(0))
+        expect(cost).not.toHaveTextContent('Unpriced')
     })
 
     it('says a fully priced row is priced, and has nothing to count', async () => {
         mockQuietApi()
         await open()
 
-        const row = rowOf('gpt-4.1')
+        const row = rowOf('claude-haiku-4-5')
 
-        expect(cellOf(row, 'Est. cost')).toHaveTextContent(formatCost(1.25))
+        expect(cellOf(row, 'Est. cost')).toHaveTextContent(formatCost(0.0045))
         expect(cellOf(row, 'Coverage')).toHaveTextContent(/^Priced$/)
     })
 
     it('says a row that reported no usage did not, rather than calling it priced', async () => {
-        mockQuietApi(() =>
-            json(
-                breakdownOf('model', [
-                    modelRow('openai', 'gpt-4.1', {
-                        usage: {
-                            state: 'not_reported',
-                            input_tokens: null,
-                            output_tokens: null,
-                            cache_read_tokens: null,
-                            cache_write_tokens: null,
-                            reasoning_tokens: null,
-                            total_tokens: null,
-                        },
-                        cost: { state: 'not_captured', amount: null },
-                        coverage: {
-                            reported_steps: 0,
-                            unpriced_steps: 0,
-                            unpriced_tokens: 0,
-                        },
-                    }),
-                ]),
-            ),
-        )
+        mockQuietApi()
         await open()
 
-        const row = rowOf('gpt-4.1')
+        const row = rowOf('gpt-5')
 
         expect(cellOf(row, 'Coverage')).toHaveTextContent('No usage reported')
         expect(cellOf(row, 'Est. cost')).toHaveTextContent('Not captured')
@@ -366,33 +364,17 @@ describe('what a row says about its cost and coverage', () => {
     })
 
     it('shows the amount and tokens so far for a row with a step still running, marked', async () => {
-        mockQuietApi(() =>
-            json(
-                breakdownOf('model', [
-                    modelRow('openai', 'gpt-4.1', {
-                        cost: { state: 'pending', amount: 0.4 },
-                        usage: {
-                            state: 'pending',
-                            input_tokens: 10,
-                            output_tokens: 5,
-                            cache_read_tokens: null,
-                            cache_write_tokens: null,
-                            reasoning_tokens: null,
-                            total_tokens: 15,
-                        },
-                    }),
-                ]),
-            ),
-        )
+        mockQuietApi()
         await open()
 
-        const row = rowOf('gpt-4.1')
+        const row = rowOf('claude-sonnet-4-5')
 
         expect(cellOf(row, 'Est. cost')).toHaveTextContent('So far')
-        expect(cellOf(row, 'Tokens')).toHaveTextContent('15')
+        expect(cellOf(row, 'Est. cost')).toHaveTextContent(formatCost(0.00825))
+        expect(cellOf(row, 'Tokens')).toHaveTextContent('1.5k')
         expect(cellOf(row, 'Tokens')).toHaveTextContent('Pending')
-        expect(cellOf(row, 'Input tokens')).toHaveTextContent(/^10/)
-        expect(cellOf(row, 'Output tokens')).toHaveTextContent(/^5/)
+        expect(cellOf(row, 'Input tokens')).toHaveTextContent(/^1,230/)
+        expect(cellOf(row, 'Output tokens')).toHaveTextContent(/^310/)
     })
 })
 
@@ -407,29 +389,27 @@ describe('the token columns', () => {
         expect(hasColumn('Reasoning')).toBe(false)
         expect(
             cellOf(rowOf('claude-sonnet-4-5'), 'Cache read'),
-        ).toHaveTextContent('90,000')
+        ).toHaveTextContent(/^5/)
         // A row that did not report it says so in the column other rows reported.
-        expect(cellOf(rowOf('gpt-4.1'), 'Cache read')).toHaveTextContent(
-            'Not reported',
-        )
+        expect(
+            cellOf(rowOf('claude-haiku-4-5'), 'Cache read'),
+        ).toHaveTextContent('Not reported')
     })
 
     it('draws the column once a row reports it', async () => {
         mockQuietApi(() =>
             json(
                 breakdownOf('model', [
-                    claude,
-                    modelRow('openai', 'o3', {
+                    sonnet,
+                    {
+                        ...haiku,
+                        model: 'o3',
                         usage: {
-                            state: 'reported',
-                            input_tokens: 100,
-                            output_tokens: 900,
-                            cache_read_tokens: null,
+                            ...haiku.usage,
                             cache_write_tokens: 40,
                             reasoning_tokens: 700,
-                            total_tokens: 1000,
                         },
-                    }),
+                    },
                 ]),
             ),
         )
@@ -443,25 +423,11 @@ describe('the token columns', () => {
 
     it('always draws input and output, saying so when nothing was reported', async () => {
         mockQuietApi(() =>
-            json(
-                breakdownOf('model', [
-                    modelRow('openai', 'gpt-4.1', {
-                        usage: {
-                            state: 'not_reported',
-                            input_tokens: null,
-                            output_tokens: null,
-                            cache_read_tokens: null,
-                            cache_write_tokens: null,
-                            reasoning_tokens: null,
-                            total_tokens: null,
-                        },
-                    }),
-                ]),
-            ),
+            json(breakdownOf('model', [{ ...haiku, usage: gpt5.usage }])),
         )
         await open()
 
-        const row = rowOf('gpt-4.1')
+        const row = rowOf('claude-haiku-4-5')
 
         expect(hasColumn('Input tokens')).toBe(true)
         expect(hasColumn('Output tokens')).toBe(true)
@@ -469,22 +435,35 @@ describe('the token columns', () => {
         expect(cellOf(row, 'Input tokens')).toHaveTextContent('Not reported')
         expect(cellOf(row, 'Output tokens')).toHaveTextContent('Not reported')
     })
+
+    it('says an output that was not reported was not, beside an input that was', async () => {
+        mockQuietApi()
+        await open()
+
+        const row = rowOf('text-embedding-3-small')
+
+        expect(cellOf(row, 'Input tokens')).toHaveTextContent('128')
+        expect(cellOf(row, 'Output tokens')).toHaveTextContent('Not reported')
+        expect(cellOf(row, 'Output tokens')).not.toHaveTextContent('0')
+    })
 })
 
 describe('a row whose runs cannot be linked', () => {
     it('is no link, still shows its figures and says so, and the other rows keep theirs', async () => {
         const error = vi.spyOn(console, 'error').mockImplementation(() => {})
-        const stray = modelRow('acme', 'mystery-1', {
+        const stray = {
+            ...haiku,
+            model: 'mystery-1',
             // A filter the traces list does not keep in its address.
             filters: { tenant: 'acme' },
-        })
-        const bare = agentRow('Bare', { filters: {} })
+        }
+        const bare = agentRow('Bare', haiku, { filters: {} })
 
         mockQuietApi((url) =>
             json(
                 paramsOf(url).by === 'agent'
                     ? breakdownOf('agent', [bare, ...agentRows])
-                    : breakdownOf('model', [stray, gpt]),
+                    : breakdownOf('model', [stray, haiku]),
             ),
         )
         await open()
@@ -493,10 +472,13 @@ describe('a row whose runs cannot be linked', () => {
 
         expect(within(row).queryByRole('link')).toBeNull()
         expect(row).toHaveTextContent('Its runs could not be linked')
-        expect(cellOf(row, 'Runs')).toHaveTextContent('120')
+        expect(cellOf(row, 'Runs')).toHaveTextContent('2')
         // The row beside it still leads to its runs.
-        expect(hrefOfRow('gpt-4.1')).toBe(
-            hrefFor('24h', { provider: 'openai', model: 'gpt-4.1' }),
+        expect(hrefOfRow('claude-haiku-4-5')).toBe(
+            hrefFor('24h', {
+                provider: 'anthropic',
+                model: 'claude-haiku-4-5',
+            }),
         )
         expect(error).toHaveBeenCalledWith(
             expect.stringContaining('Trail could not link every usage row'),
@@ -516,7 +498,12 @@ describe('a row whose runs cannot be linked', () => {
     it('is no link for an agent with no name, which the list would read as every agent', async () => {
         vi.spyOn(console, 'error').mockImplementation(() => {})
         mockQuietApi(() =>
-            json(breakdownOf('agent', [agentRow(''), agentRow('Research')])),
+            json(
+                breakdownOf('agent', [
+                    agentRow('', haiku),
+                    agentRow('Research', haiku),
+                ]),
+            ),
         )
         await open('/usage?by=agent')
 
@@ -556,7 +543,7 @@ describe('pages', () => {
         mockQuietApi()
         await open()
 
-        expect(dataRows()).toHaveLength(3)
+        expect(dataRows()).toHaveLength(4)
         expect(
             screen.queryByRole('navigation', { name: 'Pagination' }),
         ).not.toBeInTheDocument()
@@ -580,7 +567,7 @@ describe('when the breakdown holds more groups than were read', () => {
         mockQuietApi()
         await open()
 
-        expect(dataRows()).toHaveLength(3)
+        expect(dataRows()).toHaveLength(4)
         expect(
             screen.queryByText('Only part of the usage was read'),
         ).not.toBeInTheDocument()
@@ -706,7 +693,7 @@ describe('when the breakdown cannot be loaded', () => {
         retry.resolve(new Response(JSON.stringify(breakdownFor('?by=model'))))
         await rowsLoaded()
 
-        expect(dataRows()).toHaveLength(3)
+        expect(dataRows()).toHaveLength(4)
         expect(
             screen.getByRole('heading', { level: 1, name: 'Usage & cost' }),
         ).toHaveFocus()

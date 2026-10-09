@@ -369,6 +369,9 @@ export type AgentBreakdownResponse = {
     }
 }
 
+/** An intersection written out as one object type. */
+type Flat<T> = { [K in keyof T]: T[K] }
+
 /** How many of a set of steps could be priced: the steps that reported usage, and those that had no rate. */
 export type UsageRowCoverage = {
     reported_steps: number
@@ -378,7 +381,7 @@ export type UsageRowCoverage = {
 }
 
 /** What the steps of a range add up to, beyond the summary of its runs. */
-export type UsageCoverage = UsageRowCoverage & { steps: number }
+export type UsageCoverage = Flat<UsageRowCoverage & { steps: number }>
 
 /** The usage page's totals: the summary of the range's runs, and how much of its usage was priced. */
 export type UsageResponse = {
@@ -397,14 +400,13 @@ type UsageRowFigures = {
     filters: Record<string, string>
 }
 
-export type UsageModelRow = UsageRowFigures & {
-    provider: string
-    model: string
-}
+export type UsageModelRow = Flat<
+    UsageRowFigures & { provider: string; model: string }
+>
 
-export type UsageAgentRow = UsageRowFigures & { agent: string }
+export type UsageAgentRow = Flat<UsageRowFigures & { agent: string }>
 
-export type UsageProviderRow = UsageRowFigures & { provider: string }
+export type UsageProviderRow = Flat<UsageRowFigures & { provider: string }>
 
 export type UsageBreakdownRow = UsageModelRow | UsageAgentRow | UsageProviderRow
 
@@ -416,12 +418,10 @@ type UsageBreakdownBase = {
 }
 
 /** The usage of a range grouped by model, top-level agent or provider; `by` says which. */
-export type UsageBreakdownResponse = UsageBreakdownBase &
-    (
-        | { by: 'model'; data: UsageModelRow[] }
-        | { by: 'agent'; data: UsageAgentRow[] }
-        | { by: 'provider'; data: UsageProviderRow[] }
-    )
+export type UsageBreakdownResponse =
+    | Flat<UsageBreakdownBase & { by: 'model'; data: UsageModelRow[] }>
+    | Flat<UsageBreakdownBase & { by: 'agent'; data: UsageAgentRow[] }>
+    | Flat<UsageBreakdownBase & { by: 'provider'; data: UsageProviderRow[] }>
 
 /** The answer to a bookmark write: the run's bookmark state after it. */
 export type BookmarkResponse = {

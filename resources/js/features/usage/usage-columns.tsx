@@ -53,7 +53,7 @@ const numeric = (id: string, header: string, hideBelow?: 'xs' | 'md') => ({
 
 // The columns are dropped so the table does not have to scroll sideways at a width the page offers
 // it: the sidebar takes a fifth of the width from 961 pixels up, so the token columns that say
-// least wait for the roomier breakpoints, and a phone keeps the name, the runs and the cost.
+// least wait for the roomier breakpoints, and a phone keeps the name, the runs, the tokens (whose sort needs a header) and the cost.
 //
 // The id of a sortable column is the API's name for the field it sorts by (see `toApiSort` in
 // lib/table-sort.ts). The server sorts, so the accessors only make the column sortable.
@@ -118,7 +118,7 @@ export function usageColumns({
             cell: ({ row }) => formatCount(row.original.steps),
         },
         {
-            ...numeric('tokens', 'Tokens', 'xs'),
+            ...numeric('tokens', 'Tokens'),
             accessorFn: (row) => row.usage.total_tokens,
             enableSorting: true,
             cell: ({ row }) => (
@@ -126,12 +126,12 @@ export function usageColumns({
             ),
         },
         // Input and output are always drawn: a count that was not reported says so, in the cell.
-        count('input', 'Input tokens', (row) => row.usage.input_tokens, 'md'),
+        count('input', 'Input tokens', (row) => row.usage.input_tokens, 'xs'),
         count(
             'output',
             'Output tokens',
             (row) => row.usage.output_tokens,
-            'md',
+            'xs',
         ),
         ...(tokens.cacheRead
             ? [
