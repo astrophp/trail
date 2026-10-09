@@ -1,0 +1,29 @@
+{
+    "data": {
+        "provider": "anthropic",
+        "model": "claude-sonnet-4-5-20250929",
+        "rates": {
+            "input": 3.5,
+            "output": 16,
+            "cache_read": 0.35,
+            "cache_write": null
+        },
+        "source": "saved",
+        "via": null,
+        "default": {
+            "source": "prefix",
+            "via": {
+                "model": "claude-sonnet-4-5",
+                "saved": false
+            },
+            "rates": {
+                "input": 3,
+                "output": 15,
+                "cache_read": 0.3,
+                "cache_write": 3.75
+            }
+        },
+        "observed": true,
+        "saved_at": "2026-01-02T12:00:00.000Z"
+    }
+}

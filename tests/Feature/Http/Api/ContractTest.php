@@ -382,6 +382,29 @@ function overviewContractDataset(): void
 }
 
 /**
+ * Models of every kind the prices list tells apart: priced by config, by a saved price over config, by a
+ * saved price alone, through a shorter id, and not at all, observed or not.
+ */
+function priceContractDataset(): void
+{
+    config(['trail.pricing' => [
+        'anthropic' => ['claude-sonnet-4-5' => ['input' => 3.0, 'output' => 15.0, 'cache_read' => 0.3, 'cache_write' => 3.75]],
+        'openai' => [
+            'gpt-4o' => ['input' => 2.5, 'output' => 10.0, 'cache_read' => 1.25],
+            'gpt-5' => ['input' => 1.25, 'output' => 10.0, 'cache_read' => 0.125],
+        ],
+    ]]);
+
+    Rows::price(['provider' => 'openai', 'model' => 'gpt-5', 'input' => '1.000000', 'output' => '8.000000']);
+    Rows::price(['provider' => 'openai', 'model' => 'gpt-5-mini', 'input' => '0.250000', 'output' => '2.000000', 'cache_read' => '0.000000']);
+
+    $trace = Rows::trace(['id' => 'trace-prices', 'status' => Status::Completed, 'started_at' => '2026-01-02 11:00:00']);
+    foreach ([['anthropic', 'claude-sonnet-4-5'], ['anthropic', 'claude-sonnet-4-5-20250929'], ['openai', 'gpt-5-2025-08-07'], ['openai', 'mystery']] as $n => [$provider, $model]) {
+        Rows::span($trace, ['id' => "price-span-{$n}", 'provider' => $provider, 'model' => $model, 'started_at' => '2026-01-02 11:00:00']);
+    }
+}
+
+/**
  * Agents of every kind the agents endpoints tell apart: one with runs of its own in several states
  * and a period before the range, one that is both run and delegated to, one that is only delegated
  * to (once under a tool, once under the run's own span), and an embeddings run; with the steps and
@@ -540,6 +563,25 @@ it('sends the bookmark response the dashboard expects', function () {
     $response = $this->withSession(['_token' => 'token'])->putJson('/trail/api/traces/0199c2f4-6a1e-7c3b-9a55-0e8a4c1d2f30/bookmark', [], ['X-CSRF-TOKEN' => 'token']);
 
     assertContract('bookmark', $response->assertOk()->json());
+});
+
+it('sends the prices response the dashboard expects', function () {
+    priceContractDataset();
+
+    assertContract('prices', $this->getJson('/trail/api/prices')->assertOk()->json());
+});
+
+it('sends the saved price response the dashboard expects', function () {
+    priceContractDataset();
+
+    // The environment is "local", where the framework checks CSRF tokens even in tests.
+    $response = $this->withSession(['_token' => 'token'])->putJson(
+        '/trail/api/prices?provider=anthropic&model=claude-sonnet-4-5-20250929',
+        ['input' => 3.5, 'output' => 16, 'cache_read' => '0.35'],
+        ['X-CSRF-TOKEN' => 'token'],
+    );
+
+    assertContract('price', $response->assertOk()->json());
 });
 
 it('sends the neighbours response the dashboard expects', function () {

@@ -8,6 +8,8 @@ use Astro\Trail\Http\Controllers\Api\ConversationIndexController;
 use Astro\Trail\Http\Controllers\Api\ConversationTranscriptController;
 use Astro\Trail\Http\Controllers\Api\MetaController;
 use Astro\Trail\Http\Controllers\Api\OverviewController;
+use Astro\Trail\Http\Controllers\Api\PriceController;
+use Astro\Trail\Http\Controllers\Api\PriceIndexController;
 use Astro\Trail\Http\Controllers\Api\TraceBookmarkController;
 use Astro\Trail\Http\Controllers\Api\TraceExportController;
 use Astro\Trail\Http\Controllers\Api\TraceIndexController;
@@ -38,6 +40,11 @@ Route::prefix('api')->middleware([RespondWithJson::class, Authorize::class])->gr
     Route::get('traces/{id}/neighbours', TraceNeighboursController::class)->name('trail.api.traces.neighbours');
     Route::put('traces/{id}/bookmark', [TraceBookmarkController::class, 'store'])->name('trail.api.traces.bookmark.store');
     Route::delete('traces/{id}/bookmark', [TraceBookmarkController::class, 'destroy'])->name('trail.api.traces.bookmark.destroy');
+
+    // The model travels in the query: its id can hold any character, a slash among them.
+    Route::get('prices', PriceIndexController::class)->name('trail.api.prices.index');
+    Route::put('prices', [PriceController::class, 'update'])->name('trail.api.prices.update');
+    Route::delete('prices', [PriceController::class, 'destroy'])->name('trail.api.prices.destroy');
 
     // Every API endpoint is registered above this line. It keeps the whole /api space out of the
     // dashboard page, so an unknown API path answers a 404 rather than the page.
