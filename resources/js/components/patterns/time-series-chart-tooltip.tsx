@@ -55,6 +55,11 @@ export function TimeSeriesChartTooltip({
                 {model.series.map((series, index) => {
                     const value = row.values[index] ?? null
 
+                    // A series with nothing to say about this bucket has no row.
+                    if (row.applies[index] === false) {
+                        return null
+                    }
+
                     return (
                         <div
                             key={series.key}
