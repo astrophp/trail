@@ -14,7 +14,8 @@ type RefreshNoteProps = {
 
 /**
  * Says so when the figures on screen could not be brought up to date: a quiet line while asking
- * goes on or the last refresh failed, and a notice with the way to try again once it has stopped.
+ * goes on, a line with the way to try again when the last refresh failed and nothing will ask
+ * again, and a notice with the way to try again once asking has stopped.
  * Nothing when there is nothing to say.
  */
 export function RefreshNote({
@@ -44,14 +45,27 @@ export function RefreshNote({
         return null
     }
 
+    const trying = refreshing === 'retrying'
+
     return (
-        <p
+        <div
             data-slot="refresh-note"
-            className={cn('mb-3 text-caption text-muted-foreground', className)}
+            className={cn(
+                'mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-caption text-muted-foreground',
+                className,
+            )}
         >
-            {refreshing === 'retrying'
-                ? 'The last refresh failed; trying again.'
-                : 'The last refresh failed. What is shown is from before it.'}
-        </p>
+            <p>
+                {trying
+                    ? 'The last refresh failed; trying again.'
+                    : 'The last refresh failed. What is shown is from before it.'}
+            </p>
+            {/* Nothing asks again by itself unless the note says it is trying: then the way out is here. */}
+            {trying ? null : (
+                <Button variant="outline" size="xs" onClick={onRetry}>
+                    Try again
+                </Button>
+            )}
+        </div>
     )
 }

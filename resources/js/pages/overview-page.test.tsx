@@ -103,13 +103,18 @@ describe('the Overview page', () => {
         expect(at(firstRow)).toBeGreaterThan(at(viewData))
     })
 
-    it('puts the panels side by side from the width of the page, not of the window', async () => {
+    it('stacks the panels at the full width of the page, the chart first', async () => {
         await open()
-        const grid = screen
+        const activity = screen
             .getByRole('heading', { name: 'Trace activity' })
-            .closest('[data-slot="panel"]')?.parentElement as HTMLElement
+            .closest('[data-slot="panel"]') as HTMLElement
+        const attention = screen
+            .getByRole('heading', { name: 'Needs attention' })
+            .closest('[data-slot="panel"]') as HTMLElement
 
-        expect(grid.parentElement).toHaveClass('@container')
-        expect(grid).toHaveClass('@2xl:grid-cols-5', '@5xl:grid-cols-3')
+        expect(activity.parentElement).toBe(attention.parentElement)
+        expect(activity.parentElement).toHaveClass('flex-col')
+        expect(activity.className).not.toMatch(/col-span|grid-cols/)
+        expect(attention.className).not.toMatch(/col-span|col-start/)
     })
 })

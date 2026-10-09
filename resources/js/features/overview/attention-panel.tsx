@@ -1,3 +1,4 @@
+import { useEffect, useMemo } from 'react'
 import { ApiError } from '@/api/client'
 import { CountChip } from '@/components/patterns/count-chip'
 import { Panel } from '@/components/patterns/panel'
@@ -6,8 +7,8 @@ import { PanelEmpty } from '@/components/patterns/panel-empty'
 import { PanelError } from '@/components/patterns/panel-error'
 import { PanelHeader } from '@/components/patterns/panel-header'
 import { PanelLoading } from '@/components/patterns/panel-loading'
-import { RankedList } from '@/components/patterns/ranked-list'
-import { AttentionRow } from '@/features/overview/attention-row'
+import { AttentionCell } from '@/features/overview/attention-cell'
+import { readAttention, unreadable } from '@/features/overview/attention-items'
 import { RefreshNote } from '@/features/overview/refresh-note'
 import { useAttention } from '@/features/overview/use-attention'
 import { useOverviewStatus } from '@/features/overview/use-overview-status'
@@ -45,6 +46,22 @@ export function AttentionPanel({ className }: { className?: string }) {
     useFocusHandoff(failed || attention.refreshing === 'stopped')
 
     const items = data?.data
+    // The range the items were counted over: the previous one while the next loads.
+    const shown = data?.range.preset ?? range
+    const entries = useMemo(
+        () => (items === undefined ? [] : readAttention(items, shown)),
+        [items, shown],
+    )
+    const unreadableReport = unreadable(entries).join('\n')
+
+    useEffect(() => {
+        // A bug to fix, not a state of the data: say so once where a developer looks.
+        if (unreadableReport !== '' && import.meta.env.DEV) {
+            console.error(
+                `Trail could not show every item of what needs attention:\n${unreadableReport}`,
+            )
+        }
+    }, [unreadableReport])
     // The count in the header is the current answer's, never the previous range's.
     const count =
         !isPlaceholderData && items !== undefined && items.length > 0
@@ -75,9 +92,6 @@ export function AttentionPanel({ className }: { className?: string }) {
             return <PanelLoading rows={4} />
         }
 
-        // The range the items were counted over: the previous one while the next loads.
-        const shown = data.range.preset ?? range
-
         return (
             <>
                 <RefreshNote
@@ -95,15 +109,21 @@ export function AttentionPanel({ className }: { className?: string }) {
                     {data.data.length === 0 ? (
                         <PanelEmpty title="Nothing needs attention in this range" />
                     ) : (
-                        <RankedList>
-                            {data.data.map((item) => (
-                                <AttentionRow
-                                    key={item.kind}
-                                    item={item}
-                                    range={shown}
+                        // Cells keep the API's order, left to right and top to bottom.
+                        // Safari drops the list semantics of a list whose markers a reset removes.
+                        // eslint-disable-next-line jsx-a11y/no-redundant-roles
+                        <ul
+                            role="list"
+                            data-slot="attention-grid"
+                            className="grid gap-2 @2xl:grid-cols-2 @4xl:grid-cols-3"
+                        >
+                            {entries.map((entry, index) => (
+                                <AttentionCell
+                                    key={`${entry.kind}:${index}`}
+                                    entry={entry}
                                 />
                             ))}
-                        </RankedList>
+                        </ul>
                     )}
                 </div>
             </>
@@ -120,7 +140,6 @@ export function AttentionPanel({ className }: { className?: string }) {
             </span>
             <PanelHeader
                 title="Needs attention"
-                description="Runs in this range worth a look"
                 action={
                     count === undefined ? null : (
                         <span className="inline-flex items-center gap-1">
@@ -132,7 +151,7 @@ export function AttentionPanel({ className }: { className?: string }) {
                     )
                 }
             />
-            <PanelContent>{body()}</PanelContent>
+            <PanelContent className="@container">{body()}</PanelContent>
         </Panel>
     )
 }

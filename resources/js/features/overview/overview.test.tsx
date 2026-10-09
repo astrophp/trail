@@ -110,7 +110,7 @@ describe('the Overview page', () => {
         expect(valueOf('Traces')).toBe('32')
         expect(valueOf('Error rate')).toBe('3.6%')
         expect(valueOf('p95 duration')).toBe('1.90s')
-        expect(valueOf('Estimated cost')).toBe('Pending')
+        expect(valueOf('Estimated cost')).toMatch(/^\$0\.0335So far/)
         expect(
             within(metric('Error rate')).getByText('1 failed'),
         ).toBeInTheDocument()
@@ -770,5 +770,50 @@ describe('an empty range', () => {
                 notice.closest('[data-slot="notice"]') as HTMLElement,
             ).queryByText('Try a longer range.') !== null,
         ).toBe(suggests)
+    })
+})
+
+describe('a failed refresh when nothing will ask again', () => {
+    it('gives the strip a way to try again, and the note goes when it works', async () => {
+        let fail = false
+        const client = createQueryClient({ queries: { retry: false } })
+        const quiet = (url: string) => {
+            const base = overviewFor(url)
+
+            return {
+                ...base,
+                data: {
+                    ...base.data,
+                    summary: {
+                        ...base.data.summary,
+                        runs: runs({ completed: 32 }),
+                    },
+                },
+            }
+        }
+
+        mockApi((url) =>
+            fail ? json({ message: 'Down.' }, 500) : json(quiet(url)),
+        )
+        renderApp('/', {}, client)
+        await screen.findAllByText('vs previous 24 hours')
+
+        fail = true
+        await act(async () => {
+            await client.refetchQueries({ queryKey: ['overview', '24h'] })
+        })
+
+        await screen.findByText(
+            'The last refresh failed. What is shown is from before it.',
+        )
+        expect(valueOf('Traces')).toBe('32')
+
+        fail = false
+        await userEvent.click(screen.getByRole('button', { name: 'Try again' }))
+
+        await waitFor(() =>
+            expect(screen.queryByText(/The last refresh failed/)).toBeNull(),
+        )
+        expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull()
     })
 })

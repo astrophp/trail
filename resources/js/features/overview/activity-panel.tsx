@@ -16,6 +16,7 @@ import {
     costSeries,
     durationSeries,
     formatActivityValue,
+    missingLabels,
     volumeSeries,
 } from '@/features/overview/activity-series'
 import { bucketLabels } from '@/features/overview/bucket-labels'
@@ -60,96 +61,109 @@ export function ActivityPanel({ className }: { className?: string }) {
     const overview = useOverview(range)
     const { failed, loading } = useOverviewStatus(overview, range)
     const { data, isPlaceholderData } = overview
-    const timeZoneName = useBoot().timezone
-    const timeZone = resolveTimeZone(timeZoneName)
+    const timeZone = resolveTimeZone(useBoot().timezone)
 
     if (failed) {
         return null
     }
 
-    const header = (description?: string) => (
-        <PanelHeader
-            title="Trace activity"
-            description={description}
-            action={
-                <ActivityModeSwitch
-                    value={mode}
-                    onValueChange={(chart) => setView({ chart })}
-                />
-            }
-        />
-    )
+    const shown = data !== undefined && !loading ? data.data : undefined
+    const series = shown?.series
+    // One tree for the loading and the loaded panel, so the switch is never remounted: focus on it
+    // survives the data arriving.
+    const description =
+        series === undefined
+            ? undefined
+            : descriptions[mode](bucketSpans[series.bucket])
 
-    if (loading || data === undefined) {
-        return (
-            <Panel className={className}>
-                {header()}
-                <PanelContent>
-                    <PanelLoading rows={6} />
-                </PanelContent>
-            </Panel>
-        )
-    }
+    let body = <PanelLoading rows={6} />
 
-    const { summary, series } = data.data
-    const labels = bucketLabels(series.bucket, series.buckets, timeZone)
-    const buckets = chartBuckets(series.buckets)
-    const note = mode === 'cost' ? costCaveatNote(series.buckets) : null
-    const common = {
-        buckets,
-        ...labels,
-        formatValue: formatActivityValue,
-        missingLabel: 'Not captured',
-        summary: activitySummary(mode, summary, series.bucket),
-        emptyLabel:
-            summary.runs.all === 0 || mode === 'volume'
+    if (shown !== undefined && series !== undefined) {
+        const { summary } = shown
+        const labels = bucketLabels(series.bucket, series.buckets, timeZone)
+        const note = mode === 'cost' ? costCaveatNote(series.buckets) : null
+        // What an empty chart says claims only what is known: no runs, or no buckets to draw.
+        const emptyLabel =
+            summary.runs.all === 0
                 ? 'No runs in this range'
-                : missing[mode],
-        zeroLabel: zero[mode],
+                : series.buckets.length === 0 || mode === 'volume'
+                  ? 'No activity to draw'
+                  : missing[mode]
+        const common = {
+            buckets: chartBuckets(series.buckets),
+            ...labels,
+            formatValue: formatActivityValue,
+            missingLabel: missingLabels[mode],
+            summary: activitySummary(mode, summary, series.bucket),
+            emptyLabel,
+            zeroLabel: zero[mode],
+        }
+
+        body = (
+            // A container for the chart, which can take a second column beside it later.
+            <div data-slot="activity-content" className="grid gap-4">
+                <div className="flex min-w-0 flex-col gap-2">
+                    {mode === 'volume' ? (
+                        <TimeSeriesChart
+                            {...common}
+                            bars={volumeSeries(series.buckets)}
+                        />
+                    ) : (
+                        <TimeSeriesChart
+                            {...common}
+                            line={
+                                mode === 'duration'
+                                    ? durationSeries(series.buckets)
+                                    : costSeries(series.buckets)
+                            }
+                        />
+                    )}
+                    {note === null ? null : (
+                        <p
+                            data-slot="cost-caveat"
+                            className="text-caption text-muted-foreground"
+                        >
+                            {note}
+                        </p>
+                    )}
+                    <p className="text-caption text-muted-foreground">
+                        {timeZone === undefined
+                            ? 'Buckets are shown in your local time zone.'
+                            : `Buckets follow the application’s time zone (${timeZone}).`}
+                    </p>
+                </div>
+            </div>
+        )
     }
 
     return (
         <Panel className={className}>
             {/* Always mounted, so a change of its text is announced; outside the busy part, where it may be muted. */}
             <span role="status" className="sr-only">
-                {isPlaceholderData ? 'Loading the activity chart' : ''}
+                {isPlaceholderData && series !== undefined
+                    ? 'Loading the activity chart'
+                    : ''}
             </span>
-            {header(descriptions[mode](bucketSpans[series.bucket]))}
+            <PanelHeader
+                title="Trace activity"
+                description={description}
+                action={
+                    <ActivityModeSwitch
+                        value={mode}
+                        onValueChange={(chart) => setView({ chart })}
+                    />
+                }
+            />
             <PanelContent
-                aria-busy={isPlaceholderData || undefined}
+                aria-busy={
+                    isPlaceholderData && series !== undefined ? true : undefined
+                }
                 className={cn(
-                    'flex flex-col gap-2 motion-safe:transition-opacity',
-                    isPlaceholderData && 'opacity-60',
+                    'motion-safe:transition-opacity',
+                    isPlaceholderData && series !== undefined && 'opacity-60',
                 )}
             >
-                {mode === 'volume' ? (
-                    <TimeSeriesChart
-                        {...common}
-                        bars={volumeSeries(series.buckets)}
-                    />
-                ) : (
-                    <TimeSeriesChart
-                        {...common}
-                        line={
-                            mode === 'duration'
-                                ? durationSeries(series.buckets)
-                                : costSeries(series.buckets)
-                        }
-                    />
-                )}
-                {note === null ? null : (
-                    <p
-                        data-slot="cost-caveat"
-                        className="text-caption text-muted-foreground"
-                    >
-                        {note}
-                    </p>
-                )}
-                <p className="text-caption text-muted-foreground">
-                    {timeZone === undefined || timeZoneName === null
-                        ? 'Buckets follow the application’s time zone.'
-                        : `Buckets follow the application’s time zone (${timeZoneName}).`}
-                </p>
+                {body}
             </PanelContent>
         </Panel>
     )

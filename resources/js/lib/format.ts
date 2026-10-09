@@ -210,7 +210,7 @@ export function resolveTimeZone(
     return knownZones.get(timeZone)
 }
 
-type ZoneFormat = 'clock' | 'shortDate' | 'day' | 'dateTime'
+type ZoneFormat = 'clock' | 'hourMinute' | 'shortDate' | 'day' | 'dateTime'
 
 const zoneFormats: Record<ZoneFormat, Intl.DateTimeFormatOptions> = {
     clock: {
@@ -219,6 +219,7 @@ const zoneFormats: Record<ZoneFormat, Intl.DateTimeFormatOptions> = {
         second: '2-digit',
         hourCycle: 'h23',
     },
+    hourMinute: { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' },
     shortDate: { month: 'short', day: 'numeric' },
     day: { year: 'numeric', month: 'numeric', day: 'numeric' },
     // `shortOffset` reads the same for every zone: `GMT+3`, `GMT-4`, `GMT`.
@@ -258,6 +259,14 @@ export function formatClockTime(
     timeZone: string | undefined,
 ): string {
     return zoneFormatter('clock', timeZone).format(at)
+}
+
+/** The time of day, 24-hour without seconds: `14:03`. */
+export function formatHoursAndMinutes(
+    at: Date,
+    timeZone: string | undefined,
+): string {
+    return zoneFormatter('hourMinute', timeZone).format(at)
 }
 
 /** The day without a year: `Oct 7`. */

@@ -81,26 +81,29 @@ export function costSeries(buckets: SeriesBucket[]): ChartSeries {
     }
 }
 
-/** How many buckets carry an amount that is not final. */
+/** How many buckets carry an amount that is not final, and how many have none for want of a price. */
 export function costCaveats(buckets: SeriesBucket[]): {
     partial: number
     pending: number
+    unpriced: number
 } {
+    const count = (state: SeriesBucket['cost']['state']) =>
+        buckets.filter((bucket) => bucket.cost.state === state).length
+
     return {
-        partial: buckets.filter((bucket) => bucket.cost.state === 'partial')
-            .length,
-        pending: buckets.filter((bucket) => bucket.cost.state === 'pending')
-            .length,
+        partial: count('partial'),
+        pending: count('pending'),
+        unpriced: count('unpriced'),
     }
 }
 
 const plural = (count: number, one: string, many: string) =>
     `${formatCount(count)} ${count === 1 ? one : many}`
 
-/** The line under the chart that says amounts are not final, or `null` when they are. */
+/** The line under the chart about amounts that are not final or are missing, or `null` when there is nothing to say. */
 export function costCaveatNote(buckets: SeriesBucket[]): string | null {
-    const { partial, pending } = costCaveats(buckets)
-    const clauses = [
+    const { partial, pending, unpriced } = costCaveats(buckets)
+    const notFinal = [
         partial > 0
             ? `${plural(partial, 'interval is', 'intervals are')} partly priced`
             : null,
@@ -108,10 +111,16 @@ export function costCaveatNote(buckets: SeriesBucket[]): string | null {
             ? `${plural(pending, 'interval is', 'intervals are')} still pending`
             : null,
     ].filter((clause) => clause !== null)
+    const sentences = [
+        notFinal.length === 0
+            ? null
+            : `Amounts are not final: ${notFinal.join(' and ')}.`,
+        unpriced > 0
+            ? `${plural(unpriced, 'interval has', 'intervals have')} no amount because ${unpriced === 1 ? 'its' : 'their'} usage could not be priced.`
+            : null,
+    ].filter((sentence) => sentence !== null)
 
-    return clauses.length === 0
-        ? null
-        : `Amounts are not final: ${clauses.join(' and ')}.`
+    return sentences.length === 0 ? null : sentences.join(' ')
 }
 
 /** What one bucket is called in a sentence. */
@@ -145,10 +154,21 @@ export function activitySummary(
     }
 
     if (mode === 'duration') {
-        return `${seriesLabels.duration} of the traces started in each ${bucket}. ${formatCount(summary.duration.measured)} of the ${all} in this range have a measured duration; a ${bucket} with none has no value.`
+        return `${seriesLabels.duration} of the traces started in each ${bucket}. ${formatCount(summary.duration.measured)} of the ${all} in this range have a measured duration; where none was measured there is no value.`
     }
 
-    return `${seriesLabels.cost} of the traces started in each ${bucket}. ${formatCount(summary.cost_coverage.unpriced_runs)} of the ${all} in this range have steps that could not be priced; a ${bucket} with no amount has no value.`
+    return `${seriesLabels.cost} of the traces started in each ${bucket}. ${formatCount(summary.cost_coverage.unpriced_runs)} of the ${all} in this range have steps that could not be priced; where there is no amount there is no value.`
+}
+
+/**
+ * What a bucket with no value reads in the table and the tooltip. One word per mode, true for
+ * every such bucket of it: a cost can be missing because it is unpriced, still pending or never
+ * reported, and a duration because no run of the bucket finished with one.
+ */
+export const missingLabels: Record<ActivityMode, string> = {
+    volume: 'No count',
+    duration: 'No measured runs',
+    cost: 'No amount',
 }
 
 /** A value of the chart as text; each series says which formatter it needs. */

@@ -5,11 +5,14 @@ import type {
     AttentionItem,
     AttentionKind,
     AttentionResponse,
+    IssueKind,
 } from '@/api/types'
 import { forgetAttentionRefreshFailures } from '@/features/overview/use-attention'
 import { forgetOverviewRefreshFailures } from '@/features/overview/use-overview'
+import type { TimeRangePreset } from '@/lib/time-range'
 import { maxFailedRefreshes, refreshEvery } from '@/lib/refresh-policy'
-import { renderApp } from '@/test/render-app'
+import { overviewKeys } from '@/api/overview'
+import { renderApp, testQueryClient } from '@/test/render-app'
 import {
     attentionFixture,
     attentionFor,
@@ -63,6 +66,13 @@ const answer =
         return json({ ...base, data: items })
     }
 
+/** The attention fixture answering for `preset` whatever range was asked for. */
+const fixedRange = (preset: TimeRangePreset) => () =>
+    json({
+        ...attentionFixture,
+        range: { ...attentionFixture.range, preset },
+    })
+
 /** The panel, found by its heading. */
 async function panel(): Promise<HTMLElement> {
     const heading = await screen.findByRole('heading', {
@@ -91,7 +101,7 @@ async function open(route = '/') {
 }
 
 const rowsOf = (of: HTMLElement) =>
-    [...of.querySelectorAll('[data-slot="attention-row"]')] as HTMLElement[]
+    [...of.querySelectorAll('[data-slot="attention-cell"]')] as HTMLElement[]
 
 const titleOf = (row: HTMLElement) =>
     row.querySelector('[data-slot="row-link"]')?.textContent
@@ -183,7 +193,15 @@ describe('the list', () => {
         const time = rowTitled(of, 'Failed runs').querySelector('time')
 
         expect(time).toHaveAttribute('datetime', '2026-01-02T10:20:00.000Z')
-        expect(time).toHaveTextContent('Jan 2 · 10:20:00')
+        // How long ago in words; the whole date and time are on hover and for assistive technology.
+        expect(time).toHaveAttribute('title', 'Jan 2, 2026, 10:20:00 GMT')
+        expect(time).toHaveTextContent('Jan 2, 2026, 10:20:00 GMT')
+        expect(time?.querySelector('[aria-hidden="true"]')).toHaveTextContent(
+            /\d+d ago$/,
+        )
+        expect(time?.closest('p')?.textContent).toMatch(
+            /^2 failed · latest .+ ago/,
+        )
     })
 
     it('draws no time for an item whose latest start could not be read', async () => {
@@ -199,11 +217,11 @@ describe('the list', () => {
         const [unread, read] = rowsOf(of)
 
         expect(unread?.querySelector('time')).toBeNull()
-        expect(unread).not.toHaveTextContent(/Latest run/)
+        expect(unread).not.toHaveTextContent(/latest/)
         expect(unread).toHaveTextContent('2 stopped without finishing')
         // The same row with a time does draw it.
         expect(read?.querySelector('time')).not.toBeNull()
-        expect(read).toHaveTextContent(/Latest run/)
+        expect(read).toHaveTextContent(/ · latest /)
     })
 
     it('describes each link by its words, so the title alone is the link text', async () => {
@@ -221,8 +239,9 @@ describe('the list', () => {
 
 describe('the links', () => {
     it('open the traces list over the item filters and the range, for every kind', async () => {
-        mockApi()
-        const of = await open('/?range=7d')
+        // The list says 7d whatever the address asked for: the links follow the list.
+        mockApi(undefined, undefined, fixedRange('7d'))
+        const of = await open('/?range=1h')
 
         expect(
             Object.fromEntries(
@@ -241,8 +260,8 @@ describe('the links', () => {
     })
 
     it('leave the default range out, as the list does', async () => {
-        mockApi()
-        const of = await open()
+        mockApi(undefined, undefined, fixedRange('24h'))
+        const of = await open('/?range=7d')
 
         expect(hrefOf(rowTitled(of, 'Sub-agent failed'))).toBe(
             '/trail/traces?status=completed&child_failed=1',
@@ -251,15 +270,14 @@ describe('the links', () => {
 
     it('carry the range of the list on screen, not the one the address is ahead with', async () => {
         const next = deferred()
+        // Asked for the last hour, the list answers for 24 hours: its links say 24 hours.
         mockApi(undefined, undefined, (url) =>
-            paramsOf(url).range === '7d'
-                ? next.promise
-                : json(attentionFor(url)),
+            paramsOf(url).range === '7d' ? next.promise : fixedRange('24h')(),
         )
         const of = await open('/?range=1h')
 
         expect(hrefOf(rowTitled(of, 'Failed runs'))).toBe(
-            '/trail/traces?range=1h&status=failed',
+            '/trail/traces?status=failed',
         )
 
         await userEvent.click(
@@ -270,14 +288,14 @@ describe('the links', () => {
         )
         await waitFor(() => expect(window.location.search).toBe('?range=7d'))
 
-        // The list of the last hour is still on screen, and it still links to the last hour.
+        // The list on screen is still the one counted over 24 hours, and its links say so: not 1h, not 7d.
         expect(of.querySelector('[aria-busy="true"]')).not.toBeNull()
         expect(hrefOf(rowTitled(of, 'Failed runs'))).toBe(
-            '/trail/traces?range=1h&status=failed',
+            '/trail/traces?status=failed',
         )
         expect(
-            [...of.querySelectorAll('a')].every((link) =>
-                link.getAttribute('href')?.includes('range=1h'),
+            [...of.querySelectorAll('a')].every(
+                (link) => !link.getAttribute('href')?.includes('range='),
             ),
         ).toBe(true)
 
@@ -295,8 +313,8 @@ describe('the links', () => {
 
 describe('the issue kinds of failed runs', () => {
     it('are links of their own under the row, each with its count and the item filters', async () => {
-        mockApi()
-        const of = await open('/?range=7d')
+        mockApi(undefined, undefined, fixedRange('7d'))
+        const of = await open('/?range=1h')
         const list = within(rowTitled(of, 'Failed runs')).getByRole('list', {
             name: 'Failed runs by issue',
         })
@@ -306,11 +324,11 @@ describe('the issue kinds of failed runs', () => {
             links.map((link) => [link.textContent, link.getAttribute('href')]),
         ).toEqual([
             [
-                'Rate limited1',
+                'Rate limited1, 1 failed',
                 '/trail/traces?range=7d&status=failed&issue_kind=rate_limited',
             ],
             [
-                'Exception1',
+                'Exception1, 1 failed',
                 '/trail/traces?range=7d&status=failed&issue_kind=exception',
             ],
         ])
@@ -318,6 +336,12 @@ describe('the issue kinds of failed runs', () => {
             'LI',
             'LI',
         ])
+        // The name of each says what its number counts.
+        expect(
+            within(list).getByRole('link', { name: 'Rate limited, 1 failed' }),
+        ).toBeVisible()
+        // Safari drops the semantics of a list a reset styled: it says so itself.
+        expect(list).toHaveAttribute('role', 'list')
     })
 
     it('are not drawn for the other kinds', async () => {
@@ -356,7 +380,7 @@ describe('the issue kinds of failed runs', () => {
         expect(within(row).getAllByRole('link')).toHaveLength(3)
         // Two issue kinds, 6 and 4: no 10 for them together, no 3 for what is left over.
         expect(within(row).getByRole('list').textContent).toBe(
-            'Rate limited6Exception4',
+            'Rate limited6, 6 failedException4, 4 failed',
         )
     })
 
@@ -694,7 +718,6 @@ describe('refreshing', () => {
         await within(of).findByText(
             'Refreshing stopped after repeated failures.',
             {},
-            { timeout: 4000 },
         )
 
         const asked = attentionUrls(fetchMock).length
@@ -736,5 +759,302 @@ describe('the overview it follows', () => {
         expect(
             attentionUrls(fetchMock).map((url) => paramsOf(url).range),
         ).toEqual(['1h'])
+    })
+})
+
+describe('an item that cannot be shown', () => {
+    const good = () => item('incomplete')
+    const failed = item('failed')
+
+    const cases: [string, AttentionItem[], string][] = [
+        [
+            'a kind it has no words for',
+            [
+                {
+                    ...item('unpriced'),
+                    kind: 'mystery' as AttentionKind,
+                    count: 7,
+                },
+                good(),
+            ],
+            'mystery',
+        ],
+        [
+            'a filter the traces list does not keep in its address',
+            [
+                { ...item('recovered'), filters: { streamed: '1' }, count: 7 },
+                good(),
+            ],
+            'recovered',
+        ],
+        [
+            'a value the traces list does not read for its filter',
+            [
+                {
+                    ...item('unpriced'),
+                    filters: { unpriced: 'true' },
+                    count: 7,
+                },
+                good(),
+            ],
+            'unpriced',
+        ],
+    ]
+
+    it.each(cases)(
+        'is drawn as a cell that says so, with its count and no link, for %s, and the rest stays',
+        async (_name, items, shownKind) => {
+            const report = vi
+                .spyOn(console, 'error')
+                .mockImplementation(() => {})
+
+            mockApi(undefined, undefined, answer(items))
+            const of = await open()
+            const bad = of.querySelector(
+                '[data-slot="attention-cell"][data-readable="false"]',
+            ) as HTMLElement
+
+            expect(bad).toHaveTextContent(shownKind)
+            expect(bad).toHaveTextContent('7 · This item could not be shown.')
+            expect(within(bad).queryByRole('link')).toBeNull()
+            // The rest of the list, the strip and the chart are where they were.
+            expect(
+                within(of).getByRole('link', { name: 'Incomplete runs' }),
+            ).toHaveAttribute('href', '/trail/traces?status=incomplete')
+            expect(
+                screen.getByRole('heading', { name: 'Trace activity' }),
+            ).toBeVisible()
+            expect(
+                document.querySelector('[data-slot="metric-strip"]'),
+            ).not.toBeNull()
+            expect(screen.queryByRole('alert')).toBeNull()
+            // Said once, for a developer.
+            expect(
+                report.mock.calls.filter(([text]) =>
+                    String(text).includes('could not show every item'),
+                ),
+            ).toHaveLength(1)
+
+            report.mockRestore()
+        },
+    )
+
+    it('keeps the issue kinds it can read, and shows one it cannot as plain text, in a failed item', async () => {
+        const report = vi.spyOn(console, 'error').mockImplementation(() => {})
+        const rows = failed.breakdown
+
+        mockApi(
+            undefined,
+            undefined,
+            answer([
+                {
+                    ...failed,
+                    breakdown: [
+                        {
+                            ...rows[0],
+                            issue_kind: 'cosmic' as IssueKind,
+                            count: 9,
+                        },
+                        rows[1],
+                    ],
+                },
+                good(),
+            ]),
+        )
+        const of = await open()
+        const cell = rowTitled(of, 'Failed runs')
+        const list = within(cell).getByRole('list')
+
+        expect(
+            within(list)
+                .getAllByRole('link')
+                .map((link) => link.getAttribute('href')),
+        ).toEqual(['/trail/traces?status=failed&issue_kind=exception'])
+        expect(list).toHaveTextContent('cosmic9')
+        expect(
+            within(cell).getByRole('link', { name: 'Failed runs' }),
+        ).toBeVisible()
+        expect(rowsOf(of)).toHaveLength(2)
+        expect(report).toHaveBeenCalledTimes(1)
+
+        report.mockRestore()
+    })
+
+    it('is not reported when everything can be shown', async () => {
+        const report = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+        mockApi()
+        await open()
+
+        expect(report).not.toHaveBeenCalled()
+        expect(document.querySelector('[data-readable="false"]')).toBeNull()
+
+        report.mockRestore()
+    })
+})
+
+describe('the compact cells', () => {
+    it('are one list in a grid whose columns follow the width of the panel, not of the window', async () => {
+        mockApi()
+        const of = await open()
+        const grid = of.querySelector('[data-slot="attention-grid"]')
+
+        expect(grid).toHaveAttribute('role', 'list')
+        expect(grid).toHaveClass('@2xl:grid-cols-2', '@4xl:grid-cols-3')
+        expect(grid?.closest('[data-slot="panel-content"]')).toHaveClass(
+            '@container',
+        )
+        expect(grid?.className).not.toMatch(/\b(sm|md|lg|xl):/)
+        expect(rowsOf(of)).toHaveLength(6)
+    })
+
+    it('have the title and one line: the count wording and how long ago the latest run began', async () => {
+        mockApi()
+        const of = await open()
+        const cell = rowTitled(of, 'Unpriced usage')
+
+        expect(cell.querySelectorAll('p')).toHaveLength(1)
+        expect(cell.querySelector('p')?.textContent).toMatch(
+            /^2 with steps that could not be priced · latest .*ago/,
+        )
+    })
+
+    it('say no date for a run that began seconds ago', async () => {
+        const seconds = new Date(Date.now() - 12_000).toISOString()
+
+        mockApi(
+            undefined,
+            undefined,
+            answer([{ ...item('incomplete'), latest_at: seconds }]),
+        )
+        const of = await open()
+        const time = rowsOf(of)[0]?.querySelector('time')
+
+        expect(
+            time?.querySelector('[aria-hidden="true"]')?.textContent,
+        ).toMatch(/^\d+s ago$/)
+    })
+
+    it('keep fixed columns, so one item is one cell wide and the rest of the row is empty', async () => {
+        mockApi(undefined, undefined, answer([item('recovered')]))
+        const of = await open()
+        const grid = of.querySelector('[data-slot="attention-grid"]')
+
+        expect(rowsOf(of)).toHaveLength(1)
+        expect(grid?.className).not.toMatch(/auto-fit|auto-fill/)
+        expect(grid).toHaveClass('@4xl:grid-cols-3')
+    })
+})
+
+describe('the list after the overview', () => {
+    const fakeInterval = () =>
+        vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })
+
+    async function tick() {
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(refreshEvery)
+        })
+    }
+
+    it('takes the answer of its last trigger even when an earlier request is still in flight', async () => {
+        fakeInterval()
+        const slow = deferred()
+        let overview = overviewFixture
+        let asked = 0
+
+        mockApi(
+            () => json(overview),
+            undefined,
+            (url) => {
+                asked += 1
+
+                if (asked === 2) {
+                    return slow.promise
+                }
+
+                return asked === 1
+                    ? json(attentionFor(url))
+                    : answer([item('recovered')])(url)
+            },
+        )
+        const of = await open()
+
+        // The overview is asked again; the list's request for it is slower than the next poll.
+        await tick()
+        overview = overviewWith({ runs: runs({ completed: 32 }) })
+        // The overview's last answer: nothing is running any more. The list asks once more.
+        await tick()
+        await waitFor(() => expect(asked).toBe(3))
+        await waitFor(() =>
+            expect(rowsOf(of).map(titleOf)).toEqual(['Recovered by failover']),
+        )
+
+        // The slow one arrives late, with an older list, and is not the answer.
+        slow.resolve(await json(attentionFixture))
+        await tick()
+        await tick()
+
+        expect(rowsOf(of).map(titleOf)).toEqual(['Recovered by failover'])
+        expect(asked).toBe(3)
+    })
+
+    it('gives a way to try again when the last refresh failed and nothing will ask by itself', async () => {
+        let fail = false
+        const client = testQueryClient()
+
+        mockApi(
+            () => json(overviewWith({ runs: runs({ completed: 32 }) })),
+            undefined,
+            (url) =>
+                fail
+                    ? json({ message: 'Down.' }, 500)
+                    : json(attentionFor(url)),
+        )
+        renderApp('/', {}, client)
+        const of = await panel()
+
+        await waitFor(() => expect(rowsOf(of)).toHaveLength(6))
+
+        fail = true
+        await act(async () => {
+            await client.refetchQueries({
+                queryKey: overviewKeys.attention('24h'),
+            })
+        })
+
+        await within(of).findByText(
+            'The last refresh failed. What is shown is from before it.',
+        )
+        expect(rowsOf(of)).toHaveLength(6)
+
+        fail = false
+        await userEvent.click(
+            within(of).getByRole('button', { name: 'Try again' }),
+        )
+
+        await waitFor(() =>
+            expect(
+                within(of).queryByText(/The last refresh failed/),
+            ).toBeNull(),
+        )
+        expect(rowsOf(of)).toHaveLength(6)
+    })
+
+    it('offers no button while it is trying again by itself', async () => {
+        fakeInterval()
+        let fail = false
+
+        mockApi(undefined, undefined, (url) =>
+            fail ? json({ message: 'Down.' }, 500) : json(attentionFor(url)),
+        )
+        const of = await open()
+
+        fail = true
+        await tick()
+
+        await within(of).findByText('The last refresh failed; trying again.')
+        expect(
+            within(of).queryByRole('button', { name: 'Try again' }),
+        ).toBeNull()
     })
 })

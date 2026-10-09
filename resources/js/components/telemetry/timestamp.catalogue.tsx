@@ -30,6 +30,12 @@ export const catalogue: CatalogueEntry = {
             ),
         },
         {
+            name: 'Only how long ago, the date and time on hover',
+            Component: () => (
+                <Timestamp at={ago(43)} now={now} layout="relative" />
+            ),
+        },
+        {
             name: 'Full date and time on one line',
             Component: () => (
                 <Timestamp at={ago(5 * 60)} now={now} layout="full" />

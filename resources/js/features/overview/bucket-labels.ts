@@ -1,10 +1,21 @@
 import type { BucketUnit, SeriesBucket } from '@/api/types'
 import type { ChartBucket } from '@/components/patterns/time-series-chart'
-import { formatClockTime, formatShortDate, isSameDay } from '@/lib/format'
+import {
+    formatClockTime,
+    formatDuration,
+    formatHoursAndMinutes,
+    formatShortDate,
+    isSameDay,
+} from '@/lib/format'
 
-/** `14:05`: the clock time without its seconds, which no bucket edge has. */
-const clock = (at: Date, timeZone: string | undefined) =>
-    formatClockTime(at, timeZone).slice(0, 5)
+const clock = formatHoursAndMinutes
+
+/** How long a bucket of each unit is, unless the clock was changed inside it. */
+const nominalLength: Record<BucketUnit, number> = {
+    '5m': 300_000,
+    hour: 3_600_000,
+    day: 86_400_000,
+}
 
 /**
  * The words for the buckets of a series, in the application's time zone, which is the zone the
@@ -49,13 +60,20 @@ export function bucketLabels(
                     : clock(at, timeZone)
             const span = `${edge(bucket.from)}–${edge(bucket.to)}`
 
+            const full = byKey.get(bucket.key)?.full === true
+            const length = bucket.to.getTime() - bucket.from.getTime()
+            // A whole bucket that is not as long as its unit is one a clock change touched: the
+            // repeated hour is one bucket of two hours, a day is 23 or 25 hours. Say how long.
+            const odd =
+                full && length !== nominalLength[unit]
+                    ? ` (${formatDuration(length)})`
+                    : ''
+
             if (unit === 'day') {
-                return byKey.get(bucket.key)?.full === false
-                    ? `${date}, ${span}`
-                    : date
+                return full ? `${date}${odd}` : `${date}, ${span}`
             }
 
-            return crossesMidnight ? `${date}, ${span}` : span
+            return `${crossesMidnight ? `${date}, ${span}` : span}${odd}`
         },
     }
 }

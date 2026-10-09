@@ -315,7 +315,7 @@ describe('the Estimated cost metric', () => {
     })
 
     it.each<[Cost, string]>([
-        [{ state: 'pending', amount: 0.033452 }, 'Pending'],
+        [{ state: 'pending', amount: null }, 'Pending'],
         [{ state: 'unpriced', amount: null }, 'Unpriced'],
         [{ state: 'not_captured', amount: null }, 'Not captured'],
     ])('shows %j in words, with no amount', (state, words) => {
@@ -323,6 +323,16 @@ describe('the Estimated cost metric', () => {
 
         expect(metric.value).toBe(words)
         expect(metric.text).not.toMatch(/\$/)
+    })
+
+    it('shows the amount so far of a range with runs still running, tagged So far', () => {
+        const metric = cost({
+            summary: withCost({ state: 'pending', amount: 0.033452 }),
+        })
+
+        expect(metric.within.getByText('$0.0335')).toBeInTheDocument()
+        expect(metric.within.getByText(/^So far/)).toBeInTheDocument()
+        expect(metric.text).not.toMatch(/Pending/)
     })
 
     it('counts the unpriced runs, in the singular for one', () => {

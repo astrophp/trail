@@ -80,7 +80,9 @@ export function useAttention(range: TimeRangePreset) {
             return
         }
 
-        void refetch({ cancelRefetch: false })
+        // The latest trigger wins: an earlier request still in flight is cancelled, since the
+        // answer it would bring is older than the overview's.
+        void refetch({ cancelRefetch: true })
     }, [range, dataUpdatedAt, overviewIsPlaceholder, hasList, mayAsk, refetch])
 
     return {

@@ -121,6 +121,48 @@ describe('bucketLabels in the application zone', () => {
         ])
     })
 
+    it('says how long an hour bucket is when the clock was set back inside it', () => {
+        // 2026-11-01 in New York: 01:00 happens twice. The API returns one bucket for both passes.
+        const { formatBucket } = bucketLabels(
+            'hour',
+            [
+                bucket('2026-11-01T05:00:00.000Z', '2026-11-01T07:00:00.000Z'),
+                bucket('2026-11-01T07:00:00.000Z', '2026-11-01T08:00:00.000Z'),
+            ],
+            'America/New_York',
+        )
+        const [merged, next] = chartBuckets([
+            bucket('2026-11-01T05:00:00.000Z', '2026-11-01T07:00:00.000Z'),
+            bucket('2026-11-01T07:00:00.000Z', '2026-11-01T08:00:00.000Z'),
+        ])
+
+        expect(formatBucket(merged)).toBe('01:00–02:00 (2h 00m)')
+        expect(formatBucket(next)).toBe('02:00–03:00')
+    })
+
+    it('says how long a day is when the clock changed in it, and nothing for an ordinary day', () => {
+        const buckets = [
+            // 2026-11-01 in New York is 25 hours long; 2026-03-08 is 23.
+            bucket('2026-11-01T04:00:00.000Z', '2026-11-02T05:00:00.000Z'),
+            bucket('2026-11-02T05:00:00.000Z', '2026-11-03T05:00:00.000Z'),
+        ]
+        const short = [
+            bucket('2026-03-08T05:00:00.000Z', '2026-03-09T04:00:00.000Z'),
+        ]
+        const label = (list: SeriesBucket[]) => {
+            const { formatBucket } = bucketLabels(
+                'day',
+                list,
+                'America/New_York',
+            )
+
+            return chartBuckets(list).map(formatBucket)
+        }
+
+        expect(label(buckets)).toEqual(['Nov 1 (25h 00m)', 'Nov 2'])
+        expect(label(short)).toEqual(['Mar 8 (23h 00m)'])
+    })
+
     it('has nothing to label without buckets', () => {
         expect(labelsOf('hour', [])).toEqual([])
     })

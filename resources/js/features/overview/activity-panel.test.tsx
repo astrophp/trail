@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { act, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { forgetAttentionRefreshFailures } from '@/features/overview/use-attention'
@@ -180,7 +180,7 @@ describe('the volume view', () => {
         expect(
             rows(table).every((row) => row.slice(1).join() === '0,0,0'),
         ).toBe(true)
-        expect(within(table).queryByText('Not captured')).toBeNull()
+        expect(within(table).queryByText('No count')).toBeNull()
     })
 
     it('does not say a range has no runs when it has', async () => {
@@ -209,9 +209,9 @@ describe('the duration view', () => {
         const table = await showData(await open('/?chart=duration'))
 
         // Two runs, none of them measured: the average is absent, not 0 ms.
-        expect(rowAt(table, 'Jan 2, 05:00–06:00')?.[1]).toBe('Not captured')
+        expect(rowAt(table, 'Jan 2, 05:00–06:00')?.[1]).toBe('No measured runs')
         expect(
-            rows(table).filter((row) => row[1] === 'Not captured'),
+            rows(table).filter((row) => row[1] === 'No measured runs'),
         ).toHaveLength(21)
         expect(within(table).queryByText(/^(0 ms|<1 ms)$/)).toBeNull()
     })
@@ -293,7 +293,7 @@ describe('the cost view', () => {
         const table = await showData(await open('/?chart=cost'))
 
         expect(rows(table)).toEqual([
-            ['09:00–10:00', 'Not captured'],
+            ['09:00–10:00', 'No amount'],
             ['10:00–11:00', '$12.50'],
         ])
     })
@@ -381,6 +381,151 @@ describe('the cost view', () => {
             within(of).getByText('No cost could be priced in this range'),
         ).toBeVisible()
         expect(within(of).queryByText(/Amounts are not final/)).toBeNull()
+    })
+})
+
+describe('the words for a value that is missing', () => {
+    it('name no cause in Cost, where unpriced, pending and unreported buckets all have no amount', async () => {
+        mockApi(() =>
+            json(
+                overviewWithSeries([
+                    seriesBucket(
+                        '2026-01-02T08:00:00.000Z',
+                        '2026-01-02T09:00:00.000Z',
+                        {
+                            runs: runs({ completed: 1 }),
+                            cost: { state: 'unpriced', amount: null },
+                        },
+                    ),
+                    seriesBucket(
+                        '2026-01-02T09:00:00.000Z',
+                        '2026-01-02T10:00:00.000Z',
+                        {
+                            runs: runs({ running: 1 }),
+                            cost: { state: 'pending', amount: null },
+                        },
+                    ),
+                    seriesBucket(
+                        '2026-01-02T10:00:00.000Z',
+                        '2026-01-02T11:00:00.000Z',
+                        {
+                            runs: runs({ completed: 1 }),
+                            cost: { state: 'not_captured', amount: null },
+                        },
+                    ),
+                    seriesBucket(
+                        '2026-01-02T11:00:00.000Z',
+                        '2026-01-02T12:00:00.000Z',
+                        {
+                            runs: runs({ completed: 1 }),
+                            cost: { state: 'estimated', amount: 2 },
+                        },
+                    ),
+                ]),
+            ),
+        )
+        const of = await open('/?chart=cost')
+        const table = await showData(of)
+
+        expect(rows(table).map((row) => row[1])).toEqual([
+            'No amount',
+            'No amount',
+            'No amount',
+            '$2.00',
+        ])
+        expect(table.textContent).not.toMatch(/Unpriced|Pending|Not captured/)
+        expect(
+            within(of).getByText(
+                'Amounts are not final: 1 interval is still pending. 1 interval has no amount because its usage could not be priced.',
+            ),
+        ).toBeVisible()
+    })
+
+    it('say how many are unpriced beside how many are partly priced and pending', async () => {
+        mockApi()
+        const of = await open('/?chart=cost')
+
+        expect(of.querySelector('[data-slot="cost-caveat"]')).toHaveTextContent(
+            'Amounts are not final: 1 interval is partly priced and 2 intervals are still pending.',
+        )
+        expect(
+            of.querySelector('[data-slot="cost-caveat"]'),
+        ).not.toHaveTextContent(/no amount because/)
+    })
+
+    it('name no cause in Duration, where a bucket of running runs has none either', async () => {
+        mockApi(() =>
+            json(
+                overviewWithSeries([
+                    seriesBucket(
+                        '2026-01-02T10:00:00.000Z',
+                        '2026-01-02T11:00:00.000Z',
+                        { runs: runs({ running: 2 }) },
+                    ),
+                    seriesBucket(
+                        '2026-01-02T11:00:00.000Z',
+                        '2026-01-02T12:00:00.000Z',
+                        {
+                            runs: runs({ completed: 1 }),
+                            duration: { average_ms: 250, measured: 1 },
+                        },
+                    ),
+                ]),
+            ),
+        )
+        const table = await showData(await open('/?chart=duration'))
+
+        expect(rows(table).map((row) => row[1])).toEqual([
+            'No measured runs',
+            '250 ms',
+        ])
+    })
+})
+
+describe('an empty series', () => {
+    const noBuckets = (all: number) =>
+        mockApi(() =>
+            json(
+                overviewWithSeries([], 'hour', '24h', {
+                    runs: runs({ completed: all }),
+                }),
+            ),
+        )
+
+    it('claims nothing when the summary has runs but there is no bucket to draw', async () => {
+        noBuckets(5)
+        const of = await open()
+
+        expect(within(of).getByText('No activity to draw')).toBeVisible()
+        expect(within(of).queryByText('No runs in this range')).toBeNull()
+    })
+
+    it('says no runs when the summary has none', async () => {
+        noBuckets(0)
+        const of = await open()
+
+        expect(within(of).getByText('No runs in this range')).toBeVisible()
+        expect(within(of).queryByText('No activity to draw')).toBeNull()
+    })
+})
+
+describe('the switch while the data arrives', () => {
+    it('is the same element, still focused, when the data resolves', async () => {
+        const pending = deferred()
+        mockApi(() => pending.promise)
+        renderApp('/')
+        const of = await panel()
+        const choice = within(of).getByRole('radio', { name: 'Duration' })
+
+        act(() => choice.focus())
+        expect(choice).toHaveFocus()
+
+        pending.resolve(await json(overviewFor('/api/overview?range=24h')))
+        await within(of).findByRole('button', { name: 'View data' })
+
+        expect(choice.isConnected).toBe(true)
+        expect(choice).toHaveFocus()
+        expect(within(of).getByRole('radio', { name: 'Duration' })).toBe(choice)
     })
 })
 
@@ -539,8 +684,21 @@ describe('the words for the buckets', () => {
         const of = await open('/', { timezone: 'Not/AZone' })
 
         expect(
-            within(of).getByText('Buckets follow the application’s time zone.'),
+            within(of).getByText('Buckets are shown in your local time zone.'),
         ).toBeVisible()
+        expect(of.textContent).not.toMatch(/application’s time zone/)
+    })
+
+    it('say the zone they follow only when it is one the labels are written in', async () => {
+        mockApi()
+        const of = await open('/', { timezone: 'Asia/Tokyo' })
+
+        expect(
+            within(of).getByText(
+                'Buckets follow the application’s time zone (Asia/Tokyo).',
+            ),
+        ).toBeVisible()
+        expect(of.textContent).not.toMatch(/local time zone/)
     })
 
     it('are the day for day buckets, and the span of a day the range cut', async () => {
@@ -616,7 +774,25 @@ describe('asking for data', () => {
         await showData(of)
         await screen.findAllByText('vs previous 24 hours')
 
+        // Every request the page made: the chart added none of its own.
+        const kinds = fetchMock.mock.calls.map(([url]) =>
+            url.includes('/api/overview/attention')
+                ? 'attention'
+                : url.includes('/api/overview')
+                  ? 'overview'
+                  : url.includes('/api/meta')
+                    ? 'meta'
+                    : url,
+        )
+
         expect(overviewUrls(fetchMock)).toHaveLength(1)
+        expect(kinds.filter((kind) => kind === 'overview')).toHaveLength(1)
+        expect(kinds.filter((kind) => kind === 'attention')).toHaveLength(1)
+        expect(
+            kinds.filter(
+                (kind) => !['overview', 'attention', 'meta'].includes(kind),
+            ),
+        ).toEqual([])
     })
 })
 

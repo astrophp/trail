@@ -41,7 +41,7 @@ export function CostMetric({ summary, previous, range }: MetricProps) {
                     : undefined
             }
         >
-            <CostValue cost={summary.cost} />
+            <CostValue cost={summary.cost} pendingAmount="show" />
         </Metric>
     )
 }

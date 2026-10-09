@@ -61,5 +61,9 @@ const wordings: Record<AttentionKind, Wording> = {
     },
 }
 
+/** Whether this client has words for a kind: the API may one day send one it does not. */
+export const isAttentionKind = (kind: string): kind is AttentionKind =>
+    Object.hasOwn(wordings, kind)
+
 /** The words and the icon of one kind of item. */
 export const attentionWording = (kind: AttentionKind): Wording => wordings[kind]
