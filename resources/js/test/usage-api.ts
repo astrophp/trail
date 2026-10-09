@@ -7,6 +7,7 @@ import type {
     UsageModelRow,
     UsageProviderRow,
     UsageResponse,
+    UsageSpendResponse,
 } from '@/api/types'
 import type { TimeRangePreset } from '@/lib/time-range'
 import { contractFixture } from '@/test/contract-fixture'
@@ -31,6 +32,13 @@ export const breakdownFixture = contractFixture('usage-breakdown') as Extract<
     UsageBreakdownResponse,
     { by: 'model' }
 >
+
+/**
+ * The estimated cost series the contract test froze: twenty-four hourly buckets, empty until the
+ * hour before the last four, the last one pending, and a projection of the next twenty-four hours
+ * from six complete hours of which three had usage, with a run still in flight left out.
+ */
+export const spendFixture = contractFixture('usage-spend') as UsageSpendResponse
 
 const range = (preset: TimeRangePreset | null = '24h') => ({
     ...usageFixture.range,
@@ -190,13 +198,32 @@ export function breakdownFor(url: string): UsageBreakdownResponse {
           : breakdownOf('model', modelRows, options)
 }
 
+/** The spend as the range asked for would have it. */
+export const spendFor = (url: string): UsageSpendResponse => ({
+    ...spendFixture,
+    range: range(presetOf(url)),
+})
+
+/** The spend with its projection or its series changed by `patch`. */
+export function spendWith(
+    patch: Partial<UsageSpendResponse['data']>,
+    preset: TimeRangePreset = '24h',
+): UsageSpendResponse {
+    return {
+        data: { ...spendFixture.data, ...patch },
+        range: range(preset),
+    }
+}
+
 const isBreakdown = (url: string) => url.includes('/api/usage/breakdown')
-const isUsage = (url: string) => url.includes('/api/usage') && !isBreakdown(url)
+const isSpend = (url: string) => url.includes('/api/usage/spend')
+const isUsage = (url: string) =>
+    url.includes('/api/usage') && !isBreakdown(url) && !isSpend(url)
 
 /**
  * Answers `/meta` with its fixture, `/usage` with `totals` (by default with a run still running),
- * `/usage/breakdown` with `breakdown` and `/prices` with `prices` (by default no models, so the
- * price panel adds no text or table to a test about something else).
+ * `/usage/breakdown` with `breakdown`, `/prices` with `prices` (by default no models, so the
+ * price panel adds no text or table to a test about something else) and `/usage/spend` with `spend`.
  */
 export function mockApi(
     totals: Handler = (url) => json(usageFor(url)),
@@ -204,6 +231,7 @@ export function mockApi(
     meta: Handler = () => json(metaFixture),
     prices: Handler = () =>
         json({ data: [], limit: { limit: 500, total: 0, truncated: false } }),
+    spend: Handler = (url) => json(spendFor(url)),
 ) {
     const fetchMock = vi.fn<Handler>((url, init) =>
         url.includes('/api/meta')
@@ -212,7 +240,9 @@ export function mockApi(
               ? prices(url, init)
               : isBreakdown(url)
                 ? breakdown(url, init)
-                : totals(url, init),
+                : isSpend(url)
+                  ? spend(url, init)
+                  : totals(url, init),
     )
     vi.stubGlobal('fetch', fetchMock)
 
@@ -220,8 +250,14 @@ export function mockApi(
 }
 
 /** Nothing running: the totals ask for nothing again. */
-export const mockQuietApi = (breakdown?: Handler) =>
-    mockApi((url) => json(quietUsageFor(url)), breakdown)
+export const mockQuietApi = (breakdown?: Handler, spend?: Handler) =>
+    mockApi(
+        (url) => json(quietUsageFor(url)),
+        breakdown,
+        undefined,
+        undefined,
+        spend,
+    )
 
 /** The totals' requests made so far. */
 export const usageUrls = (fetchMock: ReturnType<typeof mockApi>) =>
@@ -230,6 +266,10 @@ export const usageUrls = (fetchMock: ReturnType<typeof mockApi>) =>
 /** The breakdown's requests made so far. */
 export const breakdownUrls = (fetchMock: ReturnType<typeof mockApi>) =>
     fetchMock.mock.calls.map(([url]) => url).filter(isBreakdown)
+
+/** The spend's requests made so far. */
+export const spendUrls = (fetchMock: ReturnType<typeof mockApi>) =>
+    fetchMock.mock.calls.map(([url]) => url).filter(isSpend)
 
 export const lastBreakdownUrl = (fetchMock: ReturnType<typeof mockApi>) =>
     breakdownUrls(fetchMock).at(-1)

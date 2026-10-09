@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { SeriesBucket } from '@/api/types'
 import { chartBuckets } from '@/components/telemetry/activity-series'
-import { bucketLabels } from '@/components/telemetry/bucket-labels'
+import {
+    bucketLabels,
+    timeZoneNote,
+} from '@/components/telemetry/bucket-labels'
 import { overviewFixture } from '@/test/overview-api'
 
 // An application zone that is neither UTC nor the machine's: a +3 offset all year.
@@ -165,5 +168,19 @@ describe('bucketLabels in the application zone', () => {
 
     it('has nothing to label without buckets', () => {
         expect(labelsOf('hour', [])).toEqual([])
+    })
+})
+
+describe('timeZoneNote', () => {
+    it('names the application zone the edges follow', () => {
+        expect(timeZoneNote(zone)).toBe(
+            'Buckets follow the application’s time zone (Europe/Istanbul).',
+        )
+    })
+
+    it('says local time when the application has no zone the browser knows', () => {
+        expect(timeZoneNote(undefined)).toBe(
+            'Buckets are shown in your local time zone.',
+        )
     })
 })

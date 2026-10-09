@@ -17,7 +17,10 @@ import {
     missingLabels,
     volumeSeries,
 } from '@/components/telemetry/activity-series'
-import { bucketLabels } from '@/components/telemetry/bucket-labels'
+import {
+    bucketLabels,
+    timeZoneNote,
+} from '@/components/telemetry/bucket-labels'
 import { useBoot } from '@/hooks/use-boot'
 import { resolveTimeZone } from '@/lib/format'
 import { cn } from '@/lib/utils'
@@ -125,9 +128,7 @@ export function ActivityChart({
                         </p>
                     )}
                     <p className="text-caption text-muted-foreground">
-                        {timeZone === undefined
-                            ? 'Buckets are shown in your local time zone.'
-                            : `Buckets follow the application’s time zone (${timeZone}).`}
+                        {timeZoneNote(timeZone)}
                     </p>
                 </div>
             </div>
