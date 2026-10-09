@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest'
-import { framesInFlight, settleFrames } from '@/test/frame-guard'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { finishFrames, framesInFlight, settleFrames } from '@/test/frame-guard'
 
 // `setup.ts` installs the guard for every test file.
 
@@ -56,5 +56,28 @@ describe('the frame guard', () => {
         expect(Date.now() - before).toBeLessThan(1000)
 
         await settleFrames()
+    })
+})
+
+describe('finishing a file', () => {
+    afterEach(() => {
+        vi.useRealTimers()
+    })
+
+    it('waits for a frame even when the file left fake timers installed', async () => {
+        let ran = false
+
+        requestAnimationFrame(() => {
+            ran = true
+        })
+        vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+
+        expect(vi.isFakeTimers()).toBe(true)
+
+        await finishFrames()
+
+        expect(vi.isFakeTimers()).toBe(false)
+        expect(ran).toBe(true)
+        expect(framesInFlight()).toBe(0)
     })
 })

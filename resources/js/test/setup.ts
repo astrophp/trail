@@ -2,7 +2,7 @@ import '@testing-library/jest-dom/vitest'
 import { cleanup, configure } from '@testing-library/react'
 import { afterAll, afterEach, beforeEach, expect, vi } from 'vitest'
 import { contractFixture } from '@/test/contract-fixture'
-import { settleFrames, trackFrames } from '@/test/frame-guard'
+import { finishFrames, trackFrames } from '@/test/frame-guard'
 
 afterEach(cleanup)
 
@@ -70,5 +70,5 @@ afterEach(() => {
 trackFrames()
 
 afterAll(async () => {
-    await settleFrames()
+    await finishFrames()
 })
