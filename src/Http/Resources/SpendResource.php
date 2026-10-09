@@ -14,7 +14,7 @@ use Astro\Trail\Queries\SpendProjection;
 final class SpendResource
 {
     /**
-     * @return array<string, mixed>
+     * @return array{series: array{bucket: string, buckets: list<array<string, mixed>>}, projection: array{state: string, buckets: list<array<string, mixed>>, ...<string, mixed>}}
      */
     public static function of(Spend $spend): array
     {
@@ -37,7 +37,7 @@ final class SpendResource
     }
 
     /**
-     * @return array<string, mixed>
+     * @return array{state: string, buckets: list<array<string, mixed>>, ...<string, mixed>}
      */
     private static function projection(SpendProjection $projection, ?float $recorded): array
     {

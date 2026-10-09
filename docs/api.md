@@ -7,7 +7,8 @@ versioned, and it may change between releases. This page is the contract every e
 ## Requests and responses
 
 - Every response Trail produces is JSON, whatever the request's `Accept` header says, except the
-  file `GET /api/traces/export` sends. Its errors are JSON like any other.
+  files `GET /api/traces/export`, `GET /api/usage/export` and `GET /api/usage/spend/export` send.
+  Their errors are JSON like any other.
 - Keys are `snake_case`.
 - A successful response is an object with the result under `data`. Anything that describes the
   result rather than being it sits next to `data`, never inside it: `pagination`, `range`, and
@@ -1159,6 +1160,89 @@ prediction. It is a separate figure and is never to be reported, summed or expor
   queries alone.
 - On MySQL, whose comparison of text ignores case, models that differ only by case are one group,
   priced at the rate of the spelling the database returns.
+
+### `GET /api/usage/export`
+
+The usage breakdown as a CSV file: the time range, `by` and `sort` of
+[`GET /api/usage/breakdown`](#get-apiusagebreakdown), read by the breakdown's own query, so a row in
+the file is the row the breakdown shows, in the same order. It ignores `page` and `per_page` and
+writes every row the breakdown has for the view, all pages, up to `row_limit.limit` groups. An
+invalid parameter is the same 422 as for the breakdown, decided before the first byte of the file.
+
+The file has one header row, then one row for each group. The columns that name a row depend on
+`by`; the others are the same for every view:
+
+| Column | Value |
+| -- | -- |
+| `provider`, `model` | `by=model` only: the row's provider and model |
+| `provider` | `by=provider` only |
+| `agent` | `by=agent` only |
+| `runs`, `steps` | as in the breakdown |
+| `usage_state` | `reported`, `pending` or `not_reported` |
+| `input_tokens`, `output_tokens`, `cache_read_tokens`, `cache_write_tokens`, `reasoning_tokens`, `total_tokens` | counts, as in `usage` |
+| `cost_state` | `estimated`, `partial`, `unpriced`, `pending` or `not_captured` |
+| `estimated_cost_usd` | `cost.amount` as a plain decimal with the stored precision (up to 10 places), never in exponent notation. For a `pending` row it is what has been recorded so far; for a `partial` row it is the amount of the priced part |
+| `reported_steps`, `unpriced_steps`, `unpriced_tokens` | `coverage`, as in the breakdown |
+
+- A value that was not captured is an **empty cell**, never `0`: a `0` in the file is a count or an
+  amount that was recorded, a rate of `0` among them (`estimated_cost_usd` is `0`). `usage_state`
+  and `cost_state` say why a figure is missing or not final. `unpriced_tokens` is empty when the
+  unpriced steps reported neither input nor output tokens and `0` when there are no unpriced steps.
+- Three headers are sent before the file: `X-Trail-Export-Rows`, the number of rows written;
+  `X-Trail-Export-Total`, the number of groups read; and `X-Trail-Export-Truncated`, `true` when the
+  breakdown's `row_limit.truncated` is `true`, that is when there were more groups than
+  `row_limit.limit` (1,000), and then the file holds those the breakdown reads.
+- The file is named `trail-usage-<by>-YYYYMMDD-HHMMSS.csv` (UTC).
+- The format, the guard against formulas, the failure guarantees and the streaming are those of
+  [`GET /api/traces/export`](#get-apitracesexport): UTF-8 with a byte-order mark, `\r\n` line ends,
+  RFC 4180 quoting, `text/csv; charset=UTF-8`, an attachment, `Cache-Control: no-store`,
+  `X-Content-Type-Options: nosniff` and `X-Accel-Buffering: no`. Provider, model and agent names
+  come from recorded input, so a name that starts with `=`, `+`, `-`, `@`, a tab, a carriage return
+  or a line feed, or with whitespace followed by one of `=`, `+`, `-`, `@`, is prefixed with `'`.
+  The numbers Trail writes are never prefixed.
+- An empty view is a 200 with the header row alone. An error decided before the file starts (403,
+  404, 422) is JSON, and no part of a file is sent with it.
+- The route is registered before the API's fallback and apart from the other usage paths, so
+  `export` is never read as anything else.
+
+### `GET /api/usage/spend/export`
+
+The estimated cost series of [`GET /api/usage/spend`](#get-apiusagespend) and its projection as a
+CSV file. It takes a time range and nothing else (any other parameter is ignored), with the same
+422 as the spend endpoint, decided before the first byte of the file, and is read by the same query.
+
+The file has one header row, then one row for each recorded bucket of the series, then one row for
+each projected bucket (none unless the projection's `state` is `projected`):
+
+| Column | Value |
+| -- | -- |
+| `kind` | `recorded` or `projected` |
+| `from`, `to` | the bucket, ISO 8601 in UTC with milliseconds |
+| `bucket` | the unit: `5m`, `hour` or `day` |
+| `full`, `in_progress` | `true` or `false`, as in the series; empty on a projected row |
+| `runs` | the bucket's `runs.all`; empty on a projected row |
+| `cost_state` | the state of the bucket's `cost`; empty on a projected row |
+| `estimated_cost_usd` | the bucket's estimated cost; empty on a projected row |
+| `cumulative_state`, `cumulative_estimated_cost_usd` | the state and amount of the bucket's `cumulative`; empty on a projected row |
+| `projected_usd` | a projected bucket's `amount`; empty on a recorded row |
+| `projected_line_usd` | a projected bucket's `cumulative`, where a chart continues the recorded line; empty on a recorded row |
+
+- A projected value is never written in a cost column, and a recorded value never in a projected
+  column: the rows are told apart by `kind` and by living in different columns. A projection is not
+  a cost and is not to be summed with one.
+- An amount that is missing is an **empty cell**, never `0`: a bucket without runs has a
+  `cost_state` of `not_captured` and an empty `estimated_cost_usd`, and the cumulative columns stay
+  empty until the first bucket that has an amount. Amounts are plain decimals, as in the
+  breakdown's file.
+- A file always has the buckets of its range, so a range with nothing recorded is not an empty file:
+  its rows are `not_captured`.
+- Headers: `X-Trail-Export-Rows` and `X-Trail-Export-Total` are the same number, the rows written
+  (nothing is cut), and `X-Trail-Export-Truncated` is always `false`. `X-Trail-Projection-State` is
+  the projection's `state` (`projected`, `not_enough_history` or `range_not_current`), so a reader of
+  a file without projected rows can tell why. The file is named
+  `trail-usage-estimated-cost-YYYYMMDD-HHMMSS.csv` (UTC).
+- The file format and everything else about the response are those of
+  [`GET /api/usage/export`](#get-apiusageexport) and [`GET /api/traces/export`](#get-apitracesexport).
 
 ### `GET /api/conversations`
 

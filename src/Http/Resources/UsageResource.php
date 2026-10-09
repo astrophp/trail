@@ -28,11 +28,21 @@ final class UsageResource
     public static function breakdown(UsageListing $listing, Page $page): array
     {
         return [
-            'data' => array_map(fn (UsageGroup $group) => self::row($group, $listing->by), $listing->groups),
+            'data' => self::rows($listing),
             'by' => $listing->by,
             'pagination' => $page->envelope($listing->total),
             'row_limit' => ['limit' => $listing->limit, 'truncated' => $listing->truncated],
         ];
+    }
+
+    /**
+     * The rows of a listing as the breakdown sends them.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public static function rows(UsageListing $listing): array
+    {
+        return array_map(fn (UsageGroup $group) => self::row($group, $listing->by), $listing->groups);
     }
 
     /**
