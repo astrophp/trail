@@ -143,6 +143,69 @@ describe('the URL drives every filter', () => {
         },
     )
 
+    it.each([
+        ['tool=lookup_order', 'Tool: lookup_order', 'tool', 'lookup_order'],
+        [
+            `model=${encodeURIComponent('claude/x 1+2')}`,
+            'Model: claude/x 1+2',
+            'model',
+            'claude/x 1+2',
+        ],
+    ])(
+        'reads %s from the address, asks the API for it exactly and shows a chip that removes it',
+        async (query, label, param, value) => {
+            const fetchMock = mockApi()
+            renderApp(`/traces?${query}`)
+            await loaded()
+
+            expect(paramsOf(lastTraceUrl(fetchMock))[param]).toBe(value)
+            expect(chips().getByText(label)).toBeVisible()
+
+            await userEvent.click(
+                screen.getByRole('button', {
+                    name: `Remove filter: ${label}`,
+                }),
+            )
+            await expectSearch('')
+
+            expect(paramsOf(lastTraceUrl(fetchMock))).not.toHaveProperty(param)
+            noChips()
+        },
+    )
+
+    it('shows a provider and a model the selects do not list, and still filters by them', async () => {
+        const fetchMock = mockApi()
+        renderApp('/traces?provider=elsewhere&model=unlisted-model')
+        await loaded()
+
+        expect(providerSelect()).toHaveTextContent('elsewhere')
+        expect(paramsOf(lastTraceUrl(fetchMock))).toMatchObject({
+            provider: 'elsewhere',
+            model: 'unlisted-model',
+        })
+        expect(
+            chips()
+                .getAllByRole('listitem')
+                .map((item) => item.textContent),
+        ).toEqual(['Provider: elsewhere', 'Model: unlisted-model'])
+    })
+
+    it('clears the model and the tool with "Clear all", keeping the sort', async () => {
+        renderApp('/traces?model=m&tool=t&agent=A&sort=-cost')
+        await loaded()
+
+        expect(
+            chips()
+                .getAllByRole('listitem')
+                .map((item) => item.textContent),
+        ).toEqual(['Agent: A', 'Model: m', 'Tool: t'])
+
+        await userEvent.click(screen.getByRole('button', { name: 'Clear all' }))
+
+        await expectSearch('?sort=-cost')
+        noChips()
+    })
+
     it('ignores an issue kind it does not know', async () => {
         const fetchMock = mockApi()
         renderApp('/traces?issue_kind=bogus')

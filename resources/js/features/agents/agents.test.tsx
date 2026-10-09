@@ -2,10 +2,12 @@ import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it } from 'vitest'
 import type { TimeRangePreset } from '@/lib/time-range'
+import { breakdownFor, recentFor, showFor } from '@/test/agent-page-api'
 import { appReady, renderApp } from '@/test/render-app'
 import {
     agentFixture,
     agentUrls,
+    agentsFor,
     answerWith,
     dataRows,
     deferred,
@@ -660,7 +662,15 @@ describe('when the API says it read only some of the agents', () => {
 
 describe('the rows lead to the agent', () => {
     it('opens the agent’s page with the range, and the breadcrumb leads back to this view', async () => {
-        mockApi()
+        mockApi((url) =>
+            url.includes('/api/agents/show')
+                ? json(showFor(url))
+                : url.includes('/api/agents/breakdown')
+                  ? json(breakdownFor(url))
+                  : url.includes('/api/traces?')
+                    ? json(recentFor(url))
+                    : json(agentsFor(url)),
+        )
         renderApp('/agents?range=7d&sort=-cost&search=a')
         await loaded()
 
@@ -668,7 +678,10 @@ describe('the rows lead to the agent', () => {
             screen.getByRole('link', { name: 'SupportAssistant' }),
         )
 
-        await screen.findByRole('heading', { level: 1, name: 'Agent' })
+        await screen.findByRole('heading', {
+            level: 1,
+            name: 'SupportAssistant',
+        })
         expect(window.location.pathname).toBe('/trail/agents/agent')
         expect(new URLSearchParams(window.location.search).get('name')).toBe(
             'SupportAssistant',

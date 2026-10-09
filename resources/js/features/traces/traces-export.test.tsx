@@ -29,6 +29,36 @@ describe('exporting the view', () => {
         })
     })
 
+    it('carries the model and the tool exactly, and drops one when its chip goes', async () => {
+        mockApi()
+        renderApp(
+            `/traces?agent=A&provider=p&model=${encodeURIComponent('m/1 +')}&tool=${encodeURIComponent('t 2')}`,
+        )
+        await loaded()
+
+        expect(paramsOf(exportLink().getAttribute('href') ?? '')).toEqual({
+            range: '24h',
+            sort: '-started_at',
+            agent: 'A',
+            provider: 'p',
+            model: 'm/1 +',
+            tool: 't 2',
+        })
+
+        await userEvent.click(
+            screen.getByRole('button', { name: 'Remove filter: Tool: t 2' }),
+        )
+
+        await waitFor(() =>
+            expect(
+                paramsOf(exportLink().getAttribute('href') ?? ''),
+            ).not.toHaveProperty('tool'),
+        )
+        expect(
+            paramsOf(exportLink().getAttribute('href') ?? ''),
+        ).toHaveProperty('model', 'm/1 +')
+    })
+
     it('carries the slow filter, and drops it when the filter goes', async () => {
         mockApi()
         renderApp('/traces?slow=1')

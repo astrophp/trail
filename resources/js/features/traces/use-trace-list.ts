@@ -70,6 +70,14 @@ export function useTraceList() {
         })
     }
 
+    if (state.model !== '') {
+        activeFilters.push({ key: 'model', label: `Model: ${state.model}` })
+    }
+
+    if (state.tool !== '') {
+        activeFilters.push({ key: 'tool', label: `Tool: ${state.tool}` })
+    }
+
     if (state.conversation !== '') {
         activeFilters.push({
             key: 'conversation',

@@ -132,7 +132,7 @@ describe('RankedList', () => {
         const links = screen.getAllByRole('link')
 
         expect(links).toHaveLength(1)
-        expect(links[0]).toHaveAccessibleName('gpt-5')
+        expect(links[0]).toHaveAccessibleName('gpt-5 1')
         expect(links[0]).toHaveAttribute('href', '/traces?model=gpt-5')
         expect(screen.getByText('mini').closest('a')).toBeNull()
     })
@@ -151,5 +151,33 @@ describe('RankedList', () => {
 
         expect(container.querySelector('ol')).toHaveClass('a')
         expect(container.querySelector('li')).toHaveClass('b')
+    })
+})
+
+describe('RankedListItem links', () => {
+    it('are named by the label and the value, so a list of links says what each is worth', () => {
+        render(
+            <MemoryRouter>
+                <RankedList aria-label="Models">
+                    <RankedListItem
+                        label="claude-a"
+                        value="590 runs"
+                        share={0.5}
+                        to="/traces?model=claude-a"
+                    />
+                    <RankedListItem
+                        label="claude-b"
+                        value="3 runs"
+                        share={0.1}
+                    />
+                </RankedList>
+            </MemoryRouter>,
+        )
+
+        expect(
+            screen.getByRole('link', { name: 'claude-a 590 runs' }),
+        ).toHaveAttribute('href', '/traces?model=claude-a')
+        // A row without a link has no link to name.
+        expect(screen.getAllByRole('link')).toHaveLength(1)
     })
 })

@@ -71,8 +71,8 @@ describe('the way back of a run', () => {
         })
     })
 
-    it('does not lead to the agents’ pages, which a run is not opened from', () => {
-        for (const from of ['/agents', '/agents/agent?name=a']) {
+    it('does not lead to the list of agents, which a run is not opened from', () => {
+        for (const from of ['/agents', '/agents?range=7d&sort=-cost']) {
             expect(back(from)).toMatchObject({
                 to: '/traces',
                 label: 'Back to traces',
@@ -80,5 +80,16 @@ describe('the way back of a run', () => {
                 source: 'list',
             })
         }
+    })
+
+    it('leads back to the agent’s page it was opened from, with its whole view, and has no neighbours', () => {
+        const from = '/agents/agent?name=a%2Fb%20c%2Bd&range=7d&chart=cost'
+
+        expect(back(from)).toEqual({
+            to: from,
+            label: 'Back to agent',
+            from: null,
+            source: 'agent',
+        })
     })
 })

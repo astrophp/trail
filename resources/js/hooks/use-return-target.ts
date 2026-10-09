@@ -31,14 +31,17 @@ export function useReturnTarget(): ReturnTarget | null {
     return useMemo(() => parseReturn(from, returnRoutes), [from])
 }
 
-/** What a run was opened from: the list of runs, the comparison, a conversation, or nothing. */
-export type BackSource = 'list' | 'comparison' | 'conversation'
+/** What a run was opened from: the list of runs, the comparison, a conversation, an agent's page, or nothing. */
+export type BackSource = 'list' | 'comparison' | 'conversation' | 'agent'
 
 /**
  * Where the way back goes and what to call it: the page the run was opened from with the view it
  * had, or the bare list. `from` is the validated target as a `from` value, and `null` when the
- * run has no neighbours to step through (it was opened from the comparison, or from nothing);
- * `source` says which page it is.
+ * run has no neighbours to step through (it was opened from the comparison, from an agent's page,
+ * or from nothing); `source` says which page it is.
+ *
+ * The list of agents is not a place a run is opened from: a target that is that list is ignored,
+ * and the way back is the bare list of runs.
  */
 export function useBackLink(): {
     to: string
@@ -47,12 +50,7 @@ export function useBackLink(): {
     source: BackSource
 } {
     const returned = useReturnTarget()
-    // The agents' pages are places other pages return to, but a run is not opened from them yet:
-    // until it is, the run has no way back to them and no neighbours there.
-    const target =
-        returned?.pathname === '/agents' || returned?.pathname === agentPagePath
-            ? null
-            : returned
+    const target = returned?.pathname === '/agents' ? null : returned
     const from = target === null ? null : `${target.pathname}${target.search}`
 
     const source: BackSource =
@@ -60,7 +58,9 @@ export function useBackLink(): {
             ? 'comparison'
             : target?.pathname === transcriptPath
               ? 'conversation'
-              : 'list'
+              : target?.pathname === agentPagePath
+                ? 'agent'
+                : 'list'
 
     return {
         to: from ?? fallback,
@@ -69,9 +69,11 @@ export function useBackLink(): {
                 ? 'Back to comparison'
                 : source === 'conversation'
                   ? 'Back to conversation'
-                  : 'Back to traces',
-        // A comparison has no neighbours: `from` is for lists and conversations.
-        from: source === 'comparison' ? null : from,
+                  : source === 'agent'
+                    ? 'Back to agent'
+                    : 'Back to traces',
+        // A comparison and an agent's page have no neighbours: `from` is for lists and conversations.
+        from: source === 'comparison' || source === 'agent' ? null : from,
         source,
     }
 }

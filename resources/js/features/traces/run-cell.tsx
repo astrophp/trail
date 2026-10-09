@@ -6,24 +6,38 @@ import { TraceId } from '@/components/telemetry/trace-id'
 import { SelectRow } from '@/features/traces/select-row'
 import { returnTo } from '@/lib/return-context'
 
+type RunCellProps = {
+    trace: Trace
+    /** A checkbox selects the run. Left off where the rows are not a selectable list. */
+    selectable?: boolean
+    /**
+     * The page the run is opened from, as a `from` value (see `returnTo`): the page the run's page
+     * leads back to. The page the cell is on when left out.
+     */
+    from?: string
+}
+
 /**
  * Who ran, what it was asked, and which run it is. A checkbox selects it, and the name leads to the
- * run, which is told the whole view of the list it was opened from (range, filters, sort and page)
- * in `from`. The bookmark is not here: it is the row's last cell, apart from the checkbox.
+ * run, which is told the whole view of the page it was opened from (for the list: range, filters,
+ * sort and page) in `from`. The bookmark is not here: it is the row's last cell, apart from the
+ * checkbox.
  */
-export function RunCell({ trace }: { trace: Trace }) {
+export function RunCell({ trace, selectable = true, from }: RunCellProps) {
     const { pathname, search } = useLocation()
-    const from = new URLSearchParams({ from: returnTo(pathname, search) })
+    const back = new URLSearchParams({
+        from: from ?? returnTo(pathname, search),
+    })
 
     return (
         // The gap is the header's own: the agent icon sits under the column's label.
         <div className="flex max-w-55 min-w-0 items-start gap-4 md:max-w-67.5">
-            <SelectRow trace={trace} />
+            {selectable ? <SelectRow trace={trace} /> : null}
             <div className="flex min-w-0 flex-col gap-1 leading-normal">
                 <div className="flex min-w-0 items-center gap-2">
                     <AgentIcon type={trace.type} />
                     <RowLink
-                        to={`/traces/${encodeURIComponent(trace.id)}?${from.toString()}`}
+                        to={`/traces/${encodeURIComponent(trace.id)}?${back.toString()}`}
                         className="truncate"
                     >
                         {trace.name}

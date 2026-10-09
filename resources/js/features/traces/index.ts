@@ -1,3 +1,5 @@
 export { TracesView } from '@/features/traces/traces-view'
 export { useBookmark } from '@/features/traces/use-bookmark'
 export { ExportButton } from '@/features/traces/export-button'
+export { RecentTraces } from '@/features/traces/recent-traces'
+export { forgetRecentTracesRefreshFailures } from '@/features/traces/use-recent-traces'

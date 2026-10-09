@@ -1,20 +1,11 @@
-import { useEffect, useMemo } from 'react'
 import { failureMessage } from '@/api/client'
-import { CountChip } from '@/components/patterns/count-chip'
-import { Panel } from '@/components/patterns/panel'
-import { PanelContent } from '@/components/patterns/panel-content'
-import { PanelEmpty } from '@/components/patterns/panel-empty'
-import { PanelError } from '@/components/patterns/panel-error'
-import { PanelHeader } from '@/components/patterns/panel-header'
-import { PanelLoading } from '@/components/patterns/panel-loading'
-import { AttentionCell } from '@/features/overview/attention-cell'
-import { readAttention, unreadable } from '@/features/overview/attention-items'
-import { RefreshNote } from '@/features/overview/refresh-note'
+import { tracesLinkFor } from '@/api/traces-link'
+import { RefreshNote } from '@/components/patterns/refresh-note'
+import { AttentionSection } from '@/components/telemetry/attention-section'
 import { useAttention } from '@/features/overview/use-attention'
-import { useOverviewStatus } from '@/features/overview/use-overview-status'
 import { useFocusHandoff } from '@/hooks/use-focus-handoff'
+import { useQueryStatus } from '@/hooks/use-query-status'
 import { useTimeRange } from '@/hooks/use-time-range'
-import { cn } from '@/lib/utils'
 
 /**
  * What in the range needs a look, most pressing first, each item a link to the runs behind it.
@@ -26,7 +17,7 @@ export function AttentionPanel({ className }: { className?: string }) {
     const [range] = useTimeRange()
     const attention = useAttention(range)
     const { data, isError, isPlaceholderData } = attention
-    const { failed, retrying, failure, loading } = useOverviewStatus(
+    const { failed, retrying, failure, loading } = useQueryStatus(
         attention,
         range,
     )
@@ -34,113 +25,33 @@ export function AttentionPanel({ className }: { className?: string }) {
     // The retry button, or the one of the stopped notice, goes away when the list recovers.
     useFocusHandoff(failed || attention.refreshing === 'stopped')
 
-    const items = data?.data
-    // The range the items were counted over: the previous one while the next loads.
-    const shown = data?.range.preset ?? range
-    const entries = useMemo(
-        () => (items === undefined ? [] : readAttention(items, shown)),
-        [items, shown],
-    )
-    const unreadableReport = unreadable(entries).join('\n')
-
-    useEffect(() => {
-        // A bug to fix, not a state of the data: say so once where a developer looks.
-        if (unreadableReport !== '' && import.meta.env.DEV) {
-            console.error(
-                `Trail could not show every item of what needs attention:\n${unreadableReport}`,
-            )
-        }
-    }, [unreadableReport])
-    // The count in the header is the current answer's, never the previous range's.
-    const count =
-        !isPlaceholderData && items !== undefined && items.length > 0
-            ? items.length
-            : undefined
-
-    const body = () => {
-        if (failed) {
-            return (
-                <PanelError
-                    title="What needs attention could not be loaded"
-                    message={failureMessage(failure)}
-                    onRetry={() => {
-                        if (!retrying) {
-                            void attention.refetch()
-                        }
-                    }}
-                />
-            )
-        }
-
-        // An empty placeholder is the previous range's "nothing": it says nothing about this one.
-        if (
-            loading ||
-            data === undefined ||
-            (isPlaceholderData && data.data.length === 0)
-        ) {
-            return <PanelLoading rows={4} />
-        }
-
-        return (
-            <>
+    return (
+        <AttentionSection
+            items={loading || failed ? undefined : data?.data}
+            // The range the items were counted over: the previous one while the next loads.
+            range={data?.range.preset ?? range}
+            linkFor={tracesLinkFor}
+            busy={isPlaceholderData}
+            failure={
+                failed
+                    ? {
+                          message: failureMessage(failure),
+                          onRetry: () => {
+                              if (!retrying) {
+                                  void attention.refetch()
+                              }
+                          },
+                      }
+                    : undefined
+            }
+            note={
                 <RefreshNote
                     refreshing={attention.refreshing}
                     failed={isError}
                     onRetry={() => void attention.refreshAgain()}
                 />
-                <div
-                    aria-busy={isPlaceholderData || undefined}
-                    className={cn(
-                        'motion-safe:transition-opacity',
-                        isPlaceholderData && 'opacity-60',
-                    )}
-                >
-                    {data.data.length === 0 ? (
-                        <PanelEmpty title="Nothing needs attention in this range" />
-                    ) : (
-                        // Cells keep the API's order, left to right and top to bottom.
-                        // Safari drops the list semantics of a list whose markers a reset removes.
-                        // eslint-disable-next-line jsx-a11y/no-redundant-roles
-                        <ul
-                            role="list"
-                            data-slot="attention-grid"
-                            className="grid gap-2 @2xl:grid-cols-2 @4xl:grid-cols-3"
-                        >
-                            {entries.map((entry, index) => (
-                                <AttentionCell
-                                    key={`${entry.kind}:${index}`}
-                                    entry={entry}
-                                />
-                            ))}
-                        </ul>
-                    )}
-                </div>
-            </>
-        )
-    }
-
-    return (
-        <Panel className={className}>
-            {/* Always mounted, so a change of its text is announced; outside the busy part, where it may be muted. */}
-            <span role="status" className="sr-only">
-                {isPlaceholderData && !failed
-                    ? 'Loading what needs attention'
-                    : ''}
-            </span>
-            <PanelHeader
-                title="Needs attention"
-                action={
-                    count === undefined ? null : (
-                        <span className="inline-flex items-center gap-1">
-                            <CountChip count={count} />
-                            <span className="sr-only">
-                                {count === 1 ? 'item' : 'items'}
-                            </span>
-                        </span>
-                    )
-                }
-            />
-            <PanelContent className="@container">{body()}</PanelContent>
-        </Panel>
+            }
+            className={className}
+        />
     )
 }

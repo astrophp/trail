@@ -107,3 +107,50 @@ export const traceColumns: DataTableColumn<Trace>[] = [
         cell: ({ row }) => <BookmarkCell trace={row.original} />,
     },
 ]
+
+/** The columns of the list that a short list of runs shares with it; the others are for a list to work with. */
+const sharedColumnIds = [
+    'outcome',
+    'model',
+    'duration',
+    'tokens',
+    'cost',
+    'started_at',
+]
+
+/**
+ * The columns of a short list of someone's latest runs: the list's own cells, in its order,
+ * without the checkbox, the bookmark and the sort. A run is opened with `from` as the page its
+ * way back leads to.
+ */
+export function recentTraceColumns(from: string): DataTableColumn<Trace>[] {
+    return [
+        {
+            id: 'agent',
+            header: 'Run',
+            meta: {
+                rowHeader: true,
+                // No checkbox gutter: the cell is three lines.
+                skeleton: (
+                    <div className="flex w-51.5 flex-col gap-2 py-1.5 md:w-71.5">
+                        <Skeleton
+                            className={cn(skeletonBarClass, 'h-3.5 w-3/4')}
+                        />
+                        <Skeleton
+                            className={cn(skeletonBarClass, 'h-3 w-full')}
+                        />
+                        <Skeleton
+                            className={cn(skeletonBarClass, 'h-3 w-1/2')}
+                        />
+                    </div>
+                ),
+            },
+            cell: ({ row }) => (
+                <RunCell trace={row.original} selectable={false} from={from} />
+            ),
+        },
+        ...traceColumns
+            .filter((column) => sharedColumnIds.includes(column.id ?? ''))
+            .map((column) => ({ ...column, enableSorting: false })),
+    ]
+}

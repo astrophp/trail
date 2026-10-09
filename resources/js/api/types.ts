@@ -197,12 +197,15 @@ export type SeriesBucket = {
     unpriced_runs: number
 }
 
+/** The range cut into buckets of one length. */
+export type Series = { bucket: BucketUnit; buckets: SeriesBucket[] }
+
 export type OverviewResponse = {
     data: {
         summary: Summary
         /** `null` when the previous period holds no runs. */
         previous: Summary | null
-        series: { bucket: BucketUnit; buckets: SeriesBucket[] }
+        series: Series
     }
     range: Range
     previous_range: PreviousRange
@@ -315,7 +318,7 @@ export type AgentResponse = {
         agent: Agent
         summary: Summary
         previous: Summary | null
-        series: { bucket: BucketUnit; buckets: SeriesBucket[] }
+        series: Series
         attention: AttentionItem[]
     }
     range: Range

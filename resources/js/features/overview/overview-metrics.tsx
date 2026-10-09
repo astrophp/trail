@@ -1,18 +1,14 @@
-import { MetricStrip } from '@/components/patterns/metric-strip'
 import { MetricStripSkeleton } from '@/components/patterns/metric-strip-skeleton'
 import { ErrorState } from '@/components/patterns/error-state'
+import { BusyRegion } from '@/components/patterns/busy-region'
 import { Notice } from '@/components/patterns/notice'
-import { CostMetric } from '@/features/overview/cost-metric'
-import { DurationMetric } from '@/features/overview/duration-metric'
-import { ErrorRateMetric } from '@/features/overview/error-rate-metric'
-import { RefreshNote } from '@/features/overview/refresh-note'
-import { TracesMetric } from '@/features/overview/traces-metric'
+import { RefreshNote } from '@/components/patterns/refresh-note'
+import { SummaryStrip } from '@/components/telemetry/summary-strip'
+import { tracesLink } from '@/api/traces-link'
 import { useOverview } from '@/features/overview/use-overview'
-import { useOverviewStatus } from '@/features/overview/use-overview-status'
+import { useQueryStatus } from '@/hooks/use-query-status'
 import { useFocusHandoff } from '@/hooks/use-focus-handoff'
 import { useTimeRange } from '@/hooks/use-time-range'
-import { timeRangePeriods } from '@/lib/time-range'
-import { cn } from '@/lib/utils'
 
 /**
  * The headline figures of the time range, each against the previous period and linked to the runs
@@ -23,7 +19,7 @@ export function OverviewMetrics({ className }: { className?: string }) {
     const [range] = useTimeRange()
     const overview = useOverview(range)
     const { data, isError, isPlaceholderData, refetch } = overview
-    const { failed, retrying, failure, loading } = useOverviewStatus(
+    const { failed, retrying, failure, loading } = useQueryStatus(
         overview,
         range,
     )
@@ -50,8 +46,7 @@ export function OverviewMetrics({ className }: { className?: string }) {
     const { summary, previous } = data.data
     // The range the figures are for: the previous one while the next loads.
     const shown = data.range.preset ?? range
-    const period = timeRangePeriods[shown]
-    const metric = { summary, previous, range: shown }
+    const metric = { summary, previous, range: shown, link: tracesLink }
 
     return (
         <div className={className}>
@@ -60,17 +55,7 @@ export function OverviewMetrics({ className }: { className?: string }) {
                 failed={isError}
                 onRetry={() => void overview.refreshAgain()}
             />
-            {/* Always mounted, so a change of its text is announced; outside the busy part, where it may be muted. */}
-            <span role="status" className="sr-only">
-                {isPlaceholderData ? 'Loading' : ''}
-            </span>
-            <div
-                aria-busy={isPlaceholderData || undefined}
-                className={cn(
-                    'motion-safe:transition-opacity',
-                    isPlaceholderData && 'opacity-60',
-                )}
-            >
+            <BusyRegion busy={isPlaceholderData}>
                 {summary.runs.all === 0 ? (
                     <Notice
                         tone="info"
@@ -80,18 +65,8 @@ export function OverviewMetrics({ className }: { className?: string }) {
                         {shown === '7d' ? null : 'Try a longer range.'}
                     </Notice>
                 ) : null}
-                <MetricStrip>
-                    <TracesMetric {...metric} />
-                    <ErrorRateMetric {...metric} />
-                    <DurationMetric {...metric} />
-                    <CostMetric {...metric} />
-                </MetricStrip>
-                {previous === null ? (
-                    <p className="mt-3 text-caption text-muted-foreground">
-                        No runs were recorded in the previous {period}
-                    </p>
-                ) : null}
-            </div>
+                <SummaryStrip {...metric} />
+            </BusyRegion>
         </div>
     )
 }
