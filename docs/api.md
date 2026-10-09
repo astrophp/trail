@@ -1053,6 +1053,106 @@ What the runs of a time range used, by model, by provider or by agent. Takes a t
   that summary existed is in no `model` or `provider` row and adds no steps to its agent's row. It still counts in that row's `runs`, `usage` and `cost` (whose state can be `partial` or `unpriced`) while adding nothing to `steps` and `coverage`, so for such runs the two can disagree.
 - It is read in one grouped query whatever the view, the sort and the page.
 
+### `GET /api/usage/spend`
+
+The estimated cost recorded in each bucket of a time range, and beside it, never inside it, a simple
+projection of the next period. It takes a time range and nothing else: any other parameter is
+ignored. Trail is not a billing system: a recorded amount is an estimate that was frozen when its run
+was stored, and the projection is the recent rate at today's prices carried forward, not a
+prediction. It is a separate figure and is never to be reported, summed or exported as cost.
+
+```json
+{
+  "data": {
+    "series": {
+      "bucket": "hour",
+      "buckets": [
+        {
+          "from": "…", "to": "…", "full": true, "in_progress": false,
+          "runs": { "all": 4, "completed": 4, "failed": 0, "incomplete": 0, "running": 0, "awaiting_approval": 0 },
+          "duration": { "average_ms": 1200.5, "measured": 4 },
+          "cost": { "state": "estimated", "amount": 0.41 }, "unpriced_runs": 0,
+          "cumulative": { "state": "estimated", "amount": 3.02 }
+        }
+      ]
+    },
+    "projection": {
+      "state": "projected",
+      "window": { "from": "…", "to": "…", "buckets": 6, "with_usage": 5 },
+      "per_bucket": 0.418,
+      "total": 10.032,
+      "buckets": [ { "from": "…", "to": "…", "amount": 0.418, "cumulative": 13.898 } ],
+      "left_out": { "unpriced_steps": 2, "unpriced_tokens": 5300, "unfinished_runs": 1 }
+    }
+  },
+  "range": { "preset": "24h", "from": "…", "to": "…" }
+}
+```
+
+- `series` is recorded. Its `bucket` and every bucket's `from`, `to`, `full`, `in_progress`, `runs`,
+  `duration`, `cost` and `unpriced_runs` are exactly those of `data.series` of
+  [`GET /api/overview`](#get-apioverview) for the same range, read by the same code: the same
+  buckets along the clock of the application's timezone, the same clock-change rules and the same
+  422 for a range over 92 days. A bucket's `cost` is the estimate frozen when its runs were stored,
+  so a price changed later never alters a bucket.
+- `cumulative` is the estimated cost recorded from the start of the range through the bucket, so a
+  client never adds amounts. It has the shape and the states of a cost, taken over everything
+  recorded so far: `pending` if a run so far is running, otherwise `partial` if some usage so far
+  could not be priced and some could, `unpriced` if usage was reported and none could be priced,
+  `estimated` if all of it was priced and `not_captured` if none was reported. Its `amount` is `null`,
+  never `0`, until the first bucket that has one. The `cumulative` of the last bucket is exactly
+  `summary.cost` of [`GET /api/usage`](#get-apiusage) and of the overview for the same range, amount
+  and state.
+- `projection` is always an object. `state` is `projected`; `not_enough_history`, when the range is
+  current and fewer than 3 buckets of the window have recorded usage, when it has no complete bucket
+  at all, or when nothing in the window could be priced; or `range_not_current`.
+- Only a range that ends now is projected: the presets `1h`, `24h` and `7d`. An explicit `from` and
+  `to` is `range_not_current` whatever its `to`, even one that is the current instant. Then `window`
+  is `null`, `per_bucket` and `total` are `null`, `buckets` is `[]` and `left_out` is zeros, and the
+  response costs what the overview costs.
+- `window` is the complete buckets the rate was taken from: the last 6 buckets of the series that
+  are `full` and not `in_progress`, counted back from the newest such bucket. `from` is the start of
+  the oldest and `to` the end of the newest, `buckets` is how many there are (fewer than 6 when the
+  series has fewer complete ones, which a preset has only when a repeated hour makes the series
+  short) and `with_usage` how many of them have at least one step that reported usage, priced or not.
+  It is `null` when the series has no complete bucket. The bucket in progress and a bucket cut by
+  the range never feed the rate.
+- `per_bucket` is the estimated cost of the window's priced usage at the prices as they are now,
+  divided by `window.buckets`, rounded to 10 places. It is divided by the buckets of the window, not
+  by those with usage: an idle bucket is part of the recent rate. It is `null` unless `projected`,
+  and is never `0` for a lack of history.
+- The rate is computed from one grouped read of the tokens of the runs that started in the window,
+  by bucket, provider and model, and priced in PHP at the rates of the price book now, saved prices
+  included. It is the formula of the cost calculator applied to the sums: uncached input tokens at
+  the input rate, output tokens at the output rate, and cache read and cache write tokens at their
+  own rates, each per million, and a part that used no tokens needs no rate. A group is priced whole
+  or left out whole. It is left out when its provider or model is `null`, when the model has no rate,
+  when no input was reported, when it charges for output and no output was reported, and when a part
+  that used tokens has no rate. A rate of `0` is a price. Runs still running are not read.
+- `left_out` counts what the window held and the rate does not include. `unpriced_steps` is the
+  steps that reported usage in the groups left out, `unpriced_tokens` their input and output tokens
+  (`0` when there are none, and `null` when those steps reported neither), and `unfinished_runs` the
+  runs of the window that are running. A run left running past `stale_after` is over, as everywhere
+  in the API: it is not unfinished and its usage is in the rate.
+- `buckets` is, when `projected`, the next clock buckets of the same unit, cut as the series is
+  (a clock change makes the same bucket the series would): 12 for `1h`, 24 for `24h` and 7 for `7d`,
+  beginning where the last bucket of the series ends. Each has `amount`, which is `per_bucket`, and
+  `cumulative`, the series' last cumulative amount (taken as `0` when `null`) plus `per_bucket` for
+  each bucket up to and including this one, rounded to 10 places. `cumulative` only says where a
+  line continues on a chart from the recorded one: it is not a cost. It is `[]` unless `projected`.
+- `total` is `per_bucket` times the number of projected buckets, rounded to 10 places, and `null`
+  unless `projected`.
+- The projection follows prices at once, and the recorded series does not: a price saved or reset
+  through [`PUT /api/prices`](#put-apipricesprovidermodel) changes `per_bucket`, `total` and the
+  projected buckets on the next request, since the saved prices are read afresh for it and a price
+  saved by another worker shows at once, while no bucket and no `cumulative` of the series changes.
+- It is read in the overview's queries, plus one grouped read of the window's tokens when the range
+  is current and has a complete bucket, plus the price book's own read of the saved prices when the
+  window holds usage that names a provider and a model. An explicit range is read in the overview's
+  queries alone.
+- On MySQL, whose comparison of text ignores case, models that differ only by case are one group,
+  priced at the rate of the spelling the database returns.
+
 ### `GET /api/conversations`
 
 The conversations in a time range: recorded runs grouped by their conversation id, filtered,
