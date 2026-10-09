@@ -1,5 +1,6 @@
 <?php
 
+use Astro\Trail\Enums\SpanType;
 use Astro\Trail\Enums\Status;
 use Astro\Trail\Facades\Trail;
 use Astro\Trail\Storage\Models\Trace;
@@ -223,6 +224,18 @@ describe('filters', function () {
         expectNeighboursOfList($this, 'provider=openai');
         expectNeighboursOfList($this, 'provider=openai&model=gpt-5&sort=-cost');
         expect(listedIds($this, 'provider=openai'))->not->toBe(listedIds($this, ''));
+    });
+
+    it('gives the neighbours the list gives under a tool filter', function () {
+        foreach (Trace::query()->orderBy('id')->get() as $i => $trace) {
+            if ($i % 2 === 1) {
+                Rows::span($trace, ['type' => SpanType::Tool, 'name' => 'lookup_order', 'started_at' => $trace->started_at]);
+            }
+        }
+
+        expectNeighboursOfList($this, 'tool=lookup_order');
+        expectNeighboursOfList($this, 'tool=lookup_order&sort=-cost');
+        expect(listedIds($this, 'tool=lookup_order'))->not->toBe(listedIds($this, ''));
     });
 
     it('gives the neighbours the list gives for bookmarked runs', function () {

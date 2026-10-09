@@ -90,11 +90,14 @@ function exportDataset(): void
     Rows::bookmark($full);
     Rows::span($full, ['provider' => 'anthropic', 'model' => 'claude-sonnet-4-5', 'started_at' => '2026-01-02 11:00:00']);
     Rows::span($full, ['provider' => 'openai', 'model' => 'gpt-5', 'started_at' => '2026-01-02 11:00:00']);
+    Rows::span($full, ['type' => SpanType::Tool, 'name' => 'lookup_order', 'started_at' => '2026-01-02 11:00:00']);
 
-    exportable('run-partial', [
+    $partial = exportable('run-partial', [
         'name' => 'TicketTriage', 'provider' => 'openai', 'model' => 'gpt-5', 'duration_ms' => 950.5, 'input_tokens' => 800, 'output_tokens' => 120,
         'cost' => 0.004, 'unpriced_span_count' => 1, 'span_count' => 3, 'started_at' => '2026-01-02 10:50:00', 'ended_at' => '2026-01-02 10:50:00.950',
     ]);
+    Rows::span($partial, ['type' => SpanType::Tool, 'name' => 'lookup_order', 'started_at' => '2026-01-02 10:50:00']);
+    Rows::span($partial, ['type' => SpanType::Tool, 'name' => 'send_email', 'started_at' => '2026-01-02 10:50:00']);
     exportable('run-unpriced', [
         'name' => 'TicketTriage', 'duration_ms' => 400.25, 'input_tokens' => 90, 'unpriced_span_count' => 1, 'span_count' => 1, 'started_at' => '2026-01-02 10:40:00',
     ]);
@@ -168,6 +171,8 @@ describe('against the list', function () {
         'an agent' => 'agent=SupportAssistant',
         'a search' => 'search=order',
         'a provider with spans' => 'provider=openai',
+        'a tool' => 'tool=lookup_order',
+        'a tool and a status' => 'tool=lookup_order&status=completed',
         'a provider and a model' => 'provider=anthropic&model=claude-sonnet-4-5',
         'bookmarked' => 'bookmarked=1',
         'slow' => 'slow=1',

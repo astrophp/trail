@@ -839,6 +839,7 @@ The recorded runs in a time range, filtered, sorted and paginated.
 | `status` | with that status |
 | `agent` | with that name |
 | `provider`, `model` | that used it in any step, not only the first. Sent together, one step must match both |
+| `tool` | that called the tool, by its name: a tool span of that name anywhere in the run, those of agents it delegated to included. Compared as the database compares text |
 | `conversation` | of that conversation id |
 | `user_id`, `user_type` | of that user. `user_type` narrows `user_id` and cannot be sent alone |
 | `issue_kind` | with that issue kind |

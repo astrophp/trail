@@ -2,6 +2,7 @@
 
 namespace Astro\Trail\Queries;
 
+use Astro\Trail\Enums\SpanType;
 use Astro\Trail\Enums\Status;
 use Astro\Trail\Storage\Models\Bookmark;
 use Astro\Trail\Storage\Models\Span;
@@ -294,6 +295,14 @@ final class TraceIndex
                 ->where('started_at', '>=', StaleRuns::format($range->from))
                 ->when($filters->provider !== null, fn (Builder $spans) => $spans->where('provider', $filters->provider))
                 ->when($filters->model !== null, fn (Builder $spans) => $spans->where('model', $filters->model)));
+        }
+
+        if ($filters->tool !== null) {
+            // A tool span anywhere in the run, a delegated agent's included. Bounded by the range's start like the model filter.
+            $query->whereIn('id', Span::query()->select('trace_id')
+                ->where('type', SpanType::Tool->value)
+                ->where('name', $filters->tool)
+                ->where('started_at', '>=', StaleRuns::format($range->from)));
         }
 
         if ($filters->slow) {
