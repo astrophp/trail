@@ -1112,7 +1112,9 @@ prediction. It is a separate figure and is never to be reported, summed or expor
   response costs what the overview costs.
 - `window` is the complete buckets the rate was taken from: the last 6 buckets of the series that
   are `full` and not `in_progress`, counted back from the newest such bucket. `from` is the start of
-  the oldest and `to` the end of the newest, `buckets` is how many there are (fewer than 6 when the
+  the oldest and `to` the end of the newest, `buckets` is how many there are (a bucket that is longer
+  than its unit because a clock was set back counts as one, and so does a projected one, which gets
+  one `per_bucket`; fewer than 6 when the
   series has fewer complete ones, which a preset has only when a repeated hour makes the series
   short) and `with_usage` how many of them have at least one step that reported usage, priced or not.
   It is `null` when the series has no complete bucket. The bucket in progress and a bucket cut by
@@ -1128,7 +1130,12 @@ prediction. It is a separate figure and is never to be reported, summed or expor
   own rates, each per million, and a part that used no tokens needs no rate. A group is priced whole
   or left out whole. It is left out when its provider or model is `null`, when the model has no rate,
   when no input was reported, when it charges for output and no output was reported, and when a part
-  that used tokens has no rate. A rate of `0` is a price. Runs still running are not read.
+  that used tokens has no rate. A rate of `0` is a price. The rules are those of the groups' sums and not of
+  each step: a step that reported input and no output, which its recorded cost leaves unpriced, has its
+  input tokens priced here when another step of the same model reported output, and is not counted
+  in `left_out`. Only runs still running are not read; a run awaiting approval is, and is not unfinished.
+  When the saved prices cannot be read, the failure is reported and the rate is priced from the
+  configuration alone.
 - `left_out` counts what the window held and the rate does not include. `unpriced_steps` is the
   steps that reported usage in the groups left out, `unpriced_tokens` their input and output tokens
   (`0` when there are none, and `null` when those steps reported neither), and `unfinished_runs` the

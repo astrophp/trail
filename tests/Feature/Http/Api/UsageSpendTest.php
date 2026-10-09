@@ -8,9 +8,12 @@ use Astro\Trail\Queries\RunFigures;
 use Astro\Trail\Queries\SpendQuery;
 use Astro\Trail\Tests\Fixtures\Http\AgentRows;
 use Astro\Trail\Tests\Fixtures\Http\UsageRows;
+use Astro\Trail\Tests\Fixtures\Pricing\FlakyResolver;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\ConnectionResolverInterface;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Exceptions;
 
 /*
  * The clock is fixed at 12:30 on 2 January 2026 unless a test sets another. Prices (USD per million tokens):
@@ -437,6 +440,49 @@ describe('what the rate leaves out', function () {
         'tokens reported as zero' => [[spendStep(['inputTokens' => 0, 'outputTokens' => 0])], 4, 1.5, 0, 0],
     ]);
 
+    it('prices a group on its sums, so a step without output is priced beside a step with it', function () {
+        spendRun('2026-01-02 06:10:00', [spendStep()]);
+        spendRun('2026-01-02 07:10:00', [spendStep()]);
+        // The second step reported input and no output: its recorded cost is null, but the group has output from the first.
+        spendRun('2026-01-02 08:10:00', [spendStep(), spendStep(['outputTokens' => null, 'cost' => null])]);
+
+        $body = spendAt($this);
+        $projection = $body['data']['projection'];
+
+        // 3 + 3 + (2,000,000 input at 2 + 100,000 output at 10 = 5) over six buckets.
+        expect($projection['state'])->toBe('projected')
+            ->and($projection['per_bucket'])->toBe(1.8333333333)
+            ->and($projection['left_out'])->toBe(['unpriced_steps' => 0, 'unpriced_tokens' => 0, 'unfinished_runs' => 0])
+            ->and($body['data']['series']['buckets'][20]['cost'])->toBe(['state' => 'partial', 'amount' => 3]);
+    });
+
+    it('reads the tokens of a run that awaits approval as history, and does not call it unfinished', function () {
+        spendRun('2026-01-02 06:10:00', [spendStep()]);
+        spendRun('2026-01-02 07:10:00', [spendStep()]);
+        spendRun('2026-01-02 08:10:00', [spendStep()]);
+        spendRun('2026-01-02 09:10:00', [spendStep()], ['status' => Status::AwaitingApproval]);
+
+        $projection = spendAt($this)['data']['projection'];
+
+        expect($projection['window']['with_usage'])->toBe(4)
+            ->and($projection['per_bucket'])->toBe(2)
+            ->and($projection['left_out'])->toBe(['unpriced_steps' => 0, 'unpriced_tokens' => 0, 'unfinished_runs' => 0]);
+    });
+
+    it('counts a run exactly on the window\'s first moment, not the moment before, and not its end', function () {
+        spendRun('2026-01-02 05:59:59.999', [spendStep()]);
+        spendRun('2026-01-02 06:00:00.000', [spendStep()]);
+        spendRun('2026-01-02 08:00:00.000', [spendStep()]);
+        spendRun('2026-01-02 11:59:59.999', [spendStep()]);
+        spendRun('2026-01-02 12:00:00.000', [spendStep()]);
+
+        $projection = spendAt($this)['data']['projection'];
+
+        // Three steps of three over six buckets: the one at 05:59:59.999 is before the window, the one at 12:00 is in the bucket in progress.
+        expect($projection['window'])->toBe(['from' => '2026-01-02T06:00:00.000Z', 'to' => '2026-01-02T12:00:00.000Z', 'buckets' => 6, 'with_usage' => 3])
+            ->and($projection['per_bucket'])->toBe(1.5);
+    });
+
     it('is not enough history when nothing in the window could be priced', function () {
         foreach (['06:10', '07:10', '08:10'] as $time) {
             spendRun("2026-01-02 {$time}:00", [UsageRows::step('acme', 'mystery', ['inputTokens' => 100, 'outputTokens' => 10])]);
@@ -520,6 +566,22 @@ describe('prices', function () {
         expect($projection['state'])->toBe('not_enough_history')
             ->and($projection['per_bucket'])->toBeNull()
             ->and($projection['left_out'])->toBe(['unpriced_steps' => 5, 'unpriced_tokens' => 5_500_000, 'unfinished_runs' => 0]);
+    });
+});
+
+describe('prices that cannot be read', function () {
+    it('projects from the prices of the configuration and reports the failure', function () {
+        spendDay();
+        Exceptions::fake();
+        // The prices table cannot be read: the connection refuses.
+        $this->app->singleton(PriceBook::class, fn ($app) => new PriceBook($app->make('config'), new FlakyResolver($app->make(ConnectionResolverInterface::class))));
+
+        $projection = spendAt($this)['data']['projection'];
+
+        expect($projection['state'])->toBe('projected')
+            ->and($projection['per_bucket'])->toBe(2.5);
+
+        Exceptions::assertReportedCount(1);
     });
 });
 
