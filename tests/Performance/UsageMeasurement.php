@@ -335,7 +335,7 @@ final class UsageMeasurement
                     sum(case when {$bills} then 1 else 0 end) as steps,
                     sum(case when {$bills} and {$reported} then 1 else 0 end) as reported_steps,
                     sum(case when {$unpriced} then 1 else 0 end) as unpriced_steps,
-                    sum(case when {$unpriced} then coalesce(s.input_tokens, 0) + coalesce(s.output_tokens, 0) end) as unpriced_tokens,
+                    sum(case when {$unpriced} and (s.input_tokens is not null or s.output_tokens is not null) then coalesce(s.input_tokens, 0) + coalesce(s.output_tokens, 0) end) as unpriced_tokens,
                     max(case when {$bills} and s.status = 'running' then s.created_at end) as open_at,
                     sum(case when {$bills} then s.input_tokens end) as input_tokens,
                     sum(case when {$bills} and s.input_tokens is not null then case when s.input_tokens > {$cached} then s.input_tokens - {$cached} else 0 end end) as uncached_input_tokens,

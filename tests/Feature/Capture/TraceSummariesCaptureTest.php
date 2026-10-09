@@ -3,6 +3,7 @@
 use Astro\Trail\Facades\Trail;
 use Astro\Trail\Queries\AgentBreakdown;
 use Astro\Trail\Queries\TimeRange;
+use Astro\Trail\Storage\Contracts\TraceStore;
 use Astro\Trail\Tests\Fixtures\Agents\AssistantAgent;
 use Astro\Trail\Tests\Fixtures\Agents\ResearcherAgent;
 use Astro\Trail\Tests\Fixtures\Capture\Failures;
@@ -13,6 +14,7 @@ use Astro\Trail\Tests\Fixtures\Storage\Summaries;
 use Astro\Trail\Tests\Fixtures\Tools\CallbackTool;
 use Astro\Trail\Tests\Fixtures\Tools\LookupTool;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Http;
@@ -182,15 +184,29 @@ it('counts a failed tool and a tool a sub-agent called with the run\'s own', fun
     ]);
 });
 
-it('leaves a step that is still running open, and closes it when the run is flushed again', function () {
+it('leaves a step that is still running open', function () {
     $id = Streams::abandonedAfter(2);
     Trail::flush();
 
-    $probe = new DatabaseStoreProbe;
-    $step = collect($probe->spans($id))->firstWhere('type', 'step');
+    $step = collect((new DatabaseStoreProbe)->spans($id))->firstWhere('type', 'step');
 
     expect(Summaries::only(Summaries::models($id), ['steps', 'reported_steps', 'open_at', 'input_tokens', 'cost']))
         ->toBe([['steps' => 1, 'reported_steps' => 0, 'open_at' => $step['created_at'], 'input_tokens' => null, 'cost' => null]]);
+});
+
+it('closes the open step of an abandoned run when the run is swept, and keeps the same rows', function () {
+    $id = Streams::abandonedAfter(2);
+    Trail::flush();
+
+    $before = Summaries::models($id);
+
+    expect($before)->toHaveCount(1)->and($before[0]['open_at'])->not->toBeNull();
+
+    $this->travelTo(Carbon::now()->addHours(2));
+
+    expect(app(TraceStore::class)->sweep(300))->toBe(1)
+        ->and(DB::table('trail_spans')->where('trace_id', $id)->where('type', 'step')->value('status'))->toBe('incomplete')
+        ->and(Summaries::models($id))->toBe([array_merge($before[0], ['open_at' => null])]);
 });
 
 it('agrees with the grouped reads of spans over a varied set of runs', function () {
@@ -281,7 +297,7 @@ it('agrees with the grouped reads of spans over a varied set of runs', function 
     expect($marked)->toBe($distinct)->and($marked)->toBe([['anthropic', 6], ['openai', 2]]);
 });
 
-it('stays usable, reports the failure and leaves no rows when the summary cannot be written inside the application\'s transaction', function () {
+it('stores the run, reports the failure once and stays usable when the summary cannot be written inside the application\'s transaction', function () {
     Exceptions::fake();
     $broken = false;
     DB::beforeExecuting(function (string $query) use (&$broken) {
@@ -307,9 +323,9 @@ it('stays usable, reports the failure and leaves no rows when the summary cannot
     Exceptions::assertReportedCount(1);
     expect(DB::table('trail_trace_models')->count())->toBe(0)
         ->and(DB::table('trail_trace_tools')->count())->toBe(0)
-        // The flush wrote nothing at all: the run is only the row its early insert made.
-        ->and(DB::table('trail_spans')->count())->toBe(0)
-        ->and(DB::table('trail_traces')->count())->toBe(1);
+        // The write itself is stored: the run's spans and its totals.
+        ->and(DB::table('trail_spans')->count())->toBe(4)
+        ->and(DB::table('trail_traces')->value('input_tokens'))->toBe(20);
 });
 
 it('stays usable when a summary table is gone at the flush', function () {
@@ -325,5 +341,9 @@ it('stays usable when a summary table is gone at the flush', function () {
         ->and(DB::select('select 1 as one')[0]->one)->toBe(1);
 
     Exceptions::assertReportedCount(1);
+    // The write itself is stored; only the summary is missing.
+    expect(DB::table('trail_spans')->count())->toBe(2)
+        ->and(DB::table('trail_traces')->value('input_tokens'))->toBe(10)
+        ->and(DB::table('trail_trace_models')->count())->toBe(0);
     DB::statement('alter table trail_trace_tools_away rename to trail_trace_tools');
 })->skip(fn () => DB::connection()->getDriverName() !== 'pgsql', 'only Postgres refuses statements after a failed one, and undoes DDL with the transaction');

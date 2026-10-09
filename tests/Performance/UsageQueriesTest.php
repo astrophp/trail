@@ -25,9 +25,11 @@ use Astro\Trail\Tests\TestCase;
  * TRAIL_MEASURE_MYSQL_PORT (33306), TRAIL_MEASURE_PGSQL_PORT (35432) and TRAIL_MEASURE_PASSWORD. The
  * databases must be throwaway ones: the tables are emptied and filled with generated rows.
  *
- * MySQL at a million runs needs more memory than a Docker host of 8 GiB can give it with its data
- * in memory: the spans and their indexes take about 3 GiB, and the grouped reads over a week need more
- * than 1 GiB of temporary space on top of that. Measure MySQL at 100,000 runs, and Postgres at both.
+ * A million runs are about 5.3 million spans. With their indexes, the spans and runs take about 3.5 GiB
+ * in Postgres and about 4.5 GiB in MySQL; the two summaries add about 1 GiB with their indexes, and the
+ * grouped reads over a week in MySQL write more than 1 GiB of temporary files. When the data directory
+ * is held in memory, a million runs therefore need roughly 6 GiB for Postgres and 8 GiB or more for MySQL,
+ * beside what the server itself uses. Measure MySQL at 100,000 runs, and Postgres at both.
  */
 uses(TestCase::class);
 

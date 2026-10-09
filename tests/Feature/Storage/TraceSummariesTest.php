@@ -6,9 +6,12 @@ use Astro\Trail\Storage\Contracts\TraceStore;
 use Astro\Trail\Storage\DatabaseTraceStore;
 use Astro\Trail\Tests\Fixtures\Storage\Records;
 use Astro\Trail\Tests\Fixtures\Storage\Summaries;
+use Astro\Trail\Tests\Fixtures\Storage\Transactions;
+use Illuminate\Database\DeadlockException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Exceptions;
 
 uses(RefreshDatabase::class);
 
@@ -133,6 +136,25 @@ it('counts steps, steps that reported usage and steps that could not be priced a
     ]);
 });
 
+it('keeps the tokens of unpriced steps unknown unless a step reported input or output', function () {
+    ($this->put)([
+        // Unpriced, and reported only a cache count: one unpriced step, no known tokens.
+        ($this->step)('a1', ['cacheReadTokens' => 5]),
+        // Unpriced, with input: counted, beside one that reported only reasoning.
+        ($this->step)('b1', ['model' => 'gpt-b', 'inputTokens' => 7, 'outputTokens' => 3]),
+        ($this->step)('b2', ['model' => 'gpt-b', 'reasoningTokens' => 4]),
+        // Every step that reported usage is priced.
+        ($this->step)('c1', ['model' => 'gpt-c', 'inputTokens' => 9, 'cost' => 0.25]),
+        ($this->step)('c2', ['model' => 'gpt-c', 'cacheReadTokens' => 2, 'cost' => 0.5]),
+    ]);
+
+    expect(Summaries::only(Summaries::models('run-1'), ['model', 'steps', 'reported_steps', 'unpriced_steps', 'unpriced_tokens']))->toBe([
+        ['model' => 'gpt-a', 'steps' => 1, 'reported_steps' => 1, 'unpriced_steps' => 1, 'unpriced_tokens' => null],
+        ['model' => 'gpt-b', 'steps' => 2, 'reported_steps' => 2, 'unpriced_steps' => 2, 'unpriced_tokens' => 10],
+        ['model' => 'gpt-c', 'steps' => 2, 'reported_steps' => 2, 'unpriced_steps' => 0, 'unpriced_tokens' => null],
+    ]);
+});
+
 it('sums the uncached input per step, never below zero, and leaves it null when no step reported input', function () {
     ($this->put)([
         // More cached than input: nothing is uncached, and it takes nothing from the other step.
@@ -221,7 +243,7 @@ it('counts tool calls by name across the run, failures apart, and has no row for
         ->and(count(Summaries::models('run-2')))->toBe(1);
 });
 
-it('adds exactly four statements to a write, whatever the run holds', function (int $models, int $tools) {
+it('issues exactly the statements it did before and four more for the summaries, whatever the run holds', function (int $models, int $tools, int $total) {
     $spans = [];
 
     for ($index = 0; $index < $models; $index++) {
@@ -232,16 +254,18 @@ it('adds exactly four statements to a write, whatever the run holds', function (
         $spans[] = ($this->tool)("t{$index}", "tool-{$index}");
     }
 
-    $summary = [];
-    DB::listen(function ($query) use (&$summary) {
-        if (preg_match('/trail_trace_(models|tools)/', $query->sql) === 1) {
-            $summary[] = $query->sql;
-        }
+    $all = [];
+    DB::listen(function ($query) use (&$all) {
+        $all[] = $query->sql;
     });
 
     ($this->put)($spans);
 
-    expect($summary)->toHaveCount(4)
+    $summary = array_values(array_filter($all, fn (string $sql) => preg_match('/trail_trace_(models|tools)/', $sql) === 1));
+
+    // Every statement of the write is counted, so one added anywhere fails this.
+    expect($all)->toHaveCount($total, implode("\n", $all))
+        ->and($summary)->toHaveCount(4)
         ->and($summary[0])->toMatch('/^delete from ["`]?trail_trace_models/')
         ->and($summary[1])->toMatch('/^insert into ["`]?trail_trace_models/')
         ->and($summary[2])->toMatch('/^delete from ["`]?trail_trace_tools/')
@@ -249,8 +273,8 @@ it('adds exactly four statements to a write, whatever the run holds', function (
         ->and(count(Summaries::models('run-1')))->toBe($models)
         ->and(count(Summaries::tools('run-1')))->toBe($tools);
 })->with([
-    'one model, no tools' => [1, 0],
-    'four models, three tools' => [4, 3],
+    'one model, no tools' => [1, 0, 10],
+    'four models, three tools' => [4, 3, 10],
 ]);
 
 it('removes the rows of a pruned run and leaves another run\'s', function () {
@@ -295,7 +319,24 @@ it('leaves the rows of a swept run as they are, except that nothing is open any 
         ->and(Summaries::only(Summaries::models('new'), ['open_at']))->toBe([['open_at' => '2026-03-01 12:18:00.000']]);
 });
 
-it('fails the write, and leaves the rows as they were, when the summary cannot be written', function () {
+it('keeps a group open when only its older running step is swept', function () {
+    config(['trail.stale_after' => 3600]);
+    $running = fn (string $id) => Records::span('run-1', ['id' => $id, 'provider' => 'openai', 'model' => 'gpt-a', 'status' => Status::Running]);
+
+    $this->store->store(Records::trace(['id' => 'run-1']), [$running('s-old')]);
+    $this->travelTo(Carbon::parse('2026-03-01 12:18:00'));
+    $this->store->store(Records::trace(['id' => 'run-1']), [$running('s-new')]);
+    $this->travelTo(Carbon::parse('2026-03-01 12:20:00'));
+
+    // Swept at 12:15: the step from 12:00 goes, the one from 12:18 stays running and the group stays open from it.
+    $this->store->sweep(300);
+
+    expect(DB::table('trail_spans')->whereIn('id', ['s-old', 's-new'])->orderBy('id')->pluck('status', 'id')->all())->toBe(['s-new' => 'running', 's-old' => 'incomplete'])
+        ->and(Summaries::only(Summaries::models('run-1'), ['steps', 'open_at']))->toBe([['steps' => 2, 'open_at' => '2026-03-01 12:18:00.000']]);
+});
+
+it('stores the write, reports the failure once and leaves the rows as they were when the summary cannot be written', function () {
+    Exceptions::fake();
     ($this->put)([($this->step)('s1', ['inputTokens' => 5]), ($this->tool)('t1', 'lookup')]);
     $before = [Summaries::models('run-1'), Summaries::tools('run-1')];
 
@@ -306,16 +347,41 @@ it('fails the write, and leaves the rows as they were, when the summary cannot b
         }
     });
 
-    expect(fn () => ($this->put)([($this->step)('s2', ['inputTokens' => 6]), ($this->tool)('t2', 'search')]))->toThrow(RuntimeException::class, 'the tools cannot be written');
-
-    // The models were rebuilt before the tools failed; nothing of that write remains, the span included.
-    expect([Summaries::models('run-1'), Summaries::tools('run-1')])->toBe($before)
-        ->and(DB::table('trail_spans')->where('trace_id', 'run-1')->count())->toBe(2);
-
-    $broken = false;
+    // The models were rebuilt before the tools failed; the savepoint undid that, and only that.
     ($this->put)([($this->step)('s2', ['inputTokens' => 6]), ($this->tool)('t2', 'search')]);
 
-    expect(Summaries::only(Summaries::models('run-1'), ['steps', 'input_tokens']))->toBe([['steps' => 2, 'input_tokens' => 11]]);
+    Exceptions::assertReportedCount(1);
+    expect([Summaries::models('run-1'), Summaries::tools('run-1')])->toBe($before)
+        ->and(DB::table('trail_spans')->where('trace_id', 'run-1')->count())->toBe(4)
+        ->and(DB::table('trail_traces')->where('id', 'run-1')->value('input_tokens'))->toBe(11)
+        ->and(DB::table('trail_traces')->where('id', 'run-1')->value('span_count'))->toBe(4);
+
+    $broken = false;
+    ($this->put)([]);
+
+    expect(Summaries::only(Summaries::models('run-1'), ['steps', 'input_tokens']))->toBe([['steps' => 2, 'input_tokens' => 11]])
+        ->and(Summaries::only(Summaries::tools('run-1'), ['name', 'calls']))->toBe([['name' => 'lookup', 'calls' => 1], ['name' => 'search', 'calls' => 1]]);
+    Exceptions::assertReportedCount(1);
+});
+
+it('does not swallow a deadlock from the summary: the write is tried again and stored', function () {
+    Exceptions::fake();
+    $attempts = 0;
+
+    Transactions::outside(function () use (&$attempts) {
+        DB::beforeExecuting(function (string $query) use (&$attempts) {
+            if (preg_match('/^insert into ["`]?trail_trace_models/i', $query) === 1 && ++$attempts === 1) {
+                throw new DeadlockException('Deadlock found when trying to get lock; try restarting transaction');
+            }
+        });
+
+        ($this->put)([($this->step)('s1', ['inputTokens' => 5])]);
+
+        expect($attempts)->toBe(2)
+            ->and(Summaries::only(Summaries::models('run-1'), ['steps', 'input_tokens']))->toBe([['steps' => 1, 'input_tokens' => 5]])
+            ->and(DB::table('trail_spans')->where('trace_id', 'run-1')->count())->toBe(1);
+        Exceptions::assertNothingReported();
+    });
 });
 
 it('groups names as the database compares them: one row for a model spelt in two cases', function () {

@@ -9,13 +9,18 @@ use Astro\Trail\Storage\Contracts\TraceStore;
 use DateTimeInterface;
 use Illuminate\Database\ConnectionInterface;
 use Illuminate\Database\ConnectionResolverInterface;
+use Illuminate\Database\DeadlockException;
+use Illuminate\Database\DetectsConcurrencyErrors;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Carbon;
 use InvalidArgumentException;
+use Throwable;
 
 class DatabaseTraceStore implements TraceStore
 {
+    use DetectsConcurrencyErrors;
+
     private const JSON_FLAGS = JSON_UNESCAPED_UNICODE
         | JSON_UNESCAPED_SLASHES
         | JSON_PRESERVE_ZERO_FRACTION
@@ -104,7 +109,7 @@ class DatabaseTraceStore implements TraceStore
 
             $this->storeSpans($db, $trace->id, $spans);
             $this->writeTotals($db, $trace->id);
-            $this->writeSummaries($db, $trace->id);
+            $this->keepSummaries($db, $trace->id);
         }, 3);
     }
 
@@ -121,6 +126,18 @@ class DatabaseTraceStore implements TraceStore
                 'updated_at' => $now,
             ];
 
+            // A step swept as incomplete is no longer open, whatever age the sweep was run with. Only the
+            // rows of runs with a step to sweep are looked at, and this is done before those steps change.
+            $swept = $db->table('trail_spans')
+                ->select('trace_id')
+                ->where('status', Status::Running->value)
+                ->where('created_at', '<', $cutoff);
+
+            $db->table('trail_trace_models')
+                ->where('open_at', '<', $cutoff)
+                ->whereIn('trace_id', $swept)
+                ->update(['open_at' => null]);
+
             $traces = $db->table('trail_traces')
                 ->where('status', Status::Running->value)
                 ->where('created_at', '<', $cutoff)
@@ -130,11 +147,6 @@ class DatabaseTraceStore implements TraceStore
                 ->where('status', Status::Running->value)
                 ->where('created_at', '<', $cutoff)
                 ->update($changes);
-
-            // A step swept as incomplete is no longer open, whatever age the sweep was run with.
-            $db->table('trail_trace_models')
-                ->where('open_at', '<', $cutoff)
-                ->update(['open_at' => null]);
 
             return $traces;
         }, 3);
@@ -331,6 +343,28 @@ class DatabaseTraceStore implements TraceStore
     }
 
     /**
+     * Keep the summaries of the run, without letting them cost the write its evidence.
+     *
+     * They are rebuilt in a savepoint of their own. If that fails (the tables are not migrated yet, or
+     * the database rejects the statements) the failure is reported, the savepoint undoes the summary
+     * alone, and the spans and totals of this write are stored with the run's summary rows as they were.
+     * A deadlock or a serialization failure is not that kind of failure: it is thrown on, so that the
+     * transaction around the whole write is tried again.
+     */
+    private function keepSummaries(ConnectionInterface $db, string $traceId): void
+    {
+        try {
+            $db->transaction(fn () => $this->writeSummaries($db, $traceId));
+        } catch (Throwable $e) {
+            if ($e instanceof DeadlockException || $this->causedByConcurrencyError($e)) {
+                throw $e;
+            }
+
+            report($e);
+        }
+    }
+
+    /**
      * Rebuild the run's rows of what it used, from its spans, in statements the database runs by itself.
      *
      * Each table is filled by one insert-select. That reads the spans as the database holds them now
@@ -358,7 +392,8 @@ class DatabaseTraceStore implements TraceStore
             ->selectRaw("sum(case when {$bills} then 1 else 0 end) as steps")
             ->selectRaw("sum(case when {$bills} and {$reported} then 1 else 0 end) as reported_steps")
             ->selectRaw("sum(case when {$unpriced} then 1 else 0 end) as unpriced_steps")
-            ->selectRaw("sum(case when {$unpriced} then coalesce(trail_spans.input_tokens, 0) + coalesce(trail_spans.output_tokens, 0) end) as unpriced_tokens")
+            // Unknown when a step reported neither input nor output: cache and reasoning tokens are not counted here.
+            ->selectRaw("sum(case when {$unpriced} and (trail_spans.input_tokens is not null or trail_spans.output_tokens is not null) then coalesce(trail_spans.input_tokens, 0) + coalesce(trail_spans.output_tokens, 0) end) as unpriced_tokens")
             ->selectRaw("max(case when {$bills} and trail_spans.status = ? then trail_spans.created_at end) as open_at", [$running])
             ->selectRaw("sum(case when {$bills} then trail_spans.input_tokens end) as input_tokens")
             // The comparison comes first so that the unsigned columns are never subtracted below zero.
