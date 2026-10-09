@@ -5,6 +5,8 @@ import {
     formatCount,
     formatDateTime,
     formatDuration,
+    formatHoursAndMinutes,
+    formatDurationFromZero,
     formatOffset,
     formatRate,
     formatRelativeTime,
@@ -110,6 +112,20 @@ describe('formatDuration', () => {
     ])('formats %s ms as %s', (ms, text) => {
         expect(formatDuration(ms)).toBe(text)
     })
+})
+
+describe('formatDurationFromZero', () => {
+    it('writes an exact zero as 0 ms, where formatDuration says under a millisecond', () => {
+        expect(formatDuration(0)).toBe('<1 ms')
+        expect(formatDurationFromZero(0)).toBe('0 ms')
+    })
+
+    it.each([0.4, 4.8, 840, 1_840.412, 3_720_000])(
+        'is formatDuration for %s ms',
+        (ms) => {
+            expect(formatDurationFromZero(ms)).toBe(formatDuration(ms))
+        },
+    )
 })
 
 describe('formatOffset', () => {
@@ -274,5 +290,17 @@ describe('shortId', () => {
 
         expect(shortId(id)).toBe('😀'.repeat(8) + '…' + '😀'.repeat(4))
         expect(shortId('😀'.repeat(13))).toBe('😀'.repeat(13))
+    })
+})
+
+describe('formatHoursAndMinutes', () => {
+    it('writes the time of day without seconds, 24-hour, in the zone given', () => {
+        const at = new Date('2026-01-02T10:05:59Z')
+
+        expect(formatHoursAndMinutes(at, 'UTC')).toBe('10:05')
+        expect(formatHoursAndMinutes(at, 'Europe/Istanbul')).toBe('13:05')
+        expect(
+            formatHoursAndMinutes(new Date('2026-01-02T00:00:00Z'), 'UTC'),
+        ).toBe('00:00')
     })
 })

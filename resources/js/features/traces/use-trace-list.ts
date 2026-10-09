@@ -7,6 +7,7 @@ import {
     type TraceFilterKey,
     type TraceListView,
 } from '@/api/trace-list-view'
+import { issueKindLabels } from '@/components/telemetry/issue-kind-labels'
 import { statusFilterLabel } from '@/features/traces/trace-status'
 import { useListState } from '@/hooks/use-list-state'
 import { useTimeRange } from '@/hooks/use-time-range'
@@ -74,6 +75,25 @@ export function useTraceList() {
             key: 'conversation',
             label: `Conversation: ${conversationIdText(state.conversation)}`,
         })
+    }
+
+    if (state.issue_kind !== 'all') {
+        activeFilters.push({
+            key: 'issue_kind',
+            label: `Issue: ${issueKindLabels[state.issue_kind]}`,
+        })
+    }
+
+    if (state.child_failed) {
+        activeFilters.push({ key: 'child_failed', label: 'Sub-agent failed' })
+    }
+
+    if (state.unpriced) {
+        activeFilters.push({ key: 'unpriced', label: 'Unpriced usage' })
+    }
+
+    if (state.recovered) {
+        activeFilters.push({ key: 'recovered', label: 'Recovered by failover' })
     }
 
     if (state.bookmarked) {

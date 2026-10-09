@@ -110,6 +110,27 @@ describe('Timestamp', () => {
         expect(screen.getByText('Not captured')).toBeInTheDocument()
     })
 
+    it('shows only how long ago when relative, with the whole date and time on hover and for assistive technology', () => {
+        render(
+            inZone(
+                'Asia/Tokyo',
+                <Timestamp
+                    at="2026-10-07T21:05:09Z"
+                    now={now}
+                    layout="relative"
+                />,
+            ),
+        )
+
+        const time = screen.getByText('13s ago').closest('time')
+
+        expect(time).toHaveAttribute('datetime', '2026-10-07T21:05:09Z')
+        expect(time).toHaveAttribute('title', 'Oct 8, 2026, 06:05:09 GMT+9')
+        expect(time).toHaveTextContent('Oct 8, 2026, 06:05:09 GMT+9')
+        // No clock time or date in the visible words: it is a second line's worth of nothing.
+        expect(screen.queryByText('06:05:09')).toBeNull()
+    })
+
     it('shows the day and the clock time on one line, even on the same day, when inline', () => {
         const { container } = render(
             inZone(

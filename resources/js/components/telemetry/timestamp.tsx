@@ -18,9 +18,11 @@ type TimestampProps = {
     /**
      * `stacked` is how long ago with the clock time under it; `inline` is the day and the clock
      * time on one line (`Oct 7 \u00b7 14:03:22`), for a header that states when a run started;
-     * `full` is the whole date and time with its zone on one line, with how long ago on hover.
+     * `full` is the whole date and time with its zone on one line, with how long ago on hover;
+     * `relative` is only how long ago, on one line, with the whole date and time on hover and in
+     * the accessible text.
      */
-    layout?: 'stacked' | 'inline' | 'full'
+    layout?: 'stacked' | 'inline' | 'full' | 'relative'
     className?: string
 }
 
@@ -51,6 +53,20 @@ export function Timestamp({
 
     const absolute = formatDateTime(date, timeZone)
     const clock = formatClockTime(date, timeZone)
+
+    if (layout === 'relative') {
+        return (
+            <time
+                data-slot="timestamp"
+                dateTime={at}
+                title={absolute}
+                className={cn('tabular-nums', className)}
+            >
+                <span aria-hidden="true">{formatRelativeTime(date, now)}</span>
+                <span className="sr-only">{absolute}</span>
+            </time>
+        )
+    }
 
     if (layout === 'full') {
         return (

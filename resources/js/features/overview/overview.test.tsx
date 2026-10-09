@@ -47,7 +47,10 @@ const valueOf = (label: string) =>
 const hrefOf = (label: string) =>
     metric(label).querySelector('a')?.getAttribute('href')
 const strip = () => document.querySelector('[data-slot="metric-strip"]')
-const busy = () => document.querySelector('[aria-busy="true"]')
+/** The busy part of the strip. The panels below it have busy parts of their own. */
+const busy = () => strip()?.closest('[aria-busy="true"]') ?? null
+/** The strip's status region, the first on the page: the panels' follow it. */
+const stripStatus = () => screen.getAllByRole('status')[0]
 
 async function open(route = '/', period = '24 hours') {
     renderApp(route)
@@ -107,7 +110,7 @@ describe('the Overview page', () => {
         expect(valueOf('Traces')).toBe('32')
         expect(valueOf('Error rate')).toBe('3.6%')
         expect(valueOf('p95 duration')).toBe('1.90s')
-        expect(valueOf('Estimated cost')).toBe('Pending')
+        expect(valueOf('Estimated cost')).toMatch(/^\$0\.0335So far/)
         expect(
             within(metric('Error rate')).getByText('1 failed'),
         ).toBeInTheDocument()
@@ -469,7 +472,7 @@ describe('the Overview page', () => {
             expect(hrefOf('Traces')).toBe('/trail/traces')
             expect(hrefOf('Error rate')).toBe('/trail/traces?status=failed')
             // The announcement is outside the busy part, where a screen reader may mute it.
-            const status = screen.getByRole('status')
+            const status = stripStatus()
 
             expect(status).toHaveTextContent('Loading')
             expect(dimmed).not.toContainElement(status)
@@ -487,7 +490,7 @@ describe('the Overview page', () => {
             expect(strip()).not.toHaveClass('opacity-60')
             expect(valueOf('Traces')).toBe('7')
             expect(hrefOf('Traces')).toBe('/trail/traces?range=7d')
-            expect(screen.getByRole('status')).toBeEmptyDOMElement()
+            expect(stripStatus()).toBeEmptyDOMElement()
         })
 
         it('draws an empty answer for the next range only once it has arrived', async () => {
@@ -767,5 +770,50 @@ describe('an empty range', () => {
                 notice.closest('[data-slot="notice"]') as HTMLElement,
             ).queryByText('Try a longer range.') !== null,
         ).toBe(suggests)
+    })
+})
+
+describe('a failed refresh when nothing will ask again', () => {
+    it('gives the strip a way to try again, and the note goes when it works', async () => {
+        let fail = false
+        const client = createQueryClient({ queries: { retry: false } })
+        const quiet = (url: string) => {
+            const base = overviewFor(url)
+
+            return {
+                ...base,
+                data: {
+                    ...base.data,
+                    summary: {
+                        ...base.data.summary,
+                        runs: runs({ completed: 32 }),
+                    },
+                },
+            }
+        }
+
+        mockApi((url) =>
+            fail ? json({ message: 'Down.' }, 500) : json(quiet(url)),
+        )
+        renderApp('/', {}, client)
+        await screen.findAllByText('vs previous 24 hours')
+
+        fail = true
+        await act(async () => {
+            await client.refetchQueries({ queryKey: ['overview', '24h'] })
+        })
+
+        await screen.findByText(
+            'The last refresh failed. What is shown is from before it.',
+        )
+        expect(valueOf('Traces')).toBe('32')
+
+        fail = false
+        await userEvent.click(screen.getByRole('button', { name: 'Try again' }))
+
+        await waitFor(() =>
+            expect(screen.queryByText(/The last refresh failed/)).toBeNull(),
+        )
+        expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull()
     })
 })

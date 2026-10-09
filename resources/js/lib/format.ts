@@ -140,6 +140,14 @@ export function formatDuration(ms: number): string {
 }
 
 /**
+ * `formatDuration`, except that exactly zero is `0 ms`: the start of an axis, or an average that
+ * really is zero, is not "under a millisecond".
+ */
+export function formatDurationFromZero(ms: number): string {
+    return ms === 0 ? '0 ms' : formatDuration(ms)
+}
+
+/**
  * Where something starts on a run's time axis: `+0 ms`, `+31 ms`, `+1.20s`. Built on the units of
  * `formatDuration`. Before the start is a real minus sign: `−12 ms`.
  * The input must be finite: a caller that may hold NaN or Infinity guards it first.
@@ -202,7 +210,7 @@ export function resolveTimeZone(
     return knownZones.get(timeZone)
 }
 
-type ZoneFormat = 'clock' | 'shortDate' | 'day' | 'dateTime'
+type ZoneFormat = 'clock' | 'hourMinute' | 'shortDate' | 'day' | 'dateTime'
 
 const zoneFormats: Record<ZoneFormat, Intl.DateTimeFormatOptions> = {
     clock: {
@@ -211,6 +219,7 @@ const zoneFormats: Record<ZoneFormat, Intl.DateTimeFormatOptions> = {
         second: '2-digit',
         hourCycle: 'h23',
     },
+    hourMinute: { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' },
     shortDate: { month: 'short', day: 'numeric' },
     day: { year: 'numeric', month: 'numeric', day: 'numeric' },
     // `shortOffset` reads the same for every zone: `GMT+3`, `GMT-4`, `GMT`.
@@ -250,6 +259,14 @@ export function formatClockTime(
     timeZone: string | undefined,
 ): string {
     return zoneFormatter('clock', timeZone).format(at)
+}
+
+/** The time of day, 24-hour without seconds: `14:03`. */
+export function formatHoursAndMinutes(
+    at: Date,
+    timeZone: string | undefined,
+): string {
+    return zoneFormatter('hourMinute', timeZone).format(at)
 }
 
 /** The day without a year: `Oct 7`. */
