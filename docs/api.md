@@ -784,13 +784,18 @@ parent started inside a run that did. Takes a time range, `search`, `sort` and p
 Each item is [The agent](#the-agent).
 
 - `search` keeps the agents whose name contains the text (at most 200 characters), whatever its case,
-  as the other lists search. A `%` or `_` in the text is taken literally.
+  as the other lists search. A `%` or `_` in the text is taken literally. The text is matched against
+  the names of the runs and of the delegated spans before they are grouped, so on a database whose
+  `LIKE` tells apart spellings that its `=` takes for one agent (MySQL: a trailing space, `ß` and `ss`)
+  the figures of an agent cover only the spellings that match, and can change with the search term.
 - `sort` is `runs` (the agent's `top_level.runs.all`), `name`, `error_rate`, `duration` (the average),
   `cost` (the amount) or `last_activity`, with a leading `-` for descending; the default is `-runs`.
   An agent without the value comes last in both directions: an agent that was only delegated to has
   no top-level figures, an agent with no finished run has no error rate and one with no duration or
-  cost has no average or amount. A tie is ordered by `name` in the direction of the sort, comparing
-  names without regard to case, so a page never repeats or skips an agent.
+  cost has no average or amount. A tie is ordered by `name` in the direction of the sort, so a page
+  never repeats or skips an agent. `name` is ordered by the application's own case-insensitive
+  comparison of one stored spelling of the agent, which can differ from the database's order that
+  `GET /api/traces?sort=agent` uses.
 - `buckets` describes the buckets of every agent's `activity`: `bucket` and the edges mean what they
   mean in the series of [`GET /api/overview`](#get-apioverview), and a range over 92 days is the same
   422.
@@ -800,8 +805,10 @@ Each item is [The agent](#the-agent).
   over the grouped rows, of which at most `agent_limit.limit` are read for each of the first two: the
   agents with most runs, and the delegated agents with most spans, a delegated agent whose name has no
   group among the runs read included. `truncated` is `true` when there were more groups than the
-  limit, and then `pagination.total` is the number of agents read, not of all that exist, and an agent
-  whose own runs were not read can be listed as one that was only delegated to.
+  limit in either read, and then `pagination.total` is the number of agents read, not of all that
+  exist. It goes wrong in both directions: an agent whose own runs were not read can be listed as one
+  that was only delegated to (`top_level` `null`), and an agent whose delegated group was not read has
+  `delegated` `null` although it was delegated to.
 
 ### `GET /api/agents/show`
 
@@ -831,7 +838,8 @@ One agent for a time range, its summary and series, and what needs a look among 
   `last_activity_at` `null`, an all-zero `activity`, and the spelling and class of its latest run ever
   (else of its latest delegated span). A name that was never recorded is a 404. Whether it was is
   looked up by its latest run, then by its latest delegated span, which the index on a span's type and
-  name finds.
+  name finds. Looking up a name that has nothing in the range reads the runs by name without an
+  index.
 - `summary`, `previous` and `series` are those of [`GET /api/overview`](#get-apioverview) over the
   agent's own runs, with the 95th percentile of its durations: delegated spans are no part of them,
   and `summary.runs` is `agent.top_level.runs`.
@@ -872,24 +880,32 @@ the same time range.
 ```
 
 - `models` and `tools` are read over every span of the agent's own runs that started in the range,
-  those of agents it delegated to included. `steps` counts the spans that called the model: model
-  steps, and embeddings calls, since the runs list's `provider` and `model` filters match any span
-  that used the model. A span without a provider and model is in no row. `calls` counts tool spans and
-  `failed` those that failed. `runs` is the number of distinct runs.
+  those of agents it delegated to included. A model's `runs` is the number of distinct runs that have
+  any span with that provider and model, an agent span (the run's own or a delegated agent's, which
+  record the model they asked for) included, as the runs list's `provider` and `model` filters keep
+  them. A span missing either its provider or its model is in no row. `steps` counts the spans that
+  called the model: model steps and embeddings calls, the only spans that carry usage. A model that
+  only agent spans asked for is still a row, with `steps` `0`, a `usage` that is `not_reported` and a
+  `cost` that is `not_captured`. A tool's `calls` counts tool spans, `failed` those that failed, and
+  `runs` the distinct runs that called it.
 - `GET /api/traces` with a row's `filters` and the same range returns exactly the row's `runs`.
-- A model's `usage` and `cost` are sums over its spans, shaped as a run's are: `cost` is `partial`
-  when some of its spans reported usage and could not be priced, and `pending` while one of them is
-  running (a span still running after `stale_after` seconds is not).
-- `delegated.models` and `delegated.tools` are the same rows read over the steps and tools that are
-  children of the agent's delegated agent spans. They carry no `filters`: the list cannot filter on
-  what happened inside a delegated run, so none of their counts can be reproduced there.
-- Each list is ordered by `runs`, most first, then by name, and holds at most the `limit` of 20 rows;
-  `limits` says how many there are.
+- A model's `usage` and `cost` are sums over its step and embeddings spans, shaped as a run's are:
+  `cost` is `partial` when some of those spans reported usage and could not be priced, and `pending`
+  while one of them is running (a span still running after `stale_after` seconds is not).
+- `delegated.models` and `delegated.tools` are read over the steps, embeddings calls and tools that
+  are children of the agent's delegated agent spans, so an embeddings call made by a tool of a
+  delegated agent is not in them, nor are the agents that agent delegated to. A delegated model's
+  `runs` is the number of distinct runs with such a span: an agent span that asked for the model and
+  called it nowhere is not counted. They carry no `filters`: the list cannot filter on what happened
+  inside a delegated run, so none of their counts can be reproduced there.
+- Models are ordered by `runs`, most first, then by provider, then by model; tools by `runs`, then by
+  name. Each list holds at most the `limit` of 20 rows; `limits` says how many there are.
 - An agent recorded but with nothing in the range has empty lists and totals of `0`. A name that was
   never recorded is a 404.
 - It is read in the lookup of the agent's name (one or two queries when it has something in the
   range) and four queries, one for each list; an agent with nothing in the range is not read for
-  models and tools at all.
+  models and tools at all. Looking up a name that has nothing in the range reads the runs by name
+  without an index.
 
 ### `GET /api/conversations`
 

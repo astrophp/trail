@@ -413,6 +413,72 @@ it('reads at most the limit of delegated groups, and says so', function () {
         ->and(array_column($body['data'], 'name'))->toBe(['Other', 'Host', 'Three', 'One']);
 });
 
+it('lists an agent whose runs were cut as one that was only delegated to', function () {
+    $this->app->bind(AgentIndex::class, fn () => new AgentIndex(1));
+
+    $big = AgentRows::run('Big', '2026-01-02 10:00:00', ['id' => 'big-1']);
+    AgentRows::run('Big', '2026-01-02 10:10:00', ['id' => 'big-2']);
+    AgentRows::run('Small', '2026-01-02 10:20:00', ['id' => 'small-1']);
+    AgentRows::span($big, SpanType::Agent, 'Small', '2026-01-02 10:00:01', ['id' => 'small-span', 'parent_id' => 'big-1']);
+
+    $body = agentsAt($this);
+    $byName = array_column($body['data'], null, 'name');
+
+    // Only Big's group of runs is read; Small has a run, but is found through its delegation alone.
+    expect($body['agent_limit'])->toBe(['limit' => 1, 'truncated' => true])
+        ->and(array_keys($byName))->toBe(['Big', 'Small'])
+        ->and($byName['Big']['top_level']['runs']['all'])->toBe(2)
+        ->and($byName['Small']['top_level'])->toBeNull()
+        ->and($byName['Small']['delegated']['all'])->toBe(1);
+});
+
+it('shows no delegations for an agent whose delegated group was cut', function () {
+    $this->app->bind(AgentIndex::class, fn () => new AgentIndex(1));
+
+    $run = AgentRows::run('Solo', '2026-01-02 10:00:00', ['id' => 'solo']);
+    AgentRows::span($run, SpanType::Agent, 'Helper', '2026-01-02 10:00:01', ['id' => 'helper-1', 'parent_id' => 'solo']);
+    AgentRows::span($run, SpanType::Agent, 'Helper', '2026-01-02 10:00:02', ['id' => 'helper-2', 'parent_id' => 'solo']);
+    AgentRows::span($run, SpanType::Agent, 'Solo', '2026-01-02 10:00:03', ['id' => 'solo-span', 'parent_id' => 'solo']);
+
+    $body = agentsAt($this);
+    $byName = array_column($body['data'], null, 'name');
+
+    // Helper has two delegations, Solo one, and only one delegated group is read: Solo was delegated to, and shows none.
+    expect($body['agent_limit'])->toBe(['limit' => 1, 'truncated' => true])
+        ->and(array_keys($byName))->toBe(['Solo', 'Helper'])
+        ->and($byName['Solo']['top_level']['runs']['all'])->toBe(1)
+        ->and($byName['Solo']['delegated'])->toBeNull()
+        ->and($byName['Helper']['delegated']['all'])->toBe(2);
+});
+
+describe('in the application\'s timezone', function () {
+    it('lists the moments exactly and counts the activity in the buckets of the local clock', function () {
+        config(['app.timezone' => 'Asia/Tokyo']);
+        Carbon::setTestNow(Carbon::parse('2026-01-04 12:00:00', 'Asia/Tokyo'));
+
+        // Stored and read as local times.
+        $first = AgentRows::run('Alpha', '2026-01-04 09:00:00', ['id' => 'tz-1']);
+        AgentRows::run('Alpha', '2026-01-04 11:30:00', ['id' => 'tz-2']);
+        AgentRows::run('Alpha', '2026-01-03 11:59:59', ['id' => 'tz-before']);
+        AgentRows::span($first, SpanType::Agent, 'Beta', '2026-01-04 09:00:05', ['id' => 'tz-beta', 'parent_id' => 'tz-1']);
+
+        $body = agentsAt($this);
+        $byName = array_column($body['data'], null, 'name');
+        $range = new TimeRange('24h', Carbon::now()->subDay()->toImmutable(), Carbon::now()->toImmutable());
+        $scoped = (new OverviewQuery)->read($range, RunScope::agent('Alpha'));
+        $series = $this->getJson('/trail/api/overview')->assertOk()->json('data.series');
+
+        expect($body['range'])->toBe(['preset' => '24h', 'from' => '2026-01-03T03:00:00.000Z', 'to' => '2026-01-04T03:00:00.000Z'])
+            ->and($byName['Alpha']['last_activity_at'])->toBe('2026-01-04T02:30:00.000Z')
+            ->and($byName['Alpha']['top_level']['last_activity_at'])->toBe('2026-01-04T02:30:00.000Z')
+            ->and($byName['Beta']['delegated']['last_activity_at'])->toBe('2026-01-04T00:00:05.000Z')
+            ->and($byName['Alpha']['top_level']['runs']['all'])->toBe(2)
+            ->and($byName['Alpha']['activity'])->toBe(array_map(fn ($bucket) => $bucket->figures->runs['all'], $scoped->buckets))
+            ->and(array_sum($byName['Alpha']['activity']))->toBe(2)
+            ->and($body['buckets']['edges'])->toBe(array_map(fn (array $bucket) => array_intersect_key($bucket, array_flip(['from', 'to', 'full', 'in_progress'])), $series['buckets']));
+    });
+});
+
 describe('names that differ in case or accent', function () {
     /** The agents the dataset below makes, as the database under test groups the names. */
     beforeEach(function () {
@@ -426,24 +492,35 @@ describe('names that differ in case or accent', function () {
     });
 
     it('groups them as the database compares text, and shows the latest run\'s spelling', function () {
-        $ignoresCase = DB::connection()->getDriverName() === 'mysql';
-        $byName = array_column(agentsAt($this)['data'], null, 'name');
-
-        if ($ignoresCase) {
-            // One agent: four runs, spelled as the latest of them is, with every delegation.
-            expect(array_keys($byName))->toEqualCanonicalizing(['support', 'Unrelated'])
-                ->and($byName['support']['top_level']['runs'])->toBe(AgentRows::counts(completed: 3, failed: 1))
-                ->and($byName['support']['delegated']['all'])->toBe(2)
-                ->and($byName['support']['last_activity_at'])->toBe('2026-01-02T11:00:00.000Z');
-        } else {
+        // What each driver must answer: MySQL compares text without regard to case and accent, the others do not.
+        $expected = [
+            // One agent, spelled as the latest of its four runs is, with every delegation.
+            'mysql' => [
+                'support' => ['runs' => AgentRows::counts(completed: 3, failed: 1), 'delegated' => 2],
+                'Unrelated' => ['runs' => null, 'delegated' => 1],
+            ],
             // Four agents, each its own spelling; a delegation goes with the spelling it was recorded with.
-            expect(array_keys($byName))->toEqualCanonicalizing(['Support', 'support', 'SUPPORT', 'Suppört', 'Unrelated'])
-                ->and($byName['support']['top_level']['runs'])->toBe(AgentRows::counts(failed: 1))
-                ->and($byName['support']['delegated']['all'])->toBe(1)
-                ->and($byName['SUPPORT']['top_level']['runs'])->toBe(AgentRows::counts(completed: 1))
-                ->and($byName['SUPPORT']['delegated']['all'])->toBe(1)
-                ->and($byName['Support']['delegated'])->toBeNull();
+            'sqlite' => $apart = [
+                'Support' => ['runs' => AgentRows::counts(completed: 1), 'delegated' => null],
+                'support' => ['runs' => AgentRows::counts(failed: 1), 'delegated' => 1],
+                'SUPPORT' => ['runs' => AgentRows::counts(completed: 1), 'delegated' => 1],
+                'Suppört' => ['runs' => AgentRows::counts(completed: 1), 'delegated' => null],
+                'Unrelated' => ['runs' => null, 'delegated' => 1],
+            ],
+            'pgsql' => $apart,
+        ];
+
+        $driver = DB::connection()->getDriverName();
+        $found = [];
+
+        foreach (agentsAt($this)['data'] as $agent) {
+            $found[$agent['name']] = ['runs' => $agent['top_level']['runs'] ?? null, 'delegated' => $agent['delegated']['all'] ?? null];
         }
+
+        ksort($found);
+        ksort($expected[$driver]);
+
+        expect($expected)->toHaveKey($driver)->and($found)->toBe($expected[$driver]);
     });
 
     it('counts, for each agent, exactly what the runs list returns for its name', function () {

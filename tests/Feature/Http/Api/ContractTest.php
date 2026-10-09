@@ -411,20 +411,20 @@ function agentContractDataset(): void
 
     $span = fn (Trace $run, SpanType $type, string $name, string $started, array $attributes = []) => AgentRows::span($run, $type, $name, $started, $attributes);
 
-    $span($one, SpanType::Agent, 'SupportAssistant', '2026-01-02 11:00:00', ['id' => 'support-root']);
+    $span($one, SpanType::Agent, 'SupportAssistant', '2026-01-02 11:00:00', ['id' => 'support-root', 'provider' => 'anthropic', 'model' => 'claude-sonnet-4-5']);
     $span($one, SpanType::Step, 'step', '2026-01-02 11:00:00.100', ['id' => 'support-step-1', 'parent_id' => 'support-root', 'provider' => 'anthropic', 'model' => 'claude-sonnet-4-5', 'input_tokens' => 1200, 'output_tokens' => 310, 'cost' => 0.00825]);
     $span($one, SpanType::Step, 'step', '2026-01-02 11:00:00.900', ['id' => 'support-step-2', 'parent_id' => 'support-root', 'provider' => 'anthropic', 'model' => 'claude-sonnet-4-5', 'input_tokens' => 30]);
     $span($one, SpanType::Tool, 'search', '2026-01-02 11:00:01', ['id' => 'support-tool-1', 'parent_id' => 'support-root']);
     $span($one, SpanType::Tool, 'lookup', '2026-01-02 11:00:02', ['id' => 'support-tool-2', 'parent_id' => 'support-root', 'status' => Status::Failed]);
     $span($one, SpanType::Embedding, 'embeddings', '2026-01-02 11:00:01.050', ['id' => 'support-embedding', 'parent_id' => 'support-tool-1', 'provider' => 'openai', 'model' => 'text-embedding-3-small', 'input_tokens' => 64, 'cost' => 0.000002]);
     // A sub-agent under a tool, with a step and a tool of its own; one under the run's own span, which failed; one under a tool.
-    $span($one, SpanType::Agent, 'ResearchAgent', '2026-01-02 11:00:01.100', ['id' => 'research-1', 'parent_id' => 'support-tool-1', 'agent_class' => 'App\\Ai\\Agents\\ResearchAgent']);
+    $span($one, SpanType::Agent, 'ResearchAgent', '2026-01-02 11:00:01.100', ['id' => 'research-1', 'parent_id' => 'support-tool-1', 'agent_class' => 'App\\Ai\\Agents\\ResearchAgent', 'provider' => 'anthropic', 'model' => 'claude-haiku-4-5']);
     $span($one, SpanType::Step, 'step', '2026-01-02 11:00:01.200', ['id' => 'research-step', 'parent_id' => 'research-1', 'provider' => 'anthropic', 'model' => 'claude-haiku-4-5', 'input_tokens' => 400, 'output_tokens' => 90, 'cost' => 0.0005]);
     $span($one, SpanType::Tool, 'search', '2026-01-02 11:00:01.300', ['id' => 'research-tool', 'parent_id' => 'research-1']);
-    $span($one, SpanType::Agent, 'Summarizer', '2026-01-02 11:00:02.500', ['id' => 'summarizer-1', 'parent_id' => 'run-support-1', 'status' => Status::Failed, 'agent_class' => 'App\\Ai\\Agents\\Summarizer']);
-    $span($one, SpanType::Agent, 'Summarizer', '2026-01-02 11:00:02.600', ['id' => 'summarizer-2', 'parent_id' => 'support-tool-2']);
+    $span($one, SpanType::Agent, 'Summarizer', '2026-01-02 11:00:02.500', ['id' => 'summarizer-1', 'parent_id' => 'run-support-1', 'status' => Status::Failed, 'agent_class' => 'App\\Ai\\Agents\\Summarizer', 'provider' => 'anthropic', 'model' => 'claude-sonnet-4-5']);
+    $span($one, SpanType::Agent, 'Summarizer', '2026-01-02 11:00:02.600', ['id' => 'summarizer-2', 'parent_id' => 'support-tool-2', 'provider' => 'anthropic', 'model' => 'claude-sonnet-4-5']);
 
-    $span($research, SpanType::Agent, 'ResearchAgent', '2026-01-02 09:00:00', ['id' => 'research-root']);
+    $span($research, SpanType::Agent, 'ResearchAgent', '2026-01-02 09:00:00', ['id' => 'research-root', 'provider' => 'anthropic', 'model' => 'claude-haiku-4-5']);
     $span($research, SpanType::Step, 'step', '2026-01-02 09:00:00.100', ['id' => 'research-own-step', 'parent_id' => 'research-root', 'provider' => 'anthropic', 'model' => 'claude-haiku-4-5', 'input_tokens' => 400, 'output_tokens' => 90, 'cost' => 0.004]);
     $span($research, SpanType::Tool, 'search', '2026-01-02 09:00:00.500', ['id' => 'research-own-tool', 'parent_id' => 'research-root', 'status' => Status::Failed]);
 }

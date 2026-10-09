@@ -167,11 +167,15 @@ describe('filters', function () {
         expect(sortedIdsAt($this, 'tool=lookup_order'))->toBe(['t1'])
             ->and(sortedIdsAt($this, 'tool=send_email'))->toBe(['t2'])
             ->and(sortedIdsAt($this, 'tool=web_search'))->toBe(['t4'])
-            // As the database compares text: MySQL's default collation ignores case, SQLite and Postgres do not.
-            ->and(sortedIdsAt($this, 'tool=Lookup_Order'))->toBe(DB::connection()->getDriverName() === 'mysql' ? ['t1'] : [])
             ->and(sortedIdsAt($this, 'tool=nothing'))->toBe([])
             ->and(sortedIdsAt($this, 'tool=lookup_order&agent=Beta'))->toBe([])
             ->and(sortedIdsAt($this, 'tool=lookup_order&agent=Alpha'))->toBe(['t1']);
+
+        // As the database compares text: MySQL's default collation ignores case, SQLite and Postgres match the exact case only.
+        $byDriver = ['mysql' => ['t1'], 'sqlite' => [], 'pgsql' => []];
+        $driver = DB::connection()->getDriverName();
+
+        expect($byDriver)->toHaveKey($driver)->and(sortedIdsAt($this, 'tool=Lookup_Order'))->toBe($byDriver[$driver]);
 
         $this->getJson('/trail/api/traces?tool=lookup_order')->assertOk()
             ->assertJsonPath('pagination.total', 1)

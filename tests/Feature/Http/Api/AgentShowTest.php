@@ -102,14 +102,14 @@ it('sums the buckets of the series to the runs of the agent, and to its activity
     expect(array_map(fn (array $bucket) => $bucket['runs']['all'], $buckets))->toBe($body['data']['agent']['activity']);
 });
 
-it('adds the agent to the filters of every item and row that needs a look, so that the list reproduces each count', function (string $name, string $query) {
+it('adds the agent to the filters of every item and row that needs a look, so that the list reproduces each count', function (string $name, string $query, array $kinds, int $breakdownRows) {
     showDataset();
 
     $body = showAgent($this, $name, $query);
     $items = $body['data']['attention'];
     $rows = 0;
 
-    expect($items)->not->toBe([]);
+    expect(array_column($items, 'kind'))->toBe($kinds);
 
     foreach ($items as $item) {
         expect($item['filters']['agent'])->toBe($name);
@@ -126,11 +126,13 @@ it('adds the agent to the filters of every item and row that needs a look, so th
         }
     }
 
-    expect($rows)->toBeGreaterThan($name === 'Alpha' && $query === '' ? 0 : -1);
+    expect($rows)->toBe($breakdownRows);
 })->with([
-    'Alpha' => ['Alpha', ''],
-    'Alpha in a week' => ['Alpha', 'range=7d'],
-    'Beta' => ['Beta', ''],
+    // Alpha: one failed run (a rate limit), one unpriced, one recovered. A week adds a failed run with no issue kind: no row.
+    'Alpha' => ['Alpha', '', ['failed', 'unpriced', 'recovered'], 1],
+    'Alpha in a week' => ['Alpha', 'range=7d', ['failed', 'unpriced', 'recovered'], 1],
+    // Beta: a run stored incomplete, and nothing failed.
+    'Beta' => ['Beta', '', ['incomplete'], 0],
 ]);
 
 it('narrows what needs a look to the agent, not to every run', function () {
@@ -202,21 +204,54 @@ it('spells the name as the latest run does, and the filters with it', function (
     AgentRows::run('Support', '2026-01-02 09:00:00', ['id' => 's1']);
     AgentRows::run('SUPPORT', '2026-01-02 11:00:00', ['id' => 's2', 'status' => Status::Failed]);
 
-    if (DB::connection()->getDriverName() === 'mysql') {
-        // The database compares them as one agent, spelled as its latest run spells it.
-        $body = showAgent($this, 'support');
+    // What each driver answers to the name "support" and to the name "SUPPORT": MySQL compares text
+    // without regard to case, so both are the one agent; the others never recorded "support".
+    $expected = [
+        'mysql' => [
+            'support' => ['status' => 200, 'name' => 'SUPPORT', 'runs' => AgentRows::counts(completed: 1, failed: 1), 'filters' => ['agent' => 'SUPPORT', 'status' => 'failed']],
+            'SUPPORT' => ['status' => 200, 'name' => 'SUPPORT', 'runs' => AgentRows::counts(completed: 1, failed: 1), 'filters' => ['agent' => 'SUPPORT', 'status' => 'failed']],
+        ],
+        'sqlite' => $apart = [
+            'support' => ['status' => 404, 'name' => null, 'runs' => null, 'filters' => null],
+            'SUPPORT' => ['status' => 200, 'name' => 'SUPPORT', 'runs' => AgentRows::counts(failed: 1), 'filters' => ['agent' => 'SUPPORT', 'status' => 'failed']],
+        ],
+        'pgsql' => $apart,
+    ];
 
-        expect($body['data']['agent']['name'])->toBe('SUPPORT')
-            ->and($body['data']['summary']['runs'])->toBe(AgentRows::counts(completed: 1, failed: 1))
-            ->and($body['data']['attention'][0]['filters'])->toBe(['agent' => 'SUPPORT', 'status' => 'failed']);
+    $driver = DB::connection()->getDriverName();
+    $found = [];
 
-        return;
+    foreach (['support', 'SUPPORT'] as $asked) {
+        $response = $this->getJson('/trail/api/agents/show?name='.rawurlencode($asked));
+        $found[$asked] = [
+            'status' => $response->status(),
+            'name' => $response->json('data.agent.name'),
+            'runs' => $response->json('data.summary.runs'),
+            'filters' => $response->json('data.attention.0.filters'),
+        ];
     }
 
-    // Elsewhere "support" was never recorded.
-    $this->getJson('/trail/api/agents/show?name=support')->assertNotFound();
-    expect(showAgent($this, 'SUPPORT')['data']['agent']['name'])->toBe('SUPPORT')
-        ->and(showAgent($this, 'SUPPORT')['data']['summary']['runs'])->toBe(AgentRows::counts(failed: 1));
+    expect($expected)->toHaveKey($driver)->and($found)->toBe($expected[$driver]);
+});
+
+it('shows the moments of an agent exactly in a timezone that is not UTC, with the activity of the overview\'s scoped series', function () {
+    config(['app.timezone' => 'Asia/Tokyo']);
+    Carbon::setTestNow(Carbon::parse('2026-01-04 12:00:00', 'Asia/Tokyo'));
+
+    $first = AgentRows::run('Alpha', '2026-01-04 09:00:00', ['id' => 'tz-1']);
+    AgentRows::run('Alpha', '2026-01-04 11:30:00', ['id' => 'tz-2', 'status' => Status::Failed]);
+    AgentRows::span($first, SpanType::Agent, 'Alpha', '2026-01-04 09:00:05', ['id' => 'tz-self', 'parent_id' => 'tz-1']);
+
+    $body = showAgent($this, 'Alpha');
+    $buckets = $body['data']['series']['buckets'];
+
+    expect($body['range'])->toBe(['preset' => '24h', 'from' => '2026-01-03T03:00:00.000Z', 'to' => '2026-01-04T03:00:00.000Z'])
+        ->and($body['previous_range'])->toBe(['from' => '2026-01-02T03:00:00.000Z', 'to' => '2026-01-03T03:00:00.000Z'])
+        ->and($body['data']['agent']['top_level']['last_activity_at'])->toBe('2026-01-04T02:30:00.000Z')
+        ->and($body['data']['agent']['delegated']['last_activity_at'])->toBe('2026-01-04T00:00:05.000Z')
+        ->and($body['data']['agent']['last_activity_at'])->toBe('2026-01-04T02:30:00.000Z')
+        ->and($body['data']['agent']['activity'])->toBe(array_map(fn (array $bucket) => $bucket['runs']['all'], $buckets))
+        ->and($body['data']['attention'][0]['latest_at'])->toBe('2026-01-04T02:30:00.000Z');
 });
 
 describe('the reads', function () {

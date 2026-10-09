@@ -24,14 +24,17 @@ use Illuminate\Database\Query\JoinClause;
 final class AgentBreakdown
 {
     /**
-     * The model calls of the agent's runs by provider and model: the step spans, and the embeddings
-     * spans, since the runs list's provider and model filters match any span that used the model.
+     * The models of the agent's runs by provider and model. A row's `runs` counts the distinct runs
+     * that have any span with that provider and model, as the runs list's filters keep them: agent
+     * spans carry the model they asked for too. Its `calls`, usage and cost are those of the spans
+     * that bill, the step and embeddings spans, so a model only an agent span asked for is a row with
+     * no calls.
      *
      * @return list<object> provider, model, calls, runs, token sums, cost_sum, unpriced, running
      */
     public function models(string $name, TimeRange $range): array
     {
-        return $this->modelsOf($this->spansOfRuns($name, $range), 'trail_spans');
+        return $this->modelsOf($this->spansOfRuns($name, $range), 'trail_spans', anySpan: true);
     }
 
     /**
@@ -43,13 +46,16 @@ final class AgentBreakdown
     }
 
     /**
-     * The model calls made inside the agent's delegated runs: its children of agent spans with a parent.
+     * The model calls made inside the agent's delegated runs: the step and embeddings spans that are
+     * children of its agent spans that have a parent. The runs list cannot filter on those, so no
+     * count here is reproduced there, and a span that is not a child of the agent span (an embeddings
+     * call a tool of the delegated agent made, an agent it delegated to) is not read.
      *
      * @return list<object>
      */
     public function delegatedModels(string $name, TimeRange $range): array
     {
-        return $this->modelsOf($this->childrenOfDelegated($name, $range), 'c');
+        return $this->modelsOf($this->childrenOfDelegated($name, $range), 'c', anySpan: false);
     }
 
     /**
@@ -62,29 +68,34 @@ final class AgentBreakdown
 
     /**
      * @param  literal-string  $alias  what the spans being counted are called in the query
+     * @param  bool  $anySpan  count the runs of every span with the model, not only of those that bill
      * @return list<object>
      */
-    private function modelsOf(Builder $spans, string $alias): array
+    private function modelsOf(Builder $spans, string $alias, bool $anySpan): array
     {
         $running = Status::Running->value;
         $cutoff = StaleRuns::cutoffColumn();
+        $bills = "{$alias}.type in ('step', 'embedding')";
         $reported = "({$alias}.input_tokens is not null or {$alias}.output_tokens is not null or {$alias}.cache_read_tokens is not null or {$alias}.cache_write_tokens is not null or {$alias}.reasoning_tokens is not null)";
 
+        if (! $anySpan) {
+            $spans->whereIn("{$alias}.type", [SpanType::Step->value, SpanType::Embedding->value]);
+        }
+
         return array_values($spans
-            ->whereIn("{$alias}.type", [SpanType::Step->value, SpanType::Embedding->value])
             ->whereNotNull("{$alias}.provider")->whereNotNull("{$alias}.model")
             ->select("{$alias}.provider", "{$alias}.model")
-            ->selectRaw('count(*) as calls')
+            ->selectRaw("sum(case when {$bills} then 1 else 0 end) as calls")
             ->selectRaw("count(distinct {$alias}.trace_id) as runs")
-            ->selectRaw("sum({$alias}.input_tokens) as input_tokens")
-            ->selectRaw("sum({$alias}.output_tokens) as output_tokens")
-            ->selectRaw("sum({$alias}.cache_read_tokens) as cache_read_tokens")
-            ->selectRaw("sum({$alias}.cache_write_tokens) as cache_write_tokens")
-            ->selectRaw("sum({$alias}.reasoning_tokens) as reasoning_tokens")
-            ->selectRaw("sum({$alias}.cost) as cost_sum")
+            ->selectRaw("sum(case when {$bills} then {$alias}.input_tokens end) as input_tokens")
+            ->selectRaw("sum(case when {$bills} then {$alias}.output_tokens end) as output_tokens")
+            ->selectRaw("sum(case when {$bills} then {$alias}.cache_read_tokens end) as cache_read_tokens")
+            ->selectRaw("sum(case when {$bills} then {$alias}.cache_write_tokens end) as cache_write_tokens")
+            ->selectRaw("sum(case when {$bills} then {$alias}.reasoning_tokens end) as reasoning_tokens")
+            ->selectRaw("sum(case when {$bills} then {$alias}.cost end) as cost_sum")
             // A step that reported usage and could not be priced, as a run's unpriced count has it.
-            ->selectRaw("sum(case when {$alias}.cost is null and {$reported} then 1 else 0 end) as unpriced")
-            ->selectRaw("sum(case when {$alias}.status = ? and {$alias}.created_at >= ? then 1 else 0 end) as running", [$running, $cutoff])
+            ->selectRaw("sum(case when {$bills} and {$alias}.cost is null and {$reported} then 1 else 0 end) as unpriced")
+            ->selectRaw("sum(case when {$bills} and {$alias}.status = ? and {$alias}.created_at >= ? then 1 else 0 end) as running", [$running, $cutoff])
             ->groupBy("{$alias}.provider", "{$alias}.model")
             ->orderByRaw("count(distinct {$alias}.trace_id) desc")
             ->orderBy("{$alias}.provider")->orderBy("{$alias}.model")

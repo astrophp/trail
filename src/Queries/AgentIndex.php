@@ -26,7 +26,9 @@ use Illuminate\Validation\ValidationException;
  *  4. the runs of the agents of the page in each bucket of the range.
  *
  * Merging, sorting and paging are done over the grouped rows, at most `limit` groups of each of
- * reads 1 and 2 (those with most runs, or most delegated spans).
+ * reads 1 and 2 (those with most runs, or most delegated spans). When a limit is hit the rest is not
+ * read, in both directions: an agent whose delegated group was cut shows no delegations, and one
+ * whose group of runs was cut can be listed from its delegated group alone, as if it had no runs.
  */
 final class AgentIndex
 {
@@ -178,8 +180,10 @@ final class AgentIndex
     }
 
     /**
-     * Keep the rows with a name that contains the text, whatever its case. The database compares
-     * text as it does for the group, so the spellings it takes for one agent all match or none does.
+     * Keep the rows with a name that contains the text, whatever its case. The search is applied to
+     * the rows before they are grouped, so where the database's LIKE tells apart spellings that its
+     * `=` takes for one agent (MySQL: a trailing space under a PAD SPACE collation, `ß` and `ss`), a
+     * group's figures cover only the spellings that match, and can change with the search term.
      */
     private static function matching(Builder $query, ?string $search): void
     {

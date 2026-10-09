@@ -61,7 +61,7 @@ function breakdownDataset(): void
 {
     $one = AgentRows::run('Alpha', '2026-01-02 10:00:00', ['id' => 'r1']);
     // The run's own span: the steps and tools below are its children, and it is no delegation.
-    AgentRows::span($one, SpanType::Agent, 'Alpha', '2026-01-02 10:00:00', ['id' => 'r1']);
+    AgentRows::span($one, SpanType::Agent, 'Alpha', '2026-01-02 10:00:00', ['id' => 'r1', 'provider' => 'openai', 'model' => 'gpt-5']);
     breakdownStep($one, 'st1', 'gpt-5', '2026-01-02 10:00:01', ['input_tokens' => 100, 'output_tokens' => 50, 'cost' => 0.01]);
     breakdownStep($one, 'st2', 'gpt-5', '2026-01-02 10:00:02', ['input_tokens' => 200, 'output_tokens' => 10, 'cost' => 0.02]);
     breakdownStep($one, 'st3', 'claude-sonnet', '2026-01-02 10:00:03', ['input_tokens' => 50, 'output_tokens' => 5], 'anthropic');
@@ -70,26 +70,30 @@ function breakdownDataset(): void
     breakdownTool($one, 'tool-search-2', 'search', '2026-01-02 10:00:06', ['status' => Status::Failed]);
     breakdownTool($one, 'tool-ask', 'ask', '2026-01-02 10:00:07');
     AgentRows::span($one, SpanType::Embedding, 'embed', '2026-01-02 10:00:08', ['id' => 'emb1', 'parent_id' => 'tool-search-1', 'provider' => 'openai', 'model' => 'text-embedding-3-small', 'input_tokens' => 7, 'cost' => 0.0001]);
-    AgentRows::span($one, SpanType::Agent, 'Beta', '2026-01-02 10:00:09', ['id' => 'beta-1', 'parent_id' => 'tool-ask']);
+    AgentRows::span($one, SpanType::Agent, 'Beta', '2026-01-02 10:00:09', ['id' => 'beta-1', 'parent_id' => 'tool-ask', 'provider' => 'openai', 'model' => 'gpt-5']);
     breakdownStep($one, 'b-st1', 'gpt-5', '2026-01-02 10:00:10', ['input_tokens' => 10, 'output_tokens' => 1, 'cost' => 0.001], parent: 'beta-1');
     breakdownTool($one, 'b-tool1', 'beta_tool', '2026-01-02 10:00:11', parent: 'beta-1');
 
     $two = AgentRows::run('Alpha', '2026-01-02 11:00:00', ['id' => 'r2', 'status' => Status::Failed]);
+    AgentRows::span($two, SpanType::Agent, 'Alpha', '2026-01-02 11:00:00', ['id' => 'r2', 'provider' => 'openai', 'model' => 'gpt-5']);
     breakdownStep($two, 'st5', 'gpt-5', '2026-01-02 11:00:01', ['status' => Status::Running]);
     breakdownStep($two, 'st6', 'claude-sonnet', '2026-01-02 11:00:02', ['input_tokens' => 3, 'cost' => 0.003, 'status' => Status::Running, 'created_at' => Carbon::now()->subHours(3)], 'anthropic');
     breakdownTool($two, 'tool-search-3', 'search', '2026-01-02 11:00:03', ['status' => Status::Failed]);
 
     $beta = AgentRows::run('Beta', '2026-01-02 09:00:00', ['id' => 'r3']);
+    AgentRows::span($beta, SpanType::Agent, 'Beta', '2026-01-02 09:00:00', ['id' => 'r3', 'provider' => 'openai', 'model' => 'gpt-5']);
     breakdownStep($beta, 'bst', 'gpt-5', '2026-01-02 09:00:01', ['input_tokens' => 1, 'cost' => 0.0001]);
     breakdownTool($beta, 'bt1', 'beta_tool', '2026-01-02 09:00:02');
 
     $host = AgentRows::run('Host', '2026-01-02 10:30:00', ['id' => 'r4']);
     breakdownTool($host, 'host-tool', 'delegate', '2026-01-02 10:30:01');
-    AgentRows::span($host, SpanType::Agent, 'Gamma', '2026-01-02 10:30:02', ['id' => 'gamma-1', 'parent_id' => 'host-tool']);
+    AgentRows::span($host, SpanType::Agent, 'Gamma', '2026-01-02 10:30:02', ['id' => 'gamma-1', 'parent_id' => 'host-tool', 'provider' => 'anthropic', 'model' => 'claude-sonnet']);
+    AgentRows::span($host, SpanType::Agent, 'Host', '2026-01-02 10:30:00', ['id' => 'r4', 'provider' => 'anthropic', 'model' => 'claude-sonnet']);
     breakdownStep($host, 'g-st1', 'claude-sonnet', '2026-01-02 10:30:03', ['input_tokens' => 4, 'cost' => 0.004], 'anthropic', parent: 'gamma-1');
     breakdownTool($host, 'g-tool1', 'gtool', '2026-01-02 10:30:04', ['status' => Status::Failed], parent: 'gamma-1');
 
     $before = AgentRows::run('Alpha', '2026-01-01 11:00:00', ['id' => 'r0']);
+    AgentRows::span($before, SpanType::Agent, 'Alpha', '2026-01-01 11:00:00', ['id' => 'r0', 'provider' => 'openai', 'model' => 'gpt-5']);
     breakdownStep($before, 'st0', 'gpt-5', '2026-01-01 11:00:01', ['input_tokens' => 999, 'cost' => 9.99]);
     breakdownTool($before, 'tool-0', 'search', '2026-01-01 11:00:02');
 }
@@ -229,6 +233,76 @@ it('leaves out a span that started before the range although its run started in 
         ->and($this->getJson('/trail/api/traces?agent=Alpha&tool=early_tool')->json('pagination.total'))->toBe(0)
         ->and($this->getJson('/trail/api/traces?agent=Alpha&model=early-model')->json('pagination.total'))->toBe(0)
         ->and($this->getJson('/trail/api/traces?agent=Alpha&tool=kept_tool')->json('pagination.total'))->toBe(1);
+});
+
+it('counts in a model\'s runs every run that has a span of it, an agent span that asked for it included, as the runs list does', function () {
+    // r1 asked for gpt-5 and called it; r2 failed before any step, with only its agent span on gpt-5.
+    $one = AgentRows::run('Alpha', '2026-01-02 10:00:00', ['id' => 'r1']);
+    AgentRows::span($one, SpanType::Agent, 'Alpha', '2026-01-02 10:00:00', ['id' => 'r1', 'provider' => 'openai', 'model' => 'gpt-5']);
+    breakdownStep($one, 'step-1', 'gpt-5', '2026-01-02 10:00:01', ['input_tokens' => 10, 'cost' => 0.01]);
+    $two = AgentRows::run('Alpha', '2026-01-02 11:00:00', ['id' => 'r2', 'status' => Status::Failed]);
+    AgentRows::span($two, SpanType::Agent, 'Alpha', '2026-01-02 11:00:00', ['id' => 'r2', 'provider' => 'openai', 'model' => 'gpt-5', 'status' => Status::Failed]);
+
+    $row = breakdownAt($this, 'Alpha')['data']['models'][0];
+
+    expect($row)->toMatchArray(['provider' => 'openai', 'model' => 'gpt-5', 'steps' => 1, 'runs' => 2])
+        ->and($row['usage']['input_tokens'])->toBe(10)
+        ->and($row['cost'])->toBe(['state' => 'estimated', 'amount' => 0.01])
+        ->and($this->getJson('/trail/api/traces?'.http_build_query($row['filters']))->json('pagination.total'))->toBe(2);
+});
+
+it('lists a model only an agent span asked for, with no calls, no usage and no cost', function () {
+    $run = AgentRows::run('Alpha', '2026-01-02 10:00:00', ['id' => 'r1']);
+    AgentRows::span($run, SpanType::Agent, 'Alpha', '2026-01-02 10:00:00', ['id' => 'r1', 'provider' => 'openai', 'model' => 'gpt-5']);
+    breakdownStep($run, 'step-1', 'gpt-5', '2026-01-02 10:00:01', ['input_tokens' => 10, 'cost' => 0.01]);
+    breakdownTool($run, 'tool-1', 'ask', '2026-01-02 10:00:02');
+    // A delegated agent asked for a model that no step called.
+    AgentRows::span($run, SpanType::Agent, 'Beta', '2026-01-02 10:00:03', ['id' => 'beta-1', 'parent_id' => 'tool-1', 'provider' => 'mistral', 'model' => 'large']);
+
+    $body = breakdownAt($this, 'Alpha');
+    $mistral = collect($body['data']['models'])->firstWhere('model', 'large');
+
+    expect($mistral)->toBe([
+        'provider' => 'mistral', 'model' => 'large', 'steps' => 0, 'runs' => 1,
+        'usage' => ['state' => 'not_reported', 'input_tokens' => null, 'output_tokens' => null, 'cache_read_tokens' => null, 'cache_write_tokens' => null, 'reasoning_tokens' => null, 'total_tokens' => null],
+        'cost' => ['state' => 'not_captured', 'amount' => null],
+        'filters' => ['agent' => 'Alpha', 'provider' => 'mistral', 'model' => 'large'],
+    ])
+        ->and($body['limits']['models']['total'])->toBe(2)
+        ->and($this->getJson('/trail/api/traces?'.http_build_query($mistral['filters']))->json('pagination.total'))->toBe(1)
+        // The delegated rows are read over the children of the delegated agent span, and it has none.
+        ->and($body['data']['delegated'])->toBe(['models' => [], 'tools' => []]);
+
+    $beta = breakdownAt($this, 'Beta');
+    expect($beta['data']['models'])->toBe([])->and($beta['data']['delegated']['models'])->toBe([]);
+});
+
+it('does not read, among the models of a delegated agent, what is not a child of its agent span', function () {
+    $run = AgentRows::run('Alpha', '2026-01-02 10:00:00', ['id' => 'r1']);
+    AgentRows::span($run, SpanType::Agent, 'Alpha', '2026-01-02 10:00:00', ['id' => 'r1', 'provider' => 'openai', 'model' => 'gpt-5']);
+    breakdownTool($run, 'tool-1', 'ask', '2026-01-02 10:00:01');
+    AgentRows::span($run, SpanType::Agent, 'Beta', '2026-01-02 10:00:02', ['id' => 'beta-1', 'parent_id' => 'tool-1', 'provider' => 'openai', 'model' => 'gpt-5']);
+    breakdownStep($run, 'beta-step', 'gpt-5', '2026-01-02 10:00:03', ['input_tokens' => 5], parent: 'beta-1');
+    breakdownTool($run, 'beta-tool', 'embed', '2026-01-02 10:00:04', parent: 'beta-1');
+    // An embeddings call of the delegated agent's tool is a child of that tool, and the agent Beta delegated to is another agent's.
+    AgentRows::span($run, SpanType::Embedding, 'embeddings', '2026-01-02 10:00:05', ['id' => 'emb', 'parent_id' => 'beta-tool', 'provider' => 'openai', 'model' => 'text-embedding-3-small', 'input_tokens' => 7]);
+    AgentRows::span($run, SpanType::Agent, 'Delta', '2026-01-02 10:00:06', ['id' => 'delta-1', 'parent_id' => 'beta-tool', 'provider' => 'anthropic', 'model' => 'claude-sonnet']);
+    breakdownStep($run, 'delta-step', 'claude-sonnet', '2026-01-02 10:00:07', ['input_tokens' => 9], 'anthropic', parent: 'delta-1');
+    // An agent started directly by the delegated agent, with no tool between, is its child but not a call of a model.
+    AgentRows::span($run, SpanType::Agent, 'Echo', '2026-01-02 10:00:08', ['id' => 'echo-1', 'parent_id' => 'beta-1', 'provider' => 'mistral', 'model' => 'large']);
+
+    $beta = breakdownAt($this, 'Beta')['data']['delegated'];
+    $alpha = breakdownAt($this, 'Alpha')['data']['models'];
+
+    expect(array_column($beta['models'], 'model'))->toBe(['gpt-5'])
+        ->and($beta['models'][0]['steps'])->toBe(1)
+        ->and($beta['models'][0]['usage']['input_tokens'])->toBe(5)
+        ->and(array_column($beta['tools'], 'name'))->toBe(['embed'])
+        // The runs of Alpha hold every one of them.
+        ->and(array_column($alpha, 'model'))->toBe(['claude-sonnet', 'large', 'gpt-5', 'text-embedding-3-small']);
+
+    // Delta was delegated to by a delegated agent, so it is delegated, and its own step is its child.
+    expect(array_column(breakdownAt($this, 'Delta')['data']['delegated']['models'], 'model'))->toBe(['claude-sonnet']);
 });
 
 it('lists no model for a span that recorded no provider or model', function () {
