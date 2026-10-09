@@ -71,6 +71,7 @@ function Projection({ withTable = false }: { withTable?: boolean }) {
                 color: 'chart-4',
                 values: [null, null, null, null, 4.2, 5, 5.8, 6.6],
                 span: { from: 4 },
+                anchor: 4,
             }}
             divider={{ at: 4, label: 'Now' }}
             shadeFrom={4}

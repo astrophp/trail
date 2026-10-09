@@ -274,3 +274,27 @@ describe('TimeSeriesChart: the table asked for', () => {
         expect(screen.getByRole('table', { name: summary })).toBeInTheDocument()
     })
 })
+
+describe('TimeSeriesChart: a line anchored to another', () => {
+    it('draws the anchor point so the lines meet, and the table does not report it as the second line’s', async () => {
+        const { container } = renderChart({
+            line: recorded(),
+            dashedLine: { ...projected(), anchor: 2 },
+        })
+
+        // The dashed line runs from the anchor to the end: one piece through three points.
+        const dashed = curves(container)[1]?.getAttribute('d') ?? ''
+
+        expect(dashed.match(/M/g)).toHaveLength(1)
+        expect(dashed.match(/L/g)).toHaveLength(2)
+
+        await userEvent.click(screen.getByRole('button', { name: 'View data' }))
+
+        expect(
+            within(screen.getByRole('table'))
+                .getAllByRole('row')
+                .slice(1)
+                .map((row) => within(row).getAllByRole('cell')[1]?.textContent),
+        ).toEqual(['', '', '', '4 u', '5 u'])
+    })
+})

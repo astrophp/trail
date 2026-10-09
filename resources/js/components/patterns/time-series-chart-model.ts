@@ -57,6 +57,12 @@ export type ChartSeries = {
      * of the range, such as a projection.
      */
     span?: { from?: number; to?: number }
+    /**
+     * A bucket, by position, where the series is drawn but not reported: the point only joins its
+     * line to another one. The tooltip has no row for it and the table an empty cell, so the value
+     * is never read as the series' own.
+     */
+    anchor?: number
 }
 
 export type ChartRow = {
@@ -72,6 +78,8 @@ export type ChartRow = {
     values: (number | null)[]
     /** One flag per series: the bucket is in the series' span. Where it is not, the series says nothing. */
     applies: boolean[]
+    /** One flag per series: the bucket is in the span and is not the series' anchor. Only a reported value is told. */
+    reported: boolean[]
 }
 
 export type ChartModel = {
@@ -151,6 +159,9 @@ export function buildChartModel(input: {
                 applies[at] ? usable(one.values[index]) : null,
             ),
             applies,
+            reported: series.map(
+                (one, at) => applies[at] === true && one.anchor !== index,
+            ),
         }
     })
 

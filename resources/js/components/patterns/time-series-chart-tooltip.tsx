@@ -56,7 +56,7 @@ export function TimeSeriesChartTooltip({
                     const value = row.values[index] ?? null
 
                     // A series with nothing to say about this bucket has no row.
-                    if (row.applies[index] === false) {
+                    if (row.reported[index] === false) {
                         return null
                     }
 

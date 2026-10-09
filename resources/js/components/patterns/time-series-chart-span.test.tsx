@@ -149,3 +149,83 @@ describe('TimeSeriesChartTable: a series with a span', () => {
         ).toEqual(['1 lvl', 'Not captured', ''])
     })
 })
+
+describe('a series with an anchor', () => {
+    // The recorded line ends at bucket 1; the projected line starts there only to join it.
+    const joined: ChartSeries = {
+        key: 'projected',
+        label: 'Projected',
+        color: 'chart-4',
+        values: [null, 2, 3, 4],
+        span: { from: 1 },
+        anchor: 1,
+    }
+    const model = build([recorded, joined])
+
+    it('keeps the anchor’s value to draw, and does not report it', () => {
+        const row = model.rows[1]
+
+        expect(row?.values).toEqual([2, 2])
+        expect(row?.applies).toEqual([true, true])
+        expect(row?.reported).toEqual([true, false])
+        expect(model.rows.map((one) => one.reported[1])).toEqual([
+            false,
+            false,
+            true,
+            true,
+        ])
+    })
+
+    it('reports every bucket of a series without an anchor that is in its span, and no other', () => {
+        expect(build([recorded]).rows.map((row) => row.reported[0])).toEqual([
+            true,
+            true,
+            false,
+            false,
+        ])
+    })
+
+    it('has no tooltip row for the anchor, so a recorded value is not told as a projected one', () => {
+        const { container } = render(
+            <TimeSeriesChartTooltip
+                model={model}
+                bucketIndex={1}
+                missingLabel="Not captured"
+                inProgressLabel="In progress"
+                formatValue={formatValue}
+            />,
+        )
+
+        expect(container).toHaveTextContent('Level')
+        expect(container).not.toHaveTextContent('Projected')
+    })
+
+    it('leaves the anchor’s cell empty in the table', () => {
+        render(
+            <TimeSeriesChartTable
+                model={model}
+                caption="Anchored."
+                bucketColumnLabel="Time"
+                missingLabel="Not captured"
+                inProgressLabel="In progress"
+                formatValue={formatValue}
+            />,
+        )
+
+        expect(
+            screen
+                .getAllByRole('row')
+                .slice(1)
+                .map((row) =>
+                    within(row)
+                        .getAllByRole('cell')
+                        .map((cell) => cell.textContent),
+                ),
+        ).toEqual([
+            ['1 lvl', ''],
+            ['2 lvl', ''],
+            ['', '3 u'],
+            ['', '4 u'],
+        ])
+    })
+})

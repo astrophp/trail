@@ -66,7 +66,7 @@ export function TimeSeriesChartTable({
                             const value = row.values[index] ?? null
 
                             // A series that has nothing to say about this bucket leaves its cell empty.
-                            if (row.applies[index] === false) {
+                            if (row.reported[index] === false) {
                                 return <TableCell key={series.key} />
                             }
 
