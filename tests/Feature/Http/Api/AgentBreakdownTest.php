@@ -60,6 +60,8 @@ function breakdownTool(Trace $run, string $id, string $name, string $started, ar
 function breakdownDataset(): void
 {
     $one = AgentRows::run('Alpha', '2026-01-02 10:00:00', ['id' => 'r1']);
+    // The run's own span: the steps and tools below are its children, and it is no delegation.
+    AgentRows::span($one, SpanType::Agent, 'Alpha', '2026-01-02 10:00:00', ['id' => 'r1']);
     breakdownStep($one, 'st1', 'gpt-5', '2026-01-02 10:00:01', ['input_tokens' => 100, 'output_tokens' => 50, 'cost' => 0.01]);
     breakdownStep($one, 'st2', 'gpt-5', '2026-01-02 10:00:02', ['input_tokens' => 200, 'output_tokens' => 10, 'cost' => 0.02]);
     breakdownStep($one, 'st3', 'claude-sonnet', '2026-01-02 10:00:03', ['input_tokens' => 50, 'output_tokens' => 5], 'anthropic');
@@ -212,6 +214,21 @@ it('lists at most twenty of each, the ones in most runs, and says how many there
         ->and($body['data']['tools'])->toHaveCount(20)
         ->and($body['data']['tools'][0]['name'])->toBe('tool-21')
         ->and($body['limits']['tools'])->toBe(['limit' => 20, 'total' => 21]);
+});
+
+it('leaves out a span that started before the range although its run started in it, as the runs list does', function () {
+    $run = AgentRows::run('Alpha', '2026-01-01 12:00:00.500', ['id' => 'edge']);
+    breakdownTool($run, 'early-tool', 'early_tool', '2026-01-01 11:59:59');
+    breakdownStep($run, 'early-step', 'early-model', '2026-01-01 11:59:59');
+    breakdownTool($run, 'kept-tool', 'kept_tool', '2026-01-01 12:00:01');
+
+    $body = breakdownAt($this, 'Alpha');
+
+    expect(array_column($body['data']['tools'], 'name'))->toBe(['kept_tool'])
+        ->and($body['data']['models'])->toBe([])
+        ->and($this->getJson('/trail/api/traces?agent=Alpha&tool=early_tool')->json('pagination.total'))->toBe(0)
+        ->and($this->getJson('/trail/api/traces?agent=Alpha&model=early-model')->json('pagination.total'))->toBe(0)
+        ->and($this->getJson('/trail/api/traces?agent=Alpha&tool=kept_tool')->json('pagination.total'))->toBe(1);
 });
 
 it('lists no model for a span that recorded no provider or model', function () {
