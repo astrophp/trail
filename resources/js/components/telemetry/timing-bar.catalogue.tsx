@@ -43,6 +43,16 @@ const bars: [string, Timing, number | null][] = [
     ],
     ['Running', { offset_ms: 400, duration_ms: null, status: 'running' }, 1000],
     [
+        'Running at offset 0',
+        { offset_ms: 0, duration_ms: null, status: 'running' },
+        1000,
+    ],
+    [
+        'Running, starts at the very end',
+        { offset_ms: 1000, duration_ms: null, status: 'running' },
+        1000,
+    ],
+    [
         'Running, no axis',
         { offset_ms: 400, duration_ms: null, status: 'running' },
         null,
@@ -64,14 +74,34 @@ const bars: [string, Timing, number | null][] = [
     ],
 ]
 
+const finished: Timing = {
+    offset_ms: 400,
+    duration_ms: 300,
+    status: 'completed',
+}
+
+const live: Timing = { offset_ms: 400, duration_ms: null, status: 'running' }
+
 export const catalogue: CatalogueEntry = {
     title: 'Timing bar',
-    specimens: bars.map(([name, span, axisMs]) => ({
-        name,
-        Component: () => (
-            <div className="w-72">
-                <TimingBar span={span} axisMs={axisMs} />
-            </div>
-        ),
-    })),
+    specimens: [
+        ...bars.map(([name, span, axisMs]) => ({
+            name,
+            Component: () => (
+                <div className="w-72">
+                    <TimingBar span={span} axisMs={axisMs} />
+                </div>
+            ),
+        })),
+        {
+            name: 'Running beside completed, one axis (starts aligned)',
+            Component: () => (
+                <div className="flex w-72 flex-col gap-1">
+                    <TimingBar span={finished} axisMs={1000} />
+                    <TimingBar span={live} axisMs={1000} />
+                    <TimingBar span={finished} axisMs={1000} />
+                </div>
+            ),
+        },
+    ],
 }

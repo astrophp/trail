@@ -51,3 +51,13 @@ describe.runIf(process.env.CONTRAST_TABLE)('table', () => {
         )
     })
 })
+
+// The open-ended timing bar names these in its classes; a rename or deletion here would silently
+// leave it without stripes, and no component test would notice.
+describe('the running bar stripes', () => {
+    it('defines the stripe utility and its sliding animation in the stylesheet', () => {
+        expect(css).toMatch(/@utility bg-stripes-info\s*\{/)
+        expect(css).toMatch(/--animate-stripes:\s*stripes-slide\b/)
+        expect(css).toMatch(/@keyframes stripes-slide\s*\{/)
+    })
+})
