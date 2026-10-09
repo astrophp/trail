@@ -6,13 +6,14 @@ import { mockApi } from '@/test/traces-api'
 
 let broken = true
 
-vi.mock('@/pages/placeholder-page', () => ({
-    PlaceholderPage: ({ title }: { title: string }) => {
-        if (title === 'Usage & cost' && broken) {
+// The Usage page is the real one; its content is what cannot render, until `broken` is cleared.
+vi.mock('@/features/usage', () => ({
+    UsageView: () => {
+        if (broken) {
             throw new Error('the page could not render')
         }
 
-        return <h1 tabIndex={-1}>{title}</h1>
+        return null
     },
 }))
 
