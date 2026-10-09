@@ -108,7 +108,7 @@ describe('an agent with runs of its own', () => {
         })
         await open()
 
-        expect(screen.getByText(/· Embeddings$/)).toBeVisible()
+        expect(screen.getByText('Embeddings')).toBeVisible()
         expect(screen.queryByText(/Runs on its own/)).toBeNull()
         expect(screen.getByRole('img', { name: 'Embedding run' })).toBeVisible()
     })

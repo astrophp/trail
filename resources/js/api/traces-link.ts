@@ -50,7 +50,8 @@ export function tracesLink(
  * parameter, so the link says to the list what the API said to the endpoint.
  *
  * A link that dropped a filter would lead to more runs than the item counted, so a name the list
- * does not keep in its address, or a value it would not read, throws instead.
+ * does not keep in its address, a value it would not read, and a value the address would leave out
+ * (one that is the parameter's own default, such as an empty tool name) all throw instead.
  */
 export function tracesLinkFor(
     range: TimeRangePreset,
@@ -79,7 +80,18 @@ export function tracesLinkFor(
         state[known] = value
     }
 
-    return tracesLink(range, state, base)
+    const to = tracesLink(range, state, base)
+    const written = new URLSearchParams(typeof to === 'string' ? '' : to.search)
+
+    for (const name of Object.keys(filters)) {
+        if (!written.has(name)) {
+            throw new Error(
+                `The traces list would leave the "${name}" filter out of its address: "${filters[name]}" is what it means by no filter.`,
+            )
+        }
+    }
+
+    return to
 }
 
 /** The builders of a page whose links all carry `base`. */

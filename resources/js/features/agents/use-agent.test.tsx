@@ -67,7 +67,7 @@ describe('the agent’s queries', () => {
 
         const agent = render(({ name, range }) => useAgent(name, range))
         const breakdown = render(({ name, range }) =>
-            useAgentBreakdown(name, range),
+            useAgentBreakdown(name, range, useAgent(name, range)),
         )
 
         await waitFor(() => expect(agent.result.current.data).toBeDefined())
@@ -98,7 +98,7 @@ describe('the agent’s queries', () => {
 
         const agent = render(({ name, range }) => useAgent(name, range))
         const breakdown = render(({ name, range }) =>
-            useAgentBreakdown(name, range),
+            useAgentBreakdown(name, range, useAgent(name, range)),
         )
 
         await waitFor(() => expect(agent.result.current.data).toBeDefined())

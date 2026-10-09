@@ -11,6 +11,7 @@ import { AgentBreakdown } from '@/features/agents/agent-breakdown'
 import { agentTitle } from '@/features/agents/agent-words'
 import { DelegatedFacts } from '@/features/agents/delegated-facts'
 import { formatCount } from '@/lib/format'
+import type { Refreshing } from '@/lib/refresh-policy'
 import type { TimeRangePreset } from '@/lib/time-range'
 
 type AgentLoadedProps = {
@@ -29,6 +30,14 @@ type AgentLoadedProps = {
     onModeChange: (mode: ActivityMode) => void
     /** What the page places under the models and tools; drawn for an agent with runs of its own. */
     recent?: ReactNode
+    /** The page's one query for the agent. */
+    leader: {
+        dataUpdatedAt: number
+        isPlaceholderData: boolean
+        refreshing: Refreshing
+    }
+    /** The page already says its last refresh failed. */
+    refreshNoted: boolean
 }
 
 /**
@@ -48,6 +57,8 @@ export function AgentLoaded({
     mode,
     onModeChange,
     recent,
+    leader,
+    refreshNoted,
 }: AgentLoadedProps) {
     const { agent, summary, previous, series, attention } = answer
     const own = agent.top_level
@@ -78,6 +89,15 @@ export function AgentLoaded({
     if (own === null) {
         return (
             <>
+                {/* Outside the busy region: a status message is not part of what is dimmed. */}
+                <Notice
+                    tone="info"
+                    title="It has no runs of its own in this range."
+                    className="mb-4"
+                >
+                    Its runs are recorded inside the runs of the agents that
+                    delegated to it, so its figures are part of theirs.
+                </Notice>
                 {delegated === null ? null : (
                     <BusyRegion busy={placeholder} label="Loading the figures">
                         <DelegatedFacts delegated={delegated} />
@@ -87,6 +107,8 @@ export function AgentLoaded({
                     name={name}
                     range={selected}
                     ownRuns={null}
+                    leader={leader}
+                    refreshNoted={refreshNoted}
                     className="mt-6"
                 />
             </>
@@ -126,6 +148,8 @@ export function AgentLoaded({
                     name={name}
                     range={selected}
                     ownRuns={{ runs: own.runs.all, range }}
+                    leader={leader}
+                    refreshNoted={refreshNoted}
                 />
                 {recent}
             </div>

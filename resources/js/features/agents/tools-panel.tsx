@@ -37,6 +37,7 @@ export function ToolsPanel({
             busyLabel="Loading the tools"
             loading={state.loading}
             busy={state.busy}
+            waiting={state.waiting}
             failure={state.failure}
             own={
                 state.hasOwnRuns

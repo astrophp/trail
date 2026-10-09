@@ -58,7 +58,9 @@ export type ShowPatch = {
  * running, so a page that shows it asks for nothing again by itself.
  */
 export function showFor(url: string, patch: ShowPatch = {}): AgentResponse {
-    const name = queryOf(url).get('name') ?? ''
+    // The name as the response spells it: the request's unless the patch says another, as when the
+    // request was made with a different case than the runs were recorded with.
+    const name = patch.agent?.name ?? queryOf(url).get('name') ?? ''
     const base = showFixture.data
     const own = base.agent.top_level
     const quietRuns = { ...base.summary.runs, completed: 22, running: 0 }

@@ -85,6 +85,12 @@ function Agent({
         answer.agent.top_level === null &&
         answer.agent.delegated === null
 
+    const leader = {
+        dataUpdatedAt: query.dataUpdatedAt,
+        isPlaceholderData,
+        refreshing: query.refreshing,
+    }
+
     const body = () => {
         if (missing) {
             return <AgentNotFound name={name} />
@@ -124,12 +130,10 @@ function Agent({
                     recent={recent?.({
                         agent: answer.agent.name,
                         range: shown,
-                        leader: {
-                            dataUpdatedAt: query.dataUpdatedAt,
-                            isPlaceholderData,
-                            refreshing: query.refreshing,
-                        },
+                        leader,
                     })}
+                    leader={leader}
+                    refreshNoted={isError}
                 />
             </>
         )
@@ -142,6 +146,7 @@ function Agent({
                 agent={agent}
                 range={range}
                 onRangeChange={setRange}
+                placeholder={isPlaceholderData}
                 allTraces={
                     agent === undefined || agent.top_level === null
                         ? undefined

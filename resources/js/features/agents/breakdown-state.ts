@@ -12,6 +12,8 @@ export type BreakdownState = {
     loading: boolean
     /** The answer is the previous range's. */
     busy: boolean
+    /** Runs are still running, so the rows wait for them and are not refreshed meanwhile. */
+    waiting: boolean
     /** The request failed and there is nothing to show instead. */
     failure: { message: string; onRetry: () => void } | undefined
     /** The agent's own runs, which a row's part is a part of; `null` when there is no such total (or none that is of the range shown). */

@@ -37,6 +37,7 @@ export function ModelsPanel({
             busyLabel="Loading the models"
             loading={state.loading}
             busy={state.busy}
+            waiting={state.waiting}
             failure={state.failure}
             own={
                 state.hasOwnRuns

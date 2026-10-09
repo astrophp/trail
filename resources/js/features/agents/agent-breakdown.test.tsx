@@ -14,6 +14,7 @@ import {
     mockApi,
     panel,
     paramsOf,
+    showFixture,
     showFor,
     strip,
     subAgentOnly,
@@ -75,6 +76,19 @@ const tool = (over: Partial<AgentTool> & { name: string }): AgentTool => ({
 
 const nothingDelegated = { models: [], tools: [] }
 const nothingCut = { limit: 20, total: 0 }
+
+/** The agent's answer with a run still running, as the fixture has it. */
+const showFixtureRunning = (url: string) => ({
+    ...showFixture,
+    data: {
+        ...showFixture.data,
+        agent: {
+            ...showFixture.data.agent,
+            name: paramsOf(url).name ?? '',
+        },
+    },
+    range: { ...showFixture.range, preset: '24h' as const },
+})
 
 const route = (search = '') => `/agents/agent?name=SupportAssistant${search}`
 
@@ -167,7 +181,8 @@ describe('the models', () => {
         expect(first).toHaveTextContent('20 runs')
         expect(first).toHaveTextContent('80 calls')
         expect(first).toHaveTextContent('$4.10')
-        expect(first).toHaveTextContent('Tokens 52,000')
+        expect(first).toHaveTextContent(/Tokens 52.0k/)
+        expect(first).toHaveTextContent('52,000 tokens')
 
         expect(second).toHaveTextContent('claude-b/x 1+2')
         expect(second).toHaveTextContent('8 runs')
@@ -180,6 +195,8 @@ describe('the models', () => {
         // One row's values are never in another's.
         expect(first).not.toHaveTextContent('gpt-x')
         expect(third).not.toHaveTextContent('52,000')
+        // Calls that reported no usage say so; they are not silent about tokens.
+        expect(third).toHaveTextContent('Tokens Not reported')
         expect(third).not.toHaveTextContent('$4.10')
 
         expect(fourth).toHaveTextContent('claude-asked')
@@ -195,8 +212,20 @@ describe('the models', () => {
         expect(asked).not.toHaveTextContent('0 calls')
         expect(asked).not.toHaveTextContent('Not captured')
         expect(asked).not.toHaveTextContent('Tokens')
+        expect(asked).not.toHaveTextContent('Not reported')
         // A model that was called does not say it was not.
         expect(first).not.toHaveTextContent('asked for, not called')
+    })
+
+    it('are links named by the model and what it is worth, not by the label alone', async () => {
+        await open()
+        await screen.findByText('claude-a')
+
+        expect(
+            within(panel('Models')).getByRole('link', {
+                name: /^claude-a.* 20 runs$/,
+            }),
+        ).toBeVisible()
     })
 
     it('say what the calls cost in the state the API gives, and what the tokens are', async () => {
@@ -210,7 +239,7 @@ describe('the models', () => {
         expect(pending).toHaveTextContent('Tokens Pending')
         expect(pending).not.toHaveTextContent('Tokens 900')
         expect(unpriced).toHaveTextContent('Unpriced')
-        expect(unpriced).not.toHaveTextContent('Tokens')
+        expect(unpriced).toHaveTextContent('Tokens Not reported')
     })
 
     it('draw the share of the agent’s runs that used it as a bar, clamped to the whole', async () => {
@@ -407,6 +436,40 @@ describe('the tools', () => {
     })
 })
 
+describe('a tool whose name is empty', () => {
+    it('is drawn without a link, since a link would show the runs of every tool', async () => {
+        const report = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+        mockApi({
+            breakdown: (url) =>
+                json(
+                    breakdownFor(url, {
+                        models: [],
+                        tools: [
+                            tool({ name: 'real_tool' }),
+                            tool({
+                                name: '',
+                                filters: {
+                                    agent: 'SupportAssistant',
+                                    tool: '',
+                                },
+                            }),
+                        ],
+                        delegated: nothingDelegated,
+                    }),
+                ),
+        })
+        await open()
+        await screen.findByText('real_tool')
+        const [linked, empty] = ownRows('Tools')
+
+        expect(within(linked).getByRole('link')).toBeVisible()
+        expect(within(empty).queryByRole('link')).toBeNull()
+        expect(empty).toHaveTextContent('Its runs could not be linked.')
+        report.mockRestore()
+    })
+})
+
 describe('what happened inside the runs it was delegated to', () => {
     const delegated = {
         models: [
@@ -464,6 +527,36 @@ describe('what happened inside the runs it was delegated to', () => {
             within(panel('Models')).getByText(
                 'The traces list cannot filter on these, so they have no links.',
             ),
+        ).toBeVisible()
+    })
+
+    it('is a list with a name of its own, for when no heading comes before it', async () => {
+        mockApi({
+            show: (url) => json(showFor(url, subAgentOnly)),
+            breakdown: (url) =>
+                json(
+                    breakdownFor(url, {
+                        models: [],
+                        tools: [],
+                        delegated: {
+                            models: [...delegated.models],
+                            tools: [...delegated.tools],
+                        },
+                    }),
+                ),
+        })
+        renderApp(route())
+        await screen.findByText('gpt-inner')
+
+        expect(
+            within(panel('Models')).getByRole('list', {
+                name: 'Models used inside the runs it was delegated to',
+            }),
+        ).toBeVisible()
+        expect(
+            within(panel('Tools')).getByRole('list', {
+                name: 'Tools used inside the runs it was delegated to',
+            }),
         ).toBeVisible()
     })
 
@@ -662,6 +755,85 @@ describe('the states of each panel', () => {
         await screen.findAllByText('claude-haiku-4-5')
 
         expect(screen.queryByRole('alert')).toBeNull()
+    })
+
+    it('hand focus to the page heading when the retry brings the rows, not to nothing', async () => {
+        let fail = true
+        mockApi({
+            breakdown: (url) =>
+                fail
+                    ? json({ message: 'Down.' }, 500)
+                    : json(breakdownFor(url)),
+        })
+
+        await open()
+        const retry = await within(panel('Models')).findByRole('button', {
+            name: 'Try again',
+        })
+
+        retry.focus()
+        expect(retry).toHaveFocus()
+        fail = false
+        await userEvent.click(retry)
+        await screen.findAllByText('claude-haiku-4-5')
+
+        await waitFor(() =>
+            expect(
+                screen.getByRole('heading', {
+                    level: 1,
+                    name: 'SupportAssistant',
+                }),
+            ).toHaveFocus(),
+        )
+    })
+
+    it('hand focus to the page heading when the try again of the refresh note brings the rows', async () => {
+        vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })
+        let quiet = false
+        let fail = false
+        mockApi({
+            show: (url) =>
+                json(
+                    quiet
+                        ? showFor(url)
+                        : {
+                              ...showFixtureRunning(url),
+                          },
+                ),
+            breakdown: (url) =>
+                fail
+                    ? json({ message: 'Down.' }, 500)
+                    : json(breakdownFor(url)),
+        })
+
+        await open()
+        await screen.findAllByText('claude-haiku-4-5')
+        // The runs finish, and the asking again that follows fails.
+        quiet = true
+        fail = true
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(2000)
+        })
+
+        const retry = await screen.findByRole('button', { name: 'Try again' })
+
+        // The page's own note and the breakdown's are one: only one says the refresh failed.
+        expect(screen.getAllByText(/The last refresh failed/)).toHaveLength(1)
+
+        retry.focus()
+        fail = false
+        await userEvent.click(retry)
+        await waitFor(() =>
+            expect(screen.queryByText(/The last refresh failed/)).toBeNull(),
+        )
+        await waitFor(() =>
+            expect(
+                screen.getByRole('heading', {
+                    level: 1,
+                    name: 'SupportAssistant',
+                }),
+            ).toHaveFocus(),
+        )
     })
 
     it('are empty, in words that claim nothing about runs that were not asked', async () => {

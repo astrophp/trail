@@ -1,4 +1,4 @@
-import type { ComponentProps, ReactNode } from 'react'
+import { useId, type ComponentProps, type ReactNode } from 'react'
 import { RowLink } from '@/components/patterns/row-link'
 import { cn } from '@/lib/utils'
 
@@ -24,6 +24,8 @@ export function RankedListItem({
     detail,
     className,
 }: RankedListItemProps) {
+    const labelId = useId()
+    const valueId = useId()
     const fraction =
         share !== null && Number.isFinite(share)
             ? Math.min(1, Math.max(0, share))
@@ -38,14 +40,22 @@ export function RankedListItem({
             )}
         >
             <div className="flex items-baseline justify-between gap-3 text-ui">
-                <span className="min-w-0 wrap-anywhere">
+                <span id={labelId} className="min-w-0 wrap-anywhere">
                     {to === undefined ? (
                         label
                     ) : (
-                        <RowLink to={to}>{label}</RowLink>
+                        // Named by the value as well, so a list of links says what each one is worth.
+                        <RowLink
+                            to={to}
+                            aria-labelledby={`${labelId} ${valueId}`}
+                        >
+                            {label}
+                        </RowLink>
                     )}
                 </span>
-                <span className="shrink-0 tabular-nums">{value}</span>
+                <span id={valueId} className="shrink-0 tabular-nums">
+                    {value}
+                </span>
             </div>
             {detail ? (
                 <div className="text-caption text-muted-foreground">

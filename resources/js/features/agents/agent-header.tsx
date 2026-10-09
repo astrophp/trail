@@ -6,6 +6,7 @@ import { AgentIcon } from '@/components/telemetry/agent-icon'
 import { Button } from '@/components/ui/button'
 import { agentRole, agentTitle } from '@/features/agents/agent-words'
 import type { TimeRangePreset } from '@/lib/time-range'
+import { cn } from '@/lib/utils'
 
 type AgentHeaderProps = {
     /** The name to call the page: the agent's own spelling once it is known, else the address's. */
@@ -16,6 +17,8 @@ type AgentHeaderProps = {
     onRangeChange: (range: TimeRangePreset) => void
     /** The traces list over the agent's runs and the range of the data shown. Only an agent with runs of its own has one. */
     allTraces?: To
+    /** The agent is the previous range's answer: how it runs is dimmed with the figures, as it is theirs. */
+    placeholder?: boolean
 }
 
 /**
@@ -29,6 +32,7 @@ export function AgentHeader({
     range,
     onRangeChange,
     allTraces,
+    placeholder = false,
 }: AgentHeaderProps) {
     const role = agent === undefined ? null : agentRole(agent)
     const agentClass = agent?.agent_class ?? null
@@ -46,7 +50,18 @@ export function AgentHeader({
                             </span>
                         )}
                         {agentClass !== null && role !== null ? ' · ' : null}
-                        {role}
+                        {role === null ? null : (
+                            <span
+                                data-slot="agent-role"
+                                aria-busy={placeholder || undefined}
+                                className={cn(
+                                    'motion-safe:transition-opacity',
+                                    placeholder && 'opacity-60',
+                                )}
+                            >
+                                {role}
+                            </span>
+                        )}
                     </>
                 )
             }

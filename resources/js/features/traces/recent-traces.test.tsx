@@ -241,6 +241,30 @@ describe('the states of the recent traces', () => {
         expect(screen.queryByRole('alert')).toBeNull()
     })
 
+    it('hand focus to the page heading when the retry brings the runs, not to nothing', async () => {
+        let fail = true
+        mockApi({
+            traces: (url) =>
+                fail ? json({ message: 'Down.' }, 500) : json(recentFor(url)),
+        })
+
+        await open()
+        const retry = await within(section()).findByRole('button', {
+            name: 'Try again',
+        })
+
+        retry.focus()
+        fail = false
+        await userEvent.click(retry)
+        await waitFor(() => expect(rows()).toHaveLength(8))
+
+        await waitFor(() =>
+            expect(
+                screen.getByRole('heading', { level: 1, name: 'Support/Bot' }),
+            ).toHaveFocus(),
+        )
+    })
+
     it('keep the previous range’s rows dimmed, with no total that is not the answer, until the next arrive', async () => {
         const next = deferred()
         mockApi({

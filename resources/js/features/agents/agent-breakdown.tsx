@@ -4,7 +4,9 @@ import { ModelsPanel } from '@/features/agents/models-panel'
 import { ToolsPanel } from '@/features/agents/tools-panel'
 import { agentViewKey } from '@/features/agents/use-agent'
 import { useAgentBreakdown } from '@/features/agents/use-agent-breakdown'
+import { useFocusHandoff } from '@/hooks/use-focus-handoff'
 import { useQueryStatus } from '@/hooks/use-query-status'
+import type { Refreshing } from '@/lib/refresh-policy'
 import type { TimeRangePreset } from '@/lib/time-range'
 
 type AgentBreakdownProps = {
@@ -16,6 +18,14 @@ type AgentBreakdownProps = {
      * `null` for an agent with no runs of its own, whose rows are all inside runs it was delegated to.
      */
     ownRuns: { runs: number; range: TimeRangePreset } | null
+    /** The page's one query for the agent, which the breakdown follows once it settles. */
+    leader: {
+        dataUpdatedAt: number
+        isPlaceholderData: boolean
+        refreshing: Refreshing
+    }
+    /** The page already says that its last refresh failed, so this says it no more. */
+    refreshNoted?: boolean
     className?: string
 }
 
@@ -29,14 +39,20 @@ export function AgentBreakdown({
     name,
     range,
     ownRuns,
+    leader,
+    refreshNoted = false,
     className,
 }: AgentBreakdownProps) {
-    const breakdown = useAgentBreakdown(name, range)
+    const breakdown = useAgentBreakdown(name, range, leader)
     const { data, isPlaceholderData } = breakdown
     const { failed, retrying, failure, loading } = useQueryStatus(
         breakdown,
         agentViewKey(name, range),
     )
+
+    // The retry button, or the one of the refresh note, goes away when the rows load.
+    useFocusHandoff(failed || (breakdown.isError && !refreshNoted))
+
     // The range the rows were counted over: the previous one while the next loads.
     const shown = data?.range.preset ?? range
     const state = {
@@ -44,6 +60,7 @@ export function AgentBreakdown({
         shown,
         loading,
         busy: isPlaceholderData,
+        waiting: breakdown.waitingForLeader,
         failure: failed
             ? {
                   message: failureMessage(failure),
@@ -62,7 +79,7 @@ export function AgentBreakdown({
 
     return (
         <div data-slot="agent-breakdown" className={className}>
-            {loading || failed ? null : (
+            {loading || failed || refreshNoted ? null : (
                 <RefreshNote
                     refreshing={breakdown.refreshing}
                     failed={breakdown.isError}

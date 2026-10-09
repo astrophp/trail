@@ -3,7 +3,7 @@ import type { AgentModel, DelegatedModel } from '@/api/types'
 import { RankedListItem } from '@/components/patterns/ranked-list-item'
 import { CostValue } from '@/components/telemetry/cost-value'
 import { ModelLabel } from '@/components/telemetry/model-label'
-import { TokenCount } from '@/components/telemetry/token-count'
+import { TokenValue } from '@/components/telemetry/token-value'
 import { callsText, runsText } from '@/features/agents/breakdown-words'
 
 type ModelRowProps = {
@@ -44,15 +44,9 @@ export function ModelRow({ model, to, unlinkable, share }: ModelRowProps) {
                     <span className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
                         <span>{callsText(model.steps)}</span>
                         <CostValue cost={model.cost} pendingAmount="show" />
-                        {usage.state === 'not_reported' ? null : (
-                            <span>
-                                Tokens{' '}
-                                <TokenCount
-                                    count={usage.total_tokens}
-                                    pending={usage.state === 'pending'}
-                                />
-                            </span>
-                        )}
+                        <span>
+                            Tokens <TokenValue usage={usage} />
+                        </span>
                         {unlinkable ? <Unlinkable /> : null}
                     </span>
                 )

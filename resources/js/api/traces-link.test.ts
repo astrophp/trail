@@ -93,6 +93,22 @@ describe('tracesLinkFor', () => {
         )
     })
 
+    it('fails for a filter the address would leave out, which would show more runs than were counted', () => {
+        expect(() => tracesLinkFor('24h', { tool: '' })).toThrow(
+            'would leave the "tool" filter out',
+        )
+        expect(() =>
+            tracesLinkFor('24h', { agent: '', status: 'failed' }),
+        ).toThrow('would leave the "agent" filter out')
+        expect(() => tracesLinkFor('24h', { status: 'all' })).toThrow(
+            'would leave the "status" filter out',
+        )
+        // Paired: a tool with a name is written.
+        expect(search(tracesLinkFor('24h', { tool: 'x' })).get('tool')).toBe(
+            'x',
+        )
+    })
+
     it('fails for a value the list would not read, which would show other runs', () => {
         expect(() => tracesLinkFor('24h', { status: 'done' })).toThrow(
             'does not read "done"',

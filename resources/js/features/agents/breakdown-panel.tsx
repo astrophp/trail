@@ -25,6 +25,8 @@ type BreakdownPanelProps = {
     loading: boolean
     /** The rows are the previous range's, and shown until the next arrive. */
     busy: boolean
+    /** Runs are still running: the rows are not refreshed until they finish, and the panel says so. */
+    waiting: boolean
     /** It could not be loaded and there is nothing to show instead. */
     failure?: { message: string; onRetry: () => void }
     /** Of the agent's own runs; `undefined` for an agent that has none, whose panel is its delegated rows alone. */
@@ -52,6 +54,7 @@ export function BreakdownPanel({
     busyLabel,
     loading,
     busy,
+    waiting,
     failure,
     own,
     delegated,
@@ -87,9 +90,19 @@ export function BreakdownPanel({
 
         return (
             <div className="flex flex-col gap-5">
+                {waiting ? (
+                    <p
+                        data-slot="waiting-note"
+                        className="text-caption text-muted-foreground"
+                    >
+                        Updates when the runs in flight finish
+                    </p>
+                ) : null}
                 {own === undefined ? null : hasOwn ? (
                     <div className="flex flex-col gap-3">
-                        <RankedList>{own.rows}</RankedList>
+                        <RankedList aria-label={`${title} of its own runs`}>
+                            {own.rows}
+                        </RankedList>
                         {ownCut === null ? null : (
                             <p className="text-caption text-muted-foreground">
                                 {ownCut}
@@ -120,7 +133,11 @@ export function BreakdownPanel({
                                 have no links.
                             </p>
                         </div>
-                        <RankedList>{delegated.rows}</RankedList>
+                        <RankedList
+                            aria-label={`${title} used inside the runs it was delegated to`}
+                        >
+                            {delegated.rows}
+                        </RankedList>
                         {delegatedCut === null ? null : (
                             <p className="text-caption">{delegatedCut}</p>
                         )}

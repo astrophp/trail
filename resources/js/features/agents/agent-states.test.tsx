@@ -6,11 +6,13 @@ import { forgetBreakdownRefreshFailures } from '@/features/agents/use-agent-brea
 import { forgetRecentTracesRefreshFailures } from '@/features/traces'
 import { maxFailedRefreshes, refreshEvery } from '@/lib/refresh-policy'
 import {
+    breakdownFor,
     breakdownUrls,
     deferred,
     json,
     mockApi,
     nothingInRange,
+    panel,
     paramsOf,
     showFixture,
     showFor,
@@ -314,7 +316,7 @@ describe('an agent that only ran as a sub-agent', () => {
         expect(breakdownUrls(fetchMock)).toHaveLength(1)
     })
 
-    it('leaves out the time of the last delegation when it could not be read', async () => {
+    it('keeps the row of the last delegation when its time could not be read, and says it is missing', async () => {
         mockApi({
             show: (url) =>
                 json(
@@ -336,8 +338,45 @@ describe('an agent that only ran as a sub-agent', () => {
         renderApp(route('Summarizer'))
         await screen.findByText('Delegated runs')
 
-        expect(screen.queryByText('Last delegated')).toBeNull()
-        expect(screen.queryByText('Not captured')).toBeNull()
+        const row = screen
+            .getByText('Last delegated')
+            .closest('[data-slot="key-value"]')
+
+        expect(row).toHaveTextContent('Not captured')
+    })
+
+    it('says the time of the last delegation as the rest of the page does, with the whole time on hover', async () => {
+        mockApi({ show: (url) => json(showFor(url, subAgentOnly)) })
+
+        renderApp(route('Summarizer'))
+        await screen.findByText('Delegated runs')
+
+        const row = screen
+            .getByText('Last delegated')
+            .closest('[data-slot="key-value"]')
+
+        expect(row).toHaveTextContent(/ago/)
+        expect(row?.querySelector('time')).toHaveAttribute(
+            'title',
+            expect.stringMatching(/2026/),
+        )
+    })
+
+    it('keeps its notice out of the part that is dimmed, and the facts in it', async () => {
+        mockApi({ show: (url) => json(showFor(url, subAgentOnly)) })
+
+        renderApp(route('Summarizer'))
+        const notice = (
+            await screen.findByText('It has no runs of its own in this range.')
+        ).closest('[data-slot="notice"]')
+
+        expect(notice).not.toBeNull()
+        expect(notice?.closest('[data-slot="busy-region"]')).toBeNull()
+        expect(
+            screen
+                .getByText('Delegated runs')
+                .closest('[data-slot="busy-region"]'),
+        ).not.toBeNull()
     })
 })
 
@@ -446,6 +485,18 @@ describe('changing the range', () => {
         expect(
             screen.getByRole('link', { name: 'View all traces' }),
         ).toHaveAttribute('href', '/trail/traces?agent=SupportAssistant')
+        // How it runs is the previous range's too, so it is dimmed and busy with the rest, and the
+        // name and class are not.
+        const role = document.querySelector('[data-slot="agent-role"]')
+
+        expect(role).toHaveTextContent('Runs on its own')
+        expect(role).toHaveAttribute('aria-busy', 'true')
+        expect(role).toHaveClass('opacity-60')
+        expect(
+            screen
+                .getByText('App\\Ai\\Agents\\SupportAssistant')
+                .closest('[aria-busy]'),
+        ).toBeNull()
         // The announcement sits outside the dimmed part.
         expect(
             screen
@@ -466,6 +517,9 @@ describe('changing the range', () => {
         expect(
             within(metricOf('Traces')).getByText('vs previous 7 days'),
         ).toBeVisible()
+        expect(
+            document.querySelector('[data-slot="agent-role"]'),
+        ).not.toHaveAttribute('aria-busy')
         expect(
             screen.getByRole('link', { name: 'View all traces' }),
         ).toHaveAttribute(
@@ -628,7 +682,7 @@ describe('refreshing by itself', () => {
             range: { ...showFixture.range, preset: '24h' },
         })
 
-    it('asks again every two seconds while a run is running, the models and tools and the runs with it, and stops when none is', async () => {
+    it('asks for the agent once per tick while a run is running, and for its recent runs with it, and stops when none is', async () => {
         fakeInterval()
         let quiet = false
         const fetchMock = mockApi({
@@ -642,22 +696,138 @@ describe('refreshing by itself', () => {
 
         await tick()
         await until(() => expect(showUrls(fetchMock)).toHaveLength(2))
-        await until(() => expect(breakdownUrls(fetchMock)).toHaveLength(2))
         await until(() => expect(traceUrls(fetchMock)).toHaveLength(2))
+        await tick()
+        await until(() => expect(showUrls(fetchMock)).toHaveLength(3))
+        await until(() => expect(traceUrls(fetchMock)).toHaveLength(3))
 
         quiet = true
         await tick()
+        await until(() => expect(showUrls(fetchMock)).toHaveLength(4))
+        await until(() => expect(traceUrls(fetchMock)).toHaveLength(4))
+
+        await tick()
+        await tick()
+        await tick()
+
+        expect(showUrls(fetchMock)).toHaveLength(4)
+        expect(traceUrls(fetchMock)).toHaveLength(4)
+    })
+
+    it('does not ask the models and tools on every tick, but once when the runs have finished', async () => {
+        fakeInterval()
+        let quiet = false
+        const fetchMock = mockApi({
+            show: (url) => (quiet ? json(showFor(url)) : running(url)),
+        })
+
+        renderApp(route('SupportAssistant'))
+        await figures()
+        await until(() => expect(breakdownUrls(fetchMock)).toHaveLength(1))
+
+        await tick()
+        await tick()
         await until(() => expect(showUrls(fetchMock)).toHaveLength(3))
-        await until(() => expect(breakdownUrls(fetchMock)).toHaveLength(3))
-        await until(() => expect(traceUrls(fetchMock)).toHaveLength(3))
+
+        // Three answers of the agent with a run still running: none of them asked for the breakdown.
+        expect(breakdownUrls(fetchMock)).toHaveLength(1)
+
+        quiet = true
+        await tick()
+        await until(() => expect(showUrls(fetchMock)).toHaveLength(4))
+        await until(() => expect(breakdownUrls(fetchMock)).toHaveLength(2))
 
         await tick()
         await tick()
-        await tick()
+        expect(breakdownUrls(fetchMock)).toHaveLength(2)
+    })
 
-        expect(showUrls(fetchMock)).toHaveLength(3)
-        expect(breakdownUrls(fetchMock)).toHaveLength(3)
-        expect(traceUrls(fetchMock)).toHaveLength(3)
+    it('says in each panel that the rows wait for the runs in flight, until they have finished', async () => {
+        fakeInterval()
+        let quiet = false
+        mockApi({
+            show: (url) => (quiet ? json(showFor(url)) : running(url)),
+        })
+
+        renderApp(route('SupportAssistant'))
+        await figures()
+        await screen.findAllByText('claude-haiku-4-5')
+
+        for (const title of ['Models', 'Tools']) {
+            expect(
+                within(panel(title)).getByText(
+                    'Updates when the runs in flight finish',
+                ),
+            ).toBeVisible()
+        }
+
+        quiet = true
+        await tick()
+        await waitFor(() =>
+            expect(
+                screen.queryByText('Updates when the runs in flight finish'),
+            ).toBeNull(),
+        )
+    })
+
+    it('finishes a breakdown that takes longer than a tick, without cancelling it for the next', async () => {
+        fakeInterval()
+        const slow = deferred()
+        const fetchMock = mockApi({
+            show: (url) => running(url),
+            breakdown: () => slow.promise,
+        })
+
+        renderApp(route('SupportAssistant'))
+        await figures()
+        await until(() => expect(breakdownUrls(fetchMock)).toHaveLength(1))
+
+        for (let times = 2; times <= 4; times++) {
+            await tick()
+            await until(() => expect(showUrls(fetchMock)).toHaveLength(times))
+        }
+
+        // The one request is still the one in flight: no tick started another.
+        expect(breakdownUrls(fetchMock)).toHaveLength(1)
+
+        slow.resolve(
+            await json(breakdownFor(breakdownUrls(fetchMock)[0] ?? '')),
+        )
+        await screen.findAllByText('claude-haiku-4-5')
+
+        expect(breakdownUrls(fetchMock)).toHaveLength(1)
+    })
+
+    it('asks once more when the runs finish while its first request is still on the way', async () => {
+        fakeInterval()
+        const first = deferred()
+        let quiet = false
+        const fetchMock = mockApi({
+            show: (url) => (quiet ? json(showFor(url)) : running(url)),
+            breakdown: (url) =>
+                breakdownUrls(fetchMock).length === 1
+                    ? first.promise
+                    : json(breakdownFor(url)),
+        })
+
+        renderApp(route('SupportAssistant'))
+        await figures()
+        await until(() => expect(breakdownUrls(fetchMock)).toHaveLength(1))
+
+        quiet = true
+        await tick()
+        await until(() => expect(showUrls(fetchMock)).toHaveLength(2))
+
+        // The first request is not cancelled, and nothing else was asked for meanwhile.
+        expect(breakdownUrls(fetchMock)).toHaveLength(1)
+
+        first.resolve(
+            await json(breakdownFor(breakdownUrls(fetchMock)[0] ?? '')),
+        )
+        await until(() => expect(breakdownUrls(fetchMock)).toHaveLength(2))
+        await tick()
+        await tick()
+        expect(breakdownUrls(fetchMock)).toHaveLength(2)
     })
 
     it('never asks again when nothing is running', async () => {
