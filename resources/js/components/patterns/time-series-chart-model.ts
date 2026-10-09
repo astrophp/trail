@@ -50,6 +50,19 @@ export type ChartSeries = {
      * not captured, never drawn as something it is not.
      */
     values: (number | null)[]
+    /**
+     * The buckets, by position and both included, that the series speaks for. Outside them it has
+     * no value and says nothing: no row in the tooltip, an empty cell in the table, and a value
+     * given there is not drawn. Defaults to every bucket. For a series that only exists over part
+     * of the range, such as a projection.
+     */
+    span?: { from?: number; to?: number }
+    /**
+     * A bucket, by position, where the series is drawn but not reported: the point only joins its
+     * line to another one. The tooltip has no row for it and the table an empty cell, so the value
+     * is never read as the series' own.
+     */
+    anchor?: number
 }
 
 export type ChartRow = {
@@ -63,6 +76,10 @@ export type ChartRow = {
     inProgress: boolean
     /** One value per series, in the series' order. */
     values: (number | null)[]
+    /** One flag per series: the bucket is in the series' span. Where it is not, the series says nothing. */
+    applies: boolean[]
+    /** One flag per series: the bucket is in the span and is not the series' anchor. Only a reported value is told. */
+    reported: boolean[]
 }
 
 export type ChartModel = {
@@ -82,6 +99,13 @@ function usable(value: number | null | undefined): number | null {
     return typeof value === 'number' && Number.isFinite(value) && value >= 0
         ? value
         : null
+}
+
+/** Whether the series speaks for the bucket at `index`. */
+function inSpan(series: ChartSeries, index: number): boolean {
+    const { from = 0, to = Number.POSITIVE_INFINITY } = series.span ?? {}
+
+    return index >= from && index <= to
 }
 
 /**
@@ -122,14 +146,24 @@ export function buildChartModel(input: {
 }): ChartModel {
     const { buckets, series, stacked, formatBucket, formatTick } = input
 
-    const rows = buckets.map((bucket, index): ChartRow => ({
-        key: bucket.key,
-        bucket,
-        label: formatBucket(bucket),
-        tick: formatTick(bucket, index),
-        inProgress: bucket.inProgress,
-        values: series.map((one) => usable(one.values[index])),
-    }))
+    const rows = buckets.map((bucket, index): ChartRow => {
+        const applies = series.map((one) => inSpan(one, index))
+
+        return {
+            key: bucket.key,
+            bucket,
+            label: formatBucket(bucket),
+            tick: formatTick(bucket, index),
+            inProgress: bucket.inProgress,
+            values: series.map((one, at) =>
+                applies[at] ? usable(one.values[index]) : null,
+            ),
+            applies,
+            reported: series.map(
+                (one, at) => applies[at] === true && one.anchor !== index,
+            ),
+        }
+    })
 
     const heights = rows.map((row) => {
         const present = row.values.filter(

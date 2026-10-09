@@ -48,6 +48,11 @@ import type {
     BucketUnit,
     ErrorRate,
     SeriesBucket,
+    SpendBucket,
+    SpendProjection,
+    ProjectedBucket,
+    ProjectionLeftOut,
+    ProjectionWindow,
     Status,
     StatusCounts,
     Summary,
@@ -64,6 +69,7 @@ import type {
     UsageCoverage,
     UsageResponse,
     UsageRowCoverage,
+    UsageSpendResponse,
     Attempt,
     Message,
     MessagePart,
@@ -620,6 +626,69 @@ const usageResponse = z.strictObject({
     range,
 })
 
+const spendBucket = z.strictObject({
+    ...seriesBucket.shape,
+    cumulative: cost,
+})
+
+const projectionWindow = z.strictObject({
+    from: timestamp,
+    to: timestamp,
+    buckets: count,
+    with_usage: count,
+})
+
+const projectedBucket = z.strictObject({
+    from: timestamp,
+    to: timestamp,
+    amount: z.number(),
+    cumulative: z.number(),
+})
+
+const projectionLeftOut = z.strictObject({
+    unpriced_steps: count,
+    unpriced_tokens: nullable(count),
+    unfinished_runs: count,
+})
+
+const spendProjection = z.discriminatedUnion('state', [
+    z.strictObject({
+        state: z.literal('projected'),
+        window: projectionWindow,
+        per_bucket: z.number(),
+        total: z.number(),
+        buckets: z.array(projectedBucket),
+        left_out: projectionLeftOut,
+    }),
+    z.strictObject({
+        state: z.literal('not_enough_history'),
+        window: nullable(projectionWindow),
+        per_bucket: z.null(),
+        total: z.null(),
+        buckets: z.tuple([]),
+        left_out: projectionLeftOut,
+    }),
+    z.strictObject({
+        state: z.literal('range_not_current'),
+        window: z.null(),
+        per_bucket: z.null(),
+        total: z.null(),
+        buckets: z.tuple([]),
+        left_out: projectionLeftOut,
+    }),
+])
+
+const usageSpendResponse = z.strictObject({
+    data: z.strictObject({
+        series: z.strictObject({
+            bucket: z.enum(bucketUnits),
+            buckets: z.array(spendBucket),
+        }),
+        projection: spendProjection,
+    }),
+    range,
+})
+
 const usageRowFigures = {
     steps: count,
     runs: count,
@@ -925,6 +994,22 @@ describe('types', () => {
         expectTypeOf<
             z.infer<typeof usageBreakdownResponse>
         >().toEqualTypeOf<UsageBreakdownResponse>()
+        expectTypeOf<z.infer<typeof spendBucket>>().toEqualTypeOf<SpendBucket>()
+        expectTypeOf<
+            z.infer<typeof projectionWindow>
+        >().toEqualTypeOf<ProjectionWindow>()
+        expectTypeOf<
+            z.infer<typeof projectedBucket>
+        >().toEqualTypeOf<ProjectedBucket>()
+        expectTypeOf<
+            z.infer<typeof projectionLeftOut>
+        >().toEqualTypeOf<ProjectionLeftOut>()
+        expectTypeOf<
+            z.infer<typeof spendProjection>
+        >().toEqualTypeOf<SpendProjection>()
+        expectTypeOf<
+            z.infer<typeof usageSpendResponse>
+        >().toEqualTypeOf<UsageSpendResponse>()
         expectTypeOf<
             z.infer<typeof traceNeighbours>
         >().toEqualTypeOf<TraceNeighbours>()
@@ -1395,6 +1480,34 @@ describe('tests/Contract/usage-breakdown.json', () => {
         for (const row of rows) {
             expect(Object.keys(row.filters).length).toBeGreaterThan(0)
         }
+    })
+})
+
+describe('tests/Contract/usage-spend.json', () => {
+    const parsed = usageSpendResponse.safeParse(contractFixture('usage-spend'))
+
+    it('is what the API types describe', () => {
+        expect(parsed.error?.issues).toBeUndefined()
+    })
+
+    it('has buckets with and without a cumulative amount, the last one pending', () => {
+        const buckets = parsed.data?.data.series.buckets ?? []
+
+        expect(
+            buckets.some((bucket) => bucket.cumulative.amount === null),
+        ).toBe(true)
+        expect(
+            buckets.some((bucket) => bucket.cumulative.amount !== null),
+        ).toBe(true)
+        expect(buckets.at(-1)?.cumulative.state).toBe('pending')
+    })
+
+    it('is projected, with buckets that continue the recorded line and something left out', () => {
+        const projection = parsed.data?.data.projection
+
+        expect(projection?.state).toBe('projected')
+        expect(projection?.buckets.length).toBeGreaterThan(0)
+        expect(projection?.left_out.unfinished_runs).toBeGreaterThan(0)
     })
 })
 

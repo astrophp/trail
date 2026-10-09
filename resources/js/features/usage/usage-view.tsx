@@ -1,5 +1,6 @@
 import { ModelPrices } from '@/features/usage/model-prices'
 import { UsageBreakdown } from '@/features/usage/usage-breakdown'
+import { UsageSpend } from '@/features/usage/usage-spend'
 import { UsageTotals } from '@/features/usage/usage-totals'
 import { useUsage } from '@/features/usage/use-usage'
 import { useTimeRange } from '@/hooks/use-time-range'
@@ -18,6 +19,12 @@ export function UsageView({ className }: { className?: string }) {
     return (
         <div className={className}>
             <UsageTotals usage={usage} range={range} />
+            <UsageSpend
+                leader={usage}
+                // The totals say it already when their last refresh failed.
+                refreshNoted={usage.isError && usage.data !== undefined}
+                className="mt-6"
+            />
             <UsageBreakdown
                 leader={usage}
                 // The totals say it already when their last refresh failed.

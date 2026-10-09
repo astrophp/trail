@@ -9,6 +9,8 @@
 // test file can wait for them before its environment goes away. The frame then runs, and cancels
 // the timer.
 
+import { vi } from 'vitest'
+
 const pending = new Set<number>()
 let installed = false
 
@@ -49,4 +51,13 @@ export async function settleFrames(limit = 2000): Promise<void> {
     while (pending.size > 0 && Date.now() < deadline) {
         await new Promise((resolve) => setTimeout(resolve, 5))
     }
+}
+
+/**
+ * What a test file does last: puts the real timers back, in case the file left fake ones installed
+ * (a fake `setTimeout` would never let the wait below end), and waits for the frames in flight.
+ */
+export async function finishFrames(): Promise<void> {
+    vi.useRealTimers()
+    await settleFrames()
 }

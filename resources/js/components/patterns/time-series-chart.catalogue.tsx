@@ -52,6 +52,41 @@ function Line() {
     )
 }
 
+/** A recorded line over the first five buckets and a dashed continuation from the fifth to the eighth. */
+function Projection({ withTable = false }: { withTable?: boolean }) {
+    return (
+        <TimeSeriesChart
+            {...shared}
+            buckets={hourlyBuckets(8, false)}
+            line={{
+                key: 'level',
+                label: 'Recorded',
+                color: 'chart-3',
+                values: [1, 1.5, 2.5, 3, 4.2, null, null, null],
+                span: { to: 4 },
+            }}
+            dashedLine={{
+                key: 'projected',
+                label: 'Projected',
+                color: 'chart-4',
+                values: [null, null, null, null, 4.2, 5, 5.8, 6.6],
+                span: { from: 4 },
+                anchor: 4,
+            }}
+            divider={{ at: 4, label: 'Now' }}
+            shadeFrom={4}
+            table={
+                withTable ? (
+                    <p className="text-caption">
+                        A table of the caller’s own goes here.
+                    </p>
+                ) : undefined
+            }
+            summary="A recorded line over five hours, continued by a dashed projection over the next three."
+        />
+    )
+}
+
 function States() {
     const buckets = hourlyBuckets(6)
 
@@ -130,6 +165,14 @@ export const catalogue: CatalogueEntry = {
         {
             name: 'Line with missing buckets, last in progress',
             Component: Line,
+        },
+        {
+            name: 'Recorded line, dashed projection, divider and shaded region',
+            Component: Projection,
+        },
+        {
+            name: 'The same with a table of the caller’s own behind the data button',
+            Component: () => <Projection withTable />,
         },
         {
             name: 'One bucket, bars',

@@ -1,8 +1,9 @@
 import { ChartColumnIcon } from 'lucide-react'
 import { failureMessage } from '@/api/client'
-import type { UsageGrouping } from '@/api/usage'
+import { usageExportUrl, type UsageGrouping } from '@/api/usage'
 import { CountTabs, type CountTab } from '@/components/patterns/count-tabs'
 import { EmptyState } from '@/components/patterns/empty-state'
+import { ExportLinkButton } from '@/components/patterns/export-link-button'
 import { Notice } from '@/components/patterns/notice'
 import { Pagination } from '@/components/patterns/pagination'
 import { Panel } from '@/components/patterns/panel'
@@ -102,7 +103,23 @@ export function UsageBreakdown({
                 />
             )}
             <Panel>
-                <PanelHeader title="Usage breakdown" />
+                <PanelHeader
+                    title="Usage breakdown"
+                    action={
+                        <ExportLinkButton
+                            href={usageExportUrl({
+                                range: view.range,
+                                by,
+                                sort,
+                            })}
+                            detail={`the breakdown by ${groups[by]}`}
+                            title="Every page of this view"
+                            size="sm"
+                        >
+                            Export CSV
+                        </ExportLinkButton>
+                    }
+                />
                 <PanelContent className="p-0">
                     <CountTabs
                         aria-label="Group the usage by"

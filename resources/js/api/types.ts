@@ -423,6 +423,74 @@ export type UsageBreakdownResponse =
     | Flat<UsageBreakdownBase & { by: 'agent'; data: UsageAgentRow[] }>
     | Flat<UsageBreakdownBase & { by: 'provider'; data: UsageProviderRow[] }>
 
+/** A bucket of the estimated cost series: the overview's bucket, and the cost recorded from the range's start through it. */
+export type SpendBucket = Flat<
+    SeriesBucket & {
+        /** `amount` is `null` until the first bucket that has one. */
+        cumulative: Cost
+    }
+>
+
+/** One bucket of the projection. `cumulative` is where the projected line sits; it is not a cost. */
+export type ProjectedBucket = {
+    from: string
+    to: string
+    amount: number
+    cumulative: number
+}
+
+/** What the recent window held that the projected rate does not include. */
+export type ProjectionLeftOut = {
+    unpriced_steps: number
+    /** `null` when the unpriced steps reported neither input nor output tokens. */
+    unpriced_tokens: number | null
+    unfinished_runs: number
+}
+
+/** The complete buckets the projected rate was taken from. */
+export type ProjectionWindow = {
+    from: string
+    to: string
+    buckets: number
+    with_usage: number
+}
+
+/** A projection of the next period at today's prices: a separate figure, never a cost. */
+export type SpendProjection =
+    | {
+          state: 'projected'
+          window: ProjectionWindow
+          per_bucket: number
+          total: number
+          buckets: ProjectedBucket[]
+          left_out: ProjectionLeftOut
+      }
+    | {
+          state: 'not_enough_history'
+          window: ProjectionWindow | null
+          per_bucket: null
+          total: null
+          buckets: []
+          left_out: ProjectionLeftOut
+      }
+    | {
+          state: 'range_not_current'
+          window: null
+          per_bucket: null
+          total: null
+          buckets: []
+          left_out: ProjectionLeftOut
+      }
+
+/** The estimated cost of each bucket of a range, and beside it the projection of the next period. */
+export type UsageSpendResponse = {
+    data: {
+        series: { bucket: BucketUnit; buckets: SpendBucket[] }
+        projection: SpendProjection
+    }
+    range: Range
+}
+
 /** The answer to a bookmark write: the run's bookmark state after it. */
 export type BookmarkResponse = {
     data: { trace_id: string; bookmarked: boolean }

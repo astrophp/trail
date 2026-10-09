@@ -1,5 +1,14 @@
-import { useId, useState, type ReactElement } from 'react'
-import { Bar, CartesianGrid, ComposedChart, Line, XAxis, YAxis } from 'recharts'
+import { useId, useState, type ReactElement, type ReactNode } from 'react'
+import {
+    Bar,
+    CartesianGrid,
+    ComposedChart,
+    Line,
+    ReferenceArea,
+    ReferenceLine,
+    XAxis,
+    YAxis,
+} from 'recharts'
 import { PanelEmpty } from '@/components/patterns/panel-empty'
 import {
     buildChartModel,
@@ -31,6 +40,9 @@ export type {
 
 /** How the chart is drawn, as numbers Recharts needs. */
 const margin = { top: 8, right: 16, bottom: 0, left: 0 }
+/** Room above the plot for the label of a divider. */
+const dividerMarginTop = 20
+const shadeOpacity = 0.08
 const maxBarSize = 48
 const dashedSegment = '4 3'
 const lineWidth = 2
@@ -86,6 +98,19 @@ type Shared = {
     /** The button that shows the table, and the same button when it is shown. */
     showDataLabel?: string
     hideDataLabel?: string
+    /**
+     * A vertical line at the bucket in this position (counting from 0), with `label` on it: a
+     * boundary in the data, such as the last bucket that was recorded.
+     */
+    divider?: { at: number; label: string }
+    /** Shades the chart from the bucket in this position to the last one: the part that is not recorded. */
+    shadeFrom?: number
+    /**
+     * The content of the table behind the data button, in place of the default one: for values
+     * that need more than text, such as a state beside an amount. It must carry the same numbers
+     * as the chart and name itself (a caption).
+     */
+    table?: ReactNode
     /** The height of the chart, as a class. */
     chartClassName?: string
     className?: string
@@ -97,9 +122,16 @@ export type TimeSeriesChartProps = Shared &
               /** Stacked in order, the first at the bottom. */
               bars: ChartSeries[]
               line?: never
+              dashedLine?: never
           }
         | {
               line: ChartSeries
+              /**
+               * A second line, drawn dashed and without points after the first: a projection of it.
+               * It is in the legend, the tooltip and the table like any series, and may carry a
+               * `span` so that it speaks only for the buckets it covers.
+               */
+              dashedLine?: ChartSeries
               bars?: never
           }
     )
@@ -117,6 +149,10 @@ export function TimeSeriesChart({
     buckets,
     bars,
     line,
+    dashedLine,
+    divider,
+    shadeFrom,
+    table,
     formatTick,
     formatBucket,
     formatValue,
@@ -131,7 +167,8 @@ export function TimeSeriesChart({
     chartClassName = 'h-48',
     className,
 }: TimeSeriesChartProps) {
-    const series = bars ?? (line ? [line] : [])
+    const series =
+        bars ?? (line ? [line, ...(dashedLine ? [dashedLine] : [])] : [])
     const model = buildChartModel({
         buckets,
         series,
@@ -240,7 +277,11 @@ export function TimeSeriesChart({
                 >
                     <ComposedChart
                         data={data}
-                        margin={margin}
+                        margin={
+                            divider
+                                ? { ...margin, top: dividerMarginTop }
+                                : margin
+                        }
                         accessibilityLayer={false}
                     >
                         <CartesianGrid vertical={false} />
@@ -284,6 +325,31 @@ export function TimeSeriesChart({
                             }}
                         />
                         <ChartLegend content={<ChartLegendContent />} />
+                        {shadeFrom !== undefined &&
+                        shadeFrom < model.rows.length - 1 ? (
+                            <ReferenceArea
+                                x1={shadeFrom}
+                                x2={model.rows.length - 1}
+                                fill="var(--muted-foreground)"
+                                fillOpacity={shadeOpacity}
+                                stroke="none"
+                                ifOverflow="visible"
+                            />
+                        ) : null}
+                        {divider ? (
+                            <ReferenceLine
+                                x={divider.at}
+                                stroke="var(--border)"
+                                strokeDasharray={dashedSegment}
+                                ifOverflow="visible"
+                                label={{
+                                    value: divider.label,
+                                    position: 'top',
+                                    className:
+                                        'fill-muted-foreground text-caption',
+                                }}
+                            />
+                        ) : null}
                         {bars?.map((one, index) => (
                             <Bar
                                 key={one.key}
@@ -303,6 +369,17 @@ export function TimeSeriesChart({
                                 connectNulls={false}
                                 isAnimationActive={false}
                                 dot={solidDot}
+                            />
+                        ) : null}
+                        {dashedLine ? (
+                            <Line
+                                dataKey="s1"
+                                stroke="var(--color-s1)"
+                                strokeWidth={lineWidth}
+                                strokeDasharray={dashedSegment}
+                                connectNulls={false}
+                                isAnimationActive={false}
+                                dot={false}
                             />
                         ) : null}
                         {line && filling.length > 0 ? (
@@ -338,14 +415,16 @@ export function TimeSeriesChart({
                 </Button>
             </div>
             <div id={tableId} hidden={!open}>
-                <TimeSeriesChartTable
-                    model={model}
-                    caption={summary}
-                    bucketColumnLabel={bucketColumnLabel}
-                    missingLabel={missingLabel}
-                    inProgressLabel={inProgressLabel}
-                    formatValue={formatValue}
-                />
+                {table ?? (
+                    <TimeSeriesChartTable
+                        model={model}
+                        caption={summary}
+                        bucketColumnLabel={bucketColumnLabel}
+                        missingLabel={missingLabel}
+                        inProgressLabel={inProgressLabel}
+                        formatValue={formatValue}
+                    />
+                )}
             </div>
         </div>
     )

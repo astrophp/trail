@@ -28,7 +28,7 @@ const nominalLength: Record<BucketUnit, number> = {
  */
 export function bucketLabels(
     unit: BucketUnit,
-    buckets: SeriesBucket[],
+    buckets: Pick<SeriesBucket, 'from' | 'to' | 'full'>[],
     timeZone: string | undefined,
 ) {
     const byKey = new Map(buckets.map((bucket) => [bucket.from, bucket]))
@@ -76,4 +76,11 @@ export function bucketLabels(
             return `${crossesMidnight ? `${date}, ${span}` : span}${odd}`
         },
     }
+}
+
+/** The line under a chart of buckets: which clock their edges follow. */
+export function timeZoneNote(timeZone: string | undefined): string {
+    return timeZone === undefined
+        ? 'Buckets are shown in your local time zone.'
+        : `Buckets follow the application’s time zone (${timeZone}).`
 }

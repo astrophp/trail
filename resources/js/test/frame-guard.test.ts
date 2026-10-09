@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest'
-import { framesInFlight, settleFrames } from '@/test/frame-guard'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { finishFrames, framesInFlight, settleFrames } from '@/test/frame-guard'
 
 // `setup.ts` installs the guard for every test file.
 
@@ -39,7 +39,6 @@ describe('the frame guard', () => {
     })
 
     it('gives up waiting after its limit', async () => {
-        const before = Date.now()
         // A frame that is asked for again from inside itself never leaves the guard idle.
         let again = true
         const loop = () => {
@@ -49,12 +48,38 @@ describe('the frame guard', () => {
         }
 
         requestAnimationFrame(loop)
-        await settleFrames(60)
+        // It resolves although a frame is still in flight: that is giving up. A guard that waited
+        // for the frames to end would never return, and the test would time out.
+        await settleFrames(20)
+
+        expect(framesInFlight()).toBeGreaterThan(0)
+
         again = false
-
-        expect(Date.now() - before).toBeGreaterThanOrEqual(55)
-        expect(Date.now() - before).toBeLessThan(1000)
-
         await settleFrames()
+
+        expect(framesInFlight()).toBe(0)
+    })
+})
+
+describe('finishing a file', () => {
+    afterEach(() => {
+        vi.useRealTimers()
+    })
+
+    it('waits for a frame even when the file left fake timers installed', async () => {
+        let ran = false
+
+        requestAnimationFrame(() => {
+            ran = true
+        })
+        vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+
+        expect(vi.isFakeTimers()).toBe(true)
+
+        await finishFrames()
+
+        expect(vi.isFakeTimers()).toBe(false)
+        expect(ran).toBe(true)
+        expect(framesInFlight()).toBe(0)
     })
 })
