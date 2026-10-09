@@ -636,7 +636,7 @@ list and by both writes.
   one. For a model that is not `saved` it is the same as the price's own `source`, `via` and `rates`.
 - A saved price replaces the config entry as a whole. A rate left blank in it is unknown; it does not
   fall back to the config value.
-- `observed` is whether a step or an embedding was recorded with exactly this provider and model.
+- `observed` is whether a step or an embedding was recorded with exactly this provider and model, as the per-run summary the store keeps when it writes a run has it. A model that only an agent span asked for is not observed, and neither is one used only in a run recorded before that summary existed.
 - `saved_at` is when the saved price was last written, as every time in this API, and `null` when the
   model has none.
 - Trail is not a billing system: a cost is an estimate, frozen when the run is recorded. Saving or
@@ -952,6 +952,104 @@ the same time range.
   range) and four queries, one for each list; an agent with nothing in the range is not read for
   models and tools at all. Looking up a name that has nothing in the range reads the runs by name
   without an index.
+
+### `GET /api/usage`
+
+The tokens and money of a time range: the summary of its runs, and how much of what was used could
+be counted and priced. It takes a time range and nothing else: any other parameter is ignored.
+
+```json
+{
+  "data": {
+    "summary": { "runs": { "all": 52 } },
+    "coverage": { "steps": 1310, "reported_steps": 1290, "unpriced_steps": 11, "unpriced_tokens": 24800 }
+  },
+  "range": { "preset": "24h", "from": "…", "to": "…" }
+}
+```
+
+- `summary` is [The summary](#the-summary) of the runs that started in the range, read as
+  [`GET /api/overview`](#get-apioverview) reads it: for any range it is exactly the overview's
+  `data.summary`, and a range over 92 days is the same 422.
+- `coverage` counts the steps of those runs, in the models of the per-run summary. `steps` is the
+  steps and embeddings calls recorded, `reported_steps` those that reported any token count, and
+  `unpriced_steps` those that reported usage and could not be priced. `unpriced_tokens` is the input
+  and output tokens of the unpriced steps added up. Every step counts, one recorded without its
+  provider or its model included. Coverage is counted in steps and tokens and never as a share of money.
+- The three step counts are `0` for a range with no step. `unpriced_tokens` is `0` when there is no
+  unpriced step, and `null`, never `0`, when there are unpriced steps and none of them reported input
+  or output tokens (cache and reasoning tokens are not counted in it).
+- Usage is read from a per-run summary the store keeps when it writes a run, so a run recorded before
+  that summary existed has no steps in `coverage`.
+- It is read in the overview's queries and one more: the overview's grouped read, its percentile
+  reads when it makes them, and one read of the summaries of the runs of the range.
+
+### `GET /api/usage/breakdown`
+
+What the runs of a time range used, by model, by provider or by agent. Takes a time range, `by`,
+`sort` and pagination.
+
+```json
+{
+  "data": [
+    {
+      "provider": "anthropic", "model": "claude-sonnet-4-5", "steps": 310, "runs": 120,
+      "usage": { "state": "reported", "input_tokens": 650500, "output_tokens": 136500, "cache_read_tokens": 90000, "cache_write_tokens": null, "reasoning_tokens": null, "total_tokens": 787000 },
+      "cost": { "state": "partial", "amount": 3.7603 },
+      "coverage": { "reported_steps": 300, "unpriced_steps": 4, "unpriced_tokens": 9100 },
+      "filters": { "provider": "anthropic", "model": "claude-sonnet-4-5" }
+    }
+  ],
+  "by": "model",
+  "pagination": { "page": 1, "per_page": 25, "total": 7, "last_page": 1 },
+  "row_limit": { "limit": 1000, "truncated": false },
+  "range": { "preset": "24h", "from": "…", "to": "…" }
+}
+```
+
+- `by` is `model` (the default), `provider` or `agent`; anything else is a 422 on `by`. A row of
+  `model` has `provider` and `model`, a row of `provider` has `provider` and no `model`, and a row of
+  `agent` has `agent` and neither. Every row has `steps`, `runs`, `usage`, `cost`, `coverage` and
+  `filters`.
+- `steps` counts the steps and embeddings calls, the only spans that carry usage. `usage` and `cost`
+  are their sums, shaped as a run's are: a count nobody reported is `null`, `cost` is `partial` when
+  some steps that reported usage could not be priced (the amount covers the others), `unpriced` with
+  an amount of `null`, never `0`, when none could be, and `not_captured` when no usage was reported.
+  A rate of `0` is a price: the amount is `0` and the state `estimated`.
+  `coverage` is `reported_steps`, `unpriced_steps` and `unpriced_tokens` of the row, the last by the
+  rule of [`GET /api/usage`](#get-apiusage).
+- A row is `pending` in `usage` and `cost` while one of its steps is still running (the amount is
+  what has been recorded so far). A step still running after `stale_after` seconds is not running,
+  and a run that long is `incomplete` and not pending, as everywhere in the API.
+- `by=model` has a row for each provider and model that a step, an embeddings call or an agent span
+  recorded, as [`GET /api/agents/breakdown`](#get-apiagentsbreakdown) has them for every agent. A
+  model that only an agent span asked for is a row with `steps` `0`, a `usage` that is `not_reported`
+  and a `cost` that is `not_captured`. A step recorded without its provider or its model is in no
+  `model` row, and a step without a provider is in no `provider` row; the totals of
+  [`GET /api/usage`](#get-apiusage) still count it. `by=provider` has a row for each provider, a step
+  without a model included.
+- `by=agent` has a row for each name under which a run started in the range, grouped as the database
+  compares text, and spelled as one of the spellings of the group (on MySQL, where `Support` and
+  `support` are one agent, that need not be the spelling [`GET /api/agents`](#get-apiagents) gives).
+  Its `runs`, `usage` and `cost` are that agent's `top_level.runs.all`, `top_level.usage` and `top_level.cost` there, and
+  its `steps` and `coverage` are those of the steps of its runs, the delegated agents' included. An
+  agent whose runs have no step has `steps` `0` and a coverage of zeros. A sub-agent's steps count in
+  the agent that delegated.
+- `runs` is the number of distinct runs that have a span recorded with the row's provider and model
+  (an agent span included), with the row's provider, or under the row's name, so
+  [`GET /api/traces`](#get-apitraces) with the row's `filters` and the same range returns exactly
+  the row's `runs`, for every row of every view. A database that compares text loosely (MySQL) takes
+  `gpt-5` and `GPT-5`, or `Support` and `support`, for one row, and the list takes them for one too.
+- `sort` is `cost` (the amount), `tokens` (`usage.total_tokens`), `runs` or `name` (provider and then
+  model for `by=model`), with a leading `-` for descending; the default is `-cost`, and anything else
+  is a 422 on `sort`. A row without the value comes last in both directions, and a tie is ordered by
+  the row's name in the direction of the sort, so a page never repeats or skips a row.
+- Sorting and paging are done over the grouped rows, of which at most `row_limit.limit` are read:
+  those in most runs. `truncated` is `true` when there were more, and then `pagination.total` is the
+  number of rows read, not of all that exist.
+- Usage is read from a per-run summary the store keeps when it writes a run, so a run recorded before
+  that summary existed is in no `model` or `provider` row and adds no steps to its agent's row.
+- It is read in one grouped query whatever the view, the sort and the page.
 
 ### `GET /api/conversations`
 

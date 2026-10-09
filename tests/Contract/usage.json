@@ -1,0 +1,58 @@
+{
+    "data": {
+        "summary": {
+            "runs": {
+                "all": 5,
+                "completed": 4,
+                "failed": 0,
+                "incomplete": 0,
+                "running": 1,
+                "awaiting_approval": 0
+            },
+            "error_rate": {
+                "rate": 0,
+                "failed": 0,
+                "finished": 4
+            },
+            "duration": {
+                "average_ms": 1370.206,
+                "p95_ms": null,
+                "measured": 2,
+                "not_measured": 3,
+                "p95_minimum": 20
+            },
+            "usage": {
+                "state": "pending",
+                "input_tokens": 2158,
+                "output_tokens": 490,
+                "cache_read_tokens": 5,
+                "cache_write_tokens": null,
+                "reasoning_tokens": null,
+                "total_tokens": 2648
+            },
+            "usage_coverage": {
+                "reported": 3,
+                "not_reported": 2
+            },
+            "cost": {
+                "state": "pending",
+                "amount": 0.01315
+            },
+            "cost_coverage": {
+                "unpriced_runs": 1,
+                "runs_without_amount": 2
+            }
+        },
+        "coverage": {
+            "steps": 7,
+            "reported_steps": 6,
+            "unpriced_steps": 1,
+            "unpriced_tokens": 30
+        }
+    },
+    "range": {
+        "preset": "24h",
+        "from": "2026-01-01T12:00:00.000Z",
+        "to": "2026-01-02T12:00:00.000Z"
+    }
+}

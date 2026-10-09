@@ -2,7 +2,6 @@
 
 namespace Astro\Trail\Pricing;
 
-use Astro\Trail\Enums\SpanType;
 use Illuminate\Contracts\Config\Repository;
 use Illuminate\Database\ConnectionResolverInterface;
 use Illuminate\Support\Carbon;
@@ -124,8 +123,8 @@ class PriceBook
             $connection = $this->resolver->connection($this->connection);
 
             $observed = $connection->transaction(fn () => $connection
-                ->table('trail_spans')
-                ->whereIn('type', [SpanType::Step->value, SpanType::Embedding->value])
+                ->table('trail_trace_models')
+                ->where('steps', '>', 0)
                 ->whereNotNull('provider')
                 ->whereNotNull('model')
                 ->distinct()

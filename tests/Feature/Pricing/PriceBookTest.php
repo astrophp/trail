@@ -1,10 +1,12 @@
 <?php
 
+use Astro\Trail\Enums\SpanType;
 use Astro\Trail\Pricing\PriceBook;
 use Astro\Trail\Pricing\PriceSource;
 use Astro\Trail\Pricing\Rate;
 use Astro\Trail\Tests\Fixtures\Pricing\FlakyResolver;
 use Astro\Trail\Tests\Fixtures\Storage\Rows;
+use Astro\Trail\Tests\Fixtures\Storage\Stored;
 use Illuminate\Database\ConnectionResolverInterface;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
@@ -361,15 +363,16 @@ it('lists the models a price editor should offer', function () {
     Rows::price(['provider' => 'acme', 'model' => 'tiny']);
     Rows::price(['provider' => 'openai', 'model' => 'gpt-5']);
 
-    $trace = Rows::trace();
-    Rows::span($trace, ['type' => 'step', 'provider' => 'openai', 'model' => 'gpt-5']);
-    Rows::span($trace, ['type' => 'step', 'provider' => 'openai', 'model' => 'gpt-5-2025-08-07']);
-    Rows::span($trace, ['type' => 'step', 'provider' => 'openai', 'model' => 'gpt-5-2025-08-07']);
-    Rows::span($trace, ['type' => 'embedding', 'provider' => 'voyageai', 'model' => 'voyage-4']);
-    Rows::span($trace, ['type' => 'agent', 'provider' => 'ignored', 'model' => 'agent-model']);
-    Rows::span($trace, ['type' => 'tool', 'provider' => 'ignored', 'model' => 'tool-model']);
-    Rows::span($trace, ['type' => 'step', 'provider' => null, 'model' => 'no-provider']);
-    Rows::span($trace, ['type' => 'step', 'provider' => 'ignored', 'model' => null]);
+    Stored::run([], [
+        ['type' => SpanType::Step, 'provider' => 'openai', 'model' => 'gpt-5'],
+        ['type' => SpanType::Step, 'provider' => 'openai', 'model' => 'gpt-5-2025-08-07'],
+        ['type' => SpanType::Step, 'provider' => 'openai', 'model' => 'gpt-5-2025-08-07'],
+        ['type' => SpanType::Embedding, 'provider' => 'voyageai', 'model' => 'voyage-4'],
+        ['type' => SpanType::Agent, 'provider' => 'ignored', 'model' => 'agent-model'],
+        ['type' => SpanType::Tool, 'provider' => 'ignored', 'model' => 'tool-model'],
+        ['type' => SpanType::Step, 'provider' => null, 'model' => 'no-provider'],
+        ['type' => SpanType::Step, 'provider' => 'ignored', 'model' => null],
+    ]);
 
     expect(book()->knownModels())->toBe([
         ['provider' => 'acme', 'model' => 'tiny'],
@@ -381,7 +384,7 @@ it('lists the models a price editor should offer', function () {
     ]);
 });
 
-it('lists config and price rows when the spans cannot be read', function () {
+it('lists config and price rows when the observed models cannot be read', function () {
     Exceptions::fake();
 
     config(['trail.pricing' => ['openai' => ['gpt-5' => rate(1.0)]]]);
@@ -480,16 +483,20 @@ it('knows when a saved rate was written, and a config rate was never', function 
 });
 
 it('lists the models with whether a step or an embedding was recorded with each', function () {
-    config(['trail.pricing' => ['openai' => ['gpt-5' => rate(1.0), 'gpt-4o' => rate(2.0)]]]);
+    config(['trail.pricing' => ['openai' => ['gpt-5' => rate(1.0), 'gpt-4o' => rate(2.0)], 'acme' => ['asked' => rate(1.0)]]]);
     Rows::price(['provider' => 'acme', 'model' => 'tiny']);
     Rows::price(['provider' => 'openai', 'model' => 'gpt-4o']);
 
-    $trace = Rows::trace();
-    Rows::span($trace, ['type' => 'step', 'provider' => 'openai', 'model' => 'gpt-5']);
-    Rows::span($trace, ['type' => 'embedding', 'provider' => 'voyageai', 'model' => 'voyage-4']);
-    Rows::span($trace, ['type' => 'tool', 'provider' => 'acme', 'model' => 'tiny']);
+    Stored::run([], [
+        ['type' => SpanType::Agent, 'provider' => 'acme', 'model' => 'asked'],
+        ['type' => SpanType::Step, 'provider' => 'openai', 'model' => 'gpt-5'],
+        ['type' => SpanType::Embedding, 'provider' => 'voyageai', 'model' => 'voyage-4'],
+        ['type' => SpanType::Tool, 'provider' => 'acme', 'model' => 'tiny'],
+    ]);
 
+    // A model that only an agent span asked for, or a tool span carries, was not called.
     expect(book()->catalogue())->toBe([
+        ['provider' => 'acme', 'model' => 'asked', 'observed' => false],
         ['provider' => 'acme', 'model' => 'tiny', 'observed' => false],
         ['provider' => 'openai', 'model' => 'gpt-4o', 'observed' => false],
         ['provider' => 'openai', 'model' => 'gpt-5', 'observed' => true],

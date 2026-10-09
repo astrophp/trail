@@ -15,6 +15,8 @@ use Astro\Trail\Http\Controllers\Api\TraceExportController;
 use Astro\Trail\Http\Controllers\Api\TraceIndexController;
 use Astro\Trail\Http\Controllers\Api\TraceNeighboursController;
 use Astro\Trail\Http\Controllers\Api\TraceShowController;
+use Astro\Trail\Http\Controllers\Api\UsageBreakdownController;
+use Astro\Trail\Http\Controllers\Api\UsageController;
 use Astro\Trail\Http\Controllers\DashboardController;
 use Astro\Trail\Http\Middleware\Authorize;
 use Astro\Trail\Http\Middleware\RespondWithJson;
@@ -40,6 +42,9 @@ Route::prefix('api')->middleware([RespondWithJson::class, Authorize::class])->gr
     Route::get('traces/{id}/neighbours', TraceNeighboursController::class)->name('trail.api.traces.neighbours');
     Route::put('traces/{id}/bookmark', [TraceBookmarkController::class, 'store'])->name('trail.api.traces.bookmark.store');
     Route::delete('traces/{id}/bookmark', [TraceBookmarkController::class, 'destroy'])->name('trail.api.traces.bookmark.destroy');
+
+    Route::get('usage', UsageController::class)->name('trail.api.usage');
+    Route::get('usage/breakdown', UsageBreakdownController::class)->name('trail.api.usage.breakdown');
 
     // The model travels in the query: its id can hold any character, a slash among them.
     Route::get('prices', PriceIndexController::class)->name('trail.api.prices.index');
