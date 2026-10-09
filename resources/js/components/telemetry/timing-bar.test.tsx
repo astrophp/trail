@@ -285,7 +285,7 @@ describe('TimingBar', () => {
     })
 
     it('starts a running bar exactly where a finished bar with the same offset starts', () => {
-        for (const offset_ms of [0, 100, 333.3, 949]) {
+        for (const offset_ms of [-50, -0.5, 0, 100, 333.3, 949, 1500]) {
             const { container: done, unmount: unmountDone } = render(
                 <TimingBar
                     span={{ offset_ms, duration_ms: 50, status: 'completed' }}
@@ -299,8 +299,10 @@ describe('TimingBar', () => {
                 />,
             )
 
-            expect(fill(done)!.style.left).not.toBe('')
+            // Beyond the axis both are held to the right edge, which has no `left` at all.
+            expect(fill(done)!.style.left === '').toBe(offset_ms >= 1000)
             expect(fill(live)!.style.left).toBe(fill(done)!.style.left)
+            expect(fill(live)!.style.right).toBe('0px')
             unmountDone()
             unmountLive()
         }
