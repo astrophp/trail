@@ -6,7 +6,9 @@ use Astro\Trail\Enums\SpanType;
 use Astro\Trail\Enums\Status;
 use Astro\Trail\Storage\Models\Trace;
 use Astro\Trail\Tests\Fixtures\Http\AgentRows;
+use Astro\Trail\Tests\Fixtures\Http\UsageRows;
 use Astro\Trail\Tests\Fixtures\Storage\Rows;
+use Astro\Trail\Tests\Fixtures\Storage\Stored;
 use Astro\Trail\Tests\Fixtures\Users\User;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -398,10 +400,36 @@ function priceContractDataset(): void
     Rows::price(['provider' => 'openai', 'model' => 'gpt-5', 'input' => '1.000000', 'output' => '8.000000']);
     Rows::price(['provider' => 'openai', 'model' => 'gpt-5-mini', 'input' => '0.250000', 'output' => '2.000000', 'cache_read' => '0.000000']);
 
-    $trace = Rows::trace(['id' => 'trace-prices', 'status' => Status::Completed, 'started_at' => '2026-01-02 11:00:00']);
-    foreach ([['anthropic', 'claude-sonnet-4-5'], ['anthropic', 'claude-sonnet-4-5-20250929'], ['openai', 'gpt-5-2025-08-07'], ['openai', 'mystery']] as $n => [$provider, $model]) {
-        Rows::span($trace, ['id' => "price-span-{$n}", 'provider' => $provider, 'model' => $model, 'started_at' => '2026-01-02 11:00:00']);
-    }
+    Stored::run(['id' => 'trace-prices', 'status' => Status::Completed, 'startedAt' => Carbon::parse('2026-01-02 11:00:00')], array_map(
+        fn (int $n, array $model) => ['id' => "price-span-{$n}", 'provider' => $model[0], 'model' => $model[1], 'startedAt' => Carbon::parse('2026-01-02 11:00:00')],
+        range(0, 3),
+        [['anthropic', 'claude-sonnet-4-5'], ['anthropic', 'claude-sonnet-4-5-20250929'], ['openai', 'gpt-5-2025-08-07'], ['openai', 'mystery']],
+    ));
+}
+
+/**
+ * Usage of every kind the usage endpoints tell apart, written through the store: a model priced and
+ * one that could not be, a model only an agent span asked for, an embeddings call, a step still
+ * running, and a run before the range.
+ */
+function usageContractDataset(): void
+{
+    UsageRows::run('SupportAssistant', '2026-01-02 11:00:00', [
+        UsageRows::agent('anthropic', 'claude-sonnet-4-5'),
+        UsageRows::step('anthropic', 'claude-sonnet-4-5', ['inputTokens' => 1200, 'outputTokens' => 310, 'cacheReadTokens' => 5, 'cost' => 0.00825]),
+        UsageRows::step('anthropic', 'claude-sonnet-4-5', ['inputTokens' => 30]),
+        UsageRows::embedding('openai', 'text-embedding-3-small', ['inputTokens' => 64, 'cost' => 0.0002]),
+        UsageRows::agent('anthropic', 'claude-haiku-4-5'),
+        UsageRows::step('anthropic', 'claude-haiku-4-5', ['inputTokens' => 400, 'outputTokens' => 90, 'cost' => 0.0005]),
+    ], ['id' => 'run-support-1', 'agentClass' => 'App\\Ai\\Agents\\SupportAssistant', 'durationMs' => 1840.412]);
+    UsageRows::run('SupportAssistant', '2026-01-02 11:30:00', [UsageRows::step('anthropic', 'claude-sonnet-4-5', ['status' => Status::Running])], ['id' => 'run-support-2', 'status' => Status::Running]);
+    UsageRows::run('ResearchAgent', '2026-01-02 09:00:00', [
+        UsageRows::agent('anthropic', 'claude-haiku-4-5'),
+        UsageRows::step('anthropic', 'claude-haiku-4-5', ['inputTokens' => 400, 'outputTokens' => 90, 'cost' => 0.004]),
+    ], ['id' => 'run-research', 'durationMs' => 900.0]);
+    UsageRows::run('Embeddings', '2026-01-02 08:00:00', [UsageRows::embedding('openai', 'text-embedding-3-small', ['inputTokens' => 64, 'cost' => 0.0002])], ['id' => 'run-embeddings', 'type' => SpanType::Embedding]);
+    UsageRows::run('Planner', '2026-01-02 07:00:00', [UsageRows::agent('openai', 'gpt-5')], ['id' => 'run-planner']);
+    UsageRows::run('SupportAssistant', '2026-01-01 09:00:00', [UsageRows::step('anthropic', 'claude-sonnet-4-5', ['inputTokens' => 700, 'cost' => 0.01])], ['id' => 'run-support-before']);
 }
 
 /**
@@ -554,6 +582,42 @@ it('sends the agent breakdown response the dashboard expects', function () {
     agentContractDataset();
 
     assertContract('agent-breakdown', $this->getJson('/trail/api/agents/breakdown?name=ResearchAgent')->assertOk()->json());
+});
+
+it('sends the usage response the dashboard expects', function () {
+    usageContractDataset();
+
+    assertContract('usage', $this->getJson('/trail/api/usage')->assertOk()->json());
+});
+
+it('sends the usage breakdown response the dashboard expects', function () {
+    usageContractDataset();
+
+    assertContract('usage-breakdown', $this->getJson('/trail/api/usage/breakdown')->assertOk()->json());
+});
+
+it('sends the rows of the other views of the usage breakdown with the keys the dashboard expects', function () {
+    usageContractDataset();
+
+    $providers = $this->getJson('/trail/api/usage/breakdown?by=provider&sort=name')->assertOk()->json();
+    $agents = $this->getJson('/trail/api/usage/breakdown?by=agent&sort=name')->assertOk()->json();
+
+    expect($providers['by'])->toBe('provider')
+        ->and(array_column($providers['data'], 'provider'))->toBe(['anthropic', 'openai'])
+        ->and(array_map('array_keys', $providers['data']))->toBe(array_fill(0, 2, ['provider', 'steps', 'runs', 'usage', 'cost', 'coverage', 'filters']))
+        ->and(array_column($providers['data'], 'filters'))->toBe([['provider' => 'anthropic'], ['provider' => 'openai']])
+        ->and($providers['data'][0]['coverage'])->toBe(['reported_steps' => 4, 'unpriced_steps' => 1, 'unpriced_tokens' => 30])
+        ->and($agents['by'])->toBe('agent')
+        ->and(array_column($agents['data'], 'agent'))->toBe(['Embeddings', 'Planner', 'ResearchAgent', 'SupportAssistant'])
+        ->and(array_map('array_keys', $agents['data']))->toBe(array_fill(0, 4, ['agent', 'steps', 'runs', 'usage', 'cost', 'coverage', 'filters']))
+        ->and(array_column($agents['data'], 'filters'))->toBe([['agent' => 'Embeddings'], ['agent' => 'Planner'], ['agent' => 'ResearchAgent'], ['agent' => 'SupportAssistant']])
+        ->and($agents['data'][1])->toBe([
+            'agent' => 'Planner', 'steps' => 0, 'runs' => 1,
+            'usage' => ['state' => 'not_reported', 'input_tokens' => null, 'output_tokens' => null, 'cache_read_tokens' => null, 'cache_write_tokens' => null, 'reasoning_tokens' => null, 'total_tokens' => null],
+            'cost' => ['state' => 'not_captured', 'amount' => null],
+            'coverage' => ['reported_steps' => 0, 'unpriced_steps' => 0, 'unpriced_tokens' => 0],
+            'filters' => ['agent' => 'Planner'],
+        ]);
 });
 
 it('sends the bookmark response the dashboard expects', function () {

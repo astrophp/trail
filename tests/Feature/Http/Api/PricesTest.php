@@ -1,5 +1,6 @@
 <?php
 
+use Astro\Trail\Enums\SpanType;
 use Astro\Trail\Facades\Trail;
 use Astro\Trail\Http\Controllers\Api\PriceIndexController;
 use Astro\Trail\Pricing\CostCalculator;
@@ -8,6 +9,7 @@ use Astro\Trail\Storage\Models\Price;
 use Astro\Trail\Tests\Fixtures\Http\AgentRows;
 use Astro\Trail\Tests\Fixtures\Pricing\FlakyResolver;
 use Astro\Trail\Tests\Fixtures\Storage\Rows;
+use Astro\Trail\Tests\Fixtures\Storage\Stored;
 use Illuminate\Database\ConnectionResolverInterface;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -57,9 +59,10 @@ function putRaw(string $url, string $content, string $type = 'application/json')
     return test()->call('PUT', $url, server: ['CONTENT_TYPE' => $type, 'HTTP_ACCEPT' => 'application/json'], content: $content);
 }
 
+/** A run with one step of the model, written through the store so that its summary is kept too. */
 function observedStep(string $provider, string $model): void
 {
-    Rows::span(Rows::trace(), ['type' => 'step', 'provider' => $provider, 'model' => $model]);
+    Stored::run([], [['provider' => $provider, 'model' => $model]]);
 }
 
 /**
@@ -136,7 +139,8 @@ describe('the list', function () {
 
         expect($statements)->toHaveCount(2)
             ->and(collect($statements)->filter(fn (string $sql) => str_contains($sql, 'trail_prices'))->count())->toBe(1)
-            ->and(collect($statements)->filter(fn (string $sql) => str_contains($sql, 'trail_spans'))->count())->toBe(1);
+            ->and(collect($statements)->filter(fn (string $sql) => str_contains($sql, 'trail_trace_models'))->count())->toBe(1)
+            ->and(collect($statements)->filter(fn (string $sql) => str_contains($sql, 'trail_spans'))->count())->toBe(0);
     });
 
     it('sends at most the limit, and says how many there are', function () {
@@ -163,6 +167,33 @@ describe('the list', function () {
     });
 });
 
+it('marks a model observed when a step was recorded with it and not when only an agent span asked for it', function () {
+    config(['trail.pricing' => []]);
+    Stored::run([], [
+        ['type' => SpanType::Agent, 'provider' => 'acme', 'model' => 'asked'],
+        ['type' => SpanType::Step, 'provider' => 'acme', 'model' => 'called'],
+    ]);
+    Rows::price(['provider' => 'acme', 'model' => 'asked']);
+
+    $rows = $this->getJson('/trail/api/prices')->assertOk()->json('data');
+
+    expect(array_map(fn (array $row) => [$row['model'], $row['observed']], $rows))->toBe([['called', true], ['asked', false]]);
+});
+
+it('does not observe a model used only in a run recorded without a summary, and lists it only when config or a saved price names it', function () {
+    config(['trail.pricing' => []]);
+    // The spans are there and the per-run summary is not, as for a run recorded before the summary existed.
+    Rows::span(Rows::trace(), ['type' => 'step', 'provider' => 'openai', 'model' => 'gpt-5']);
+    Rows::span(Rows::trace(), ['type' => 'step', 'provider' => 'acme', 'model' => 'old']);
+
+    expect($this->getJson('/trail/api/prices')->assertOk()->json('data'))->toBe([]);
+
+    config(['trail.pricing' => ['openai' => ['gpt-5' => ['input' => 1.0]]]]);
+    $rows = $this->getJson('/trail/api/prices')->assertOk()->json('data');
+
+    expect(array_map(fn (array $row) => [$row['model'], $row['observed']], $rows))->toBe([['gpt-5', false]]);
+});
+
 it('truncates at 500 models', function () {
     config(['trail.pricing' => ['acme' => array_fill_keys(array_map(fn (int $n) => sprintf('model-%03d', $n), range(1, 501)), ['input' => 1.0])]]);
 
@@ -175,7 +206,7 @@ it('truncates at 500 models', function () {
 it('lists the config models and the saved ones when the observed models cannot be read', function () {
     Exceptions::fake();
 
-    // A connection that holds the prices but not the spans.
+    // A connection that holds the prices but not the summary of the models.
     config([
         'database.connections.trail_prices_only' => ['driver' => 'sqlite', 'database' => ':memory:', 'prefix' => ''],
         'trail.storage.connection' => 'trail_prices_only',
