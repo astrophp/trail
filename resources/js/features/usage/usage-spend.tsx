@@ -132,9 +132,11 @@ export function UsageSpend({
             <Panel>
                 <PanelHeader
                     title="Estimated cost over time"
+                    // Below md the action drops under the title and subtitle, full width.
+                    className="max-md:grid-cols-1 max-md:[&>[data-slot=card-action]]:col-start-1 max-md:[&>[data-slot=card-action]]:row-span-1 max-md:[&>[data-slot=card-action]]:row-start-3 max-md:[&>[data-slot=card-action]]:justify-self-start"
                     description="Cumulative US dollars · estimates"
                     action={
-                        <div className="flex flex-wrap items-center justify-end gap-x-6 gap-y-2">
+                        <div className="flex flex-wrap items-center gap-x-6 gap-y-2 md:justify-end">
                             {shown === undefined ? null : (
                                 <SpendFigures
                                     data={shown.data}
