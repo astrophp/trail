@@ -443,7 +443,7 @@ describe('a ranking over part of the models', () => {
     it.each([
         [
             'duration',
-            'Models are ranked by runs because duration is not recorded per model among the models read; some were not.',
+            'Ranked by runs among the models read (some were not), because duration is not recorded per model.',
         ],
         [
             'cost',

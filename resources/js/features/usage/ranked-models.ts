@@ -27,7 +27,9 @@ export function rankingNote(metric: ActivityMode, truncated: boolean): string {
     const among = truncated ? ' among the models read; some were not' : ''
 
     if (metric === 'duration') {
-        return `Models are ranked by runs because duration is not recorded per model${among}.`
+        return truncated
+            ? 'Ranked by runs among the models read (some were not), because duration is not recorded per model.'
+            : 'Models are ranked by runs because duration is not recorded per model.'
     }
 
     return `Ranked by ${metric === 'cost' ? 'estimated cost' : 'runs'}${among}.`

@@ -52,7 +52,7 @@ describe('rankingNote', () => {
         [
             'duration',
             true,
-            'Models are ranked by runs because duration is not recorded per model among the models read; some were not.',
+            'Ranked by runs among the models read (some were not), because duration is not recorded per model.',
         ],
     ] as const)('says for %s (cut: %s) %s', (metric, cut, note) => {
         expect(rankingNote(metric, cut)).toBe(note)
