@@ -103,20 +103,85 @@ describe('the bookmark button of a row', () => {
         expect(new Set(names).size).toBe(names.length)
     })
 
-    it('sits in the Run cell before the link of its row', async () => {
+    it('is the last cell of its row, apart from the checkbox, and not in the Run cell', async () => {
         renderApp('/traces')
         await loaded()
 
         const button = toggle(failedName)
-        const link = within(button.closest('th') as HTMLElement).getByRole(
-            'link',
-            { name: 'SupportAssistant' },
-        )
+        const row = button.closest('tr') as HTMLElement
+        const cells = within(row).getAllByRole('cell')
+        const runCell = within(row).getByRole('rowheader')
 
+        // Present in the last cell, and absent from the Run cell that holds the checkbox.
+        expect(cells.at(-1)).toContainElement(button)
         expect(
-            button.compareDocumentPosition(link) &
-                Node.DOCUMENT_POSITION_FOLLOWING,
-        ).toBeTruthy()
+            within(runCell).queryByRole('button', { name: failedName }),
+        ).not.toBeInTheDocument()
+        expect(
+            within(runCell).getByRole('checkbox', { name: /^Select / }),
+        ).toBeInTheDocument()
+        expect(
+            within(runCell).queryByRole('button', { name: /^Bookmark / }),
+        ).not.toBeInTheDocument()
+    })
+
+    it('has a column named Bookmark, which cannot be sorted', async () => {
+        renderApp('/traces')
+        await loaded()
+
+        const header = screen.getByRole('columnheader', { name: 'Bookmark' })
+
+        expect(header).not.toHaveAttribute('aria-sort')
+        expect(within(header).queryByRole('button')).not.toBeInTheDocument()
+        // It is the last column, as its cells are.
+        expect(screen.getAllByRole('columnheader').at(-1)).toBe(header)
+    })
+
+    it('comes after the checkbox and the link of its row when tabbing, as it does on screen', async () => {
+        renderApp('/traces')
+        await loaded()
+
+        const row = toggle(failedName).closest('tr') as HTMLElement
+        const link = within(row).getByRole('link', { name: 'SupportAssistant' })
+        const checkbox = within(row).getByRole('checkbox')
+
+        checkbox.focus()
+        await userEvent.tab()
+        expect(link).toHaveFocus()
+        await userEvent.tab()
+        expect(toggle(failedName)).toHaveFocus()
+    })
+
+    it('does not select the row or open it when pressed', async () => {
+        serve([])
+        renderApp('/traces')
+        await loaded()
+
+        await userEvent.click(toggle(failedName))
+
+        expect(pressed(failedName)).toBe('true')
+        expect(
+            screen.queryAllByRole('checkbox', { checked: true }),
+        ).toHaveLength(0)
+        // Still on the list: no run page was opened.
+        expect(
+            screen.getByRole('table', { name: 'Recorded runs' }),
+        ).toBeVisible()
+    })
+
+    it('is drawn filled when bookmarked and as an outline when not', async () => {
+        serve([completed])
+        renderApp('/traces')
+        await loaded()
+
+        expect(toggle(completedName).querySelector('svg')).toHaveAttribute(
+            'fill',
+            'currentColor',
+        )
+        expect(toggle(failedName).querySelector('svg')).toHaveAttribute(
+            'fill',
+            'none',
+        )
     })
 
     it('shows the bookmark at once, while the request is still pending, and keeps it on success', async () => {

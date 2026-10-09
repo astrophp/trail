@@ -44,6 +44,12 @@ export type DataTableColumnMeta = {
     skeleton?: ReactNode
     /** Sits before the header's label, outside its sort button: a control for the whole column. */
     lead?: ReactNode
+    /**
+     * Wherever the table scrolls sideways, the column stays in view at the right edge (the first
+     * column does so at the left on narrow screens). For a narrow column of one control, which
+     * would otherwise be scrolled out of reach. It does nothing while the table fits.
+     */
+    stickyEnd?: boolean
 }
 
 // Written out in full, so the stylesheet can see every class.
@@ -71,6 +77,7 @@ function columnClasses(
         align[meta?.align ?? 'start'],
         meta?.hideBelow && hideBelow[meta.hideBelow],
         index === 0 && 'max-md:sticky max-md:left-0 max-md:z-1',
+        meta?.stickyEnd && 'sticky right-0 z-1',
     )
 }
 
