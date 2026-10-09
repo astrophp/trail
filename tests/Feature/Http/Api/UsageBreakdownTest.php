@@ -164,6 +164,17 @@ describe('a run recorded without a summary', function () {
     });
 });
 
+describe('a run stored without a summary but with a cost', function () {
+    it('counts in its agent\'s runs, usage and cost and adds no steps or coverage', function () {
+        $id = UsageRows::run('Old', '2026-01-02 10:00:00', [UsageRows::step('openai', 'gpt-5', ['inputTokens' => 5])]);
+        DB::table('trail_trace_models')->where('trace_id', $id)->delete();
+
+        expect(usageBreakdownAt($this, 'by=agent')['data'])->toBe([
+            usageAgentRow('Old', 0, 1, usageTokens('reported', 5, null, 5), ['state' => 'unpriced', 'amount' => null], 0, 0, 0),
+        ]);
+    });
+});
+
 describe('by provider', function () {
     it('breaks down every provider, a step without a model included', function () {
         UsageRows::dataset();
@@ -280,6 +291,15 @@ describe('sorting', function () {
         '-name' => ['sort=-name', ['openai', 'anthropic', 'acme']],
     ]);
 
+    it('orders providers of equal runs by name in the direction of the sort', function () {
+        foreach (['b', 'a', 'c'] as $provider) {
+            UsageRows::run('X'.$provider, '2026-01-02 10:00:00', [UsageRows::step($provider, 'm')]);
+        }
+
+        expect(usageNamesAt($this, 'by=provider&sort=-runs'))->toBe(['c', 'b', 'a'])
+            ->and(usageNamesAt($this, 'by=provider&sort=runs'))->toBe(['a', 'b', 'c']);
+    });
+
     it('orders the agents', function (string $query, array $names) {
         UsageRows::dataset();
 
@@ -374,6 +394,21 @@ describe('the row limit', function () {
         // Alpha has two runs; of the single-run agents, the first by name.
         'agents' => ['agent', 3, ['Alpha', 'Askonly', 'Bare']],
     ]);
+
+    it('reads the groups of equal runs in the database\'s order of their names', function () {
+        $this->app->bind(UsageQuery::class, fn () => new UsageQuery(2));
+
+        foreach (['beta', 'Alpha', 'alpha2', 'Zed'] as $n => $model) {
+            UsageRows::run('Agent'.$n, '2026-01-02 10:00:00', [UsageRows::step('p', $model, ['inputTokens' => 1, 'cost' => 0.001])]);
+        }
+
+        $body = usageBreakdownAt($this, 'sort=name');
+        $expected = ['sqlite' => ['Alpha', 'Zed'], 'mysql' => ['Alpha', 'alpha2'], 'pgsql' => ['Alpha', 'alpha2']];
+
+        // Byte order puts Zed before alpha2; a case-insensitive order does not. The database chose.
+        expect(array_column($body['data'], 'model'))->toBe($expected[DB::connection()->getDriverName()])
+            ->and($body['row_limit'])->toBe(['limit' => 2, 'truncated' => true]);
+    });
 
     it('is not truncated when the groups fill the limit exactly', function (string $by, int $groups) {
         $this->app->bind(UsageQuery::class, fn () => new UsageQuery($groups));

@@ -180,12 +180,15 @@ it('marks a model observed when a step was recorded with it and not when only an
     expect(array_map(fn (array $row) => [$row['model'], $row['observed']], $rows))->toBe([['called', true], ['asked', false]]);
 });
 
-it('does not observe a model used only in a run recorded without a summary', function () {
-    config(['trail.pricing' => ['openai' => ['gpt-5' => ['input' => 1.0]]]]);
+it('does not observe a model used only in a run recorded without a summary, and lists it only when config or a saved price names it', function () {
+    config(['trail.pricing' => []]);
     // The spans are there and the per-run summary is not, as for a run recorded before the summary existed.
     Rows::span(Rows::trace(), ['type' => 'step', 'provider' => 'openai', 'model' => 'gpt-5']);
     Rows::span(Rows::trace(), ['type' => 'step', 'provider' => 'acme', 'model' => 'old']);
 
+    expect($this->getJson('/trail/api/prices')->assertOk()->json('data'))->toBe([]);
+
+    config(['trail.pricing' => ['openai' => ['gpt-5' => ['input' => 1.0]]]]);
     $rows = $this->getJson('/trail/api/prices')->assertOk()->json('data');
 
     expect(array_map(fn (array $row) => [$row['model'], $row['observed']], $rows))->toBe([['gpt-5', false]]);

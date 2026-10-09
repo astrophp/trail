@@ -636,7 +636,7 @@ list and by both writes.
   one. For a model that is not `saved` it is the same as the price's own `source`, `via` and `rates`.
 - A saved price replaces the config entry as a whole. A rate left blank in it is unknown; it does not
   fall back to the config value.
-- `observed` is whether a step or an embedding was recorded with exactly this provider and model, as the per-run summary the store keeps when it writes a run has it. A model that only an agent span asked for is not observed, and neither is one used only in a run recorded before that summary existed.
+- `observed` is whether a step or an embedding was recorded with exactly this provider and model, as the per-run summary the store keeps when it writes a run has it. A model that only an agent span asked for is not observed, and neither is one used only in a run recorded before that summary existed, which is then listed only when `trail.pricing` or a saved price names it.
 - `saved_at` is when the saved price was last written, as every time in this API, and `null` when the
   model has none.
 - Trail is not a billing system: a cost is an estimate, frozen when the run is recorded. Saving or
@@ -1045,10 +1045,12 @@ What the runs of a time range used, by model, by provider or by agent. Takes a t
   is a 422 on `sort`. A row without the value comes last in both directions, and a tie is ordered by
   the row's name in the direction of the sort, so a page never repeats or skips a row.
 - Sorting and paging are done over the grouped rows, of which at most `row_limit.limit` are read:
-  those in most runs. `truncated` is `true` when there were more, and then `pagination.total` is the
-  number of rows read, not of all that exist.
+  those in most runs and, among groups in equally many, those first in the database's order of the
+  name (provider and then model for `by=model`). That order is the database's own, so it can differ
+  from the order the rows are sorted in within the response. `truncated` is `true` when there were
+  more, and then `pagination.total` is the number of rows read, not of all that exist.
 - Usage is read from a per-run summary the store keeps when it writes a run, so a run recorded before
-  that summary existed is in no `model` or `provider` row and adds no steps to its agent's row.
+  that summary existed is in no `model` or `provider` row and adds no steps to its agent's row. It still counts in that row's `runs`, `usage` and `cost` (whose state can be `partial` or `unpriced`) while adding nothing to `steps` and `coverage`, so for such runs the two can disagree.
 - It is read in one grouped query whatever the view, the sort and the page.
 
 ### `GET /api/conversations`
