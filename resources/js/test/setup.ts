@@ -1,7 +1,8 @@
 import '@testing-library/jest-dom/vitest'
 import { cleanup, configure } from '@testing-library/react'
-import { afterEach, beforeEach, expect, vi } from 'vitest'
+import { afterAll, afterEach, beforeEach, expect, vi } from 'vitest'
 import { contractFixture } from '@/test/contract-fixture'
+import { settleFrames, trackFrames } from '@/test/frame-guard'
 
 afterEach(cleanup)
 
@@ -62,4 +63,12 @@ Element.prototype.scrollIntoView = () => {}
 afterEach(() => {
     vi.unstubAllGlobals()
     window.history.replaceState({}, '', '/')
+})
+
+// A chart's store has a frame and a timer racing to run the same update; a test file must not end,
+// and tear jsdom down, while a frame is still waiting. See `frame-guard.ts`.
+trackFrames()
+
+afterAll(async () => {
+    await settleFrames()
 })
