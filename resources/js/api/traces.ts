@@ -1,6 +1,7 @@
 import { apiRequest, apiUrl } from '@/api/client'
 import type {
     BookmarkResponse,
+    IssueKind,
     Status,
     TraceDetailResponse,
     TraceListResponse,
@@ -22,9 +23,21 @@ export const traceSorts = [
 
 export type TraceSort = (typeof traceSorts)[number]
 
+/** The values `issue_kind` takes on `GET /traces`, in the order the API documents them. */
+export const issueKinds = [
+    'rate_limited',
+    'provider_overloaded',
+    'provider_connection',
+    'insufficient_credits',
+    'tool_error',
+    'exception',
+    'abandoned',
+] as const satisfies readonly IssueKind[]
+
 /**
  * What the list endpoint is asked for. Only the range is required. An unset filter is not
- * sent; `bookmarked: false` and `slow: false` are not sent either.
+ * sent; a switch that is `false` (`bookmarked`, `slow`, `child_failed`, `unpriced`, `recovered`)
+ * is not sent either.
  */
 export type TraceListParams = {
     range: TimeRangePreset
@@ -38,6 +51,14 @@ export type TraceListParams = {
     /** Only the runs that called the tool, anywhere in the run. */
     tool?: string
     conversation?: string
+    /** Only the runs with that issue kind. */
+    issue_kind?: IssueKind
+    /** Only the runs that completed although a sub-agent failed. */
+    child_failed?: boolean
+    /** Only the runs with a step that reported usage and could not be priced. */
+    unpriced?: boolean
+    /** Only the runs recovered by a provider failover. */
+    recovered?: boolean
     bookmarked?: boolean
     /** Only the runs at or above the 95th percentile of the range's durations. */
     slow?: boolean

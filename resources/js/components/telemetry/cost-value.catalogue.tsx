@@ -18,8 +18,28 @@ const costs: [string, Cost | SpanCost][] = [
 
 export const catalogue: CatalogueEntry = {
     title: 'Cost value',
-    specimens: costs.map(([name, cost]) => ({
-        name,
-        Component: () => <CostValue cost={cost} />,
-    })),
+    specimens: [
+        ...costs.map(([name, cost]) => ({
+            name,
+            Component: () => <CostValue cost={cost} />,
+        })),
+        {
+            name: 'Pending, amount so far shown (a figure over a range)',
+            Component: () => (
+                <CostValue
+                    cost={{ state: 'pending', amount: 0.0123 }}
+                    pendingAmount="show"
+                />
+            ),
+        },
+        {
+            name: 'Pending, no amount, shown (still Pending)',
+            Component: () => (
+                <CostValue
+                    cost={{ state: 'pending', amount: null }}
+                    pendingAmount="show"
+                />
+            ),
+        },
+    ],
 }

@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest'
+import { issueKinds } from '@/api/traces'
 import {
+    issueKindFilters,
     readTraceListView,
     traceListApiParams,
     type TraceListView,
 } from '@/api/trace-list-view'
+import { contractFixture } from '@/test/contract-fixture'
 
 const read = (query: string) => readTraceListView(new URLSearchParams(query))
 
@@ -16,6 +19,10 @@ const defaults: TraceListView = {
     agent: '',
     provider: '',
     conversation: '',
+    issue_kind: 'all',
+    child_failed: false,
+    unpriced: false,
+    recovered: false,
     bookmarked: false,
     slow: false,
 }
@@ -39,8 +46,26 @@ describe('readTraceListView', () => {
             agent: 'Support',
             provider: 'openai',
             conversation: 'support/ada 1042',
+            issue_kind: 'all',
+            child_failed: false,
+            unpriced: false,
+            recovered: false,
             bookmarked: true,
             slow: true,
+        })
+    })
+
+    it('reads the issue kind and the three flags the needs-attention list links with', () => {
+        expect(
+            read(
+                'status=completed&issue_kind=rate_limited&child_failed=1&unpriced=1&recovered=1',
+            ),
+        ).toMatchObject({
+            status: 'completed',
+            issue_kind: 'rate_limited',
+            child_failed: true,
+            unpriced: true,
+            recovered: true,
         })
     })
 
@@ -56,6 +81,10 @@ describe('readTraceListView', () => {
         ['page=abc', 'page'],
         ['bookmarked=yes', 'bookmarked'],
         ['slow=yes', 'slow'],
+        ['issue_kind=bogus', 'issue_kind'],
+        ['child_failed=yes', 'child_failed'],
+        ['unpriced=yes', 'unpriced'],
+        ['recovered=yes', 'recovered'],
     ] as const)('falls back to the default for an invalid %s', (query, key) => {
         expect(read(query)[key]).toBe(defaults[key])
     })
@@ -94,6 +123,10 @@ describe('traceListApiParams', () => {
             agent: '',
             provider: '',
             conversation: '',
+            issue_kind: undefined,
+            child_failed: false,
+            unpriced: false,
+            recovered: false,
             bookmarked: false,
             slow: false,
         })
@@ -107,10 +140,18 @@ describe('traceListApiParams', () => {
                 agent: 'Support',
                 provider: 'openai',
                 conversation: 'c-1',
+                issue_kind: 'tool_error',
+                child_failed: true,
+                unpriced: true,
+                recovered: true,
                 bookmarked: true,
                 slow: true,
             }),
         ).toMatchObject({
+            issue_kind: 'tool_error',
+            child_failed: true,
+            unpriced: true,
+            recovered: true,
             search: 'x',
             agent: 'Support',
             provider: 'openai',
@@ -118,5 +159,14 @@ describe('traceListApiParams', () => {
             bookmarked: true,
             slow: true,
         })
+    })
+})
+
+describe('the issue kinds', () => {
+    it('are the ones the API documents, in its order', () => {
+        expect([...issueKinds]).toEqual(
+            (contractFixture('enums') as { issue_kind: string[] }).issue_kind,
+        )
+        expect(issueKindFilters).toEqual(['all', ...issueKinds])
     })
 })

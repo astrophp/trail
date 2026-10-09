@@ -38,6 +38,61 @@ describe('CostValue', () => {
         expect(screen.getByText('Pending')).toBeInTheDocument()
     })
 
+    describe('pendingAmount="show"', () => {
+        it('shows the amount so far with a So far tag, and says what that means', () => {
+            render(
+                <CostValue
+                    cost={{ state: 'pending', amount: 0.0123 }}
+                    pendingAmount="show"
+                />,
+            )
+
+            expect(screen.getByText('$0.0123')).toBeInTheDocument()
+            expect(screen.getByText(/^So far/)).toHaveAttribute(
+                'title',
+                'Runs are still running, so this can still grow',
+            )
+            expect(
+                screen.getByText(
+                    /runs are still running, so this can still grow/,
+                ),
+            ).toHaveClass('sr-only')
+        })
+
+        it('still says Pending when there is no amount', () => {
+            const { container } = render(
+                <CostValue
+                    cost={{ state: 'pending', amount: null }}
+                    pendingAmount="show"
+                />,
+            )
+
+            expect(screen.getByText('Pending')).toBeInTheDocument()
+            expect(container.textContent).not.toMatch(/\d|\$|So far/)
+        })
+
+        it('changes nothing for the other states', () => {
+            render(
+                <CostValue
+                    cost={{ state: 'partial', amount: 0.5 }}
+                    pendingAmount="show"
+                />,
+            )
+
+            expect(screen.getByText('Partial')).toBeInTheDocument()
+            expect(screen.queryByText(/So far/)).toBeNull()
+        })
+
+        it('is not what a pending cost is without it: hidden', () => {
+            const { container } = render(
+                <CostValue cost={{ state: 'pending', amount: 0.0123 }} />,
+            )
+
+            expect(screen.getByText('Pending')).toBeInTheDocument()
+            expect(container.textContent).not.toMatch(/\d|\$|So far/)
+        })
+    })
+
     it('shows Not captured', () => {
         render(<CostValue cost={{ state: 'not_captured', amount: null }} />)
 

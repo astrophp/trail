@@ -54,6 +54,35 @@ describe('exporting the view', () => {
         )
     })
 
+    it('carries the issue kind and the flags, and drops one when its chip goes', async () => {
+        mockApi()
+        renderApp(
+            '/traces?issue_kind=rate_limited&child_failed=1&unpriced=1&recovered=1',
+        )
+        await loaded()
+
+        expect(paramsOf(exportLink().getAttribute('href') ?? '')).toEqual({
+            range: '24h',
+            sort: '-started_at',
+            issue_kind: 'rate_limited',
+            child_failed: '1',
+            unpriced: '1',
+            recovered: '1',
+        })
+
+        await userEvent.click(
+            screen.getByRole('button', {
+                name: 'Remove filter: Unpriced usage',
+            }),
+        )
+
+        await waitFor(() =>
+            expect(
+                paramsOf(exportLink().getAttribute('href') ?? ''),
+            ).not.toHaveProperty('unpriced'),
+        )
+    })
+
     it('follows the filters', async () => {
         mockApi()
         renderApp('/traces')

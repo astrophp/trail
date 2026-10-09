@@ -1,4 +1,9 @@
-import { traceSorts, type TraceListParams, type TraceSort } from '@/api/traces'
+import {
+    issueKinds,
+    traceSorts,
+    type TraceListParams,
+    type TraceSort,
+} from '@/api/traces'
 import type { Status } from '@/api/types'
 import { searchParam } from '@/lib/search'
 import { timeRangeParam, type TimeRangePreset } from '@/lib/time-range'
@@ -24,12 +29,18 @@ export const statusFilters = ['all', ...statusOrder] as const
 
 export type StatusFilter = (typeof statusFilters)[number]
 
+/** Which runs a view shows by issue kind: all of them, or those with one kind. */
+export const issueKindFilters = ['all', ...issueKinds] as const
+
+export type IssueKindFilter = (typeof issueKindFilters)[number]
+
 export const defaultTraceSort: TraceSort = '-started_at'
 
 /**
  * What the list keeps in the URL besides the time range. The names are the API's own
- * (`status`, `search`, `agent`, `provider`, `conversation`, `bookmarked`, `slow`, `sort`, `page`); an empty
- * `agent`, `provider` or `conversation` means all.
+ * (`status`, `search`, `agent`, `provider`, `conversation`, `issue_kind`, `child_failed`,
+ * `unpriced`, `recovered`, `bookmarked`, `slow`, `sort`, `page`); an empty `agent`, `provider` or
+ * `conversation` means all, and so does `issue_kind` left out.
  */
 export const traceListParams = {
     sort: enumParam(traceSorts, defaultTraceSort),
@@ -39,6 +50,10 @@ export const traceListParams = {
     agent: stringParam(),
     provider: stringParam(),
     conversation: stringParam(),
+    issue_kind: enumParam(issueKindFilters, 'all'),
+    child_failed: boolParam(),
+    unpriced: boolParam(),
+    recovered: boolParam(),
     bookmarked: boolParam(),
     slow: boolParam(),
 }
@@ -50,6 +65,10 @@ export const traceFilterKeys = [
     'agent',
     'provider',
     'conversation',
+    'issue_kind',
+    'child_failed',
+    'unpriced',
+    'recovered',
     'bookmarked',
     'slow',
 ] as const satisfies readonly (keyof typeof traceListParams)[]
@@ -66,6 +85,10 @@ export type TraceListView = {
     agent: string
     provider: string
     conversation: string
+    issue_kind: IssueKindFilter
+    child_failed: boolean
+    unpriced: boolean
+    recovered: boolean
     bookmarked: boolean
     slow: boolean
 }
@@ -89,6 +112,10 @@ export function traceListApiParams(view: TraceListView): TraceListParams {
         agent: view.agent,
         provider: view.provider,
         conversation: view.conversation,
+        issue_kind: view.issue_kind === 'all' ? undefined : view.issue_kind,
+        child_failed: view.child_failed,
+        unpriced: view.unpriced,
+        recovered: view.recovered,
         bookmarked: view.bookmarked,
         slow: view.slow,
     }
