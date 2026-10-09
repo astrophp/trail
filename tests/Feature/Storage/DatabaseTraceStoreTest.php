@@ -27,7 +27,7 @@ it('writes on the configured storage connection', function () {
         'trail.storage.connection' => 'trail_secondary',
     ]);
 
-    foreach (['traces', 'spans'] as $table) {
+    foreach (['traces', 'spans', 'trace_models', 'trace_tools'] as $table) {
         $migration = glob(dirname(__DIR__, 3)."/database/migrations/*_create_trail_{$table}_table.php")[0];
         (require $migration)->up();
     }
@@ -36,6 +36,7 @@ it('writes on the configured storage connection', function () {
 
     expect(DB::connection('trail_secondary')->table('trail_traces')->count())->toBe(1)
         ->and(DB::connection('trail_secondary')->table('trail_spans')->count())->toBe(1)
+        ->and(DB::connection('trail_secondary')->table('trail_trace_tools')->count())->toBe(0)
         ->and(DB::table('trail_traces')->count())->toBe(0);
 });
 

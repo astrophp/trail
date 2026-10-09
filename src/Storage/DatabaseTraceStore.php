@@ -9,6 +9,7 @@ use Astro\Trail\Storage\Contracts\TraceStore;
 use DateTimeInterface;
 use Illuminate\Database\ConnectionInterface;
 use Illuminate\Database\ConnectionResolverInterface;
+use Illuminate\Database\Query\Builder;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Carbon;
 use InvalidArgumentException;
@@ -103,6 +104,7 @@ class DatabaseTraceStore implements TraceStore
 
             $this->storeSpans($db, $trace->id, $spans);
             $this->writeTotals($db, $trace->id);
+            $this->writeSummaries($db, $trace->id);
         }, 3);
     }
 
@@ -129,6 +131,11 @@ class DatabaseTraceStore implements TraceStore
                 ->where('created_at', '<', $cutoff)
                 ->update($changes);
 
+            // A step swept as incomplete is no longer open, whatever age the sweep was run with.
+            $db->table('trail_trace_models')
+                ->where('open_at', '<', $cutoff)
+                ->update(['open_at' => null]);
+
             return $traces;
         }, 3);
     }
@@ -152,6 +159,8 @@ class DatabaseTraceStore implements TraceStore
 
             $deleted += $db->transaction(function () use ($db, $ids) {
                 $db->table('trail_spans')->whereIn('trace_id', $ids)->delete();
+                $db->table('trail_trace_models')->whereIn('trace_id', $ids)->delete();
+                $db->table('trail_trace_tools')->whereIn('trace_id', $ids)->delete();
                 $db->table('trail_bookmarks')->whereIn('trace_id', $ids)->delete();
 
                 return $db->table('trail_traces')->whereIn('id', $ids)->delete();
@@ -165,6 +174,8 @@ class DatabaseTraceStore implements TraceStore
 
         $db->transaction(function () use ($db) {
             $db->table('trail_spans')->delete();
+            $db->table('trail_trace_models')->delete();
+            $db->table('trail_trace_tools')->delete();
             $db->table('trail_bookmarks')->delete();
             $db->table('trail_traces')->delete();
         });
@@ -317,6 +328,87 @@ class DatabaseTraceStore implements TraceStore
             'unpriced_span_count' => $totals->unpricedSpanCount,
             'updated_at' => $this->now(),
         ]);
+    }
+
+    /**
+     * Rebuild the run's rows of what it used, from its spans, in statements the database runs by itself.
+     *
+     * Each table is filled by one insert-select. That reads the spans as the database holds them now
+     * and not as the transaction first saw them (on MySQL an insert-select is a current read), so a
+     * flush inside an application's transaction that began before another process flushed the same run
+     * still counts that process's spans. It also sends no rows through PHP, so it needs no chunking
+     * for the number of bound parameters, and it lets the database's own comparison of text decide
+     * what one model, one provider and one tool are, as every grouped read of spans does.
+     *
+     * The run's name and start are those of its stored row, which is what reads compare against.
+     */
+    private function writeSummaries(ConnectionInterface $db, string $traceId): void
+    {
+        $running = Status::Running->value;
+        $failed = Status::Failed->value;
+        $bills = SpanSql::bills('trail_spans');
+        $reported = SpanSql::reported('trail_spans');
+        $unpriced = "{$bills} and trail_spans.cost is null and {$reported}";
+        $input = 'trail_spans.input_tokens';
+        $cached = '(coalesce(trail_spans.cache_read_tokens, 0) + coalesce(trail_spans.cache_write_tokens, 0))';
+        $stored = fn () => $db->table('trail_traces')->select('id', 'name', 'started_at')->where('id', $traceId);
+
+        $models = $db->table('trail_spans')
+            ->select('provider', 'model')
+            ->selectRaw("sum(case when {$bills} then 1 else 0 end) as steps")
+            ->selectRaw("sum(case when {$bills} and {$reported} then 1 else 0 end) as reported_steps")
+            ->selectRaw("sum(case when {$unpriced} then 1 else 0 end) as unpriced_steps")
+            ->selectRaw("sum(case when {$unpriced} then coalesce(trail_spans.input_tokens, 0) + coalesce(trail_spans.output_tokens, 0) end) as unpriced_tokens")
+            ->selectRaw("max(case when {$bills} and trail_spans.status = ? then trail_spans.created_at end) as open_at", [$running])
+            ->selectRaw("sum(case when {$bills} then trail_spans.input_tokens end) as input_tokens")
+            // The comparison comes first so that the unsigned columns are never subtracted below zero.
+            ->selectRaw("sum(case when {$bills} and {$input} is not null then case when {$input} > {$cached} then {$input} - {$cached} else 0 end end) as uncached_input_tokens")
+            ->selectRaw("sum(case when {$bills} then trail_spans.output_tokens end) as output_tokens")
+            ->selectRaw("sum(case when {$bills} then trail_spans.cache_read_tokens end) as cache_read_tokens")
+            ->selectRaw("sum(case when {$bills} then trail_spans.cache_write_tokens end) as cache_write_tokens")
+            ->selectRaw("sum(case when {$bills} then trail_spans.reasoning_tokens end) as reasoning_tokens")
+            ->selectRaw("sum(case when {$bills} then trail_spans.cost end) as cost")
+            ->where('trace_id', $traceId)
+            ->where(fn (Builder $spans) => $spans->whereNotNull('provider')->orWhereNotNull('model')->orWhereRaw($bills))
+            ->groupBy('provider', 'model');
+
+        // The first model of each provider, by the database's own ordering, marks the row that counts the provider.
+        $firsts = $db->table('trail_spans')
+            ->select('provider')
+            ->selectRaw('min(model) as first_model')
+            ->where('trace_id', $traceId)
+            ->whereNotNull('provider')
+            ->groupBy('provider');
+
+        $db->table('trail_trace_models')->where('trace_id', $traceId)->delete();
+
+        $db->table('trail_trace_models')->insertUsing([
+            'trace_id', 'provider', 'model', 'run_name', 'started_at', 'provider_first', 'steps', 'reported_steps', 'unpriced_steps',
+            'unpriced_tokens', 'open_at', 'input_tokens', 'uncached_input_tokens', 'output_tokens', 'cache_read_tokens',
+            'cache_write_tokens', 'reasoning_tokens', 'cost',
+        ], $db->table($models, 'g')
+            ->crossJoinSub($stored(), 't')
+            ->leftJoinSub($firsts, 'p', 'p.provider', '=', 'g.provider')
+            ->select('t.id', 'g.provider', 'g.model', 't.name', 't.started_at')
+            ->selectRaw('case when g.provider is not null and (g.model = p.first_model or (p.first_model is null and g.model is null)) then true else false end as provider_first')
+            ->addSelect('g.steps', 'g.reported_steps', 'g.unpriced_steps', 'g.unpriced_tokens', 'g.open_at', 'g.input_tokens', 'g.uncached_input_tokens', 'g.output_tokens', 'g.cache_read_tokens', 'g.cache_write_tokens', 'g.reasoning_tokens', 'g.cost'));
+
+        $tools = $db->table('trail_spans')
+            ->select('name')
+            ->selectRaw('count(*) as calls')
+            ->selectRaw('sum(case when status = ? then 1 else 0 end) as failed', [$failed])
+            ->where('trace_id', $traceId)
+            ->where('type', SpanType::Tool->value)
+            ->groupBy('name');
+
+        $db->table('trail_trace_tools')->where('trace_id', $traceId)->delete();
+
+        $db->table('trail_trace_tools')->insertUsing(
+            ['trace_id', 'name', 'run_name', 'started_at', 'calls', 'failed'],
+            $db->table($tools, 'g')
+                ->crossJoinSub($stored(), 't')
+                ->select('t.id', 'g.name', 't.name', 't.started_at', 'g.calls', 'g.failed'),
+        );
     }
 
     /**

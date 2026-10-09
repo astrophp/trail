@@ -5,18 +5,19 @@ namespace Astro\Trail\Tests\Performance;
 use Astro\Trail\Queries\AgentBreakdown;
 use Astro\Trail\Queries\BucketUnit;
 use Astro\Trail\Queries\TimeRange;
-use Astro\Trail\Storage\StaleRuns;
+use Astro\Trail\Storage\DatabaseTraceStore;
+use Astro\Trail\Storage\SpanSql;
 use Carbon\CarbonImmutable;
 use Closure;
 use Illuminate\Database\Connection;
-use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Times the reads a usage page would need, on spans as they are and on a per-run summary made by
- * hand in the throwaway database, checks that the two agree, and times what keeping the summary
- * current would add to a flush. Driven by environment variables; see UsageQueriesTest.
+ * Times the reads a usage page would need, on spans as they are and on the per-run summaries the
+ * store keeps, checks that the two agree, and times what keeping the summaries current adds to a
+ * write through the store. Driven by environment variables; see UsageQueriesTest.
  */
 final class UsageMeasurement
 {
@@ -26,19 +27,18 @@ final class UsageMeasurement
     /** Plans are captured for queries slower than this many milliseconds. */
     private const PLAN_THRESHOLD = 200.0;
 
-    /** The summaries' tables, in the order they are built. */
+    /** The summaries' tables. */
     private const TABLES = ['trail_trace_models', 'trail_trace_tools'];
 
     /**
-     * The indexes tried by hand: name => table => columns.
+     * The indexes tried by hand, beside the two the migrations make (on the run and on its start):
+     * name => table => columns.
      *
      * @var array<string, array<string, string>>
      */
     private const INDEXES = [
-        'started' => ['trail_trace_models' => 'started_at', 'trail_trace_tools' => 'started_at'],
         'pms' => ['trail_trace_models' => 'provider, model, started_at', 'trail_trace_tools' => 'name, started_at'],
-        'trace' => ['trail_trace_models' => 'trace_id', 'trail_trace_tools' => 'trace_id'],
-        'name' => ['trail_trace_models' => 'name, started_at', 'trail_trace_tools' => 'run_name, started_at'],
+        'name' => ['trail_trace_models' => 'run_name, started_at', 'trail_trace_tools' => 'run_name, started_at'],
     ];
 
     /** @var list<string> */
@@ -71,7 +71,7 @@ final class UsageMeasurement
             $env('TRAIL_MEASURE_ROWS', '100000'),
             (int) $env('TRAIL_MEASURE_REPEATS', '5'),
             $env('TRAIL_MEASURE_OUT', ''),
-            $env('TRAIL_MEASURE_CONFIGS', 'none,started,pms,trace,name,all'),
+            $env('TRAIL_MEASURE_CONFIGS', 'none,pms,name,all'),
             $env('TRAIL_MEASURE_ONLY', ''),
             (int) $env('TRAIL_MEASURE_CHECK_MAX', '150000'),
             (int) $env('TRAIL_MEASURE_WRITE_RUNS', '300'),
@@ -114,9 +114,10 @@ final class UsageMeasurement
         CarbonImmutable::setTestNow($now);
         $this->expected = [];
 
-        $schema = $db->getSchemaBuilder();
-        $schema->dropIfExists('trail_trace_models');
-        $schema->dropIfExists('trail_trace_tools');
+        foreach (self::TABLES as $table) {
+            $db->table($table)->truncate();
+        }
+
         $db->table('trail_spans')->truncate();
         $db->table('trail_traces')->truncate();
 
@@ -155,7 +156,12 @@ final class UsageMeasurement
                 }
 
                 $key = $unbounded ? 'all' : $preset;
-                $this->expected["{$key}|{$label}"] = $this->arrayOf($this->measure($db, $driver, $rows, $key, 'migrations', $label, fn () => $read($range, $context[$preset])));
+                $result = $this->measure($db, $driver, $rows, $key, 'migrations', $label, fn () => $read($range, $context[$preset]));
+
+                // A read that failed has nothing to compare against.
+                if ($result !== null) {
+                    $this->expected["{$key}|{$label}"] = $this->arrayOf($result);
+                }
             }
         }
 
@@ -167,8 +173,9 @@ final class UsageMeasurement
             }
         }
 
-        $schema->dropIfExists('trail_trace_models');
-        $schema->dropIfExists('trail_trace_tools');
+        foreach (self::TABLES as $table) {
+            $db->table($table)->truncate();
+        }
     }
 
     /**
@@ -235,8 +242,8 @@ final class UsageMeasurement
      */
     private function summaries(Connection $db, string $driver, int $rows, array $ranges, array $context, UsageReads $reads): void
     {
-        $this->create($db);
         $this->backfill($db, $driver);
+        $this->agreeWithStore($db, $driver, $rows);
 
         foreach (array_filter(array_map('trim', explode(',', $this->configs))) as $config) {
             $names = match ($config) {
@@ -286,60 +293,31 @@ final class UsageMeasurement
         $pm = ['provider', 'model'];
 
         return [
-            ['B1 models, count(*)', 'A1c models, runs of any span', $pm, [], fn (TimeRange $r) => $reads->modelsOnSummary($r, $pm, 'rows')],
-            ['B2a providers, count(*)', 'A2c providers, runs of any span', ['provider'], ['runs'], fn (TimeRange $r) => $reads->modelsOnSummary($r, ['provider'], 'rows')],
-            ['B2b providers, count(distinct trace_id)', 'A2c providers, runs of any span', ['provider'], [], fn (TimeRange $r) => $reads->modelsOnSummary($r, ['provider'], 'distinct')],
-            ['B3 agents and models', 'A3c agents and models, from the spans', ['name', 'provider', 'model'], [], fn (TimeRange $r) => $reads->modelsOnSummary($r, ['name', 'provider', 'model'], 'rows')],
+            ['B1 models, count(*)', 'A1c models, runs of any span', $pm, ['running'], fn (TimeRange $r) => $reads->modelsOnSummary($r, $pm, 'rows')],
+            ['B2a providers, count(*)', 'A2c providers, runs of any span', ['provider'], ['runs', 'running'], fn (TimeRange $r) => $reads->modelsOnSummary($r, ['provider'], 'rows')],
+            ['B2b providers, count(distinct trace_id)', 'A2c providers, runs of any span', ['provider'], ['running'], fn (TimeRange $r) => $reads->modelsOnSummary($r, ['provider'], 'distinct')],
+            ['B2c providers, sum(provider_first)', 'A2c providers, runs of any span', ['provider'], ['running'], fn (TimeRange $r) => $reads->modelsOnSummary($r, ['provider'], 'first')],
+            ['B3 agents and models', 'A3c agents and models, from the spans', ['run_name', 'provider', 'model'], ['running'], fn (TimeRange $r) => $reads->modelsOnSummary($r, ['run_name', 'provider', 'model'], 'rows')],
             ['B4a buckets, whole range', 'A4a buckets, whole range', ['slot', 'provider', 'model'], [], fn (TimeRange $r, array $c) => $reads->bucketsOnSummary($r, $c['cuts'])],
             ['B4b buckets, last 6 complete', 'A4b buckets, last 6 complete', ['slot', 'provider', 'model'], [], fn (TimeRange $r, array $c) => $reads->bucketsOnSummary($c['tail'], $c['last'])],
             ['B5a observed models, billing', 'A5 observed models, unbounded', $pm, [], fn () => $reads->observedOnSummary(true)],
             ['B5b observed models, any row', null, $pm, [], fn () => $reads->observedOnSummary(false)],
-            ['B6a models, big agent', 'A7c models, big agent (AgentBreakdown)', $pm, [], fn (TimeRange $r) => $reads->modelsOnSummary($r, $pm, 'rows', $big)],
+            ['B6a models, big agent', 'A7c models, big agent (AgentBreakdown)', $pm, ['running'], fn (TimeRange $r) => $reads->modelsOnSummary($r, $pm, 'rows', $big)],
             ['B6b tools, big agent', 'A7b tools, big agent (AgentBreakdown)', ['name'], [], fn (TimeRange $r) => $reads->toolsOnSummary($r, $big)],
             ['B6c tools, all agents', 'A7a tools, all agents', ['name'], [], fn (TimeRange $r) => $reads->toolsOnSummary($r, null)],
         ];
     }
 
-    private function create(Connection $db): void
-    {
-        $schema = $db->getSchemaBuilder();
-
-        $schema->create('trail_trace_models', function (Blueprint $table) {
-            $table->string('trace_id', 64);
-            $table->string('provider');
-            $table->string('model');
-            $table->dateTime('started_at', 3);
-            $table->string('name');
-            $table->unsignedInteger('steps');
-            $table->unsignedInteger('unpriced_steps');
-            $table->unsignedInteger('running_steps');
-
-            foreach (UsageReads::TOKENS as $token) {
-                $table->unsignedBigInteger($token)->nullable();
-            }
-
-            $table->decimal('cost', 18, 10)->nullable();
-        });
-
-        $schema->create('trail_trace_tools', function (Blueprint $table) {
-            $table->string('trace_id', 64);
-            $table->string('name');
-            $table->dateTime('started_at', 3);
-            $table->string('run_name');
-            $table->unsignedInteger('calls');
-            $table->unsignedInteger('failed');
-        });
-    }
-
     /**
-     * Fill both tables from the spans and the runs with one insert-select each: what a database that
-     * already holds runs would run once.
+     * Fill both tables from the spans and the runs with one insert-select each, over every run at once:
+     * what an existing database would run once. The rows are those the store writes for a run.
      */
     private function backfill(Connection $db, string $driver): void
     {
-        $bills = "s.type in ('step', 'embedding')";
-        $reported = '(s.input_tokens is not null or s.output_tokens is not null or s.cache_read_tokens is not null or s.cache_write_tokens is not null or s.reasoning_tokens is not null)';
-        $tokens = implode(', ', array_map(fn (string $token) => "sum(case when {$bills} then s.{$token} end)", UsageReads::TOKENS));
+        $bills = SpanSql::bills('s');
+        $reported = SpanSql::reported('s');
+        $unpriced = "{$bills} and s.cost is null and {$reported}";
+        $cached = '(coalesce(s.cache_read_tokens, 0) + coalesce(s.cache_write_tokens, 0))';
 
         // The statements are not reads, so the timeout that stops one is lifted for them.
         match ($driver) {
@@ -348,23 +326,39 @@ final class UsageMeasurement
         };
 
         $start = hrtime(true);
-        $db->statement("insert into trail_trace_models (trace_id, provider, model, started_at, name, steps, unpriced_steps, running_steps, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, reasoning_tokens, cost)
-            select s.trace_id, s.provider, s.model, t.started_at, t.name,
-                sum(case when {$bills} then 1 else 0 end),
-                sum(case when {$bills} and s.cost is null and {$reported} then 1 else 0 end),
-                sum(case when {$bills} and s.status = 'running' and s.created_at >= ? then 1 else 0 end),
-                {$tokens}, sum(case when {$bills} then s.cost end)
-            from trail_spans s join trail_traces t on t.id = s.trace_id
-            where s.provider is not null and s.model is not null
-            group by s.trace_id, s.provider, s.model, t.started_at, t.name", [StaleRuns::cutoffColumn()]);
+        $db->statement("insert into trail_trace_models (trace_id, provider, model, run_name, started_at, provider_first, steps, reported_steps, unpriced_steps, unpriced_tokens, open_at, input_tokens, uncached_input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, reasoning_tokens, cost)
+            select g.trace_id, g.provider, g.model, t.name, t.started_at,
+                case when g.provider is not null and (g.model = p.first_model or (p.first_model is null and g.model is null)) then true else false end,
+                g.steps, g.reported_steps, g.unpriced_steps, g.unpriced_tokens, g.open_at, g.input_tokens, g.uncached_input_tokens, g.output_tokens, g.cache_read_tokens, g.cache_write_tokens, g.reasoning_tokens, g.cost
+            from (
+                select s.trace_id, s.provider, s.model,
+                    sum(case when {$bills} then 1 else 0 end) as steps,
+                    sum(case when {$bills} and {$reported} then 1 else 0 end) as reported_steps,
+                    sum(case when {$unpriced} then 1 else 0 end) as unpriced_steps,
+                    sum(case when {$unpriced} then coalesce(s.input_tokens, 0) + coalesce(s.output_tokens, 0) end) as unpriced_tokens,
+                    max(case when {$bills} and s.status = 'running' then s.created_at end) as open_at,
+                    sum(case when {$bills} then s.input_tokens end) as input_tokens,
+                    sum(case when {$bills} and s.input_tokens is not null then case when s.input_tokens > {$cached} then s.input_tokens - {$cached} else 0 end end) as uncached_input_tokens,
+                    sum(case when {$bills} then s.output_tokens end) as output_tokens,
+                    sum(case when {$bills} then s.cache_read_tokens end) as cache_read_tokens,
+                    sum(case when {$bills} then s.cache_write_tokens end) as cache_write_tokens,
+                    sum(case when {$bills} then s.reasoning_tokens end) as reasoning_tokens,
+                    sum(case when {$bills} then s.cost end) as cost
+                from trail_spans s
+                where s.provider is not null or s.model is not null or {$bills}
+                group by s.trace_id, s.provider, s.model
+            ) g
+            join trail_traces t on t.id = g.trace_id
+            left join (select trace_id, provider, min(model) as first_model from trail_spans where provider is not null group by trace_id, provider) p
+                on p.trace_id = g.trace_id and p.provider = g.provider");
         $models = (hrtime(true) - $start) / 1e9;
 
         $start = hrtime(true);
-        $db->statement("insert into trail_trace_tools (trace_id, name, started_at, run_name, calls, failed)
-            select s.trace_id, s.name, t.started_at, t.name, count(*), sum(case when s.status = 'failed' then 1 else 0 end)
+        $db->statement("insert into trail_trace_tools (trace_id, name, run_name, started_at, calls, failed)
+            select s.trace_id, s.name, t.name, t.started_at, count(*), sum(case when s.status = 'failed' then 1 else 0 end)
             from trail_spans s join trail_traces t on t.id = s.trace_id
             where s.type = 'tool'
-            group by s.trace_id, s.name, t.started_at, t.name");
+            group by s.trace_id, s.name, t.name, t.started_at");
         $tools = (hrtime(true) - $start) / 1e9;
 
         MeasureDatabase::limit($db, $driver);
@@ -373,7 +367,66 @@ final class UsageMeasurement
         $runs = (int) $db->table('trail_traces')->count();
         $modelRows = (int) $db->table('trail_trace_models')->count();
         $toolRows = (int) $db->table('trail_trace_tools')->count();
-        $this->log(sprintf("\nBackfill without secondary indexes: trail_trace_models %s rows (%.2f per run, of which %s with no billing span) in %.1f s; trail_trace_tools %s rows (%.2f per run) in %.1f s.\n", number_format($modelRows), $modelRows / max(1, $runs), number_format((int) $db->table('trail_trace_models')->where('steps', 0)->count()), $models, number_format($toolRows), $toolRows / max(1, $runs), $tools));
+        $this->log(sprintf("\nBackfill with the indexes of the migrations: trail_trace_models %s rows (%.2f per run, of which %s with no billing span) in %.1f s; trail_trace_tools %s rows (%.2f per run) in %.1f s.\n", number_format($modelRows), $modelRows / max(1, $runs), number_format((int) $db->table('trail_trace_models')->where('steps', 0)->count()), $models, number_format($toolRows), $toolRows / max(1, $runs), $tools));
+    }
+
+    /**
+     * Whether the rows the store writes for a run are the rows the set-based backfill made: the
+     * store's own write is run again for a sample of runs, and the rows compared.
+     */
+    private function agreeWithStore(Connection $db, string $driver, int $rows): void
+    {
+        $sample = $db->table('trail_traces')->orderBy('id')->limit(200)->pluck('id')->all();
+        $store = new DatabaseTraceStore(DB::getFacadeRoot());
+        $write = new \ReflectionMethod($store, 'writeSummaries');
+        $models = ['trace_id', 'provider', 'model', 'run_name', 'started_at', 'provider_first', 'steps', 'reported_steps', 'unpriced_steps', 'unpriced_tokens', 'open_at', 'input_tokens', 'uncached_input_tokens', 'output_tokens', 'cache_read_tokens', 'cache_write_tokens', 'reasoning_tokens', 'cost'];
+        $tools = ['trace_id', 'name', 'run_name', 'started_at', 'calls', 'failed'];
+        $read = fn (string $table, array $columns): array => $this->canonical($db->table($table)->whereIn('trace_id', $sample)->get($columns)->map(fn (object $row) => (array) $row)->all(), $driver);
+
+        $before = ['trail_trace_models' => $read('trail_trace_models', $models), 'trail_trace_tools' => $read('trail_trace_tools', $tools)];
+        $found = [];
+
+        foreach ($sample as $id) {
+            $db->transaction(fn () => $write->invoke($store, $db, (string) $id));
+        }
+
+        foreach (['trail_trace_models' => $models, 'trail_trace_tools' => $tools] as $table => $columns) {
+            $after = $read($table, $columns);
+
+            if ($after !== $before[$table]) {
+                $found[] = sprintf('%s %s runs: the store\'s own write for %d runs differs from the backfill in %s (%d rows, the backfill made %d)', $driver, number_format($rows), count($sample), $table, count($after), count($before[$table]));
+            }
+        }
+
+        array_push($this->findings, ...$found);
+        $this->log(sprintf('Check: the store\'s own write was run again for %d runs and left %s.', count($sample), $found === [] ? 'the same rows as the backfill' : 'rows that differ'));
+    }
+
+    /**
+     * Rows as comparable text, in a fixed order.
+     *
+     * @param  list<array<string, mixed>>  $rows
+     * @return list<string>
+     */
+    private function canonical(array $rows, string $driver): array
+    {
+        $lines = array_map(function (array $row) use ($driver): string {
+            foreach ($row as $column => $value) {
+                $row[$column] = match (true) {
+                    $value === null => 'null',
+                    $column === 'cost' => $driver === 'sqlite' ? sprintf('%.8f', (float) (is_numeric($value) ? $value : 0)) : bcadd(is_numeric($value) ? (string) $value : '0', '0', 10),
+                    $column === 'provider_first' => (string) (int) $value,
+                    is_numeric($value) && ! in_array($column, ['trace_id', 'provider', 'model', 'name', 'run_name'], true) => (string) (int) $value,
+                    default => (string) $value,
+                };
+            }
+
+            return implode('|', $row);
+        }, $rows);
+
+        sort($lines);
+
+        return $lines;
     }
 
     /**
@@ -525,145 +578,72 @@ final class UsageMeasurement
     // What the write costs ------------------------------------------------------------------------------------------
 
     /**
-     * Flushes of bench runs with 1, 2 and 4 distinct models into the full tables: first with the
-     * indexes a read wants and a plain index on the run, then with a unique index on the run and its
-     * models (what an upsert needs). The modes are interleaved run by run, so drift hits them alike.
+     * Writes of finished bench runs with 1, 2 and 4 distinct models through the store, into tables that
+     * hold the full volume: first the writes that add a run, then writes that add no span to a run
+     * that is stored (which delete its rows and make them again). For each write, how long it took
+     * as a whole and how long the statements on the summaries took by the database's own account.
      */
     private function writes(Connection $db, string $driver, int $rows, CarbonImmutable $now): void
     {
         $runs = $driver === 'sqlite' ? 10 : $this->writeRuns;
+        $store = new DatabaseTraceStore(DB::getFacadeRoot());
         $this->build($db, $driver, array_keys(self::INDEXES));
-        $this->log("\nCost of a flush ({$driver}, summary tables holding the full volume, {$runs} runs per cell; each flush is one transaction, commit included; ms):\n");
-        $this->log("| indexes | models | mode | pass | statements | median | p95 |\n| -- | -- | -- | -- | -- | -- | -- |");
 
-        $this->flushes($db, $driver, 'plain', ['baseline', 'delete-insert'], $runs, $now);
-        $this->collision($db, $driver, 'plain', ['delete-insert']);
+        $statements = 0;
+        $summary = 0;
+        $summaryMs = 0.0;
+        $db->listen(function (QueryExecuted $query) use (&$statements, &$summary, &$summaryMs) {
+            $statements++;
 
-        foreach (array_keys(self::INDEXES['trace']) as $table) {
-            $db->statement($driver === 'mysql' ? 'drop index '.self::indexName('trace', $table)." on {$table}" : 'drop index '.self::indexName('trace', $table));
+            if (preg_match('/trail_trace_(models|tools)/', $query->sql) === 1) {
+                $summary++;
+                $summaryMs += $query->time;
+            }
+        });
+
+        $this->log("\nCost of a write through the store ({$driver}, summary tables holding {$rows} runs, the migrations' indexes and the trial ones, {$runs} runs per cell; one transaction each, commit included; ms):\n");
+        $this->log("| models | write | statements | of them on the summaries | median | p95 | summaries' statements, median | p95 |\n| -- | -- | -- | -- | -- | -- | -- | -- |");
+
+        $next = $now->addSeconds(1);
+
+        foreach ([1, 2, 4] as $models) {
+            $set = [];
+
+            for ($index = 0; $index < $runs; $index++) {
+                $set[] = BenchRuns::make(sprintf('ffffffff-bench-%d-%05d', $models, $index), $models, $next, $index);
+                $next = $next->addMilliseconds(10);
+            }
+
+            foreach (['adds a run' => true, 'adds no span to a stored run' => false] as $label => $adds) {
+                $total = [];
+                $inside = [];
+                $counts = [];
+
+                foreach ($set as [$trace, $spans]) {
+                    [$statements, $summary, $summaryMs] = [0, 0, 0.0];
+                    $start = hrtime(true);
+                    $store->store($trace, $adds ? $spans : []);
+                    $total[] = (hrtime(true) - $start) / 1e6;
+                    $inside[] = $summaryMs;
+                    $counts = [$statements, $summary];
+                }
+
+                $this->log(sprintf('| %d | %s | %d | %d | %.2f | %.2f | %.2f | %.2f |', $models, $label, $counts[0], $counts[1], self::percentile($total, 50), self::percentile($total, 95), self::percentile($inside, 50), self::percentile($inside, 95)));
+            }
         }
 
-        $db->statement('create unique index hyp_tm_unique on trail_trace_models (trace_id, provider, model)');
-        $db->statement('create unique index hyp_tt_unique on trail_trace_tools (trace_id, name)');
-        MeasureDatabase::analyse($db, $driver, self::TABLES);
-
-        $this->flushes($db, $driver, 'unique', ['baseline', 'delete-insert', 'upsert'], $runs, $now);
-        $this->collision($db, $driver, 'unique', ['delete-insert', 'upsert']);
-
-        foreach (['trail_trace_models' => 'hyp_tm_unique', 'trail_trace_tools' => 'hyp_tt_unique'] as $table => $index) {
-            $db->statement($driver === 'mysql' ? "drop index {$index} on {$table}" : "drop index {$index}");
-        }
-
-        $this->drop($db, $driver, ['started', 'pms', 'name']);
+        $this->drop($db, $driver, array_keys(self::INDEXES));
         $this->cleanup($db);
     }
 
     /**
-     * @param  list<string>  $modes
+     * @param  list<float>  $values
      */
-    private function flushes(Connection $db, string $driver, string $indexes, array $modes, int $runs, CarbonImmutable $now): void
+    private static function percentile(array $values, int $rank): float
     {
-        $writer = new SummaryWriter($db);
-        $template = (new SpanFixture(1))->forRun(['id' => 'template', 'name' => 'BenchAgent', 'status' => 'completed', 'duration_ms' => 1500.0], 0)[0];
-        $count = 0;
-        $db->listen(function () use (&$count) {
-            $count++;
-        });
-        $next = $now->getTimestampMs() + 1000;
+        sort($values);
 
-        foreach ([1, 2, 4] as $models) {
-            $set = [];
-            $spans = [];
-            $traces = [];
-
-            foreach ($modes as $mode) {
-                for ($index = 0; $index < $runs; $index++) {
-                    $id = sprintf('ffffffff-bench-%s-%d-%s-%05d', $indexes, $models, substr($mode, 0, 2), $index);
-                    $started = gmdate('Y-m-d H:i:s', intdiv($next, 1000)).sprintf('.%03d', $next % 1000);
-                    $set[$mode][] = [$id, $started];
-                    array_push($spans, ...SummaryWriter::benchSpans($id, $models, $next, $template, $index));
-                    $traces[] = ['id' => $id, 'type' => 'agent', 'name' => 'BenchAgent', 'status' => 'completed', 'started_at' => $started, 'created_at' => $started, 'updated_at' => $started];
-                    $next += 10;
-                }
-            }
-
-            foreach (array_chunk($traces, 500) as $chunk) {
-                $db->table('trail_traces')->insert($chunk);
-            }
-
-            foreach (array_chunk($spans, 500) as $chunk) {
-                $db->table('trail_spans')->insert($chunk);
-            }
-
-            foreach (['first', 'again'] as $pass) {
-                $times = [];
-                $statements = [];
-
-                for ($index = 0; $index < $runs; $index++) {
-                    foreach (array_keys($modes) as $position) {
-                        // The mode that goes first alternates, so none is always the one that follows a pause.
-                        $mode = $modes[($position + $index) % count($modes)];
-                        [$id, $started] = $set[$mode][$index];
-                        $count = 0;
-                        $start = hrtime(true);
-                        $writer->flush($id, 'BenchAgent', $started, $mode);
-                        $times[$mode][] = (hrtime(true) - $start) / 1e6;
-                        $statements[$mode] = $count;
-                    }
-                }
-
-                foreach ($modes as $mode) {
-                    sort($times[$mode]);
-                    $this->log(sprintf('| %s | %d | %s | %s | %d | %.2f | %.2f |', $indexes, $models, $mode, $pass, $statements[$mode], $times[$mode][intdiv(count($times[$mode]), 2)], $times[$mode][min(count($times[$mode]) - 1, (int) ceil(0.95 * count($times[$mode])) - 1)]));
-                }
-            }
-        }
-    }
-
-    /**
-     * A run that has the same model, and the same tool, spelled in two cases: what each way of writing
-     * and of reading it does on this database.
-     */
-    /**
-     * @param  list<string>  $modes
-     */
-    private function collision(Connection $db, string $driver, string $indexes, array $modes): void
-    {
-        $writer = new SummaryWriter($db);
-        $started = gmdate('Y-m-d H:i:s').'.000';
-        $id = "ffffffff-bench-case-{$indexes}";
-        $template = (new SpanFixture(1))->forRun(['id' => 'template', 'name' => 'BenchAgent', 'status' => 'completed', 'duration_ms' => 1500.0], 0)[0];
-        $blank = array_fill_keys(array_keys($template), null) + ['attempt' => 1, 'redacted' => 0, 'truncated' => 0];
-        $span = fn (string $suffix, string $type, string $name, ?string $model, int $tokens): array => [...$blank, 'id' => "{$id}-{$suffix}", 'trace_id' => $id, 'type' => $type, 'name' => $name, 'status' => 'completed', 'sequence' => 1,
-            'provider' => $model === null ? null : 'openai', 'model' => $model, 'input_tokens' => $model === null ? null : $tokens, 'started_at' => $started, 'created_at' => $started, 'updated_at' => $started];
-
-        $db->table('trail_traces')->insert(['id' => $id, 'type' => 'agent', 'name' => 'BenchAgent', 'status' => 'completed', 'started_at' => $started, 'created_at' => $started, 'updated_at' => $started]);
-        $db->table('trail_spans')->insert([$span('a', 'step', 'step', 'GPT-5', 10), $span('b', 'step', 'step', 'gpt-5', 20), $span('c', 'tool', 'Search', null, 0), $span('d', 'tool', 'search', null, 0)]);
-
-        $show = fn (string $sql): string => json_encode(array_map(fn (object $row) => (array) $row, $db->select($sql, [$id])));
-        $this->log("\nCase collision ({$driver}, {$indexes} index on the run): a run with steps on models GPT-5 (10 input tokens) and gpt-5 (20), and tools Search and search.");
-        $this->log('- spans, grouped by model: '.$show('select model, count(*) as steps, sum(input_tokens) as input from trail_spans where trace_id = ? and type = \'step\' group by model'));
-
-        foreach ($modes as $mode) {
-            $db->table('trail_trace_models')->where('trace_id', $id)->delete();
-            $db->table('trail_trace_tools')->where('trace_id', $id)->delete();
-
-            try {
-                $writer->flush($id, 'BenchAgent', $started, $mode);
-                $outcome = 'ok';
-            } catch (\Throwable $exception) {
-                $outcome = get_class($exception).': '.mb_substr(preg_replace('/\s+/', ' ', $exception->getMessage()) ?? '', 0, 150);
-            }
-
-            $this->log("- {$mode}: {$outcome}");
-            $this->log('  - summary rows of the run: '.$show('select model, steps, input_tokens from trail_trace_models where trace_id = ? order by model'));
-            $this->log('  - tool rows of the run: '.$show('select name, calls from trail_trace_tools where trace_id = ? order by name'));
-            $this->log('  - summary grouped by model: '.$show('select model, sum(steps) as steps, sum(input_tokens) as input from trail_trace_models where trace_id = ? group by model'));
-        }
-
-        // What it left would stop the unique index being built.
-        $db->table('trail_trace_models')->where('trace_id', $id)->delete();
-        $db->table('trail_trace_tools')->where('trace_id', $id)->delete();
+        return $values[min(count($values) - 1, (int) ceil($rank / 100 * count($values)) - 1)] ?? 0.0;
     }
 
     private function cleanup(Connection $db): void

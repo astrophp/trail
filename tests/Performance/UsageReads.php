@@ -11,8 +11,7 @@ use Illuminate\Database\Query\Builder;
 
 /**
  * The candidate reads behind a usage page, one small method each: first on spans as they are, then
- * on the per-run summaries made by hand in the throwaway database (`trail_trace_models` and
- * `trail_trace_tools`). They are plain SQL through the query builder with nothing vendor-specific.
+ * on the per-run summaries the store keeps (`trail_trace_models` and `trail_trace_tools`). They are plain SQL through the query builder with nothing vendor-specific.
  * None of them is part of the package: this is what the measurement times.
  *
  * Rows come back as arrays. "Billing" spans are the step and embedding spans, the ones that carry usage.
@@ -55,7 +54,7 @@ final class UsageReads
      */
     public function agentModelsOnSpans(TimeRange $range): array
     {
-        $query = $this->spans($range, joined: true)->select('t.name', 's.provider', 's.model');
+        $query = $this->spans($range, joined: true)->select('t.name as run_name', 's.provider', 's.model');
         self::figures($query, 's', 'any');
 
         return self::rows($query->groupBy('t.name', 's.provider', 's.model'));
@@ -156,22 +155,30 @@ final class UsageReads
 
     /**
      * @param  list<string>  $by  grouping columns of the summary
-     * @param  string  $runs  rows (count(*), one row per run and model) or distinct (count(distinct trace_id))
+     * @param  string  $runs  rows (count(*), one row per run and model), distinct (count(distinct trace_id)) or first (the rows marked first for their provider)
      * @return list<array<string, mixed>>
      */
     public function modelsOnSummary(TimeRange $range, array $by, string $runs, ?string $agent = null): array
     {
         $query = $this->db->table('trail_trace_models')->select($by)
             ->selectRaw('sum(steps) as calls')
-            ->selectRaw($runs === 'distinct' ? 'count(distinct trace_id) as runs' : 'count(*) as runs');
+            ->selectRaw(match ($runs) {
+                'distinct' => 'count(distinct trace_id) as runs',
+                'first' => 'sum(case when provider_first then 1 else 0 end) as runs',
+                default => 'count(*) as runs',
+            });
         self::tokens($query, '');
         $query->selectRaw('sum(cost) as cost_sum')
             ->selectRaw('sum(unpriced_steps) as unpriced')
-            ->selectRaw('sum(running_steps) as running');
+            ->whereNotNull('provider');
         $range->apply($query, 'started_at');
 
+        if (in_array('model', $by, true)) {
+            $query->whereNotNull('model');
+        }
+
         if ($agent !== null) {
-            $query->where('name', $agent);
+            $query->where('run_name', $agent);
         }
 
         return self::rows($query->groupBy($by));
@@ -186,6 +193,7 @@ final class UsageReads
         [$slot, $bindings] = self::slot($cuts, 'started_at');
         $query = $this->db->table('trail_trace_models')->selectRaw($slot.' as slot', $bindings)
             ->addSelect('provider', 'model')
+            ->whereNotNull('provider')->whereNotNull('model')
             ->where('steps', '>', 0);
         self::tokens($query, '');
         $range->apply($query, 'started_at');
@@ -198,7 +206,8 @@ final class UsageReads
      */
     public function observedOnSummary(bool $billingOnly): array
     {
-        $query = $this->db->table('trail_trace_models')->distinct()->select('provider', 'model');
+        $query = $this->db->table('trail_trace_models')->distinct()->select('provider', 'model')
+            ->whereNotNull('provider')->whereNotNull('model');
 
         if ($billingOnly) {
             $query->where('steps', '>', 0);
