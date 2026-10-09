@@ -12,6 +12,7 @@ import {
     overviewFixture,
     overviewFor,
     overviewUrls,
+    overviewWith,
     overviewWithSeries,
     paramsOf,
     runs,
@@ -769,7 +770,10 @@ describe('the words for the buckets', () => {
 
 describe('asking for data', () => {
     it('reads the overview the strip reads and makes no request of its own', async () => {
-        const fetchMock = mockApi()
+        // Nothing is running, so nothing is asked again by the clock while the test counts.
+        const fetchMock = mockApi(() =>
+            json(overviewWith({ runs: runs({ completed: 32 }) })),
+        )
         const of = await open()
         await showData(of)
         await screen.findAllByText('vs previous 24 hours')

@@ -73,6 +73,33 @@ const fixedRange = (preset: TimeRangePreset) => () =>
         range: { ...attentionFixture.range, preset },
     })
 
+/**
+ * Waits for something the page does not show, such as a request having been made. Testing
+ * Library's own `waitFor` looks again on a `setInterval`, which the tests below replace with a
+ * fake clock, so for a condition the DOM does not change with it would look once, and again only
+ * at its time limit. This looks again every few milliseconds on the real `setTimeout`, and stops
+ * on the condition, never on a count of milliseconds.
+ */
+async function until(check: () => void, limit = 4000) {
+    const deadline = Date.now() + limit
+
+    for (;;) {
+        try {
+            check()
+
+            return
+        } catch (error) {
+            if (Date.now() > deadline) {
+                throw error
+            }
+
+            await act(async () => {
+                await new Promise((resolve) => setTimeout(resolve, 5))
+            })
+        }
+    }
+}
+
 /** The panel, found by its heading. */
 async function panel(): Promise<HTMLElement> {
     const heading = await screen.findByRole('heading', {
@@ -89,8 +116,8 @@ async function panel(): Promise<HTMLElement> {
 }
 
 /** The panel once its list (or its empty answer) is in. */
-async function open(route = '/') {
-    renderApp(route)
+async function open(route = '/', client = testQueryClient()) {
+    renderApp(route, {}, client)
     const found = await panel()
 
     await waitFor(() =>
@@ -650,14 +677,14 @@ describe('refreshing', () => {
         expect(attentionUrls(fetchMock)).toHaveLength(1)
 
         await tick()
-        await waitFor(() => expect(overviewUrls(fetchMock)).toHaveLength(2))
-        await waitFor(() => expect(attentionUrls(fetchMock)).toHaveLength(2))
+        await until(() => expect(overviewUrls(fetchMock)).toHaveLength(2))
+        await until(() => expect(attentionUrls(fetchMock)).toHaveLength(2))
 
         // The last answer of the overview, with nothing running any more: the list follows it once.
         overview = nothingRunning
         await tick()
-        await waitFor(() => expect(overviewUrls(fetchMock)).toHaveLength(3))
-        await waitFor(() => expect(attentionUrls(fetchMock)).toHaveLength(3))
+        await until(() => expect(overviewUrls(fetchMock)).toHaveLength(3))
+        await until(() => expect(attentionUrls(fetchMock)).toHaveLength(3))
 
         await tick(4)
         expect(overviewUrls(fetchMock)).toHaveLength(3)
@@ -697,35 +724,47 @@ describe('refreshing', () => {
     it('keeps the list, says the refresh failed, and gives up after repeated failures', async () => {
         fakeInterval()
         let fail = false
+        const client = testQueryClient()
+        const key = overviewKeys.attention('24h')
+        // A request is settled once it has been made and the query is idle again.
+        const settled = (requests: number) => {
+            expect(attentionUrls(fetchMock)).toHaveLength(requests)
+            expect(client.getQueryState(key)?.fetchStatus).toBe('idle')
+        }
         const fetchMock = mockApi(undefined, undefined, (url) =>
             fail ? json({ message: 'Down.' }, 500) : json(attentionFor(url)),
         )
-        const of = await open()
+        const of = await open('/', client)
 
         fail = true
-        await tick()
 
-        await waitFor(() =>
-            expect(of).toHaveTextContent(
-                'The last refresh failed; trying again.',
-            ),
+        // One tick, one request, one settled failure: the next tick comes after it, as in a browser
+        // where a request is quicker than two seconds.
+        for (let failed = 1; failed <= maxFailedRefreshes; failed++) {
+            await tick()
+            await until(() => settled(1 + failed))
+        }
+
+        await within(of).findByText(
+            'Refreshing stopped after repeated failures.',
         )
         // The list is still there, and so is its count.
         expect(rowsOf(of)).toHaveLength(6)
         expect(chip(of)).toHaveTextContent('6')
 
-        await tick(maxFailedRefreshes)
-        await within(of).findByText(
-            'Refreshing stopped after repeated failures.',
-            {},
-        )
-
         const asked = attentionUrls(fetchMock).length
 
         expect(asked).toBe(1 + maxFailedRefreshes)
-        expect(rowsOf(of)).toHaveLength(6)
 
-        await tick(3)
+        // The overview answers again, and the list does not follow it any more.
+        const updates = () =>
+            client.getQueryState(overviewKeys.range('24h'))?.dataUpdateCount ??
+            0
+        const before = updates()
+
+        await tick()
+        await until(() => expect(updates()).toBeGreaterThan(before))
+        await act(async () => {})
         expect(attentionUrls(fetchMock)).toHaveLength(asked)
 
         fail = false
@@ -753,7 +792,19 @@ describe('refreshing', () => {
 
 describe('the overview it follows', () => {
     it('asks for the range of the page', async () => {
-        const fetchMock = mockApi((url) => json(overviewFor(url)))
+        // Nothing is running, so nothing asks again while the test looks.
+        const fetchMock = mockApi((url) =>
+            json({
+                ...overviewFor(url),
+                data: {
+                    ...overviewFor(url).data,
+                    summary: {
+                        ...overviewFor(url).data.summary,
+                        runs: runs({ completed: 32 }),
+                    },
+                },
+            }),
+        )
         await open('/?range=1h')
 
         expect(
@@ -958,44 +1009,64 @@ describe('the list after the overview', () => {
 
     it('takes the answer of its last trigger even when an earlier request is still in flight', async () => {
         fakeInterval()
+        // Every response is held until the test settles it, so the order is the test's, not the machine's.
+        const overviewAnswers = [deferred(), deferred()]
         const slow = deferred()
-        let overview = overviewFixture
-        let asked = 0
+        let overviewAsked = 0
+        let attentionAsked = 0
 
-        mockApi(
-            () => json(overview),
+        const fetchMock = mockApi(
+            () => {
+                overviewAsked += 1
+
+                return overviewAsked === 1
+                    ? json(overviewFixture)
+                    : (overviewAnswers[overviewAsked - 2]?.promise ??
+                          json(overviewFixture))
+            },
             undefined,
             (url) => {
-                asked += 1
+                attentionAsked += 1
 
-                if (asked === 2) {
-                    return slow.promise
+                if (attentionAsked === 1) {
+                    return json(attentionFor(url))
                 }
 
-                return asked === 1
-                    ? json(attentionFor(url))
+                // The request the second overview answer causes: slower than everything after it.
+                return attentionAsked === 2
+                    ? slow.promise
                     : answer([item('recovered')])(url)
             },
         )
         const of = await open()
 
-        // The overview is asked again; the list's request for it is slower than the next poll.
+        // The overview is asked again, and answers: the list asks, and its answer is held.
         await tick()
-        overview = overviewWith({ runs: runs({ completed: 32 }) })
-        // The overview's last answer: nothing is running any more. The list asks once more.
+        await until(() => expect(overviewUrls(fetchMock)).toHaveLength(2))
+        overviewAnswers[0]?.resolve(await json(overviewFixture))
+        await until(() => expect(attentionUrls(fetchMock)).toHaveLength(2))
+
+        // The overview's last answer, nothing running any more, comes while that request is in flight.
         await tick()
-        await waitFor(() => expect(asked).toBe(3))
+        await until(() => expect(overviewUrls(fetchMock)).toHaveLength(3))
+        overviewAnswers[1]?.resolve(
+            await json(overviewWith({ runs: runs({ completed: 32 }) })),
+        )
+
+        // The list asks once more, and what that answers is what it shows.
+        await until(() => expect(attentionUrls(fetchMock)).toHaveLength(3))
         await waitFor(() =>
             expect(rowsOf(of).map(titleOf)).toEqual(['Recovered by failover']),
         )
 
-        // The slow one arrives late, with an older list, and is not the answer.
+        // The held request answers late with an older list. It was given up, so it is not shown.
         slow.resolve(await json(attentionFixture))
-        await tick()
-        await tick()
+        await act(async () => {
+            await Promise.resolve()
+        })
 
         expect(rowsOf(of).map(titleOf)).toEqual(['Recovered by failover'])
-        expect(asked).toBe(3)
+        expect(attentionUrls(fetchMock)).toHaveLength(3)
     })
 
     it('gives a way to try again when the last refresh failed and nothing will ask by itself', async () => {
