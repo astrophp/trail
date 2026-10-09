@@ -22,7 +22,8 @@ describe('BookmarkToggle', () => {
         const button = screen.getByRole('button', { name })
 
         expect(button).toHaveAttribute('aria-pressed', 'false')
-        expect(button.querySelector('svg')).not.toHaveClass('fill-current')
+        // An outline: the shape cue is the fill, not only the colour.
+        expect(button.querySelector('svg')).toHaveAttribute('fill', 'none')
     })
 
     it('keeps the same name when bookmarked: aria-pressed alone carries the state', () => {
@@ -36,7 +37,10 @@ describe('BookmarkToggle', () => {
         const button = screen.getByRole('button', { name })
 
         expect(button).toHaveAttribute('aria-pressed', 'true')
-        expect(button.querySelector('svg')).toHaveClass('fill-current')
+        expect(button.querySelector('svg')).toHaveAttribute(
+            'fill',
+            'currentColor',
+        )
     })
 
     it('reports the state a press asks for', async () => {

@@ -103,20 +103,90 @@ describe('the bookmark button of a row', () => {
         expect(new Set(names).size).toBe(names.length)
     })
 
-    it('sits in the Run cell before the link of its row', async () => {
+    it('is the last cell of its row, apart from the checkbox, and not in the Run cell', async () => {
         renderApp('/traces')
         await loaded()
 
         const button = toggle(failedName)
-        const link = within(button.closest('th') as HTMLElement).getByRole(
+        const row = button.closest('tr') as HTMLElement
+        const cells = within(row).getAllByRole('cell')
+        const runCell = within(row).getByRole('rowheader')
+
+        // Present in the last cell, and absent from the Run cell that holds the checkbox.
+        expect(cells.at(-1)).toContainElement(button)
+        expect(
+            within(runCell).queryByRole('button', { name: failedName }),
+        ).not.toBeInTheDocument()
+        expect(
+            within(runCell).getByRole('checkbox', { name: /^Select / }),
+        ).toBeInTheDocument()
+        expect(
+            within(runCell).queryByRole('button', { name: /^Bookmark / }),
+        ).not.toBeInTheDocument()
+    })
+
+    it('has a column named Bookmark, which cannot be sorted', async () => {
+        renderApp('/traces')
+        await loaded()
+
+        const header = screen.getByRole('columnheader', { name: 'Bookmark' })
+
+        expect(header).not.toHaveAttribute('aria-sort')
+        expect(within(header).queryByRole('button')).not.toBeInTheDocument()
+        // It is the last column, as its cells are.
+        expect(screen.getAllByRole('columnheader').at(-1)).toBe(header)
+    })
+
+    it('comes after the checkbox and the link of its row when tabbing, as it does on screen', async () => {
+        renderApp('/traces')
+        await loaded()
+
+        const row = toggle(failedName).closest('tr') as HTMLElement
+        const link = within(row).getByRole('link', { name: 'SupportAssistant' })
+        const checkbox = within(row).getByRole('checkbox')
+
+        checkbox.focus()
+        await userEvent.tab()
+        expect(link).toHaveFocus()
+        await userEvent.tab()
+        expect(toggle(failedName)).toHaveFocus()
+    })
+
+    // jsdom does not lay out or follow links, so a click here proves nothing about the row's
+    // stretched link. What keeps the toggle from being covered by it is that its cell and the
+    // button are positioned and stacked above the link's pseudo-element: assert those classes.
+    it('is stacked above the stretched link of its row, so a press does not open the run', async () => {
+        renderApp('/traces')
+        await loaded()
+
+        const button = toggle(failedName)
+        const cell = button.closest('td') as HTMLElement
+        const link = within(button.closest('tr') as HTMLElement).getByRole(
             'link',
             { name: 'SupportAssistant' },
         )
 
-        expect(
-            button.compareDocumentPosition(link) &
-                Node.DOCUMENT_POSITION_FOLLOWING,
-        ).toBeTruthy()
+        // The link reaches over the whole row; the cell and the button sit above it.
+        expect(link).toHaveClass('after:absolute', 'after:inset-0')
+        expect(cell).toHaveClass('sticky', 'z-1')
+        expect(cell).toHaveClass('[&_button]:relative', '[&_button]:z-1')
+        // The button is not inside the link's own cell.
+        expect(link.closest('th')).not.toContainElement(button)
+    })
+
+    it('is drawn filled when bookmarked and as an outline when not', async () => {
+        serve([completed])
+        renderApp('/traces')
+        await loaded()
+
+        expect(toggle(completedName).querySelector('svg')).toHaveAttribute(
+            'fill',
+            'currentColor',
+        )
+        expect(toggle(failedName).querySelector('svg')).toHaveAttribute(
+            'fill',
+            'none',
+        )
     })
 
     it('shows the bookmark at once, while the request is still pending, and keeps it on success', async () => {

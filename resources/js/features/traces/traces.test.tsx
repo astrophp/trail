@@ -446,11 +446,11 @@ describe('while the runs load', () => {
                     .closest('[data-slot="data-table"]') as HTMLElement,
             ).getByRole('status'),
         ).toHaveTextContent('Loading')
-        expect(within(table).getAllByRole('columnheader')).toHaveLength(7)
+        expect(within(table).getAllByRole('columnheader')).toHaveLength(8)
         expect(skeletonRowCount()).toBe(8)
         expect(
             [...table.querySelectorAll('tbody td')].map((c) => c.textContent),
-        ).toEqual(Array(8 * 7).fill(''))
+        ).toEqual(Array(8 * 8).fill(''))
         expect(screen.queryByText(/\d traces$/)).not.toBeInTheDocument()
         expect(screen.queryByText('Loading runs…')).not.toBeInTheDocument()
     })

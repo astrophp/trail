@@ -1,4 +1,4 @@
-import { SearchXIcon } from 'lucide-react'
+import { PinIcon, SearchXIcon } from 'lucide-react'
 import { useMemo, useState, type ReactNode } from 'react'
 import { MemoryRouter } from 'react-router'
 import {
@@ -155,12 +155,40 @@ function sorted(sort: DataTableSort) {
     })
 }
 
+/** The columns again, with a narrow one of a single control pinned to the end (`stickyEnd`). */
+const pinnedColumns: DataTableColumn<Invoice>[] = [
+    ...columns.slice(0, -1).map((column) => ({
+        ...column,
+        meta: { ...column.meta, hideBelow: undefined },
+    })),
+    {
+        id: 'pin',
+        header: () => <span className="sr-only">Pin</span>,
+        meta: {
+            align: 'end',
+            stickyEnd: true,
+            skeleton: <div className="size-7" />,
+        },
+        cell: ({ row }) => (
+            <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label={`Pin ${row.original.customer}`}
+            >
+                <PinIcon aria-hidden="true" />
+            </Button>
+        ),
+    },
+]
+
 function Specimen({
     withFooter = false,
     loading = false,
     busy = false,
+    pinned = false,
     empty,
 }: {
+    pinned?: boolean
     withFooter?: boolean
     loading?: boolean
     busy?: boolean
@@ -173,7 +201,7 @@ function Specimen({
     return (
         <MemoryRouter>
             <DataTable
-                columns={columns}
+                columns={pinned ? pinnedColumns : columns}
                 data={empty ? [] : rows}
                 loading={loading}
                 busy={busy}
@@ -205,6 +233,14 @@ export const catalogue: CatalogueEntry = {
         {
             name: 'Sortable, aligned, with column priority and a row link (resize the window)',
             Component: () => <Specimen />,
+        },
+        {
+            name: 'A column pinned to the end (`stickyEnd`), in a narrow container: scroll sideways, the pin stays in view',
+            Component: () => (
+                <div className="max-w-sm">
+                    <Specimen pinned />
+                </div>
+            ),
         },
         {
             name: 'With a pagination footer',
