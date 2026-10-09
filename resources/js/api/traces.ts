@@ -34,6 +34,9 @@ export type TraceListParams = {
     search?: string
     agent?: string
     provider?: string
+    model?: string
+    /** Only the runs that called the tool, anywhere in the run. */
+    tool?: string
     conversation?: string
     bookmarked?: boolean
     /** Only the runs at or above the 95th percentile of the range's durations. */

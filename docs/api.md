@@ -223,6 +223,64 @@ the period before it, and later the runs of one agent. Only the runs that starte
   buckets added as floating-point numbers and rounded to 10 decimal places. The amount of the
   previous period is one sum from the database, rounded the same way.
 
+## The agent
+
+An agent is a name under which something started in a time range. Agents are discovered from what
+was recorded and are never created. The same shape is returned by the list and by an agent's page.
+
+```json
+{
+  "name": "SupportAssistant",
+  "agent_class": "App\\Ai\\Agents\\SupportAssistant",
+  "type": "agent",
+  "top_level": {
+    "runs": { "all": 52, "completed": 37, "failed": 9, "incomplete": 3, "running": 2, "awaiting_approval": 1 },
+    "error_rate": { "rate": 0.1836734694, "failed": 9, "finished": 49 },
+    "duration": { "average_ms": 1840.412, "measured": 49, "not_measured": 3 },
+    "usage": { "state": "pending", "input_tokens": 1, "output_tokens": 1, "cache_read_tokens": null, "cache_write_tokens": null, "reasoning_tokens": null, "total_tokens": 2 },
+    "cost": { "state": "pending", "amount": 11.48 },
+    "cost_coverage": { "unpriced_runs": 8, "runs_without_amount": 5 },
+    "last_activity_at": "2026-01-01T12:00:00.000Z"
+  },
+  "delegated": { "all": 12, "failed": 1, "incomplete": 0, "last_activity_at": "2026-01-01T11:00:00.000Z" },
+  "last_activity_at": "2026-01-01T12:00:00.000Z",
+  "activity": [0, 3, 5, 2]
+}
+```
+
+An agent is *top level* in a range when it has runs of its own there: a run is a row of the runs
+list, and its name is the agent's. It is *delegated* when it has agent spans that have a parent, in
+runs that started in the range: another agent started it. A delegated agent span's parent is the
+tool span that started it when that span was recorded, and otherwise the span of the run that
+delegated; a sub-agent of a sub-agent is delegated too. An agent span without a parent is the run's
+own span and is not a delegation. A span counts when the run it is in started in the range, wherever
+in the range the span started; a run before the range does not count its spans.
+
+- `top_level` is `null` when the agent has no run of its own in the range. Otherwise its `runs`,
+  `error_rate`, `usage`, `cost` and `cost_coverage` follow the rules of [The summary](#the-summary)
+  over those runs, the stale rule included, and `duration` is the summary's without the percentile
+  keys. `last_activity_at` is when its latest run started.
+- `delegated` is `null` when the agent was not delegated to in the range. `all` is the number of its
+  agent spans with a parent, `failed` those whose span shows `failed`, and `incomplete` those whose
+  span shows `incomplete`: stored so, or still running after `stale_after` seconds, as a span's status
+  is for every span. `last_activity_at` is when the latest of them started. A delegated run is a span
+  of the run that delegated, so it has no usage, cost or whole-run status of its own, and none is
+  given: the cost of a delegated agent's steps is part of the cost of the run that delegated.
+- `last_activity_at` is the later of the two, and `null` when the agent has neither in the range.
+- `name` is the name as the agent's latest run in the range is spelled (the greatest `started_at`,
+  and the greatest id among runs that started together), or as its latest delegated span is spelled
+  when it has no run of its own. `agent_class` and `type` (`agent`, or `embedding` for a run of
+  embeddings) are that latest run's. For an agent that has only delegated spans, `agent_class` is the
+  latest span's and `type` is `agent`.
+- Names are grouped as the database compares text, so what is counted for a name is what
+  [`GET /api/traces`](#get-apitraces) returns for `agent=<name>`: `top_level.runs` is exactly its
+  `status_counts` over the same range. MySQL ignores case and accents by default, so there `Support`,
+  `support` and `Suppört` are one agent, spelled as its latest run spells it; SQLite and Postgres
+  keep them apart.
+- `activity` is the number of the agent's own runs that started in each bucket of the response's
+  `buckets`, `0` for a bucket without one. It is all `0` for an agent that has no run of its own in
+  the range.
+
 ## The conversation
 
 The runs that carry the same conversation id, as every endpoint returns them. A run in a
@@ -707,6 +765,131 @@ pressing first. A kind with no run in the range is absent, so a range with nothi
   issue kind: the rows can add up to less than `count`, and `failed` can have a `count` and a
   `breakdown` of `[]`.
 - It is read in one query over the runs, whatever the range, and no span is read.
+
+### `GET /api/agents`
+
+The agents of a time range: a name under which a run started, or under which an agent span with a
+parent started inside a run that did. Takes a time range, `search`, `sort` and pagination.
+
+```json
+{
+  "data": [ { "name": "SupportAssistant" } ],
+  "pagination": { "page": 1, "per_page": 25, "total": 14, "last_page": 1 },
+  "range": { "preset": "24h", "from": "…", "to": "…" },
+  "buckets": { "bucket": "hour", "edges": [ { "from": "…", "to": "…", "full": true, "in_progress": false } ] },
+  "agent_limit": { "limit": 1000, "truncated": false }
+}
+```
+
+Each item is [The agent](#the-agent).
+
+- `search` keeps the agents whose name contains the text (at most 200 characters), whatever its case,
+  as the other lists search. A `%` or `_` in the text is taken literally.
+- `sort` is `runs` (the agent's `top_level.runs.all`), `name`, `error_rate`, `duration` (the average),
+  `cost` (the amount) or `last_activity`, with a leading `-` for descending; the default is `-runs`.
+  An agent without the value comes last in both directions: an agent that was only delegated to has
+  no top-level figures, an agent with no finished run has no error rate and one with no duration or
+  cost has no average or amount. A tie is ordered by `name` in the direction of the sort, comparing
+  names without regard to case, so a page never repeats or skips an agent.
+- `buckets` describes the buckets of every agent's `activity`: `bucket` and the edges mean what they
+  mean in the series of [`GET /api/overview`](#get-apioverview), and a range over 92 days is the same
+  422.
+- It is read in four queries whatever the page: the runs of the range grouped by name, the delegated
+  agent spans of the range matched to those groups by the database, the latest spelling, class and
+  type of the agents on the page, and their runs in each bucket. Merging, sorting and paging are done
+  over the grouped rows, of which at most `agent_limit.limit` are read for each of the first two: the
+  agents with most runs, and the delegated agents with most spans, a delegated agent whose name has no
+  group among the runs read included. `truncated` is `true` when there were more groups than the
+  limit, and then `pagination.total` is the number of agents read, not of all that exist, and an agent
+  whose own runs were not read can be listed as one that was only delegated to.
+
+### `GET /api/agents/show`
+
+One agent for a time range, its summary and series, and what needs a look among its runs.
+
+```json
+{
+  "data": {
+    "agent": { "name": "SupportAssistant" },
+    "summary": { "runs": { "all": 52 } },
+    "previous": null,
+    "series": { "bucket": "hour", "buckets": [] },
+    "attention": [ { "kind": "failed", "count": 9, "filters": { "agent": "SupportAssistant", "status": "failed" } } ]
+  },
+  "range": { "preset": "24h", "from": "…", "to": "…" },
+  "previous_range": { "from": "…", "to": "…" }
+}
+```
+
+- The name travels in the query as `name`, read from the raw query string and not trimmed, since a
+  name can start or end with a space and hold a slash, a percent sign or a plus sign (send it
+  percent-encoded: a literal `+` is read as a space). A missing name, an empty one, a list, one over
+  255 characters, one holding a NUL byte or one that is not valid UTF-8 is a 404 that is answered
+  without reading the database, before the range is checked.
+- `agent` is the agent for the range, in the shape of [The agent](#the-agent). An agent recorded at
+  any time but with nothing in this range is not a 404: it has `top_level` and `delegated` `null`,
+  `last_activity_at` `null`, an all-zero `activity`, and the spelling and class of its latest run ever
+  (else of its latest delegated span). A name that was never recorded is a 404. Whether it was is
+  looked up by its latest run, then by its latest delegated span, which the index on a span's type and
+  name finds.
+- `summary`, `previous` and `series` are those of [`GET /api/overview`](#get-apioverview) over the
+  agent's own runs, with the 95th percentile of its durations: delegated spans are no part of them,
+  and `summary.runs` is `agent.top_level.runs`.
+- `attention` is that of [`GET /api/overview/attention`](#get-apioverviewattention) over the agent's
+  own runs. The `filters` of every item and row carry `agent`, set to the name as `agent` spells it,
+  so [`GET /api/traces`](#get-apitraces) with them and the same range returns exactly the item's or
+  row's `count`.
+- It is read in up to four queries for the agent, one for the overview (and one more for each period
+  that has enough runs for a percentile) and one for what needs a look. When the agent has nothing in
+  the range, the first two queries find nothing and the lookup of the name adds one or two.
+
+### `GET /api/agents/breakdown`
+
+The models and tools of an agent for a time range. It is its own request because it reads the spans
+of every run of the agent. It takes `name` as [`GET /api/agents/show`](#get-apiagentsshow) does, and
+the same time range.
+
+```json
+{
+  "data": {
+    "models": [
+      {
+        "provider": "anthropic", "model": "claude-sonnet-4-5", "steps": 310, "runs": 120,
+        "usage": { "state": "reported" }, "cost": { "state": "estimated", "amount": 4.1 },
+        "filters": { "agent": "SupportAssistant", "provider": "anthropic", "model": "claude-sonnet-4-5" }
+      }
+    ],
+    "tools": [ { "name": "lookup_order", "calls": 412, "failed": 3, "runs": 180, "filters": { "agent": "SupportAssistant", "tool": "lookup_order" } } ],
+    "delegated": { "models": [], "tools": [] }
+  },
+  "range": { "preset": "24h", "from": "…", "to": "…" },
+  "limits": {
+    "models": { "limit": 20, "total": 3 },
+    "tools": { "limit": 20, "total": 7 },
+    "delegated": { "models": { "limit": 20, "total": 0 }, "tools": { "limit": 20, "total": 0 } }
+  }
+}
+```
+
+- `models` and `tools` are read over every span of the agent's own runs that started in the range,
+  those of agents it delegated to included. `steps` counts the spans that called the model: model
+  steps, and embeddings calls, since the runs list's `provider` and `model` filters match any span
+  that used the model. A span without a provider and model is in no row. `calls` counts tool spans and
+  `failed` those that failed. `runs` is the number of distinct runs.
+- `GET /api/traces` with a row's `filters` and the same range returns exactly the row's `runs`.
+- A model's `usage` and `cost` are sums over its spans, shaped as a run's are: `cost` is `partial`
+  when some of its spans reported usage and could not be priced, and `pending` while one of them is
+  running (a span still running after `stale_after` seconds is not).
+- `delegated.models` and `delegated.tools` are the same rows read over the steps and tools that are
+  children of the agent's delegated agent spans. They carry no `filters`: the list cannot filter on
+  what happened inside a delegated run, so none of their counts can be reproduced there.
+- Each list is ordered by `runs`, most first, then by name, and holds at most the `limit` of 20 rows;
+  `limits` says how many there are.
+- An agent recorded but with nothing in the range has empty lists and totals of `0`. A name that was
+  never recorded is a 404.
+- It is read in the lookup of the agent's name (one or two queries when it has something in the
+  range) and four queries, one for each list; an agent with nothing in the range is not read for
+  models and tools at all.
 
 ### `GET /api/conversations`
 

@@ -1,6 +1,16 @@
 import { describe, expect, expectTypeOf, it } from 'vitest'
 import { z } from 'zod'
 import type {
+    Agent,
+    AgentBreakdownResponse,
+    AgentDelegated,
+    AgentListResponse,
+    AgentModel,
+    AgentResponse,
+    AgentTool,
+    AgentTopLevel,
+    DelegatedModel,
+    DelegatedTool,
     AgentSubtotal,
     AttentionItem,
     AttentionKind,
@@ -471,6 +481,119 @@ const attentionResponse = z.strictObject({
     range,
 })
 
+const agentTopLevel = z.strictObject({
+    runs: statusCounts,
+    error_rate: errorRate,
+    duration: z.strictObject({
+        average_ms: nullable(z.number()),
+        measured: count,
+        not_measured: count,
+    }),
+    usage,
+    cost,
+    cost_coverage: z.strictObject({
+        unpriced_runs: count,
+        runs_without_amount: count,
+    }),
+    last_activity_at: nullable(timestamp),
+})
+
+const agentDelegated = z.strictObject({
+    all: count,
+    failed: count,
+    incomplete: count,
+    last_activity_at: nullable(timestamp),
+})
+
+const agent = z.strictObject({
+    name: z.string(),
+    agent_class: nullable(z.string()),
+    type: z.enum(['agent', 'embedding']),
+    top_level: nullable(agentTopLevel),
+    delegated: nullable(agentDelegated),
+    last_activity_at: nullable(timestamp),
+    activity: z.array(count),
+})
+
+const agentListResponse = z.strictObject({
+    data: z.array(agent),
+    pagination,
+    range,
+    buckets: z.strictObject({
+        bucket: z.enum(bucketUnits),
+        edges: z.array(
+            z.strictObject({
+                from: timestamp,
+                to: timestamp,
+                full: z.boolean(),
+                in_progress: z.boolean(),
+            }),
+        ),
+    }),
+    agent_limit: z.strictObject({ limit: count, truncated: z.boolean() }),
+})
+
+const agentResponse = z.strictObject({
+    data: z.strictObject({
+        agent,
+        summary,
+        previous: nullable(summary),
+        series: z.strictObject({
+            bucket: z.enum(bucketUnits),
+            buckets: z.array(seriesBucket),
+        }),
+        attention: z.array(attentionItem),
+    }),
+    range,
+    previous_range: previousRange,
+})
+
+const delegatedModel = z.strictObject({
+    provider: z.string(),
+    model: z.string(),
+    steps: count,
+    runs: count,
+    usage,
+    cost,
+})
+
+const agentModel = delegatedModel.extend({
+    filters: z.record(z.string(), z.string()),
+})
+
+const delegatedTool = z.strictObject({
+    name: z.string(),
+    calls: count,
+    failed: count,
+    runs: count,
+})
+
+const agentTool = delegatedTool.extend({
+    filters: z.record(z.string(), z.string()),
+})
+
+const breakdownLimit = z.strictObject({ limit: count, total: count })
+
+const agentBreakdownResponse = z.strictObject({
+    data: z.strictObject({
+        models: z.array(agentModel),
+        tools: z.array(agentTool),
+        delegated: z.strictObject({
+            models: z.array(delegatedModel),
+            tools: z.array(delegatedTool),
+        }),
+    }),
+    range,
+    limits: z.strictObject({
+        models: breakdownLimit,
+        tools: breakdownLimit,
+        delegated: z.strictObject({
+            models: breakdownLimit,
+            tools: breakdownLimit,
+        }),
+    }),
+})
+
 const messageParts = ['prompt', 'response', 'activity'] as const
 const toolCallLinks = [
     'linked',
@@ -662,6 +785,30 @@ describe('types', () => {
         expectTypeOf<
             (typeof attentionKinds)[number]
         >().toEqualTypeOf<AttentionKind>()
+        expectTypeOf<
+            z.infer<typeof agentTopLevel>
+        >().toEqualTypeOf<AgentTopLevel>()
+        expectTypeOf<
+            z.infer<typeof agentDelegated>
+        >().toEqualTypeOf<AgentDelegated>()
+        expectTypeOf<z.infer<typeof agent>>().toEqualTypeOf<Agent>()
+        expectTypeOf<
+            z.infer<typeof agentListResponse>
+        >().toEqualTypeOf<AgentListResponse>()
+        expectTypeOf<
+            z.infer<typeof agentResponse>
+        >().toEqualTypeOf<AgentResponse>()
+        expectTypeOf<z.infer<typeof agentModel>>().toEqualTypeOf<AgentModel>()
+        expectTypeOf<z.infer<typeof agentTool>>().toEqualTypeOf<AgentTool>()
+        expectTypeOf<
+            z.infer<typeof delegatedModel>
+        >().toEqualTypeOf<DelegatedModel>()
+        expectTypeOf<
+            z.infer<typeof delegatedTool>
+        >().toEqualTypeOf<DelegatedTool>()
+        expectTypeOf<
+            z.infer<typeof agentBreakdownResponse>
+        >().toEqualTypeOf<AgentBreakdownResponse>()
         expectTypeOf<
             z.infer<typeof traceNeighbours>
         >().toEqualTypeOf<TraceNeighbours>()
@@ -941,6 +1088,113 @@ describe('tests/Contract/attention.json', () => {
 
     it('has no item for a count of zero', () => {
         expect(items.every((item) => item.count > 0)).toBe(true)
+    })
+})
+
+describe('tests/Contract/agents.json', () => {
+    const parsed = agentListResponse.safeParse(contractFixture('agents'))
+
+    it('is what the API types describe', () => {
+        expect(parsed.error?.issues).toBeUndefined()
+    })
+
+    const agents = parsed.data?.data ?? []
+
+    it('has an agent with runs only, one with both, one only delegated to and an embeddings one', () => {
+        expect(
+            agents.some((a) => a.top_level !== null && a.delegated === null),
+        ).toBe(true)
+        expect(
+            agents.some((a) => a.top_level !== null && a.delegated !== null),
+        ).toBe(true)
+        expect(
+            agents.some((a) => a.top_level === null && a.delegated !== null),
+        ).toBe(true)
+        expect(agents.some((a) => a.type === 'embedding')).toBe(true)
+    })
+
+    it('counts the activity of an agent in the buckets it describes, and none for an agent without runs', () => {
+        const edges = parsed.data?.buckets.edges ?? []
+
+        for (const a of agents) {
+            expect(a.activity).toHaveLength(edges.length)
+            expect(a.activity.reduce((sum, n) => sum + n, 0)).toBe(
+                a.top_level?.runs.all ?? 0,
+            )
+        }
+    })
+
+    it('has an agent whose latest activity is a delegation', () => {
+        expect(
+            agents.some(
+                (a) =>
+                    a.delegated?.last_activity_at != null &&
+                    a.last_activity_at === a.delegated.last_activity_at,
+            ),
+        ).toBe(true)
+    })
+
+    it('has a failed delegation and a failed run', () => {
+        expect(agents.some((a) => (a.delegated?.failed ?? 0) > 0)).toBe(true)
+        expect(agents.some((a) => (a.top_level?.runs.failed ?? 0) > 0)).toBe(
+            true,
+        )
+    })
+})
+
+describe('tests/Contract/agent.json', () => {
+    const parsed = agentResponse.safeParse(contractFixture('agent'))
+
+    it('is what the API types describe', () => {
+        expect(parsed.error?.issues).toBeUndefined()
+    })
+
+    const data = parsed.data?.data
+
+    it('has the agent’s own runs as its summary', () => {
+        expect(data?.summary.runs).toEqual(data?.agent.top_level?.runs)
+    })
+
+    it('has a previous period, a percentile and what needs a look filtered by the agent', () => {
+        expect(data?.previous?.runs.all).toBeGreaterThan(0)
+        expect(data?.summary.duration.p95_ms).not.toBeNull()
+        expect(data?.attention.length).toBeGreaterThan(0)
+
+        for (const item of data?.attention ?? []) {
+            expect(item.filters.agent).toBe(data?.agent.name)
+
+            for (const row of item.breakdown) {
+                expect(row.filters.agent).toBe(data?.agent.name)
+            }
+        }
+    })
+})
+
+describe('tests/Contract/agent-breakdown.json', () => {
+    const parsed = agentBreakdownResponse.safeParse(
+        contractFixture('agent-breakdown'),
+    )
+
+    it('is what the API types describe', () => {
+        expect(parsed.error?.issues).toBeUndefined()
+    })
+
+    const data = parsed.data?.data
+
+    it('has models and tools of the runs, with the parameters that list them, and of the delegated runs, without', () => {
+        expect(data?.models.length).toBeGreaterThan(0)
+        expect(data?.tools.length).toBeGreaterThan(0)
+        expect(data?.delegated.models.length).toBeGreaterThan(0)
+        expect(data?.delegated.tools.length).toBeGreaterThan(0)
+
+        for (const row of [...(data?.models ?? []), ...(data?.tools ?? [])]) {
+            expect(row.filters.agent).toBeTypeOf('string')
+        }
+    })
+
+    it('says how many there are beside the rows', () => {
+        expect(parsed.data?.limits.models.total).toBe(data?.models.length)
+        expect(parsed.data?.limits.tools.total).toBe(data?.tools.length)
     })
 })
 

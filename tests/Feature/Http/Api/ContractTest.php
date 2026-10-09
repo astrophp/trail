@@ -5,6 +5,7 @@ use Astro\Trail\Enums\IssueKind;
 use Astro\Trail\Enums\SpanType;
 use Astro\Trail\Enums\Status;
 use Astro\Trail\Storage\Models\Trace;
+use Astro\Trail\Tests\Fixtures\Http\AgentRows;
 use Astro\Trail\Tests\Fixtures\Storage\Rows;
 use Astro\Trail\Tests\Fixtures\Users\User;
 use Illuminate\Support\Carbon;
@@ -381,6 +382,54 @@ function overviewContractDataset(): void
 }
 
 /**
+ * Agents of every kind the agents endpoints tell apart: one with runs of its own in several states
+ * and a period before the range, one that is both run and delegated to, one that is only delegated
+ * to (once under a tool, once under the run's own span), and an embeddings run; with the steps and
+ * tools their breakdowns are made of. Twenty timed runs give the first agent a 95th percentile.
+ */
+function agentContractDataset(): void
+{
+    $one = AgentRows::run('SupportAssistant', '2026-01-02 11:00:00', [
+        'id' => 'run-support-1', 'agent_class' => 'App\\Ai\\Agents\\SupportAssistant', 'duration_ms' => 1840.412, 'input_tokens' => 1200, 'output_tokens' => 310,
+        'cost' => 0.00825,
+    ]);
+    AgentRows::run('SupportAssistant', '2026-01-02 10:00:00', [
+        'id' => 'run-support-2', 'agent_class' => 'App\\Ai\\Agents\\SupportAssistant', 'status' => Status::Failed, 'issue_kind' => IssueKind::RateLimited,
+        'input_tokens' => 90, 'unpriced_span_count' => 1, 'recovered' => true,
+    ]);
+    AgentRows::run('SupportAssistant', '2026-01-02 12:10:00', ['id' => 'run-support-3', 'agent_class' => 'App\\Ai\\Agents\\SupportAssistant', 'status' => Status::Running]);
+    AgentRows::run('SupportAssistant', '2026-01-01 09:00:00', ['id' => 'run-support-before', 'duration_ms' => 700.5, 'cost' => 0.01]);
+
+    foreach (range(1, 20) as $i) {
+        AgentRows::run('SupportAssistant', '2026-01-02 08:30:00', ['id' => sprintf('run-latency-%02d', $i), 'duration_ms' => $i * 100, 'input_tokens' => 10, 'output_tokens' => 5, 'cost' => 0.001]);
+    }
+
+    $research = AgentRows::run('ResearchAgent', '2026-01-02 09:00:00', [
+        'id' => 'run-research', 'agent_class' => 'App\\Ai\\Agents\\ResearchAgent', 'duration_ms' => 900.0, 'input_tokens' => 400, 'output_tokens' => 90, 'cost' => 0.004,
+    ]);
+    AgentRows::run('Embeddings', '2026-01-02 08:00:00', ['id' => 'run-embeddings', 'type' => SpanType::Embedding, 'provider' => 'openai', 'model' => 'text-embedding-3-small', 'duration_ms' => 210.5, 'input_tokens' => 64, 'cost' => 0.000002]);
+
+    $span = fn (Trace $run, SpanType $type, string $name, string $started, array $attributes = []) => AgentRows::span($run, $type, $name, $started, $attributes);
+
+    $span($one, SpanType::Agent, 'SupportAssistant', '2026-01-02 11:00:00', ['id' => 'support-root']);
+    $span($one, SpanType::Step, 'step', '2026-01-02 11:00:00.100', ['id' => 'support-step-1', 'parent_id' => 'support-root', 'provider' => 'anthropic', 'model' => 'claude-sonnet-4-5', 'input_tokens' => 1200, 'output_tokens' => 310, 'cost' => 0.00825]);
+    $span($one, SpanType::Step, 'step', '2026-01-02 11:00:00.900', ['id' => 'support-step-2', 'parent_id' => 'support-root', 'provider' => 'anthropic', 'model' => 'claude-sonnet-4-5', 'input_tokens' => 30]);
+    $span($one, SpanType::Tool, 'search', '2026-01-02 11:00:01', ['id' => 'support-tool-1', 'parent_id' => 'support-root']);
+    $span($one, SpanType::Tool, 'lookup', '2026-01-02 11:00:02', ['id' => 'support-tool-2', 'parent_id' => 'support-root', 'status' => Status::Failed]);
+    $span($one, SpanType::Embedding, 'embeddings', '2026-01-02 11:00:01.050', ['id' => 'support-embedding', 'parent_id' => 'support-tool-1', 'provider' => 'openai', 'model' => 'text-embedding-3-small', 'input_tokens' => 64, 'cost' => 0.000002]);
+    // A sub-agent under a tool, with a step and a tool of its own; one under the run's own span, which failed; one under a tool.
+    $span($one, SpanType::Agent, 'ResearchAgent', '2026-01-02 11:00:01.100', ['id' => 'research-1', 'parent_id' => 'support-tool-1', 'agent_class' => 'App\\Ai\\Agents\\ResearchAgent']);
+    $span($one, SpanType::Step, 'step', '2026-01-02 11:00:01.200', ['id' => 'research-step', 'parent_id' => 'research-1', 'provider' => 'anthropic', 'model' => 'claude-haiku-4-5', 'input_tokens' => 400, 'output_tokens' => 90, 'cost' => 0.0005]);
+    $span($one, SpanType::Tool, 'search', '2026-01-02 11:00:01.300', ['id' => 'research-tool', 'parent_id' => 'research-1']);
+    $span($one, SpanType::Agent, 'Summarizer', '2026-01-02 11:00:02.500', ['id' => 'summarizer-1', 'parent_id' => 'run-support-1', 'status' => Status::Failed, 'agent_class' => 'App\\Ai\\Agents\\Summarizer']);
+    $span($one, SpanType::Agent, 'Summarizer', '2026-01-02 11:00:02.600', ['id' => 'summarizer-2', 'parent_id' => 'support-tool-2']);
+
+    $span($research, SpanType::Agent, 'ResearchAgent', '2026-01-02 09:00:00', ['id' => 'research-root']);
+    $span($research, SpanType::Step, 'step', '2026-01-02 09:00:00.100', ['id' => 'research-own-step', 'parent_id' => 'research-root', 'provider' => 'anthropic', 'model' => 'claude-haiku-4-5', 'input_tokens' => 400, 'output_tokens' => 90, 'cost' => 0.004]);
+    $span($research, SpanType::Tool, 'search', '2026-01-02 09:00:00.500', ['id' => 'research-own-tool', 'parent_id' => 'research-root', 'status' => Status::Failed]);
+}
+
+/**
  * @param  array<string, mixed>|object  $body  decoded as objects where an empty object must stay one
  */
 function assertContract(string $name, array|object $body): void
@@ -460,6 +509,28 @@ it('sends the needs-attention response the dashboard expects', function () {
     Rows::trace(['id' => 'trace-child-failed', 'name' => 'Parent', 'status' => Status::Completed, 'child_failed' => true, 'started_at' => '2026-01-02 09:30:00']);
 
     assertContract('attention', $this->getJson('/trail/api/overview/attention')->assertOk()->json());
+});
+
+it('sends the agents response the dashboard expects', function () {
+    // Not on an edge of the clock, so the first bucket is cut and the last one is still open.
+    Carbon::setTestNow('2026-01-02 12:20:00');
+    agentContractDataset();
+
+    assertContract('agents', $this->getJson('/trail/api/agents')->assertOk()->json());
+});
+
+it('sends the agent response the dashboard expects', function () {
+    Carbon::setTestNow('2026-01-02 12:20:00');
+    agentContractDataset();
+
+    assertContract('agent', $this->getJson('/trail/api/agents/show?name=SupportAssistant')->assertOk()->json());
+});
+
+it('sends the agent breakdown response the dashboard expects', function () {
+    Carbon::setTestNow('2026-01-02 12:20:00');
+    agentContractDataset();
+
+    assertContract('agent-breakdown', $this->getJson('/trail/api/agents/breakdown?name=ResearchAgent')->assertOk()->json());
 });
 
 it('sends the bookmark response the dashboard expects', function () {
