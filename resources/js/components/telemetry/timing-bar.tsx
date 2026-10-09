@@ -4,7 +4,8 @@ import { formatDuration, formatOffset } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
 // Status is never colour alone: a failed bar has a hard end cap, an incomplete one is dashed and
-// hollow, one awaiting approval is outlined, and a running one fades out where it is still open.
+// hollow, one awaiting approval is outlined, and a running one is striped and open at its right end.
+// The stripes are drawn without motion too; the slide is only added where motion is welcome.
 const bar = cva('absolute inset-y-0 min-w-1.5', {
     variants: {
         status: {
@@ -14,8 +15,7 @@ const bar = cva('absolute inset-y-0 min-w-1.5', {
                 'rounded-sm border border-dashed border-warning bg-warning-soft',
             awaiting_approval:
                 'rounded-sm border border-primary-ink bg-primary-soft',
-            running:
-                'rounded-l-sm bg-linear-to-r from-info to-transparent motion-safe:animate-pulse',
+            running: 'rounded-l-sm bg-stripes-info motion-safe:animate-stripes',
         },
     },
 })
@@ -89,6 +89,7 @@ export function TimingBar({ span, axisMs, id, className }: TimingBarProps) {
             )
         }
 
+        // The same track as every finished bar, so a start lines up with theirs and with the axis.
         return (
             <span
                 id={id}
@@ -97,26 +98,24 @@ export function TimingBar({ span, axisMs, id, className }: TimingBarProps) {
                 role="img"
                 aria-label={text}
                 title={text}
-                className={cn('flex items-center gap-2', className)}
+                className={cn(
+                    'relative block h-2 w-full overflow-hidden',
+                    className,
+                )}
             >
-                <span className="relative block h-2 flex-1 overflow-hidden">
-                    <span
-                        data-slot="timing-bar-fill"
-                        aria-hidden="true"
-                        className={bar({ status })}
-                        style={
-                            clamp01(offset / axis) >= nearEnd
-                                ? { right: 0 }
-                                : {
-                                      left: percent(clamp01(offset / axis)),
-                                      right: 0,
-                                  }
-                        }
-                    />
-                </span>
-                <span className="text-caption whitespace-nowrap text-muted-foreground">
-                    In progress
-                </span>
+                <span
+                    data-slot="timing-bar-fill"
+                    aria-hidden="true"
+                    className={bar({ status })}
+                    style={
+                        clamp01(offset / axis) >= nearEnd
+                            ? { right: 0 }
+                            : {
+                                  left: percent(clamp01(offset / axis)),
+                                  right: 0,
+                              }
+                    }
+                />
             </span>
         )
     }

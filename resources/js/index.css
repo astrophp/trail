@@ -102,6 +102,32 @@
     --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/* The barber pole of an open-ended bar: one stripe pattern slides one period along the bar, so the
+   loop has no seam. The class is `motion-safe:animate-stripes`; without motion the stripes stay. */
+@theme {
+    --animate-stripes: stripes-slide 1.6s linear infinite;
+
+    @keyframes stripes-slide {
+        to {
+            background-position-x: 1rem;
+        }
+    }
+}
+
+/* Diagonal stripes in the info colour over a tint of it, for a span whose length is not known yet.
+   The tile is one stripe period wide (the stripes run at 45 degrees, so 1rem across is 1rem divided
+   by the square root of 2 along the gradient), which is what lets the slide above loop cleanly. */
+@utility bg-stripes-info {
+    background-color: var(--info);
+    background-image: repeating-linear-gradient(
+        45deg,
+        var(--info) 0 0.3535rem,
+        color-mix(in srgb, var(--info) 45%, var(--info-soft)) 0.3535rem
+            0.7071rem
+    );
+    background-size: 1rem 100%;
+}
+
 /* `accent` is shadcn's neutral hover surface. The violet is `primary` (filled),
    `primary-ink` (as text) and `primary-soft` (as a tint). */
 :root,

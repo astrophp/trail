@@ -76,7 +76,9 @@ describe('the timing lane', () => {
         })
 
         expect(running).toHaveAttribute('data-state', 'open')
-        expect(running).toHaveTextContent('In progress')
+        // The words are said once, by the Duration column beside the lane, not by the lane.
+        expect(running.textContent).toBe('')
+        expect(row('Model step 2, Running')).toHaveTextContent('In progress')
     })
 
     it('describes a closed bar by its sentence in the row description', () => {
