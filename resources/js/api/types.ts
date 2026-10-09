@@ -428,6 +428,50 @@ export type BookmarkResponse = {
     data: { trace_id: string; bookmarked: boolean }
 }
 
+/** What a model costs per million tokens, in US dollars, for each kind of token. `null` is unknown, never free; `0` is a free rate. */
+export type PriceRates = {
+    input: number | null
+    output: number | null
+    cache_read: number | null
+    cache_write: number | null
+}
+
+/** Where a model's rates come from. `saved` is a price written through the dashboard. */
+export type PriceSource = 'saved' | 'config' | 'prefix' | 'none'
+
+/** The listed id a `prefix` price comes through, and whether that id's rates are themselves a saved price. */
+export type PriceVia = { model: string; saved: boolean }
+
+/** What would apply if the model's own saved price were removed: what a reset returns to. */
+export type PriceDefault = {
+    source: Exclude<PriceSource, 'saved'>
+    via: PriceVia | null
+    rates: PriceRates
+}
+
+/** A model, what it is priced at now and where that comes from. */
+export type Price = {
+    provider: string
+    model: string
+    rates: PriceRates
+    source: PriceSource
+    via: PriceVia | null
+    default: PriceDefault
+    /** A step or an embedding was recorded with exactly this provider and model. */
+    observed: boolean
+    /** When the saved price was last written; `null` when the model has none. */
+    saved_at: string | null
+}
+
+/** Every model Trail knows, observed models without a rate first. At most `limit.limit` are sent. */
+export type PriceListResponse = {
+    data: Price[]
+    limit: { limit: number; total: number; truncated: boolean }
+}
+
+/** The answer to a price write: the model's price as it now resolves. */
+export type PriceResponse = { data: Price }
+
 /** The runs the list shows just before and just after a run, in the view that was asked about. */
 export type TraceNeighbours = {
     previous: string | null

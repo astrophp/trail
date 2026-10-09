@@ -93,6 +93,17 @@ export function formatRate(rate: number): string {
     return share.format(rate)
 }
 
+const perMillion = new Intl.NumberFormat(locale, { maximumFractionDigits: 6 })
+
+/**
+ * A price per million tokens as the number it is, in US dollars, up to the six decimals the API
+ * keeps: `3`, `0.3`, `0.000001`. Never rounded to fewer, so what is shown is what is stored. A
+ * real zero is `0`.
+ */
+export function formatPerMillion(amount: number): string {
+    return perMillion.format(amount)
+}
+
 /** A whole count with thousands separators: `9,432`, `1,284`. */
 export function formatCount(count: number): string {
     return whole.format(count)

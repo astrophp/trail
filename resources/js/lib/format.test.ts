@@ -8,6 +8,7 @@ import {
     formatHoursAndMinutes,
     formatDurationFromZero,
     formatOffset,
+    formatPerMillion,
     formatRate,
     formatRelativeTime,
     formatDayAndClock,
@@ -66,6 +67,20 @@ describe('formatCount', () => {
         [1_234_567, '1,234,567'],
     ])('formats %s as %s', (count, text) => {
         expect(formatCount(count)).toBe(text)
+    })
+})
+
+describe('formatPerMillion', () => {
+    it.each([
+        [0, '0'],
+        [3, '3'],
+        [15, '15'],
+        [0.3, '0.3'],
+        [3.75, '3.75'],
+        [0.000001, '0.000001'],
+        [999999.999999, '999,999.999999'],
+    ])('writes %s as %s, without rounding it', (amount, text) => {
+        expect(formatPerMillion(amount)).toBe(text)
     })
 })
 
