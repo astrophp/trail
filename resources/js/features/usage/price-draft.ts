@@ -1,4 +1,5 @@
 import { ApiError } from '@/api/client'
+import type { PriceRatesText } from '@/api/prices'
 import type { Price, PriceRates } from '@/api/types'
 import { decimalText, parseDecimalText } from '@/lib/decimal-text'
 
@@ -79,14 +80,18 @@ export function isChanged(draft: Draft): boolean {
     })
 }
 
-/** The rates a draft says, or the fields that are not numbers. Blank is `null`; nothing is rounded. */
+/**
+ * The rates a draft says, as the text that was typed (trimmed): the number is read only to check
+ * it, so nothing is rounded on the way to the server. Blank is `null`. Or the fields that are not
+ * numbers.
+ */
 export function ratesOf(
     fields: RateFields,
 ):
-    | { ok: true; rates: PriceRates }
+    | { ok: true; rates: PriceRatesText }
     | { ok: false; errors: Partial<Record<RateKey, string>> } {
     const errors: Partial<Record<RateKey, string>> = {}
-    const rates: PriceRates = {
+    const rates: PriceRatesText = {
         input: null,
         output: null,
         cache_read: null,
@@ -97,7 +102,7 @@ export function ratesOf(
         const parsed = parseDecimalText(fields[key])
 
         if (parsed.ok) {
-            rates[key] = parsed.value
+            rates[key] = parsed.value === null ? null : fields[key].trim()
         } else {
             errors[key] = parsed.message
         }
@@ -187,17 +192,30 @@ function readInvalid(error: ApiError, verb: string): WriteFailure {
     const errors: Partial<Record<RateKey, string>> = {}
     const rest: string[] = []
 
-    for (const [name, messages] of Object.entries(error.errors ?? {})) {
+    // The body is the server's, and is read for what it is: a value that is not a list of texts
+    // says nothing, and the response's own message stands in.
+    const named: unknown = error.errors
+    const entries =
+        typeof named === 'object' && named !== null
+            ? Object.entries(named as Record<string, unknown>)
+            : []
+
+    for (const [name, value] of entries) {
+        const messages = (Array.isArray(value) ? (value as unknown[]) : [value])
+            .filter((message): message is string => typeof message === 'string')
+            .filter((message) => message !== '')
         const key = rateKeys.find((rate) => rate === name)
 
-        if (key !== undefined) {
+        if (messages.length === 0) {
+            rest.push(error.message)
+        } else if (key !== undefined) {
             errors[key] = messages.join(' ')
         } else {
             rest.push(...messages)
         }
     }
 
-    const row = rest.join(' ')
+    const row = [...new Set(rest)].join(' ')
     const message =
         row !== ''
             ? row

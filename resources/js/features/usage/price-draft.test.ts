@@ -94,10 +94,10 @@ describe('ratesOf', () => {
         expect(ratesOf(fields())).toEqual({
             ok: true,
             rates: {
-                input: 3,
-                output: 15,
+                input: '3',
+                output: '15',
                 cache_read: null,
-                cache_write: 0,
+                cache_write: '0',
             },
         })
     })
@@ -153,6 +153,45 @@ describe('readFailure', () => {
         for (const status of [403, 404, 419, 422]) {
             expect(readFailure(error(status), 'save').failure?.retry).toBeNull()
         }
+    })
+
+    it('reads a message that is a bare text as one message', () => {
+        const read = readFailure(
+            error(422, { input: 'Too many places.' } as unknown as Record<
+                string,
+                string[]
+            >),
+            'save',
+        )
+
+        expect(read.errors).toEqual({ input: 'Too many places.' })
+        expect(read.failure).toBeNull()
+    })
+
+    it('falls back to the response’s message for values that are not texts, and never throws', () => {
+        for (const value of [{ a: 1 }, 7, null, [1, {}], []]) {
+            const read = readFailure(
+                error(422, { input: value } as unknown as Record<
+                    string,
+                    string[]
+                >),
+                'save',
+            )
+
+            expect(read.errors).toEqual({})
+            expect(read.failure).toEqual({
+                message: 'The server said so.',
+                retry: null,
+            })
+        }
+    })
+
+    it('reads an errors body that is not an object', () => {
+        const odd = new ApiError('The server said so.', 422, 'x' as never)
+
+        expect(readFailure(odd, 'save').failure?.message).toBe(
+            'The price was not saved. The server said so.',
+        )
     })
 
     it('says a 404 means the model is gone', () => {

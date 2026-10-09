@@ -128,10 +128,15 @@ describe('the list', () => {
             screen.getAllByText(/applies to runs recorded from now on/),
         ).toHaveLength(1)
         expect(
-            screen.getByText(/costs already recorded stay as they were/),
+            screen.getByText(
+                'A price you save applies to runs recorded from now on. Costs already recorded stay as they were.',
+            ),
         ).toBeVisible()
         expect(
-            screen.getByText(/can take up to a minute to pick it up/),
+            screen.getByText(/Costs already recorded stay as they were/),
+        ).toBeVisible()
+        expect(
+            screen.getByText(/can take up to a minute to pick up a new price/),
         ).toBeVisible()
     })
 
@@ -302,8 +307,43 @@ describe('where the rates come from', () => {
         await tableLoaded()
 
         expect(cellOf(rowOf(mystery), 'source')).toHaveTextContent(
-            'No rateSeen in usage, which shows as Unpriced',
+            'No rateSeen in usage; without an input rate it shows as Unpriced',
         )
+    })
+
+    it('flags a saved price whose rates are all blank, without blaming the config', async () => {
+        const blank = savedAs(gpt4o, {
+            input: null,
+            output: null,
+            cache_read: null,
+            cache_write: null,
+        })
+
+        mockPrices(() => listOf([{ ...blank, observed: true }]))
+        renderPrices()
+        await tableLoaded()
+
+        const source = cellOf(rowOf(blank), 'source')
+
+        expect(source).toHaveTextContent('Saved')
+
+        expect(source).toHaveTextContent(
+            'Seen in usage; without an input rate it shows as Unpriced',
+        )
+        expect(source).not.toHaveTextContent(/config/i)
+    })
+
+    it('does not flag a saved price that has an input rate', async () => {
+        const priced = { ...gpt5, observed: true }
+
+        mockPrices(() => listOf([priced]))
+        renderPrices()
+        await tableLoaded()
+
+        const source = cellOf(rowOf(priced), 'source')
+
+        expect(source).toHaveTextContent('Saved')
+        expect(source).not.toHaveTextContent(/Unpriced/)
     })
 
     it('does not flag a model with no rate that was not seen in usage', async () => {
@@ -391,7 +431,7 @@ describe('the compact summary a narrow screen shows', () => {
         )
 
         expect(summary).toHaveTextContent(
-            'No rateSeen in usage, which shows as Unpriced',
+            'No rateSeen in usage; without an input rate it shows as Unpriced',
         )
     })
 

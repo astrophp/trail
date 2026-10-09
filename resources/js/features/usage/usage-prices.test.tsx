@@ -61,6 +61,35 @@ describe('the way from the coverage figure to the prices', () => {
         expect(window.location.hash).toBe('')
     })
 
+    it('moves focus to the heading while the prices are still loading', async () => {
+        const user = userEvent.setup()
+        mockApi(undefined, undefined, undefined, () => new Promise(() => {}))
+        renderApp('/usage')
+        await totals()
+
+        await user.click(review()!)
+
+        expect(
+            screen.getByRole('heading', { level: 2, name: 'Model prices' }),
+        ).toHaveFocus()
+    })
+
+    it('moves focus to the heading when the prices could not be loaded', async () => {
+        const user = userEvent.setup()
+        mockApi(undefined, undefined, undefined, () =>
+            json({ message: 'no' }, 500),
+        )
+        renderApp('/usage')
+        await totals()
+        await screen.findByText('The model prices could not be loaded')
+
+        await user.click(review()!)
+
+        expect(
+            screen.getByRole('heading', { level: 2, name: 'Model prices' }),
+        ).toHaveFocus()
+    })
+
     it('can be followed with the keyboard', async () => {
         const user = userEvent.setup()
         mockApi()

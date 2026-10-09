@@ -1,7 +1,13 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { priceKeys, resetPrice, savePrice, type PriceId } from '@/api/prices'
-import type { Price, PriceListResponse, PriceRates } from '@/api/types'
+import {
+    priceKeys,
+    resetPrice,
+    savePrice,
+    type PriceId,
+    type PriceRatesText,
+} from '@/api/prices'
+import type { Price, PriceListResponse } from '@/api/types'
 import { notify } from '@/components/patterns/notify'
 import {
     isChanged,
@@ -17,7 +23,7 @@ import {
 /** Where focus goes once the draft has been drawn: the row's Edit button, its first field, or its first field with an error. */
 type FocusRequest = { key: string; target: 'edit' | 'first' | 'error' }
 
-type Write = { price: PriceId; rates: PriceRates | null }
+type Write = { price: PriceId; rates: PriceRatesText | null }
 
 const named = (price: PriceId) => `${price.provider} ${price.model}`
 
@@ -48,6 +54,19 @@ export function usePriceEditor(prices: Price[] | undefined) {
             ),
         [all, listed],
     )
+    // A model the list no longer holds loses its draft for good, so it cannot come back stale if
+    // a later read lists the model again.
+    if (
+        prices !== undefined &&
+        Object.keys(all).some((key) => !listed.has(key))
+    ) {
+        setAll((current) =>
+            Object.fromEntries(
+                Object.entries(current).filter(([key]) => listed.has(key)),
+            ),
+        )
+    }
+
     const unsaved = Object.values(drafts).some(isChanged)
 
     const write = useMutation({
@@ -125,7 +144,19 @@ export function usePriceEditor(prices: Price[] | undefined) {
             return
         }
 
-        let rates: PriceRates | null = null
+        // A reset throws away what was typed: ask once, unless this is the retry of one already asked.
+        if (
+            action === 'reset' &&
+            isChanged(draft) &&
+            draft.failure?.retry !== 'reset' &&
+            !window.confirm(
+                `Discard your changes and reset the price of ${named(price)}?`,
+            )
+        ) {
+            return
+        }
+
+        let rates: PriceRatesText | null = null
 
         if (action === 'save') {
             const read = ratesOf(draft.fields)

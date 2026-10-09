@@ -1,10 +1,13 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { act, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
+import { priceKeys } from '@/api/prices'
+import { testQueryClient } from '@/test/render-app'
 import { until } from '@/test/wait'
 import {
     cellOf,
     deferred,
+    savedAs,
     editButton,
     expectNotEditing,
     fieldOf,
@@ -12,6 +15,7 @@ import {
     listed,
     mystery,
     priceFixture,
+    priceReads,
     priceServer,
     priceWrites,
     pricesFixture,
@@ -162,5 +166,117 @@ describe('while another row saves and the list is read again', () => {
                 name: 'Edit the price of openai mystery',
             }),
         ).not.toBeInTheDocument()
+    })
+})
+
+describe('a stale draft', () => {
+    it('does not come back when a later read lists the model again', async () => {
+        const user = userEvent.setup()
+        const client = testQueryClient()
+        const server = priceServer()
+        server.answers(priceFixture.data)
+        renderPrices({ client })
+        await tableLoaded()
+
+        await user.click(editButton(mystery))
+        await user.type(fieldOf(mystery, 'Input'), '4')
+
+        // A read without the model drops it, and the page has nothing unsaved.
+        server.set(pricesFixture.data.filter((price) => price !== mystery))
+        await act(() => client.invalidateQueries({ queryKey: priceKeys.list }))
+        await waitFor(() => expect(listed()).not.toContain('openai mystery'))
+
+        const leaving = new Event('beforeunload', { cancelable: true })
+        window.dispatchEvent(leaving)
+
+        expect(leaving.defaultPrevented).toBe(false)
+
+        // A read that lists it again shows it closed, with fresh values.
+        server.set(pricesFixture.data)
+        await act(() => client.invalidateQueries({ queryKey: priceKeys.list }))
+        await waitFor(() => expect(listed()).toContain('openai mystery'))
+
+        expectNotEditing(mystery)
+
+        await user.click(editButton(mystery))
+
+        expect(fieldOf(mystery, 'Input')).toHaveValue('')
+    })
+})
+
+describe('two providers with a model of the same name', () => {
+    const azure = { ...sonnet, provider: 'azure', model: 'gpt-x' }
+    const openai = { ...sonnet, provider: 'openai', model: 'gpt-x' }
+
+    it('keep their own drafts and saves', async () => {
+        const user = userEvent.setup()
+        const server = priceServer([azure, openai])
+        server.answers(savedAs(azure, { ...azure.rates, input: 8 }))
+        renderPrices()
+        await tableLoaded()
+
+        await user.click(editButton(azure))
+        await user.click(editButton(openai))
+        await user.clear(fieldOf(azure, 'Input'))
+        await user.type(fieldOf(azure, 'Input'), '8')
+
+        expect(fieldOf(openai, 'Input')).toHaveValue('3')
+
+        await user.click(
+            within(formOf(azure)).getByRole('button', { name: 'Save' }),
+        )
+        await waitFor(() => expectNotEditing(azure))
+
+        expect(priceWrites(server.fetchMock).map((c) => c.url)).toEqual([
+            '/trail/api/prices?provider=azure&model=gpt-x',
+        ])
+        expect(fieldOf(openai, 'Input')).toBeEnabled()
+        expect(cellOf(rowOf(azure), 'input')).toHaveTextContent(/^8$/)
+        expect(cellOf(rowOf(openai), 'input')).toHaveTextContent(/^3$/)
+    })
+})
+
+describe('two saves answered in the opposite order', () => {
+    it('leaves each row with its own answer, and reads the list once after the last settles', async () => {
+        const user = userEvent.setup()
+        const client = testQueryClient()
+        const server = priceServer()
+        const fiveFor = savedAs(sonnet, { ...sonnet.rates, input: 5 })
+        const first = deferred()
+        const second = deferred()
+        renderPrices({ client })
+        await tableLoaded()
+        server.fetchMock.mockImplementationOnce(() => first.promise)
+        server.fetchMock.mockImplementationOnce(() => second.promise)
+
+        await user.click(editButton(sonnet))
+        await user.click(editButton(sonnetDated))
+        await user.click(
+            within(formOf(sonnet)).getByRole('button', { name: 'Save' }),
+        )
+        await user.click(
+            within(formOf(sonnetDated)).getByRole('button', { name: 'Save' }),
+        )
+        await until(() => expect(priceWrites(server.fetchMock)).toHaveLength(2))
+
+        server.set(
+            pricesFixture.data.map((price) =>
+                price === sonnet
+                    ? fiveFor
+                    : price === sonnetDated
+                      ? priceFixture.data
+                      : price,
+            ),
+        )
+        // The second save is answered first.
+        second.resolve(new Response(JSON.stringify(priceFixture)))
+        await waitFor(() => expectNotEditing(sonnetDated))
+        first.resolve(new Response(JSON.stringify({ data: fiveFor })))
+        await waitFor(() => expectNotEditing(sonnet))
+        await until(() => expect(client.isFetching()).toBe(0))
+
+        expect(cellOf(rowOf(sonnet), 'input')).toHaveTextContent(/^5$/)
+        expect(cellOf(rowOf(sonnetDated), 'input')).toHaveTextContent(/^3.5$/)
+        expect(priceReads(server.fetchMock)).toHaveLength(2)
     })
 })

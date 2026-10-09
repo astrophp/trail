@@ -14,9 +14,23 @@ function Note({ children }: { children: ReactNode }) {
 /**
  * Where a model's rates come from: its own saved price (and when it was saved), its entry in the
  * configuration, the entry of a shorter id it extends (and whether that one is itself saved), or
- * nowhere. A model that was seen in usage and has no rate is flagged: its usage shows as Unpriced.
+ * nowhere. A model that was seen in usage and has no input rate is flagged whatever the source: its
+ * usage is never priced, so it shows as Unpriced.
  */
 export function PriceSource({ price }: { price: Price }) {
+    return (
+        <>
+            <SourceName price={price} />
+            {price.observed && price.rates.input === null ? (
+                <span className="block text-caption text-warning">
+                    Seen in usage; without an input rate it shows as Unpriced
+                </span>
+            ) : null}
+        </>
+    )
+}
+
+function SourceName({ price }: { price: Price }) {
     switch (price.source) {
         case 'saved':
             return (
@@ -48,15 +62,6 @@ export function PriceSource({ price }: { price: Price }) {
                 </span>
             )
         case 'none':
-            return (
-                <span className="block">
-                    No rate
-                    {price.observed ? (
-                        <span className="block text-caption text-warning">
-                            Seen in usage, which shows as Unpriced
-                        </span>
-                    ) : null}
-                </span>
-            )
+            return <span className="block">No rate</span>
     }
 }

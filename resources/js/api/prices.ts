@@ -1,5 +1,11 @@
 import { apiRequest } from '@/api/client'
-import type { PriceListResponse, PriceRates, PriceResponse } from '@/api/types'
+import type { PriceListResponse, PriceResponse } from '@/api/types'
+
+/** The four rates as typed: plain decimal text, or `null` for a blank. Sent as is, so nothing is rounded on the way. */
+export type PriceRatesText = Record<
+    'input' | 'output' | 'cache_read' | 'cache_write',
+    string | null
+>
 
 /** A model's identity: the provider and the model id, both exactly as the list spells them. */
 export type PriceId = { provider: string; model: string }
@@ -22,7 +28,7 @@ export function fetchPrices(signal?: AbortSignal): Promise<PriceListResponse> {
  */
 export function savePrice(
     id: PriceId,
-    rates: PriceRates,
+    rates: PriceRatesText,
 ): Promise<PriceResponse> {
     return apiRequest<PriceResponse>(pricePath(id), {
         method: 'PUT',

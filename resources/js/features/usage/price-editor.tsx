@@ -21,6 +21,17 @@ export function resetLabel(price: Price): string {
         : 'Reset to no rate'
 }
 
+/** Where the fields of a price that is not saved yet start from. */
+function startsFrom(price: Price): string {
+    if (price.source === 'config') {
+        return 'The fields start from the rates in your config.'
+    }
+
+    return price.source === 'prefix' && price.via !== null
+        ? `The fields start from the rates of ${price.via.model}, which apply now.`
+        : 'No rate applies now, so the fields start blank.'
+}
+
 type PriceEditorProps = {
     price: Price
     draft: Draft
@@ -75,8 +86,9 @@ export function PriceEditor({
                 ))}
             </div>
             <p className="text-caption text-muted-foreground">
-                Saving replaces the model&apos;s rates as a whole: a blank rate
-                means no rate, not the default one.
+                {price.source === 'saved'
+                    ? "Saving replaces the model's rates as a whole: a blank rate means no rate, not the default one."
+                    : `${startsFrom(price)} Saving stores them as this model's own price, so later changes to the config no longer reach it until it is reset.`}
             </p>
             {failure === null ? null : (
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-2">

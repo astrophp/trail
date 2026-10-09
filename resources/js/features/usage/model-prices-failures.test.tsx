@@ -144,6 +144,38 @@ describe('a save the server refuses as invalid', () => {
         expect(fieldOf(sonnetDated, 'Input')).toHaveValue('0.1234567')
     })
 
+    it('reads a message that is a bare text as the field’s message', async () => {
+        const user = userEvent.setup()
+        refuse({ input: tooMany as unknown as string[] })
+        renderPrices()
+        await tableLoaded()
+
+        await trySaving(user)
+
+        await waitFor(() =>
+            expect(fieldOf(sonnetDated, 'Input')).toHaveAccessibleDescription(
+                tooMany,
+            ),
+        )
+        expect(save()).toBeEnabled()
+    })
+
+    it('falls back to the response’s message when a value is not texts, and leaves the busy state', async () => {
+        const user = userEvent.setup()
+        refuse({ input: { places: 6 } as unknown as string[] })
+        renderPrices()
+        await tableLoaded()
+
+        await trySaving(user)
+
+        await waitFor(() =>
+            expect(rowMessage()).toEqual(['The given data was invalid.']),
+        )
+        expect(save()).toBeEnabled()
+        expect(fieldOf(sonnetDated, 'Input')).toBeEnabled()
+        expect(fieldOf(sonnetDated, 'Input')).toHaveValue('0.1234567')
+    })
+
     it('shows a message about the body as the row’s own', async () => {
         const user = userEvent.setup()
         refuse({ body: ['The body must be a JSON object.'] })
@@ -292,7 +324,7 @@ describe('a save the page cannot make', () => {
 
         expect(writes).toHaveLength(2)
         expect(writes[1]?.body).toEqual(writes[0]?.body)
-        expect(writes[0]?.body).toMatchObject({ input: 0.1234567 })
+        expect(writes[0]?.body).toMatchObject({ input: '0.1234567' })
         expect(editButton(sonnetDated)).toHaveFocus()
     })
 

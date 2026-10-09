@@ -68,7 +68,19 @@ export function ModelPrices({ className }: { className?: string }) {
                 <PanelHeader
                     title="Model prices"
                     titleTarget={{ id: pricesHeadingId }}
-                    description="A price you save applies to runs recorded from now on (a long-running worker can take up to a minute to pick it up); costs already recorded stay as they were."
+                    description={
+                        <>
+                            <span className="block">
+                                A price you save applies to runs recorded from
+                                now on. Costs already recorded stay as they
+                                were.
+                            </span>
+                            <span className="block">
+                                A long-running worker can take up to a minute to
+                                pick up a new price.
+                            </span>
+                        </>
+                    }
                 />
                 <PanelContent className="p-0">
                     {failed ? (

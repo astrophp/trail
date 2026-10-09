@@ -71,7 +71,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
-    success.mockRestore()
+    vi.restoreAllMocks()
 })
 
 describe('starting to edit', () => {
@@ -113,9 +113,49 @@ describe('starting to edit', () => {
 
         expect(
             within(formOf(sonnet)).getAllByText(
-                /Saving replaces the model's rates as a whole: a blank rate means no rate, not the default one\./,
+                "The fields start from the rates in your config. Saving stores them as this model's own price, so later changes to the config no longer reach it until it is reset.",
             ),
         ).toHaveLength(1)
+    })
+
+    it('names the id a prefix model starts from, and says saving makes the price its own', async () => {
+        const user = userEvent.setup()
+        mockPrices()
+        renderPrices()
+        await tableLoaded()
+
+        await user.click(editButton(sonnetDated))
+
+        expect(formOf(sonnetDated)).toHaveTextContent(
+            "The fields start from the rates of claude-sonnet-4-5, which apply now. Saving stores them as this model's own price, so later changes to the config no longer reach it until it is reset.",
+        )
+    })
+
+    it('says a model with no rate starts blank', async () => {
+        const user = userEvent.setup()
+        mockPrices()
+        renderPrices()
+        await tableLoaded()
+
+        await user.click(editButton(mystery))
+
+        expect(formOf(mystery)).toHaveTextContent(
+            'No rate applies now, so the fields start blank. Saving stores them',
+        )
+    })
+
+    it('keeps the replace-as-a-whole hint for a saved price', async () => {
+        const user = userEvent.setup()
+        mockPrices()
+        renderPrices({ search: '?prices=all' })
+        await tableLoaded()
+
+        await user.click(editButton(gpt5))
+
+        expect(formOf(gpt5)).toHaveTextContent(
+            "Saving replaces the model's rates as a whole: a blank rate means no rate, not the default one.",
+        )
+        expect(formOf(gpt5)).not.toHaveTextContent('start from')
     })
 
     it('opens the editor in place of the Edit button and moves focus to the first field', async () => {
@@ -237,14 +277,34 @@ describe('saving', () => {
                 method: 'PUT',
                 url: '/trail/api/prices?provider=anthropic&model=claude-sonnet-4-5-20250929',
                 body: {
-                    input: 3.5,
-                    output: 16,
-                    cache_read: 0.35,
+                    input: '3.50',
+                    output: '16',
+                    cache_read: '0.35',
                     cache_write: null,
                 },
                 csrf: 'token',
             },
         ])
+    })
+
+    it('sends a long decimal exactly as typed, not as the number it parses to', async () => {
+        const user = userEvent.setup()
+        const fetchMock = mockPrices()
+        renderPrices()
+        await tableLoaded()
+
+        // 20 significant digits: as a number this would not survive.
+        const typed = '12345.678901234567890'
+
+        expect(String(Number(typed))).not.toBe(typed)
+
+        await user.click(editButton(sonnet))
+        await type(user, sonnet, 'Input', ` ${typed} `)
+        await user.click(saveButton(sonnet))
+
+        await until(() => expect(priceWrites(fetchMock)).toHaveLength(1))
+
+        expect(priceWrites(fetchMock)[0]?.body).toMatchObject({ input: typed })
     })
 
     it('percent-encodes a provider and a model that hold a slash, a colon, a plus sign and a space', async () => {
@@ -286,8 +346,8 @@ describe('saving', () => {
 
         expect(priceWrites(fetchMock)[0]?.body).toEqual({
             input: null,
-            output: 10,
-            cache_read: 0,
+            output: '10',
+            cache_read: '0',
             cache_write: null,
         })
     })
@@ -303,7 +363,12 @@ describe('saving', () => {
 
         await until(() => expect(priceWrites(fetchMock)).toHaveLength(1))
 
-        expect(priceWrites(fetchMock)[0]?.body).toEqual(sonnet.rates)
+        expect(priceWrites(fetchMock)[0]?.body).toEqual({
+            input: '3',
+            output: '15',
+            cache_read: '0.3',
+            cache_write: '3.75',
+        })
     })
 
     it('saves with Enter in a field', async () => {
@@ -482,8 +547,66 @@ describe('resetting', () => {
         }
     })
 
+    it('asks once before a reset throws away what was typed, and sends nothing when declined', async () => {
+        const user = userEvent.setup()
+        const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
+        const server = priceServer()
+        server.answers(resetTo(gpt5))
+        renderPrices({ search: '?prices=all' })
+        await tableLoaded()
+
+        await user.click(editButton(gpt5))
+        await type(user, gpt5, 'Input', '99')
+        await user.click(
+            within(formOf(gpt5)).getByRole('button', {
+                name: 'Reset to config',
+            }),
+        )
+
+        expect(confirm).toHaveBeenCalledTimes(1)
+        expect(confirm).toHaveBeenCalledWith(
+            'Discard your changes and reset the price of openai gpt-5?',
+        )
+        expect(priceWrites(server.fetchMock)).toEqual([])
+        expect(fieldOf(gpt5, 'Input')).toHaveValue('99')
+
+        confirm.mockReturnValue(true)
+        await user.click(
+            within(formOf(gpt5)).getByRole('button', {
+                name: 'Reset to config',
+            }),
+        )
+
+        await waitFor(() => expectNotEditing(gpt5))
+        expect(confirm).toHaveBeenCalledTimes(2)
+        expect(priceWrites(server.fetchMock)).toHaveLength(1)
+        confirm.mockRestore()
+    })
+
+    it('resets at once, without asking, when nothing was changed', async () => {
+        const user = userEvent.setup()
+        const confirm = vi.spyOn(window, 'confirm')
+        const server = priceServer()
+        server.answers(resetTo(gpt5))
+        renderPrices({ search: '?prices=all' })
+        await tableLoaded()
+
+        await user.click(editButton(gpt5))
+        await user.click(
+            within(formOf(gpt5)).getByRole('button', {
+                name: 'Reset to config',
+            }),
+        )
+
+        await waitFor(() => expectNotEditing(gpt5))
+        expect(confirm).not.toHaveBeenCalled()
+        expect(priceWrites(server.fetchMock)).toHaveLength(1)
+        confirm.mockRestore()
+    })
+
     it('discards what was typed in the row when it resets', async () => {
         const user = userEvent.setup()
+        vi.spyOn(window, 'confirm').mockReturnValue(true)
         priceServer().answers(resetTo(gpt5))
         renderPrices({ search: '?prices=all' })
         await tableLoaded()
