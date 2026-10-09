@@ -1,14 +1,5 @@
 import type { IssueKind } from '@/api/types'
-
-const labels: Record<IssueKind, string> = {
-    rate_limited: 'Rate limited',
-    provider_overloaded: 'Provider overloaded',
-    provider_connection: 'Provider connection',
-    insufficient_credits: 'Insufficient credits',
-    tool_error: 'Tool error',
-    exception: 'Exception',
-    abandoned: 'Abandoned',
-}
+import { issueKindLabels } from '@/components/telemetry/issue-kind-labels'
 
 type IssueLabelProps = {
     kind: IssueKind
@@ -19,7 +10,7 @@ type IssueLabelProps = {
 export function IssueLabel({ kind, className }: IssueLabelProps) {
     return (
         <span data-slot="issue-label" className={className}>
-            {labels[kind]}
+            {issueKindLabels[kind]}
         </span>
     )
 }

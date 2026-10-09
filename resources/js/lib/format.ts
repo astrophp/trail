@@ -140,6 +140,14 @@ export function formatDuration(ms: number): string {
 }
 
 /**
+ * `formatDuration`, except that exactly zero is `0 ms`: the start of an axis, or an average that
+ * really is zero, is not "under a millisecond".
+ */
+export function formatDurationFromZero(ms: number): string {
+    return ms === 0 ? '0 ms' : formatDuration(ms)
+}
+
+/**
  * Where something starts on a run's time axis: `+0 ms`, `+31 ms`, `+1.20s`. Built on the units of
  * `formatDuration`. Before the start is a real minus sign: `−12 ms`.
  * The input must be finite: a caller that may hold NaN or Infinity guards it first.

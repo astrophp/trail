@@ -47,7 +47,10 @@ const valueOf = (label: string) =>
 const hrefOf = (label: string) =>
     metric(label).querySelector('a')?.getAttribute('href')
 const strip = () => document.querySelector('[data-slot="metric-strip"]')
-const busy = () => document.querySelector('[aria-busy="true"]')
+/** The busy part of the strip. The panels below it have busy parts of their own. */
+const busy = () => strip()?.closest('[aria-busy="true"]') ?? null
+/** The strip's status region, the first on the page: the panels' follow it. */
+const stripStatus = () => screen.getAllByRole('status')[0]
 
 async function open(route = '/', period = '24 hours') {
     renderApp(route)
@@ -469,7 +472,7 @@ describe('the Overview page', () => {
             expect(hrefOf('Traces')).toBe('/trail/traces')
             expect(hrefOf('Error rate')).toBe('/trail/traces?status=failed')
             // The announcement is outside the busy part, where a screen reader may mute it.
-            const status = screen.getByRole('status')
+            const status = stripStatus()
 
             expect(status).toHaveTextContent('Loading')
             expect(dimmed).not.toContainElement(status)
@@ -487,7 +490,7 @@ describe('the Overview page', () => {
             expect(strip()).not.toHaveClass('opacity-60')
             expect(valueOf('Traces')).toBe('7')
             expect(hrefOf('Traces')).toBe('/trail/traces?range=7d')
-            expect(screen.getByRole('status')).toBeEmptyDOMElement()
+            expect(stripStatus()).toBeEmptyDOMElement()
         })
 
         it('draws an empty answer for the next range only once it has arrived', async () => {

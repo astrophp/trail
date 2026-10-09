@@ -5,6 +5,7 @@ import {
     formatCount,
     formatDateTime,
     formatDuration,
+    formatDurationFromZero,
     formatOffset,
     formatRate,
     formatRelativeTime,
@@ -110,6 +111,20 @@ describe('formatDuration', () => {
     ])('formats %s ms as %s', (ms, text) => {
         expect(formatDuration(ms)).toBe(text)
     })
+})
+
+describe('formatDurationFromZero', () => {
+    it('writes an exact zero as 0 ms, where formatDuration says under a millisecond', () => {
+        expect(formatDuration(0)).toBe('<1 ms')
+        expect(formatDurationFromZero(0)).toBe('0 ms')
+    })
+
+    it.each([0.4, 4.8, 840, 1_840.412, 3_720_000])(
+        'is formatDuration for %s ms',
+        (ms) => {
+            expect(formatDurationFromZero(ms)).toBe(formatDuration(ms))
+        },
+    )
 })
 
 describe('formatOffset', () => {

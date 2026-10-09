@@ -111,6 +111,73 @@ describe('the URL drives every filter', () => {
         noChips()
     })
 
+    it.each([
+        [
+            'issue_kind=rate_limited',
+            'Issue: Rate limited',
+            'issue_kind',
+            'rate_limited',
+        ],
+        ['child_failed=1', 'Sub-agent failed', 'child_failed', '1'],
+        ['unpriced=1', 'Unpriced usage', 'unpriced', '1'],
+        ['recovered=1', 'Recovered by failover', 'recovered', '1'],
+    ])(
+        'reads %s from the address, asks the API for it and shows a chip that removes it',
+        async (query, label, param, value) => {
+            const fetchMock = mockApi()
+            renderApp(`/traces?${query}`)
+            await loaded()
+
+            expect(paramsOf(lastTraceUrl(fetchMock))[param]).toBe(value)
+            expect(chips().getByText(label)).toBeVisible()
+
+            await userEvent.click(
+                screen.getByRole('button', {
+                    name: `Remove filter: ${label}`,
+                }),
+            )
+            await expectSearch('')
+
+            expect(paramsOf(lastTraceUrl(fetchMock))).not.toHaveProperty(param)
+            noChips()
+        },
+    )
+
+    it('ignores an issue kind it does not know', async () => {
+        const fetchMock = mockApi()
+        renderApp('/traces?issue_kind=bogus')
+        await loaded()
+
+        expect(paramsOf(lastTraceUrl(fetchMock))).not.toHaveProperty(
+            'issue_kind',
+        )
+        noChips()
+    })
+
+    it('clears the issue kind and the flags with "Clear all"', async () => {
+        renderApp(
+            '/traces?status=completed&issue_kind=exception&child_failed=1&unpriced=1&recovered=1&sort=-cost',
+        )
+        await loaded()
+
+        expect(
+            chips()
+                .getAllByRole('listitem')
+                .map((item) => item.textContent),
+        ).toEqual([
+            'Status: Completed',
+            'Issue: Exception',
+            'Sub-agent failed',
+            'Unpriced usage',
+            'Recovered by failover',
+        ])
+
+        await userEvent.click(screen.getByRole('button', { name: 'Clear all' }))
+
+        await expectSearch('?sort=-cost')
+        noChips()
+    })
+
     it('shows no chip and sends no filter for the default view', async () => {
         const fetchMock = mockApi()
         renderApp('/traces')
