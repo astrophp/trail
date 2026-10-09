@@ -10,6 +10,7 @@ import { Timestamp } from '@/components/telemetry/timestamp'
 import { TokenValue } from '@/components/telemetry/token-value'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
+import { BookmarkCell } from '@/features/traces/bookmark-cell'
 import { OutcomeCell } from '@/features/traces/outcome-cell'
 import { RunCell } from '@/features/traces/run-cell'
 import { SelectPage } from '@/features/traces/select-page'
@@ -25,9 +26,9 @@ export const traceColumns: DataTableColumn<Trace>[] = [
         meta: {
             rowHeader: true,
             lead: <SelectPage />,
-            // The cell is three lines (the name, the prompt and the id) beside the checkbox and the bookmark's gutter.
+            // The cell is three lines (the name, the prompt and the id) beside the checkbox's gutter.
             skeleton: (
-                <div className="flex w-51.5 flex-col gap-2 py-1.5 pl-11.5 md:w-71.5">
+                <div className="flex w-51.5 flex-col gap-2 py-1.5 pl-8 md:w-71.5">
                     <Skeleton className={cn(skeletonBarClass, 'h-3.5 w-3/4')} />
                     <Skeleton className={cn(skeletonBarClass, 'h-3 w-full')} />
                     <Skeleton className={cn(skeletonBarClass, 'h-3 w-1/2')} />
@@ -85,5 +86,24 @@ export const traceColumns: DataTableColumn<Trace>[] = [
         sortDescFirst: true,
         meta: { align: 'end' },
         cell: ({ row }) => <Timestamp at={row.original.started_at} />,
+    },
+    {
+        id: 'bookmark',
+        // A lone icon button has no visible label, but the column still has a name.
+        header: () => <span className="sr-only">Bookmark</span>,
+        meta: {
+            align: 'end',
+            // While the table scrolls sideways, the bookmark stays in view at the row's end.
+            stickyEnd: true,
+            skeleton: (
+                // As wide as the loaded cell's own content, so no column moves when the rows arrive.
+                <div className="flex size-7 items-center justify-end">
+                    <Skeleton
+                        className={cn(skeletonBarClass, 'size-4 rounded-sm')}
+                    />
+                </div>
+            ),
+        },
+        cell: ({ row }) => <BookmarkCell trace={row.original} />,
     },
 ]

@@ -101,7 +101,10 @@ Do not rewrite any of them in a feature.
   for the list of sorts the API takes.
 - **`DataTable`** (`patterns`): draws the loading, refreshing and empty states, and provides
   `TableBusyContext` from its `busy` prop. A control in a cell that writes to the cache reads it
-  and disables itself while the rows are the previous view's.
+  and disables itself while the rows are the previous view's. A narrow column of one control (a
+  row's bookmark) is pinned to the right edge with `meta.stickyEnd`, so it stays in view where the
+  table scrolls sideways. Make the control fill the cell, padding included: the pinned cell sits
+  above the row's link, so a click on its padding would otherwise do nothing.
 - **`useListStatus`** (`hooks`): from the query, whether to draw `failed`, `loading` or `empty`, and
   the move off a page past the end.
 
