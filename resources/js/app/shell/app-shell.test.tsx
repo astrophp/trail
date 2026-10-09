@@ -63,16 +63,19 @@ describe('a page that throws', () => {
         renderApp('/agents')
 
         await userEvent.click(
-            within(nav()).getByRole('link', { name: 'Overview' }),
+            within(nav()).getByRole('link', { name: 'Usage & cost' }),
         )
 
         expect(
-            await screen.findByRole('heading', { level: 1, name: 'Overview' }),
+            await screen.findByRole('heading', {
+                level: 1,
+                name: 'Usage & cost',
+            }),
         ).toBeVisible()
         expect(screen.queryByRole('alert')).not.toBeInTheDocument()
         // The shell still hands focus to the new page's heading.
         expect(screen.getByRole('heading', { level: 1 })).toHaveFocus()
-        expect(document.title).toContain('Overview')
+        expect(document.title).toContain('Usage & cost')
     })
 
     it('tries the page again, and focuses the recovered page’s heading', async () => {

@@ -80,6 +80,13 @@ export function useTraceList() {
         activeFilters.push({ key: 'bookmarked', label: 'Bookmarked' })
     }
 
+    if (state.slow) {
+        activeFilters.push({
+            key: 'slow',
+            label: 'Slow: 95th percentile and above',
+        })
+    }
+
     return {
         ...state,
         view,

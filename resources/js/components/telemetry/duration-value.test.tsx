@@ -46,6 +46,23 @@ describe('DurationValue', () => {
         expect(container.textContent).not.toMatch(/\d/)
     })
 
+    it('draws a figure over many runs without a status', () => {
+        render(<DurationValue of={{ duration_ms: 1_900 }} />)
+
+        expect(screen.getByText('1.90s')).toBeInTheDocument()
+    })
+
+    it('says no runs were measured for a missing figure over many runs, never a run state', () => {
+        const { container } = render(
+            <DurationValue of={{ duration_ms: null }} />,
+        )
+
+        expect(screen.getByText('No measured runs')).toBeInTheDocument()
+        expect(container.textContent).not.toMatch(
+            /Not captured|In progress|Pending|Incomplete/,
+        )
+    })
+
     it('shows a real zero as a duration, not as missing', () => {
         render(<DurationValue of={{ duration_ms: 0, status: 'completed' }} />)
 

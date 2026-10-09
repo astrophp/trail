@@ -20,6 +20,12 @@ const decimal = new Intl.NumberFormat(locale, {
     maximumFractionDigits: 1,
 })
 
+const share = new Intl.NumberFormat(locale, {
+    style: 'percent',
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+})
+
 const whole = new Intl.NumberFormat(locale, { maximumFractionDigits: 0 })
 
 const twoDigits = (value: number) => String(value).padStart(2, '0')
@@ -69,6 +75,22 @@ export function formatTokens(count: number): string {
     const value = (Math.sign(count) * tenths(unit)) / 10
 
     return `${decimal.format(value)}${unit.suffix}`
+}
+
+/**
+ * A fraction from 0 to 1 as a percentage with one decimal: `3.6%`. A real zero is `0.0%`; a share
+ * that would round to it, or to 100.0%, keeps its side of the edge (`<0.1%`, `>99.9%`).
+ */
+export function formatRate(rate: number): string {
+    if (rate > 0 && rate < 0.0005) {
+        return '<0.1%'
+    }
+
+    if (rate < 1 && rate >= 0.9995) {
+        return '>99.9%'
+    }
+
+    return share.format(rate)
 }
 
 /** A whole count with thousands separators: `9,432`, `1,284`. */
