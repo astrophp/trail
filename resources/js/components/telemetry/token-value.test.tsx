@@ -99,4 +99,58 @@ describe('TokenValue', () => {
 
         expect(container.firstElementChild).toHaveClass('extra')
     })
+
+    describe('pendingAmount="show"', () => {
+        it('shows the total so far with a Pending tag', () => {
+            render(
+                <TokenValue
+                    usage={{
+                        ...none,
+                        state: 'pending',
+                        total_tokens: 7_901_600,
+                    }}
+                    pendingAmount="show"
+                />,
+            )
+
+            expect(screen.getByText('7.9M')).toBeInTheDocument()
+            expect(screen.getByText('7,901,600 tokens')).toBeInTheDocument()
+            expect(screen.getByText(/^Pending/)).toBeInTheDocument()
+        })
+
+        it('says Pending, never 0, when nothing was recorded', () => {
+            const { container } = render(
+                <TokenValue
+                    usage={{ ...none, state: 'pending' }}
+                    pendingAmount="show"
+                />,
+            )
+
+            expect(screen.getByText('Pending')).toBeInTheDocument()
+            expect(container.textContent).not.toMatch(/\d/)
+        })
+
+        it('does not change a settled total', () => {
+            render(
+                <TokenValue
+                    usage={{ ...none, total_tokens: 842 }}
+                    pendingAmount="show"
+                />,
+            )
+
+            expect(screen.getByText('842')).toBeInTheDocument()
+            expect(screen.queryByText(/Pending/)).not.toBeInTheDocument()
+        })
+
+        it('is off by default: a pending total with a count is still only Pending', () => {
+            const { container } = render(
+                <TokenValue
+                    usage={{ ...none, state: 'pending', total_tokens: 99 }}
+                />,
+            )
+
+            expect(screen.getByText('Pending')).toBeInTheDocument()
+            expect(container.textContent).not.toMatch(/\d/)
+        })
+    })
 })

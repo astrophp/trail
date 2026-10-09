@@ -18,9 +18,9 @@ import { ConversationPage } from '@/pages/conversation-page'
 import { ConversationsPage } from '@/pages/conversations-page'
 import { NotFoundPage } from '@/pages/not-found-page'
 import { OverviewPage } from '@/pages/overview-page'
-import { PlaceholderPage } from '@/pages/placeholder-page'
 import { TracePage } from '@/pages/trace-page'
 import { TracesPage } from '@/pages/traces-page'
+import { UsagePage } from '@/pages/usage-page'
 
 export type Section =
     'overview' | 'traces' | 'conversations' | 'agents' | 'usage'
@@ -105,7 +105,7 @@ export const routeTable: RouteDef[] = [
     {
         path: '/usage',
         title: 'Usage & cost',
-        element: <PlaceholderPage title="Usage & cost" />,
+        element: <UsagePage />,
         section: 'usage',
         icon: ChartColumnIcon,
     },

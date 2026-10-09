@@ -369,6 +369,60 @@ export type AgentBreakdownResponse = {
     }
 }
 
+/** An intersection written out as one object type. */
+type Flat<T> = { [K in keyof T]: T[K] }
+
+/** How many of a set of steps could be priced: the steps that reported usage, and those that had no rate. */
+export type UsageRowCoverage = {
+    reported_steps: number
+    unpriced_steps: number
+    /** `null` when the unpriced steps reported neither input nor output tokens. */
+    unpriced_tokens: number | null
+}
+
+/** What the steps of a range add up to, beyond the summary of its runs. */
+export type UsageCoverage = Flat<UsageRowCoverage & { steps: number }>
+
+/** The usage page's totals: the summary of the range's runs, and how much of its usage was priced. */
+export type UsageResponse = {
+    data: { summary: Summary; coverage: UsageCoverage }
+    range: Range
+}
+
+/** What every row of the usage breakdown shares, whatever it groups by. */
+type UsageRowFigures = {
+    steps: number
+    runs: number
+    usage: Usage
+    cost: Cost
+    coverage: UsageRowCoverage
+    /** The traces list's parameters that return the runs behind the row. */
+    filters: Record<string, string>
+}
+
+export type UsageModelRow = Flat<
+    UsageRowFigures & { provider: string; model: string }
+>
+
+export type UsageAgentRow = Flat<UsageRowFigures & { agent: string }>
+
+export type UsageProviderRow = Flat<UsageRowFigures & { provider: string }>
+
+export type UsageBreakdownRow = UsageModelRow | UsageAgentRow | UsageProviderRow
+
+type UsageBreakdownBase = {
+    pagination: Pagination
+    /** `truncated` when more groups than `limit` were found and the rest were not read. */
+    row_limit: { limit: number; truncated: boolean }
+    range: Range
+}
+
+/** The usage of a range grouped by model, top-level agent or provider; `by` says which. */
+export type UsageBreakdownResponse =
+    | Flat<UsageBreakdownBase & { by: 'model'; data: UsageModelRow[] }>
+    | Flat<UsageBreakdownBase & { by: 'agent'; data: UsageAgentRow[] }>
+    | Flat<UsageBreakdownBase & { by: 'provider'; data: UsageProviderRow[] }>
+
 /** The answer to a bookmark write: the run's bookmark state after it. */
 export type BookmarkResponse = {
     data: { trace_id: string; bookmarked: boolean }

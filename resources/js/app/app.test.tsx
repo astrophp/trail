@@ -5,8 +5,9 @@ import { renderApp, appReady } from '@/test/render-app'
 import { agentsFor } from '@/test/agents-api'
 import { listFor as conversationsFor } from '@/test/conversations-api'
 import { json, listFor, mockApi } from '@/test/traces-api'
+import { breakdownFor, quietUsageFor } from '@/test/usage-api'
 
-// The Traces, Conversations and Agents pages ask for their lists when a test navigates to them.
+// The Traces, Conversations, Agents and Usage pages ask for their data when a test navigates to them.
 beforeEach(() => {
     mockApi((url) =>
         json(
@@ -14,7 +15,11 @@ beforeEach(() => {
                 ? conversationsFor(url)
                 : url.includes('/api/agents')
                   ? agentsFor(url)
-                  : listFor(url),
+                  : url.includes('/api/usage/breakdown')
+                    ? breakdownFor(url)
+                    : url.includes('/api/usage')
+                      ? quietUsageFor(url)
+                      : listFor(url),
         ),
     )
 })

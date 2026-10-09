@@ -30,8 +30,32 @@ const usages: [string, Usage][] = [
 
 export const catalogue: CatalogueEntry = {
     title: 'Token value',
-    specimens: usages.map(([name, usage]) => ({
-        name,
-        Component: () => <TokenValue usage={usage} />,
-    })),
+    specimens: [
+        ...usages.map(([name, usage]) => ({
+            name,
+            Component: () => <TokenValue usage={usage} />,
+        })),
+        {
+            name: 'Pending, total so far shown',
+            Component: () => (
+                <TokenValue
+                    usage={{
+                        ...none,
+                        state: 'pending',
+                        total_tokens: 7_901_600,
+                    }}
+                    pendingAmount="show"
+                />
+            ),
+        },
+        {
+            name: 'Pending, nothing recorded, so far shown',
+            Component: () => (
+                <TokenValue
+                    usage={{ ...none, state: 'pending' }}
+                    pendingAmount="show"
+                />
+            ),
+        },
+    ],
 }

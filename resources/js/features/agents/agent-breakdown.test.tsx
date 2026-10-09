@@ -372,6 +372,42 @@ describe('the models', () => {
         )
         report.mockRestore()
     })
+
+    it('say so, with no link, for a row with no filters or a filter value the list would trim', async () => {
+        const report = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+        mockApi({
+            breakdown: (url) =>
+                json(
+                    breakdownFor(url, {
+                        models: [
+                            model({ model: 'ok-model' }),
+                            model({ model: 'bare-model', filters: {} }),
+                            model({
+                                model: 'padded-model',
+                                filters: {
+                                    agent: ' SupportAssistant',
+                                    provider: 'anthropic',
+                                    model: 'padded-model',
+                                },
+                            }),
+                        ],
+                        tools: [],
+                        delegated: nothingDelegated,
+                    }),
+                ),
+        })
+        await open()
+        await screen.findByText('ok-model')
+        const [linked, bare, padded] = ownRows('Models')
+
+        expect(within(linked).getByRole('link')).toBeVisible()
+        expect(within(bare).queryByRole('link')).toBeNull()
+        expect(bare).toHaveTextContent('Its runs could not be linked.')
+        expect(within(padded).queryByRole('link')).toBeNull()
+        expect(padded).toHaveTextContent('Its runs could not be linked.')
+        report.mockRestore()
+    })
 })
 
 describe('the tools', () => {

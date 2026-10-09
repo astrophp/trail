@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { readTraceListView } from '@/api/trace-list-view'
-import { tracesLink, tracesLinkFor, tracesLinkers } from '@/api/traces-link'
+import {
+    linkRows,
+    tracesLink,
+    tracesLinkFor,
+    tracesLinkers,
+    unlinkable,
+} from '@/api/traces-link'
 import { attentionFixture } from '@/test/overview-api'
 
 const search = (to: ReturnType<typeof tracesLinkFor>) =>
@@ -172,5 +178,71 @@ describe('a base every link carries', () => {
         expect(() => linkFor('24h', { streamed: '1' })).toThrow(
             'no "streamed" filter',
         )
+    })
+})
+
+describe('linkRows', () => {
+    it('links each row to the runs its filters name, over the range', () => {
+        const rows: { filters: Record<string, string> }[] = [
+            { filters: { provider: 'openai', model: 'gpt-4.1' } },
+            { filters: { agent: 'Support' } },
+        ]
+
+        expect(linkRows(rows, '7d').map(({ to }) => to)).toEqual([
+            {
+                pathname: '/traces',
+                search: '?range=7d&provider=openai&model=gpt-4.1',
+            },
+            { pathname: '/traces', search: '?range=7d&agent=Support' },
+        ])
+        expect(unlinkable(linkRows(rows, '7d'))).toEqual([])
+    })
+
+    it('gives a row no link, and the reason, when the list cannot keep a filter', () => {
+        const rows: { filters: Record<string, string> }[] = [
+            { filters: { tenant: 'acme' } },
+            { filters: { agent: 'A' } },
+        ]
+        const linked = linkRows(rows, '24h')
+
+        expect(linked[0].to).toBeNull()
+        expect(linked[0].reason).toContain('no "tenant" filter')
+        expect(linked[1].to).not.toBeNull()
+        expect(unlinkable(linked)).toEqual([linked[0].reason])
+    })
+
+    it('gives a row that names no filter no link: it would lead to every run', () => {
+        const linked = linkRows([{ filters: {} }, {}], '24h')
+
+        expect(linked.map(({ to }) => to)).toEqual([null, null])
+        expect(linked.map(({ reason }) => reason)).toEqual([
+            'The row names no filter to link by.',
+            'The row names no filter to link by.',
+        ])
+    })
+
+    it('gives a row whose value the address would drop no link', () => {
+        const [row] = linkRows([{ filters: { agent: '' } }], '24h')
+
+        expect(row.to).toBeNull()
+        expect(row.reason).toContain('"agent"')
+    })
+
+    it.each([[' '], [' lead'], ['trail ']])(
+        'gives a row whose value %j has whitespace at its ends no link: the list trims it',
+        (agent) => {
+            const [row] = linkRows([{ filters: { agent } }], '24h')
+
+            expect(row.to).toBeNull()
+            expect(row.reason).toContain('whitespace')
+        },
+    )
+
+    it('keeps whitespace inside a value', () => {
+        const [row] = linkRows([{ filters: { agent: 'a  b' } }], '24h')
+
+        expect(
+            search(row.to as ReturnType<typeof tracesLinkFor>).get('agent'),
+        ).toBe('a  b')
     })
 })

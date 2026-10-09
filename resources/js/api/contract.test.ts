@@ -56,6 +56,10 @@ import type {
     TraceNeighbours,
     TraceNeighboursResponse,
     TraceUsageBreakdown,
+    UsageBreakdownResponse,
+    UsageCoverage,
+    UsageResponse,
+    UsageRowCoverage,
     Attempt,
     Message,
     MessagePart,
@@ -594,6 +598,67 @@ const agentBreakdownResponse = z.strictObject({
     }),
 })
 
+const usageRowCoverage = z.strictObject({
+    reported_steps: count,
+    unpriced_steps: count,
+    unpriced_tokens: nullable(count),
+})
+
+const usageCoverage = z.strictObject({
+    steps: count,
+    reported_steps: count,
+    unpriced_steps: count,
+    unpriced_tokens: nullable(count),
+})
+
+const usageResponse = z.strictObject({
+    data: z.strictObject({ summary, coverage: usageCoverage }),
+    range,
+})
+
+const usageRowFigures = {
+    steps: count,
+    runs: count,
+    usage,
+    cost,
+    coverage: usageRowCoverage,
+    filters: z.record(z.string(), z.string()),
+}
+
+const usageBreakdownBase = {
+    pagination,
+    row_limit: z.strictObject({ limit: count, truncated: z.boolean() }),
+    range,
+}
+
+const usageBreakdownResponse = z.discriminatedUnion('by', [
+    z.strictObject({
+        by: z.literal('model'),
+        data: z.array(
+            z.strictObject({
+                provider: z.string(),
+                model: z.string(),
+                ...usageRowFigures,
+            }),
+        ),
+        ...usageBreakdownBase,
+    }),
+    z.strictObject({
+        by: z.literal('agent'),
+        data: z.array(
+            z.strictObject({ agent: z.string(), ...usageRowFigures }),
+        ),
+        ...usageBreakdownBase,
+    }),
+    z.strictObject({
+        by: z.literal('provider'),
+        data: z.array(
+            z.strictObject({ provider: z.string(), ...usageRowFigures }),
+        ),
+        ...usageBreakdownBase,
+    }),
+])
+
 const messageParts = ['prompt', 'response', 'activity'] as const
 const toolCallLinks = [
     'linked',
@@ -809,6 +874,18 @@ describe('types', () => {
         expectTypeOf<
             z.infer<typeof agentBreakdownResponse>
         >().toEqualTypeOf<AgentBreakdownResponse>()
+        expectTypeOf<
+            z.infer<typeof usageCoverage>
+        >().toEqualTypeOf<UsageCoverage>()
+        expectTypeOf<
+            z.infer<typeof usageRowCoverage>
+        >().toEqualTypeOf<UsageRowCoverage>()
+        expectTypeOf<
+            z.infer<typeof usageResponse>
+        >().toEqualTypeOf<UsageResponse>()
+        expectTypeOf<
+            z.infer<typeof usageBreakdownResponse>
+        >().toEqualTypeOf<UsageBreakdownResponse>()
         expectTypeOf<
             z.infer<typeof traceNeighbours>
         >().toEqualTypeOf<TraceNeighbours>()
@@ -1195,6 +1272,45 @@ describe('tests/Contract/agent-breakdown.json', () => {
     it('says how many there are beside the rows', () => {
         expect(parsed.data?.limits.models.total).toBe(data?.models.length)
         expect(parsed.data?.limits.tools.total).toBe(data?.tools.length)
+    })
+})
+
+describe('tests/Contract/usage.json', () => {
+    const parsed = usageResponse.safeParse(contractFixture('usage'))
+
+    it('is what the API types describe', () => {
+        expect(parsed.error?.issues).toBeUndefined()
+    })
+
+    it('has a run still running, so its usage and cost are pending, and a step that could not be priced', () => {
+        const data = parsed.data?.data
+
+        expect(data?.summary.runs.running).toBeGreaterThan(0)
+        expect(data?.summary.cost.state).toBe('pending')
+        expect(data?.coverage.unpriced_steps).toBeGreaterThan(0)
+    })
+})
+
+describe('tests/Contract/usage-breakdown.json', () => {
+    const parsed = usageBreakdownResponse.safeParse(
+        contractFixture('usage-breakdown'),
+    )
+
+    it('is what the API types describe', () => {
+        expect(parsed.error?.issues).toBeUndefined()
+    })
+
+    it('has a pending partly priced row and a row that reported nothing, each with the filters that list its runs', () => {
+        const rows = parsed.data?.data ?? []
+
+        expect(rows.some((row) => row.cost.state === 'pending')).toBe(true)
+        expect(rows.some((row) => row.usage.state === 'not_reported')).toBe(
+            true,
+        )
+
+        for (const row of rows) {
+            expect(Object.keys(row.filters).length).toBeGreaterThan(0)
+        }
     })
 })
 

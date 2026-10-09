@@ -1,12 +1,10 @@
 import { useMemo } from 'react'
+import { linkRows, unlinkable } from '@/api/traces-link'
 import { BreakdownPanel } from '@/features/agents/breakdown-panel'
-import { linkRows, unlinkable } from '@/features/agents/breakdown-links'
-import {
-    useUnlinkedReport,
-    type BreakdownState,
-} from '@/features/agents/breakdown-state'
+import type { BreakdownState } from '@/features/agents/breakdown-state'
 import { shareOf } from '@/features/agents/breakdown-words'
 import { ToolRow } from '@/features/agents/tool-row'
+import { useUnlinkedReport } from '@/hooks/use-unlinked-report'
 
 const none = { limit: 0, total: 0 }
 
