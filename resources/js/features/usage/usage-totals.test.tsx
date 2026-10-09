@@ -265,10 +265,11 @@ describe('the pricing coverage', () => {
         expect(wordsOf('Pricing coverage')).toEqual([
             '1 unpriced run',
             '1 step · 30 tokens without a rate',
+            'Review prices',
         ])
         expect(
             within(metric('Pricing coverage'))
-                .getByRole('link')
+                .getByRole('link', { name: 'Pricing coverage' })
                 .getAttribute('href'),
         ).toBe('/trail/traces?range=7d&unpriced=1')
     })
@@ -293,6 +294,7 @@ describe('the pricing coverage', () => {
         expect(wordsOf('Pricing coverage')).toEqual([
             '8 unpriced runs',
             '11 steps · 24.8k tokens without a rate',
+            'Review prices',
         ])
     })
 
@@ -304,6 +306,7 @@ describe('the pricing coverage', () => {
         expect(wordsOf('Pricing coverage')).toEqual([
             '1 unpriced run',
             '1 step without a rate',
+            'Review prices',
         ])
         expect(metric('Pricing coverage')).not.toHaveTextContent(
             /tokens|Not captured|\b0\b/,
@@ -330,6 +333,7 @@ describe('the pricing coverage', () => {
         expect(wordsOf('Pricing coverage')).toEqual([
             '1 unpriced run',
             '1 step · 1 token without a rate',
+            'Review prices',
         ])
     })
 
@@ -401,10 +405,13 @@ describe('the pricing coverage', () => {
         renderApp('/usage')
         await totals()
 
-        expect(wordsOf('Pricing coverage')).toEqual(['2 unpriced runs'])
+        expect(wordsOf('Pricing coverage')).toEqual([
+            '2 unpriced runs',
+            'Review prices',
+        ])
         expect(
             within(metric('Pricing coverage'))
-                .getByRole('link')
+                .getByRole('link', { name: 'Pricing coverage' })
                 .getAttribute('href'),
         ).toBe('/trail/traces?unpriced=1')
     })
@@ -429,10 +436,13 @@ describe('the pricing coverage', () => {
         expect(wordsOf('Pricing coverage')).toEqual([
             '3 unpriced steps',
             '30 tokens without a rate',
+            'Review prices',
         ])
         expect(metric('Pricing coverage')).not.toHaveTextContent(/\b0\b/)
         expect(
-            within(metric('Pricing coverage')).queryByRole('link'),
+            within(metric('Pricing coverage')).queryByRole('link', {
+                name: 'Pricing coverage',
+            }),
         ).not.toBeInTheDocument()
     })
 
@@ -453,7 +463,10 @@ describe('the pricing coverage', () => {
         renderApp('/usage')
         await totals()
 
-        expect(wordsOf('Pricing coverage')).toEqual(['1 unpriced step'])
+        expect(wordsOf('Pricing coverage')).toEqual([
+            '1 unpriced step',
+            'Review prices',
+        ])
     })
 
     it('does not call a range priced when no step reported usage', async () => {

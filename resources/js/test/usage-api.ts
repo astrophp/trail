@@ -194,20 +194,25 @@ const isBreakdown = (url: string) => url.includes('/api/usage/breakdown')
 const isUsage = (url: string) => url.includes('/api/usage') && !isBreakdown(url)
 
 /**
- * Answers `/meta` with its fixture, `/usage` with `totals` (by default with a run still running)
- * and `/usage/breakdown` with `breakdown`.
+ * Answers `/meta` with its fixture, `/usage` with `totals` (by default with a run still running),
+ * `/usage/breakdown` with `breakdown` and `/prices` with `prices` (by default no models, so the
+ * price panel adds no text or table to a test about something else).
  */
 export function mockApi(
     totals: Handler = (url) => json(usageFor(url)),
     breakdown: Handler = (url) => json(breakdownFor(url)),
     meta: Handler = () => json(metaFixture),
+    prices: Handler = () =>
+        json({ data: [], limit: { limit: 500, total: 0, truncated: false } }),
 ) {
     const fetchMock = vi.fn<Handler>((url, init) =>
         url.includes('/api/meta')
             ? meta(url, init)
-            : isBreakdown(url)
-              ? breakdown(url, init)
-              : totals(url, init),
+            : url.includes('/api/prices')
+              ? prices(url, init)
+              : isBreakdown(url)
+                ? breakdown(url, init)
+                : totals(url, init),
     )
     vi.stubGlobal('fetch', fetchMock)
 

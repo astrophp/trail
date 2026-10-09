@@ -36,6 +36,10 @@ import type {
     Pagination,
     PreviousRange,
     PendingApproval,
+    Price,
+    PriceListResponse,
+    PriceRates,
+    PriceResponse,
     Range,
     Span,
     SpanCost,
@@ -791,6 +795,41 @@ const traceNeighbours = z.strictObject({
 
 const traceNeighboursResponse = z.strictObject({ data: traceNeighbours })
 
+const priceRates = z.strictObject({
+    input: nullable(z.number()),
+    output: nullable(z.number()),
+    cache_read: nullable(z.number()),
+    cache_write: nullable(z.number()),
+})
+
+const priceVia = z.strictObject({ model: z.string(), saved: z.boolean() })
+
+const price = z.strictObject({
+    provider: z.string(),
+    model: z.string(),
+    rates: priceRates,
+    source: z.enum(['saved', 'config', 'prefix', 'none']),
+    via: nullable(priceVia),
+    default: z.strictObject({
+        source: z.enum(['config', 'prefix', 'none']),
+        via: nullable(priceVia),
+        rates: priceRates,
+    }),
+    observed: z.boolean(),
+    saved_at: nullable(timestamp),
+})
+
+const priceListResponse = z.strictObject({
+    data: z.array(price),
+    limit: z.strictObject({
+        limit: count,
+        total: count,
+        truncated: z.boolean(),
+    }),
+})
+
+const priceResponse = z.strictObject({ data: price })
+
 // The schemas and the types are the same type, both ways.
 describe('types', () => {
     it('match the schemas', () => {
@@ -892,6 +931,14 @@ describe('types', () => {
         expectTypeOf<
             z.infer<typeof traceNeighboursResponse>
         >().toEqualTypeOf<TraceNeighboursResponse>()
+        expectTypeOf<z.infer<typeof priceRates>>().toEqualTypeOf<PriceRates>()
+        expectTypeOf<z.infer<typeof price>>().toEqualTypeOf<Price>()
+        expectTypeOf<
+            z.infer<typeof priceListResponse>
+        >().toEqualTypeOf<PriceListResponse>()
+        expectTypeOf<
+            z.infer<typeof priceResponse>
+        >().toEqualTypeOf<PriceResponse>()
         expectTypeOf<
             NonNullable<z.infer<typeof trace>['issue_kind']>
         >().toEqualTypeOf<IssueKind>()
@@ -1012,6 +1059,43 @@ describe('tests/Contract/neighbours.json', () => {
 
         expect(data.previous).not.toBeNull()
         expect(data.next).not.toBeNull()
+    })
+})
+
+describe('tests/Contract/prices.json', () => {
+    it('is what the API types describe', () => {
+        expect(
+            priceListResponse.safeParse(contractFixture('prices')).error
+                ?.issues,
+        ).toBeUndefined()
+    })
+
+    it('holds a model of every source, a free rate and a blank one', () => {
+        const { data } = priceListResponse.parse(contractFixture('prices'))
+
+        expect(new Set(data.map((p) => p.source))).toEqual(
+            new Set(['saved', 'config', 'prefix', 'none']),
+        )
+        expect(data.some((p) => p.rates.cache_read === 0)).toBe(true)
+        expect(data.some((p) => p.rates.cache_write === null)).toBe(true)
+        expect(data.some((p) => p.via?.saved === true)).toBe(true)
+        expect(data.some((p) => p.observed && p.source === 'none')).toBe(true)
+    })
+})
+
+describe('tests/Contract/price.json', () => {
+    it('is what the API types describe', () => {
+        expect(
+            priceResponse.safeParse(contractFixture('price')).error?.issues,
+        ).toBeUndefined()
+    })
+
+    it('is a saved price with a time, whose default is the model it replaced', () => {
+        const { data } = priceResponse.parse(contractFixture('price'))
+
+        expect(data.source).toBe('saved')
+        expect(data.saved_at).not.toBeNull()
+        expect(data.default.source).toBe('prefix')
     })
 })
 

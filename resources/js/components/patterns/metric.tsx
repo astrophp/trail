@@ -11,6 +11,11 @@ type MetricProps = {
     change?: ReactNode
     /** A small secondary line beside the change, such as "27 failed". Not interactive: the metric's link covers it. */
     detail?: ReactNode
+    /**
+     * A link or button of its own, for what to do about the figure: on its own line, above the
+     * metric's link so it stays a target of its own.
+     */
+    action?: ReactNode
     /** Makes the whole metric a link to the evidence behind it. */
     to?: ComponentProps<typeof RowLink>['to']
     className?: string
@@ -25,6 +30,7 @@ export function Metric({
     children,
     change,
     detail,
+    action,
     to,
     className,
 }: MetricProps) {
@@ -63,6 +69,12 @@ export function Metric({
             {detail ? (
                 <dd className="mt-1.5 text-caption text-muted-foreground empty:hidden">
                     {detail}
+                </dd>
+            ) : null}
+            {/* Above the metric's stretched link, which would otherwise take every click. */}
+            {action ? (
+                <dd className="relative z-1 mt-1.5 basis-full text-caption">
+                    {action}
                 </dd>
             ) : null}
         </div>
