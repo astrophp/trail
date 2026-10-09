@@ -13,6 +13,7 @@ import type { TimeRangePreset } from '@/lib/time-range'
 import { maxFailedRefreshes, refreshEvery } from '@/lib/refresh-policy'
 import { overviewKeys } from '@/api/overview'
 import { renderApp, testQueryClient } from '@/test/render-app'
+import { until } from '@/test/wait'
 import {
     attentionFixture,
     attentionFor,
@@ -72,33 +73,6 @@ const fixedRange = (preset: TimeRangePreset) => () =>
         ...attentionFixture,
         range: { ...attentionFixture.range, preset },
     })
-
-/**
- * Waits for something the page does not show, such as a request having been made. Testing
- * Library's own `waitFor` looks again on a `setInterval`, which the tests below replace with a
- * fake clock, so for a condition the DOM does not change with it would look once, and again only
- * at its time limit. This looks again every few milliseconds on the real `setTimeout`, and stops
- * on the condition, never on a count of milliseconds.
- */
-async function until(check: () => void, limit = 4000) {
-    const deadline = Date.now() + limit
-
-    for (;;) {
-        try {
-            check()
-
-            return
-        } catch (error) {
-            if (Date.now() > deadline) {
-                throw error
-            }
-
-            await act(async () => {
-                await new Promise((resolve) => setTimeout(resolve, 5))
-            })
-        }
-    }
-}
 
 /** The panel, found by its heading. */
 async function panel(): Promise<HTMLElement> {
