@@ -250,8 +250,8 @@ describe('the strip', () => {
         expect(text.match(/(?<!\d)1 (unpriced )?runs?(?![a-z])/g)).toHaveLength(
             1,
         )
-        expect(text).not.toContain('unpriced runs')
-        expect(wordsOf('Pricing coverage')[0]).toBe('1 run')
+        expect(text.match(/unpriced runs?/g)).toHaveLength(1)
+        expect(wordsOf('Pricing coverage')[0]).toBe('1 unpriced run')
         expect(metric('Estimated cost')).toHaveTextContent(formatCost(0.01315))
     })
 })
@@ -263,7 +263,7 @@ describe('the pricing coverage', () => {
         await totals()
 
         expect(wordsOf('Pricing coverage')).toEqual([
-            '1 run',
+            '1 unpriced run',
             '1 step · 30 tokens without a rate',
         ])
         expect(
@@ -291,7 +291,7 @@ describe('the pricing coverage', () => {
         await totals()
 
         expect(wordsOf('Pricing coverage')).toEqual([
-            '8 runs',
+            '8 unpriced runs',
             '11 steps · 24.8k tokens without a rate',
         ])
     })
@@ -302,7 +302,7 @@ describe('the pricing coverage', () => {
         await totals()
 
         expect(wordsOf('Pricing coverage')).toEqual([
-            '1 run',
+            '1 unpriced run',
             '1 step without a rate',
         ])
         expect(metric('Pricing coverage')).not.toHaveTextContent(
@@ -328,7 +328,7 @@ describe('the pricing coverage', () => {
         await totals()
 
         expect(wordsOf('Pricing coverage')).toEqual([
-            '1 run',
+            '1 unpriced run',
             '1 step · 1 token without a rate',
         ])
     })

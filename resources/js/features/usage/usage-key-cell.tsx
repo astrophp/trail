@@ -48,7 +48,7 @@ export function UsageKeyCell({
                     <ModelLabel
                         of={{ provider: row.provider, model: row.model }}
                     />,
-                    'block',
+                    'block min-w-0 wrap-anywhere',
                 )
             ) : (
                 link(row.provider, 'wrap-anywhere')

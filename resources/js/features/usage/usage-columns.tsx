@@ -88,8 +88,8 @@ export function usageColumns({
             enableSorting: true,
             meta: {
                 rowHeader: true,
-                // The column takes the width the others leave.
-                className: 'w-full max-w-0',
+                // The column takes the width the others leave, never less than a floor: the cell is cut at its width (max-w-0), so without one it collapses under its neighbour.
+                className: 'w-full max-w-0 min-w-32 xs:min-w-40',
                 skeleton: (
                     <div className="flex w-24 max-w-full flex-col gap-2 py-1.5 xs:w-45">
                         <Skeleton

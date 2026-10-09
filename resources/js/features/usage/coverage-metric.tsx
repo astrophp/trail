@@ -55,7 +55,7 @@ export function CoverageMetric({
                 </>
             }
         >
-            {plural(unpriced_runs, 'run', 'runs')}
+            {plural(unpriced_runs, 'unpriced run', 'unpriced runs')}
         </Metric>
     )
 }
