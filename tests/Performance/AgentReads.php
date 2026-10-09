@@ -2,6 +2,7 @@
 
 namespace Astro\Trail\Tests\Performance;
 
+use Astro\Trail\Enums\SpanType;
 use Astro\Trail\Queries\TimeRange;
 use Astro\Trail\Queries\TraceIndex;
 use Astro\Trail\Storage\StaleRuns;
@@ -407,6 +408,74 @@ final class AgentReads
         $range->apply($query, 'started_at');
 
         return $query;
+    }
+
+    // K. The models of the whole range ------------------------------------------------------------------------------
+
+    /**
+     * The step spans of the range grouped by provider and model, with what the models page would
+     * show. `own` bounds the steps by their own start (steps that started in the range); `runs` by the
+     * runs that started in it (with the span start at or after the range's start, as the runs list
+     * does). `distinct` counts the runs of each model, which costs a sort or a hash; `named` also pins
+     * the span's name, which every step span has in common.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function stepModels(TimeRange $range, string $bound, bool $distinct = true, bool $named = false): array
+    {
+        $cutoff = StaleRuns::cutoffColumn();
+        $query = $this->db->table('trail_spans as s')
+            ->where('s.type', SpanType::Step->value)
+            ->select('s.provider', 's.model')
+            ->selectRaw('count(*) as steps')
+            ->selectRaw('count(s.duration_ms) as measured')
+            ->selectRaw('sum(s.duration_ms) as duration_sum')
+            ->selectRaw('sum(s.input_tokens) as input_tokens')
+            ->selectRaw('sum(s.output_tokens) as output_tokens')
+            ->selectRaw('sum(s.cache_read_tokens) as cache_read_tokens')
+            ->selectRaw('sum(s.cache_write_tokens) as cache_write_tokens')
+            ->selectRaw('sum(s.reasoning_tokens) as reasoning_tokens')
+            ->selectRaw('sum(s.cost) as cost_sum')
+            ->selectRaw('sum(case when s.cost is null and (s.input_tokens is not null or s.output_tokens is not null or s.cache_read_tokens is not null or s.cache_write_tokens is not null or s.reasoning_tokens is not null) then 1 else 0 end) as unpriced')
+            ->selectRaw('sum(case when s.status = ? and s.created_at >= ? then 1 else 0 end) as running', ['running', $cutoff]);
+
+        if ($distinct) {
+            $query->selectRaw('count(distinct s.trace_id) as runs');
+        }
+
+        if ($named) {
+            $query->where('s.name', 'step');
+        }
+
+        if ($bound === 'own') {
+            $range->apply($query, 's.started_at');
+        } else {
+            $query->where('s.started_at', '>=', StaleRuns::format($range->from))->whereIn('s.trace_id', $this->runsOf($range));
+        }
+
+        return self::rows($query->groupBy('s.provider', 's.model'));
+    }
+
+    /**
+     * How far apart the two bounds are on this data: the steps and the runs each one counts.
+     *
+     * @return array{own_steps: int, own_runs: int, runs_steps: int, runs_runs: int}
+     */
+    public function stepBoundsDiffer(TimeRange $range): array
+    {
+        $own = $this->db->table('trail_spans as s')->where('s.type', 'step')->selectRaw('count(*) as steps, count(distinct s.trace_id) as runs');
+        $range->apply($own, 's.started_at');
+
+        $inRuns = $this->db->table('trail_spans as s')->where('s.type', 'step')->selectRaw('count(*) as steps, count(distinct s.trace_id) as runs')
+            ->where('s.started_at', '>=', StaleRuns::format($range->from))->whereIn('s.trace_id', $this->runsOf($range));
+
+        $one = $own->first();
+        $other = $inRuns->first();
+
+        return [
+            'own_steps' => (int) ($one->steps ?? 0), 'own_runs' => (int) ($one->runs ?? 0),
+            'runs_steps' => (int) ($other->steps ?? 0), 'runs_runs' => (int) ($other->runs ?? 0),
+        ];
     }
 
     // Shared ---------------------------------------------------------------------------------------------------------

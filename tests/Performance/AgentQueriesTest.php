@@ -14,9 +14,12 @@ use Astro\Trail\Tests\TestCase;
  * ROWS is the number of runs; each run brings about five spans. Other variables:
  * TRAIL_MEASURE_SQLITE_ROWS (runs SQLite is filled with, default 300; it is only a sanity check),
  * TRAIL_MEASURE_REPEATS (default 5; a read whose first run takes over 10 s is repeated 3 times),
- * TRAIL_MEASURE_CONFIGS (indexes to time with, default baseline,traces_name,spans_type_name,spans_parent,spans_trace_type,all;
+ * TRAIL_MEASURE_CONFIGS (indexes to time with, default baseline,traces_name,spans_parent,spans_trace_type,all;
  * join several with +), TRAIL_MEASURE_ONLY (a regular expression the label of a read must match),
  * TRAIL_MEASURE_CHECK_MAX (the most runs a dataset may have for the agreement checks, default 150000),
+ * TRAIL_MEASURE_SUITE (candidates, the default, times the candidate reads and the indexes tried by hand; endpoints
+ * times the reads of the agents endpoints as they are, and the models of the whole range, with the indexes of the
+ * migration only: give it TRAIL_MEASURE_CONFIGS=baseline),
  * TRAIL_MEASURE_OUT (a file the report is appended to), TRAIL_MEASURE_HOST, TRAIL_MEASURE_MYSQL_PORT
  * (33306), TRAIL_MEASURE_PGSQL_PORT (35432) and TRAIL_MEASURE_PASSWORD. The databases must be
  * throwaway ones: the tables are dropped, created and filled with generated rows.

@@ -2,11 +2,18 @@
 
 namespace Astro\Trail\Tests\Performance;
 
+use Astro\Trail\Queries\AgentBreakdown;
+use Astro\Trail\Queries\AgentFilters;
+use Astro\Trail\Queries\AgentIndex;
+use Astro\Trail\Queries\AgentLookup;
 use Astro\Trail\Queries\AttentionQuery;
 use Astro\Trail\Queries\BucketUnit;
 use Astro\Trail\Queries\OverviewQuery;
+use Astro\Trail\Queries\Page;
 use Astro\Trail\Queries\RunScope;
 use Astro\Trail\Queries\TimeRange;
+use Astro\Trail\Queries\TraceFilters;
+use Astro\Trail\Queries\TraceIndex;
 use Carbon\CarbonImmutable;
 use Closure;
 use Illuminate\Database\Connection;
@@ -39,7 +46,6 @@ final class AgentMeasurement
     /** @var array<string, array{0: string, 1: string}> the indexes tried by hand: name => table and columns */
     private const INDEXES = [
         'traces_name' => ['trail_traces', 'name, started_at'],
-        'spans_type_name' => ['trail_spans', 'type, name, started_at'],
         'spans_parent' => ['trail_spans', 'parent_id'],
         'spans_trace_type' => ['trail_spans', 'trace_id, type, name'],
     ];
@@ -57,6 +63,7 @@ final class AgentMeasurement
         private readonly string $configs,
         private readonly string $only,
         private readonly int $checkMax,
+        private readonly string $suite = 'candidates',
     ) {
         $this->timer = new ReadTimer($repeats);
     }
@@ -70,9 +77,10 @@ final class AgentMeasurement
             $env('TRAIL_MEASURE_ROWS', '100000'),
             (int) $env('TRAIL_MEASURE_REPEATS', '5'),
             $env('TRAIL_MEASURE_OUT', ''),
-            $env('TRAIL_MEASURE_CONFIGS', 'baseline,traces_name,spans_type_name,spans_parent,spans_trace_type,all'),
+            $env('TRAIL_MEASURE_CONFIGS', 'baseline,traces_name,spans_parent,spans_trace_type,all'),
             $env('TRAIL_MEASURE_ONLY', ''),
             (int) $env('TRAIL_MEASURE_CHECK_MAX', '150000'),
+            $env('TRAIL_MEASURE_SUITE', 'candidates'),
         );
     }
 
@@ -133,7 +141,7 @@ final class AgentMeasurement
 
         $reads = new AgentReads($db);
 
-        if ($driver === 'sqlite' || $rows <= $this->checkMax) {
+        if ($this->suite === 'candidates' && ($driver === 'sqlite' || $rows <= $this->checkMax)) {
             foreach ($ranges as $preset => $range) {
                 array_push($this->findings, ...(new AgentChecks($db, $reads))->run($range, "{$driver} {$rows} runs {$preset}"));
             }
@@ -145,11 +153,17 @@ final class AgentMeasurement
 
         $context = $this->context($reads, $ranges);
 
+        if ($this->suite === 'endpoints') {
+            foreach ($ranges as $preset => $range) {
+                $this->log(sprintf('K bounds on this data, %s: steps that started in the range %d (in %d runs); steps of the runs that started in it %d (in %d runs).', $preset, ...array_values($reads->stepBoundsDiffer($range))));
+            }
+        }
+
         foreach (array_filter(array_map('trim', explode(',', $this->configs))) as $config) {
             $names = $this->indexNames($config);
             $built = $this->build($db, $driver, $names);
 
-            foreach ($this->definitions($reads, $context) as [$label, $touchesSpans, $read]) {
+            foreach ($this->suite === 'endpoints' ? $this->endpointDefinitions($reads) : $this->definitions($reads, $context) as [$label, $touchesSpans, $read]) {
                 if (($this->only !== '' && preg_match('/'.$this->only.'/', $label) !== 1) || ($config !== 'baseline' && ! $touchesSpans && ! array_filter($names, fn (string $name) => self::INDEXES[$name][0] === 'trail_traces'))) {
                     continue;
                 }
@@ -163,7 +177,7 @@ final class AgentMeasurement
             $this->drop($db, $driver, $names);
         }
 
-        if ($driver !== 'sqlite') {
+        if ($driver !== 'sqlite' && $this->suite === 'candidates') {
             $this->writes($db, $driver, $now, $rows);
         }
     }
@@ -237,6 +251,75 @@ final class AgentMeasurement
             ['J overview, 10% agent', false, fn (TimeRange $r) => (new OverviewQuery)->read($r, RunScope::agent($tenth))],
             ['J attention, 35% agent', false, fn (TimeRange $r) => (new AttentionQuery)->read($r, RunScope::agent($big))],
             ['J attention, 10% agent', false, fn (TimeRange $r) => (new AttentionQuery)->read($r, RunScope::agent($tenth))],
+        ];
+    }
+
+    /**
+     * The reads of the endpoints as the controllers run them, and the models of the whole range in
+     * the bounds under consideration (K).
+     *
+     * @return list<array{0: string, 1: bool, 2: Closure(TimeRange): mixed}>
+     */
+    private function endpointDefinitions(AgentReads $reads): array
+    {
+        $big = self::BIG_AGENT;
+        $tenth = OverviewFixture::SCOPED_AGENT;
+        $delegatedOnly = SpanFixture::DELEGATED_ONLY;
+        $common = (string) array_key_first(SpanFixture::TOOLS);
+        $rare = (string) array_key_last(SpanFixture::TOOLS);
+
+        $show = function (string $name) {
+            return function (TimeRange $range) use ($name): array {
+                $agent = (new AgentIndex)->find($range, $name);
+
+                return [
+                    'agent' => $agent,
+                    'overview' => (new OverviewQuery)->read($range, RunScope::agent($name)),
+                    'attention' => (new AttentionQuery)->read($range, RunScope::agent($name)),
+                ];
+            };
+        };
+
+        $breakdown = function (string $name) {
+            return function (TimeRange $range) use ($name): array {
+                $identity = (new AgentLookup)->inRange($name, $range);
+                $breakdown = new AgentBreakdown;
+
+                return [
+                    'models' => $breakdown->models($name, $range),
+                    'tools' => $breakdown->tools($name, $range),
+                    'delegated_models' => $breakdown->delegatedModels($name, $range),
+                    'delegated_tools' => $breakdown->delegatedTools($name, $range),
+                    'identity' => $identity,
+                ];
+            };
+        };
+
+        $runsWithTool = function (string $tool) {
+            return function (TimeRange $range) use ($tool): array {
+                $filters = new TraceFilters(tool: $tool);
+                $index = new TraceIndex;
+
+                return ['counts' => $index->statusCounts($range, $filters, null), 'rows' => $index->rows($range, $filters, null, new Page)->all()];
+            };
+        };
+
+        return [
+            ['GET /agents, by runs', true, fn (TimeRange $r) => (new AgentIndex)->list($r, new AgentFilters, new Page)->agents],
+            ['GET /agents, by cost', true, fn (TimeRange $r) => (new AgentIndex)->list($r, new AgentFilters(sort: 'cost'), new Page)->agents],
+            ['GET /agents/show, 35% agent', true, $show($big)],
+            ['GET /agents/show, 10% agent', true, $show($tenth)],
+            ['GET /agents/show, delegated-only agent', true, $show($delegatedOnly)],
+            ['GET /agents/breakdown, 35% agent', true, $breakdown($big)],
+            ['GET /agents/breakdown, 10% agent', true, $breakdown($tenth)],
+            ['GET /agents/breakdown, delegated-only agent', true, $breakdown($delegatedOnly)],
+            ['GET /traces?tool=, most common tool', true, $runsWithTool($common)],
+            ['GET /traces?tool=, rarest tool', true, $runsWithTool($rare)],
+            ['K (i) steps that started in the range', true, fn (TimeRange $r) => $reads->stepModels($r, 'own')],
+            ['K (ii) steps of the runs of the range', true, fn (TimeRange $r) => $reads->stepModels($r, 'runs')],
+            ['K (iii) as (ii) without count(distinct)', true, fn (TimeRange $r) => $reads->stepModels($r, 'runs', distinct: false)],
+            ['K (iv-i) as (i), name pinned', true, fn (TimeRange $r) => $reads->stepModels($r, 'own', named: true)],
+            ['K (iv-ii) as (ii), name pinned', true, fn (TimeRange $r) => $reads->stepModels($r, 'runs', named: true)],
         ];
     }
 
