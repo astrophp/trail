@@ -72,9 +72,12 @@ final class MeasureDatabase
         };
     }
 
-    public static function analyse(Connection $db, string $driver): void
+    /**
+     * @param  list<string>  $tables
+     */
+    public static function analyse(Connection $db, string $driver, array $tables = ['trail_traces', 'trail_spans']): void
     {
-        foreach (['trail_traces', 'trail_spans'] as $table) {
+        foreach ($tables as $table) {
             match ($driver) {
                 'mysql' => $db->select("analyze table {$table}"),
                 'pgsql' => $db->statement("analyze {$table}"),
@@ -87,22 +90,24 @@ final class MeasureDatabase
      * The size on disk of each index of the two tables, the primary key included, and of the
      * table's rows without its secondary indexes under "(rows)".
      *
+     * @param  list<string>  $tables
      * @return array<string, int> "table.index" => bytes
      */
-    public static function sizes(Connection $db, string $driver): array
+    public static function sizes(Connection $db, string $driver, array $tables = ['trail_traces', 'trail_spans']): array
     {
         $sizes = [];
+        $list = "'".implode("', '", $tables)."'";
 
         if ($driver === 'mysql') {
-            self::analyse($db, $driver);
+            self::analyse($db, $driver, $tables);
 
-            foreach ($db->select("select table_name as t, index_name as i, stat_value * @@innodb_page_size as bytes from mysql.innodb_index_stats where database_name = database() and table_name in ('trail_traces', 'trail_spans') and stat_name = 'size'") as $row) {
-                $sizes["{$row->t}.".($row->i === 'PRIMARY' ? '(rows)' : $row->i)] = (int) $row->bytes;
+            foreach ($db->select("select table_name as t, index_name as i, stat_value * @@innodb_page_size as bytes from mysql.innodb_index_stats where database_name = database() and table_name in ({$list}) and stat_name = 'size'") as $row) {
+                $sizes["{$row->t}.".(in_array($row->i, ['PRIMARY', 'GEN_CLUST_INDEX'], true) ? '(rows)' : $row->i)] = (int) $row->bytes;
             }
         }
 
         if ($driver === 'pgsql') {
-            foreach ($db->select("select c.relname as t, 'rows' as i, pg_relation_size(c.oid) as bytes from pg_class c where c.relname in ('trail_traces', 'trail_spans') union all select t.relname, i.relname, pg_relation_size(i.oid) from pg_index x join pg_class t on t.oid = x.indrelid join pg_class i on i.oid = x.indexrelid where t.relname in ('trail_traces', 'trail_spans')") as $row) {
+            foreach ($db->select("select c.relname as t, 'rows' as i, pg_relation_size(c.oid) as bytes from pg_class c where c.relname in ({$list}) union all select t.relname, i.relname, pg_relation_size(i.oid) from pg_index x join pg_class t on t.oid = x.indrelid join pg_class i on i.oid = x.indexrelid where t.relname in ({$list})") as $row) {
                 $sizes["{$row->t}.".($row->i === 'rows' ? '(rows)' : $row->i)] = (int) $row->bytes;
             }
         }

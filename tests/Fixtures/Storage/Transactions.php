@@ -24,6 +24,8 @@ final class Transactions
             // Nothing the body wrote was rolled back with the wrapper, so it is removed by hand.
             DB::table('trail_spans')->delete();
             DB::table('trail_traces')->delete();
+            DB::table('trail_trace_models')->delete();
+            DB::table('trail_trace_tools')->delete();
 
             while ($db->transactionLevel() < $level) {
                 $db->beginTransaction();

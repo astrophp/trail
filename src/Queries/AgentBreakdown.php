@@ -6,6 +6,7 @@ use Astro\Trail\Enums\SpanType;
 use Astro\Trail\Enums\Status;
 use Astro\Trail\Storage\Models\Span;
 use Astro\Trail\Storage\Models\Trace;
+use Astro\Trail\Storage\SpanSql;
 use Astro\Trail\Storage\StaleRuns;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Database\Query\JoinClause;
@@ -75,8 +76,8 @@ final class AgentBreakdown
     {
         $running = Status::Running->value;
         $cutoff = StaleRuns::cutoffColumn();
-        $bills = "{$alias}.type in ('step', 'embedding')";
-        $reported = "({$alias}.input_tokens is not null or {$alias}.output_tokens is not null or {$alias}.cache_read_tokens is not null or {$alias}.cache_write_tokens is not null or {$alias}.reasoning_tokens is not null)";
+        $bills = SpanSql::bills($alias);
+        $reported = SpanSql::reported($alias);
 
         if (! $anySpan) {
             $spans->whereIn("{$alias}.type", [SpanType::Step->value, SpanType::Embedding->value]);
