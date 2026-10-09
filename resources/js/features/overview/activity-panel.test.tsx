@@ -786,15 +786,19 @@ describe('asking for data', () => {
                   ? 'overview'
                   : url.includes('/api/meta')
                     ? 'meta'
-                    : url,
+                    : url.includes('/api/agents')
+                      ? 'agents'
+                      : url,
         )
 
         expect(overviewUrls(fetchMock)).toHaveLength(1)
         expect(kinds.filter((kind) => kind === 'overview')).toHaveLength(1)
         expect(kinds.filter((kind) => kind === 'attention')).toHaveLength(1)
+        expect(kinds.filter((kind) => kind === 'agents')).toHaveLength(1)
         expect(
             kinds.filter(
-                (kind) => !['overview', 'attention', 'meta'].includes(kind),
+                (kind) =>
+                    !['overview', 'attention', 'agents', 'meta'].includes(kind),
             ),
         ).toEqual([])
     })

@@ -16,7 +16,7 @@ describe('resolveRoute', () => {
         ['/conversations', 'conversations', 'Conversations'],
         ['/conversations/transcript', 'conversations', 'Conversation'],
         ['/agents', 'agents', 'Agents'],
-        ['/agents/SupportAgent', 'agents', 'Agent'],
+        ['/agents/agent', 'agents', 'Agent'],
         ['/usage', 'usage', 'Usage & cost'],
         ['/traces/', 'traces', 'Traces'],
     ])('%s belongs to %s as "%s"', (pathname, section, title) => {
@@ -24,7 +24,14 @@ describe('resolveRoute', () => {
     })
 
     it('has no section for an unknown path, however close', () => {
-        for (const pathname of ['/nope', '/traces/a/b', '/trace']) {
+        for (const pathname of [
+            '/nope',
+            '/traces/a/b',
+            '/trace',
+            // An agent's name is in the query, not the path.
+            '/agents/SupportAgent',
+            '/agents/agent/x',
+        ]) {
             expect(resolveRoute(pathname)).toBe(notFoundRoute)
         }
 
@@ -48,7 +55,7 @@ describe('breadcrumbTrail', () => {
             { title: 'Traces', to: '/traces' },
             { title: 'Compare' },
         ])
-        expect(breadcrumbTrail(resolveRoute('/agents/x'))).toEqual([
+        expect(breadcrumbTrail(resolveRoute('/agents/agent'))).toEqual([
             { title: 'Agents', to: '/agents' },
             { title: 'Agent' },
         ])

@@ -1,5 +1,6 @@
 import { PageHeader } from '@/components/patterns/page-header'
 import { TimeRangeSelect } from '@/components/patterns/time-range-select'
+import { AgentPerformance } from '@/features/agents'
 import {
     ActivityPanel,
     AttentionPanel,
@@ -23,6 +24,7 @@ export function OverviewPage() {
             <div className="mt-6 flex flex-col gap-4">
                 <ActivityPanel />
                 <AttentionPanel />
+                <AgentPerformance />
             </div>
         </>
     )
