@@ -64,6 +64,26 @@ describe('PanelHeader', () => {
         expect(screen.getAllByRole('heading')).toHaveLength(1)
     })
 
+    it('is not focusable without a target, and is one script can focus with it', () => {
+        const { rerender } = render(<PanelHeader title="Model prices" />)
+        const heading = () =>
+            screen.getByRole('heading', { level: 2, name: 'Model prices' })
+
+        expect(heading()).not.toHaveAttribute('id')
+        expect(heading()).not.toHaveAttribute('tabindex')
+
+        rerender(
+            <PanelHeader title="Model prices" titleTarget={{ id: 'prices' }} />,
+        )
+
+        expect(heading()).toHaveAttribute('id', 'prices')
+        expect(heading()).toHaveAttribute('tabindex', '-1')
+
+        heading().focus()
+
+        expect(heading()).toHaveFocus()
+    })
+
     it('shows a description and an action only when it has them', () => {
         const { container, rerender } = render(
             <PanelHeader title="Trace activity" />,

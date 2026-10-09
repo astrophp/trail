@@ -14,6 +14,11 @@ type PanelHeaderProps = {
     description?: ReactNode
     /** A control that acts on the panel, at the end of the header: a tab list, a link. */
     action?: ReactNode
+    /**
+     * Makes the heading something a link can point at and move focus to: an `id`, and `tabIndex`
+     * -1 so script can focus it without it becoming a tab stop.
+     */
+    titleTarget?: { id: string }
     className?: string
 }
 
@@ -23,6 +28,7 @@ export function PanelHeader({
     headingLevel = 2,
     description,
     action,
+    titleTarget,
     className,
 }: PanelHeaderProps) {
     return (
@@ -33,6 +39,8 @@ export function PanelHeader({
             <CardTitle
                 role="heading"
                 aria-level={headingLevel}
+                id={titleTarget?.id}
+                tabIndex={titleTarget ? -1 : undefined}
                 className="text-heading"
             >
                 {title}

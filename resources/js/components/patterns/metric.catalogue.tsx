@@ -59,6 +59,27 @@ export const catalogue: CatalogueEntry = {
             ),
         },
         {
+            name: 'With an action of its own, beside the metric link',
+            Component: () => (
+                <MemoryRouter>
+                    <MetricStrip className="max-w-xs">
+                        <Metric
+                            label="Pricing coverage"
+                            to="/traces?unpriced=1"
+                            detail="2 steps without a rate"
+                            action={
+                                <a href="#prices" className="underline">
+                                    Review prices
+                                </a>
+                            }
+                        >
+                            1 unpriced run
+                        </Metric>
+                    </MetricStrip>
+                </MemoryRouter>
+            ),
+        },
+        {
             name: 'A link (hover it, Tab to it: the whole metric is the target)',
             Component: () => (
                 <MemoryRouter>

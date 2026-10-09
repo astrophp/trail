@@ -25,5 +25,17 @@ export const catalogue: CatalogueEntry = {
                 </Panel>
             ),
         },
+        {
+            name: 'A title a link can focus (an id and tabindex -1)',
+            Component: () => (
+                <Panel>
+                    <PanelHeader
+                        title="Model prices"
+                        titleTarget={{ id: 'catalogue-model-prices' }}
+                        description="Reached by an in-page link"
+                    />
+                </Panel>
+            ),
+        },
     ],
 }

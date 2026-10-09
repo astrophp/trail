@@ -135,6 +135,44 @@ describe('Metric', () => {
         expect(link.parentElement?.tagName).toBe('DT')
     })
 
+    it('puts an action of its own after the figures, beside the metric link and not instead of it', () => {
+        const { container } = renderMetric(
+            <Metric
+                label="Pricing coverage"
+                to="/traces?unpriced=1"
+                detail="2 steps"
+                action={<a href="#prices">Review prices</a>}
+            >
+                1 unpriced run
+            </Metric>,
+        )
+
+        const action = screen.getByRole('link', { name: 'Review prices' })
+
+        expect(
+            screen.getByRole('link', { name: 'Pricing coverage' }),
+        ).toHaveAttribute('href', '/traces?unpriced=1')
+        expect(group(container).contains(action)).toBe(true)
+        expect(
+            Array.from(group(container).children).map(
+                (child) => child.textContent,
+            ),
+        ).toEqual([
+            'Pricing coverage',
+            '1 unpriced run',
+            '2 steps',
+            'Review prices',
+        ])
+        expect(action.parentElement?.tagName).toBe('DD')
+    })
+
+    it('leaves out an action it is not given', () => {
+        renderMetric(<Metric label="Failed">27</Metric>)
+
+        expect(screen.queryByRole('link')).not.toBeInTheDocument()
+        expect(screen.getAllByRole('definition')).toHaveLength(1)
+    })
+
     it('takes a class name', () => {
         const { container } = renderMetric(
             <Metric label="Failed" className="extra">
