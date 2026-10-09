@@ -51,6 +51,11 @@ describe('spendChartInput', () => {
         expect(input.projected?.span).toEqual({ from: recordedCount - 1 })
     })
 
+    it('anchors the projected line at the last recorded bucket, so the join is drawn but not told', () => {
+        expect(input.projected?.anchor).toBe(recordedCount - 1)
+        expect(input.recorded.anchor).toBeUndefined()
+    })
+
     it('starts the projected line where the recorded one ends, and not before', () => {
         const values = input.projected?.values ?? []
 

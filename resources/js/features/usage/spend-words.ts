@@ -19,11 +19,13 @@ const completeBuckets: Record<BucketUnit, { one: string; other: string }> = {
     day: { one: 'complete day', other: 'complete days' },
 }
 
-/** A count of complete buckets: `1 complete hour`, `6 complete hours`. */
-function countComplete(count: number, unit: BucketUnit): string {
+/** The last complete buckets: `the last complete day`, `the last 6 complete days`. */
+function lastComplete(count: number, unit: BucketUnit): string {
     const noun = completeBuckets[unit]
 
-    return `${formatCount(count)} ${count === 1 ? noun.one : noun.other}`
+    return count === 1
+        ? `the last ${noun.one}`
+        : `the last ${formatCount(count)} ${noun.other}`
 }
 
 /**
@@ -34,7 +36,27 @@ export function assumptionSentence(
     unit: BucketUnit,
     window: { buckets: number; with_usage: number },
 ): string {
-    return `Projected from the tokens recorded in the last ${countComplete(window.buckets, unit)} (${formatCount(window.with_usage)} with usage), priced at the prices saved now. Recorded costs do not change when a price changes.`
+    return `Projected from the tokens recorded in ${lastComplete(window.buckets, unit)} (${formatCount(window.with_usage)} with usage), priced at the prices saved now. Recorded costs do not change when a price changes.`
+}
+
+/** How much of the window had recorded usage, in a clause: any count of buckets, with any count having some. */
+function historyClause(
+    unit: BucketUnit,
+    window: { buckets: number; with_usage: number },
+): string {
+    const { buckets, with_usage: some } = window
+
+    if (buckets === 1) {
+        return `${lastComplete(1, unit)} ${some === 0 ? 'has no' : 'has'} recorded usage`
+    }
+
+    const of = lastComplete(buckets, unit)
+
+    if (some === 0) {
+        return `none of ${of} have recorded usage`
+    }
+
+    return `${formatCount(some)} of ${of} ${some === 1 ? 'has' : 'have'} recorded usage`
 }
 
 /** Why there is no projection, when there is none. `null` when there is one. */
@@ -58,10 +80,10 @@ export function noProjectionSentence(
 
     // Enough buckets had usage, so what was missing was a price.
     if (window.with_usage >= neededWithUsage) {
-        return `None of the usage in the last ${countComplete(window.buckets, unit)} has a price, so nothing is projected.`
+        return `None of the usage in ${lastComplete(window.buckets, unit)} has a price, so nothing is projected.`
     }
 
-    return `Not enough recent usage to project: ${formatCount(window.with_usage)} of the last ${countComplete(window.buckets, unit)} have recorded usage; ${neededWithUsage} are needed.`
+    return `Not enough recent usage to project: ${historyClause(unit, window)}; ${neededWithUsage} are needed.`
 }
 
 const parts = (count: number, one: string, other: string) =>
@@ -104,11 +126,11 @@ const bucketNoun: Record<BucketUnit, string> = {
 /** What a chart of the estimated cost says, for assistive technology and the table's caption. */
 export function spendSummary(
     data: UsageSpendResponse['data'],
-    period: string | undefined,
+    period: string,
 ): string {
     const projected = data.projection.state === 'projected'
 
-    return `Cumulative estimated cost recorded through each ${bucketNoun[data.series.bucket]} of the range.${projected ? ` A dashed line continues it as a projection for the next ${period ?? 'period'}; a projection is not a cost.` : ''} Where there is no amount, there is no value.`
+    return `Cumulative estimated cost recorded through each ${bucketNoun[data.series.bucket]} of the range.${projected ? ` A dashed line continues it as a projection for the next ${period}; a projection is not a cost.` : ''} Where there is no amount, there is no value.`
 }
 
 /** The caption of the table behind the chart. */

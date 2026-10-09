@@ -1,6 +1,6 @@
 import { failureMessage } from '@/api/client'
 import { usageSpendExportUrl } from '@/api/usage'
-import type { UsageSpendResponse } from '@/api/types'
+import type { SpendBucket, UsageSpendResponse } from '@/api/types'
 import { BusyRegion } from '@/components/patterns/busy-region'
 import { ExportLinkButton } from '@/components/patterns/export-link-button'
 import { Panel } from '@/components/patterns/panel'
@@ -35,21 +35,21 @@ import { formatCost, resolveTimeZone } from '@/lib/format'
 import type { Refreshing } from '@/lib/refresh-policy'
 import { timeRangePeriods } from '@/lib/time-range'
 
-/** What there is to say instead of a chart when no bucket has an amount, by the state of what was recorded. */
-const nothingToDraw: Record<
-    UsageSpendResponse['data']['series']['buckets'][number]['cumulative']['state'],
-    string
-> = {
-    not_captured:
-        'No usage was recorded in this range, so there is no estimated cost to draw.',
-    unpriced:
-        'Usage was recorded in this range, but none of it could be priced, so there is no estimated cost to draw.',
-    pending:
-        'Runs in this range are still running and no estimated cost has been recorded yet.',
-    // Neither has an amount to be missing, so a series with one is drawn.
-    estimated: 'No estimated cost was recorded in this range.',
-    partial: 'No estimated cost was recorded in this range.',
+/** What there is to say instead of a chart when no bucket has an amount and nothing is projected, by the state of what was recorded. */
+function nothingToDraw(state: SpendBucket['cumulative']['state']): string {
+    switch (state) {
+        case 'unpriced':
+            return 'Usage was recorded in this range, but none of it could be priced, so there is no estimated cost to draw.'
+        case 'pending':
+            return 'Runs in this range are still running and no estimated cost has been recorded yet.'
+        default:
+            return 'No usage was recorded in this range, so there is no estimated cost to draw.'
+    }
 }
+
+/** What is said before the projection's own sentence (which says it is priced at the prices saved now) when nothing recorded has an estimated cost. */
+const nothingRecorded =
+    'None of the usage recorded in this range has an estimated cost, so the recorded line has no amount.'
 
 const caption = 'text-caption text-muted-foreground'
 
@@ -133,7 +133,7 @@ export function UsageSpend({
                 <PanelHeader
                     title="Estimated cost over time"
                     // Below md the action drops under the title and subtitle, full width.
-                    className="max-md:grid-cols-1 max-md:[&>[data-slot=card-action]]:col-start-1 max-md:[&>[data-slot=card-action]]:row-span-1 max-md:[&>[data-slot=card-action]]:row-start-3 max-md:[&>[data-slot=card-action]]:justify-self-start"
+                    className="max-md:has-data-[slot=card-action]:grid-cols-1 max-md:[&>[data-slot=card-action]]:col-start-1 max-md:[&>[data-slot=card-action]]:row-span-1 max-md:[&>[data-slot=card-action]]:row-start-3 max-md:[&>[data-slot=card-action]]:justify-self-start"
                     description="Cumulative US dollars · estimates"
                     action={
                         <div className="flex flex-wrap items-center gap-x-6 gap-y-2 md:justify-end">
@@ -145,7 +145,7 @@ export function UsageSpend({
                             )}
                             <ExportLinkButton
                                 href={usageSpendExportUrl({ range })}
-                                label="Export the estimated cost and its projection as CSV"
+                                detail="the estimated cost and its projection"
                                 title="Every bucket of this range, and the projected ones"
                                 size="sm"
                             >
@@ -173,15 +173,24 @@ function SpendContent({
     const unit = series.bucket
     const input = spendChartInput(data)
     const labels = bucketLabels(unit, input.labelled, timeZone)
-    const drawn = hasRecordedAmount(series.buckets)
+    const recorded = hasRecordedAmount(series.buckets)
     const last = series.buckets.at(-1)
     const projected = input.projected !== null
+    // A projection is drawn even when nothing recorded has an amount: a gap, then the dashed line.
+    const drawn = recorded || projected
     // Why there is no projection, or what the one there is assumes, and what it left out.
     const assumption =
         projection.state === 'projected' && projection.window !== null
             ? assumptionSentence(unit, projection.window)
             : noProjectionSentence(unit, projection)
-    const explanation = [assumption, leftOutSentence(projection.left_out)]
+    // What was left out belongs to a projection: with none, nothing was priced to leave anything out of.
+    const explanation = [
+        recorded ? null : projected ? nothingRecorded : null,
+        assumption,
+        projection.state === 'projected'
+            ? leftOutSentence(projection.left_out)
+            : null,
+    ]
         .filter((sentence) => sentence !== null)
         .join(' ')
 
@@ -216,7 +225,7 @@ function SpendContent({
                     data-slot="spend-nothing"
                     className="text-ui text-muted-foreground"
                 >
-                    {nothingToDraw[last?.cumulative.state ?? 'not_captured']}
+                    {nothingToDraw(last?.cumulative.state ?? 'not_captured')}
                 </p>
             )}
             {explanation === '' ? null : (

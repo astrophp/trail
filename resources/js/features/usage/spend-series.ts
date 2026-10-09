@@ -67,6 +67,8 @@ export function spendChartInput(
                           ...projected.map((bucket) => bucket.cumulative),
                       ],
                       span: { from: lastRecorded },
+                      // The first point only joins the dashed line to the recorded one.
+                      anchor: lastRecorded,
                   },
         lastRecorded,
         labelled: [

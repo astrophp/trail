@@ -55,7 +55,7 @@ describe('assumptionSentence', () => {
     it('says a single bucket in the singular', () => {
         expect(
             assumptionSentence('day', { buckets: 1, with_usage: 1 }),
-        ).toContain('in the last 1 complete day (1 with usage)')
+        ).toContain('in the last complete day (1 with usage)')
     })
 })
 
@@ -66,26 +66,47 @@ describe('noProjectionSentence', () => {
         ).toBeNull()
     })
 
-    it('counts the buckets that had usage against the ones that are needed', () => {
-        expect(
-            noProjectionSentence(
-                'hour',
-                history({ buckets: 6, with_usage: 2 }),
-            ),
-        ).toBe(
-            'Not enough recent usage to project: 2 of the last 6 complete hours have recorded usage; 3 are needed.',
-        )
-        expect(
-            noProjectionSentence('5m', history({ buckets: 6, with_usage: 0 })),
-        ).toBe(
-            'Not enough recent usage to project: 0 of the last 6 complete 5-minute buckets have recorded usage; 3 are needed.',
-        )
-        expect(
-            noProjectionSentence('day', history({ buckets: 1, with_usage: 0 })),
-        ).toBe(
-            'Not enough recent usage to project: 0 of the last 1 complete day have recorded usage; 3 are needed.',
-        )
-    })
+    it.each([
+        ['hour', 6, 0, 'none of the last 6 complete hours have recorded usage'],
+        ['hour', 6, 1, '1 of the last 6 complete hours has recorded usage'],
+        ['hour', 6, 2, '2 of the last 6 complete hours have recorded usage'],
+        [
+            '5m',
+            6,
+            0,
+            'none of the last 6 complete 5-minute buckets have recorded usage',
+        ],
+        [
+            '5m',
+            6,
+            1,
+            '1 of the last 6 complete 5-minute buckets has recorded usage',
+        ],
+        [
+            '5m',
+            6,
+            2,
+            '2 of the last 6 complete 5-minute buckets have recorded usage',
+        ],
+        ['day', 6, 0, 'none of the last 6 complete days have recorded usage'],
+        ['day', 2, 1, '1 of the last 2 complete days has recorded usage'],
+        ['day', 1, 0, 'the last complete day has no recorded usage'],
+        ['day', 1, 1, 'the last complete day has recorded usage'],
+        ['hour', 1, 0, 'the last complete hour has no recorded usage'],
+        ['5m', 1, 0, 'the last complete 5-minute bucket has no recorded usage'],
+    ] as const)(
+        'says the history of %s with %i buckets of which %i have usage',
+        (unit, buckets, withUsage, clause) => {
+            expect(
+                noProjectionSentence(
+                    unit,
+                    history({ buckets, with_usage: withUsage }),
+                ),
+            ).toBe(
+                `Not enough recent usage to project: ${clause}; 3 are needed.`,
+            )
+        },
+    )
 
     it('says there is no complete bucket yet when there is no window', () => {
         expect(noProjectionSentence('hour', history(null))).toBe(
@@ -107,6 +128,14 @@ describe('noProjectionSentence', () => {
             ),
         ).toBe(
             'None of the usage in the last 6 complete hours has a price, so nothing is projected.',
+        )
+    })
+
+    it('says it was the prices that were missing, in the singular for one bucket', () => {
+        expect(
+            noProjectionSentence('day', history({ buckets: 1, with_usage: 3 })),
+        ).toBe(
+            'None of the usage in the last complete day has a price, so nothing is projected.',
         )
     })
 

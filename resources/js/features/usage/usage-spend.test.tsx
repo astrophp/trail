@@ -314,16 +314,20 @@ describe('the chart', () => {
         ).toHaveLength(1)
     })
 
-    it('puts the divider where the recorded line ends: on the last recorded bucket, over the first point of the projection', async () => {
+    it('puts the divider and the shaded region where the last recorded point is', async () => {
         await open()
 
         const divider = panel().querySelector('.recharts-reference-line line')!
         const area = panel().querySelector('.recharts-reference-area-rect')!
+        // The recorded line has a point for each of its four amounts; the last is the last recorded bucket.
+        const points = [...panel().querySelectorAll('circle')]
+        const last = Number(points.at(-1)?.getAttribute('cx'))
 
-        expect(Number(area.getAttribute('x'))).toBeCloseTo(
-            Number(divider.getAttribute('x1')),
-            0,
-        )
+        expect(points).toHaveLength(4)
+        expect(Number(divider.getAttribute('x1'))).toBeCloseTo(last, 0)
+        expect(Number(area.getAttribute('x'))).toBeCloseTo(last, 0)
+        // The earlier points are to its left: the divider is not at the start.
+        expect(Number(points[0]?.getAttribute('cx'))).toBeLessThan(last)
     })
 
     it('draws no point for a bucket without an amount: a gap, never a zero', async () => {
@@ -712,7 +716,7 @@ describe('the states of the panel', () => {
             ),
         ).toBeVisible()
         expect(sentenceOf()).toBe(
-            'Not enough recent usage to project: 0 of the last 6 complete hours have recorded usage; 3 are needed.',
+            'Not enough recent usage to project: none of the last 6 complete hours have recorded usage; 3 are needed.',
         )
         expect(panel().querySelector('.recharts-wrapper')).toBeNull()
         expect(
@@ -745,6 +749,62 @@ describe('the states of the panel', () => {
         expect(sentenceOf()).toBe(
             'Not enough recent usage to project: no complete hour yet.',
         )
+    })
+
+    it('draws the projection alone, after a gap, when nothing recorded has an estimated cost', async () => {
+        await open(
+            '/usage',
+            spendWith({
+                series: {
+                    ...series,
+                    buckets: allBuckets({ state: 'unpriced', amount: null }),
+                },
+            }),
+        )
+
+        // The chart is there: a dashed line, the divider and the shading, and no recorded point.
+        expect(panel().querySelector('[stroke-dasharray]')).not.toBeNull()
+        expect(panel().querySelectorAll('circle')).toHaveLength(0)
+        expect(within(panel()).getByText('Now')).toBeInTheDocument()
+        expect(
+            panel().querySelectorAll('.recharts-reference-area'),
+        ).toHaveLength(1)
+        expect(legend()).toBe('RecordedProjected')
+        // Neither "nothing to draw" sentence: the projection is the thing to draw.
+        expect(
+            within(panel()).queryByText(/there is no estimated cost to draw/),
+        ).toBeNull()
+        expect(sentenceOf()).toBe(
+            'None of the usage recorded in this range has an estimated cost, so the recorded line has no amount. Projected from the tokens recorded in the last 6 complete hours (3 with usage), priced at the prices saved now. Recorded costs do not change when a price changes. Left out: 1 run still in flight.',
+        )
+        expect(
+            within(figures()).getByText('Recorded').parentElement,
+        ).toHaveTextContent('Unpriced')
+        expect(
+            within(figures()).getByText('Projected, next 24 hours'),
+        ).toBeVisible()
+
+        // And its numbers are reachable.
+        await userEvent.click(
+            within(panel()).getByRole('button', { name: 'View data' }),
+        )
+
+        const rows = within(within(panel()).getByRole('table'))
+            .getAllByRole('row')
+            .slice(1)
+        const cells = (row: HTMLElement) =>
+            within(row)
+                .getAllByRole('cell')
+                .map((cell) => cell.textContent)
+
+        expect(rows).toHaveLength(48)
+        expect(cells(rows[0])).toEqual(['Unpriced', 'Unpriced', '', ''])
+        expect(cells(rows[24])).toEqual([
+            '',
+            '',
+            formatCost(0.00167151),
+            formatCost(0.01482151),
+        ])
     })
 
     it('says runs that are still running with nothing recorded yet', async () => {
@@ -813,7 +873,7 @@ describe('the states of the panel', () => {
         expect(within(panel()).queryByText('Now')).toBeNull()
     })
 
-    it('still says what was left out when there is no projection', async () => {
+    it('says nothing was left out when there is no projection, even if the response counts some', async () => {
         await open(
             '/usage',
             spendWith({
@@ -830,7 +890,7 @@ describe('the states of the panel', () => {
         )
 
         expect(sentenceOf()).toBe(
-            'Not enough recent usage to project: 2 of the last 6 complete hours have recorded usage; 3 are needed. Left out: 1 unpriced step (40 tokens).',
+            'Not enough recent usage to project: 2 of the last 6 complete hours have recorded usage; 3 are needed.',
         )
     })
 })
