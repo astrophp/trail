@@ -5,6 +5,7 @@ import type {
     OverviewResponse,
     SeriesBucket,
     Summary,
+    UsageBreakdownResponse,
 } from '@/api/types'
 import type { TimeRangePreset } from '@/lib/time-range'
 import { agentsFor } from '@/test/agents-api'
@@ -28,7 +29,13 @@ export const attentionFixture = contractFixture(
     'attention',
 ) as AttentionResponse
 
+/** The usage breakdown by model the contract test froze, which the Overview's list of models reads. */
+export const modelsFixture = contractFixture(
+    'usage-breakdown',
+) as UsageBreakdownResponse
+
 const isAttention = (url: string) => url.includes('/api/overview/attention')
+const isModels = (url: string) => url.includes('/api/usage/breakdown')
 const isAgents = (url: string) => url.includes('/api/agents')
 
 /**
@@ -131,6 +138,16 @@ export function attentionFor(url: string): AttentionResponse {
     }
 }
 
+/** The models fixture as the range asked for would have it. */
+export function modelsFor(url: string): UsageBreakdownResponse {
+    const preset = new URL(url, 'http://x').searchParams.get('range')
+
+    return {
+        ...modelsFixture,
+        range: { ...modelsFixture.range, preset: preset as TimeRangePreset },
+    }
+}
+
 /** The runs of a summary, all counted as the given status counts say. */
 export function runs(counts: Partial<Summary['runs']>): Summary['runs'] {
     const merged = {
@@ -155,14 +172,15 @@ export function runs(counts: Partial<Summary['runs']>): Summary['runs'] {
 
 /**
  * Answers `/meta` with its fixture, `/overview` with `respond`, `/overview/attention` with
- * `attention` (by default its fixture) and `/agents` with `agents` (by default its fixture, as many
- * rows as asked for).
+ * `attention` (by default its fixture), `/agents` with `agents` (by default its fixture, as many
+ * rows as asked for) and `/usage/breakdown` with `models` (by default its fixture).
  */
 export function mockApi(
     respond: Handler = (url) => json(overviewFor(url)),
     meta: Handler = () => json(metaFixture),
     attention: Handler = (url) => json(attentionFor(url)),
     agents: Handler = (url) => json(agentsFor(url)),
+    models: Handler = (url) => json(modelsFor(url)),
 ) {
     const fetchMock = vi.fn<Handler>((url, init) =>
         url.includes('/api/meta')
@@ -171,7 +189,9 @@ export function mockApi(
               ? attention(url, init)
               : isAgents(url)
                 ? agents(url, init)
-                : respond(url, init),
+                : isModels(url)
+                  ? models(url, init)
+                  : respond(url, init),
     )
     vi.stubGlobal('fetch', fetchMock)
 
@@ -191,3 +211,7 @@ export const agentUrls = (fetchMock: ReturnType<typeof mockApi>) =>
 /** The attention list's requests made so far. */
 export const attentionUrls = (fetchMock: ReturnType<typeof mockApi>) =>
     fetchMock.mock.calls.map(([url]) => url).filter(isAttention)
+
+/** The models list's requests made so far. */
+export const modelUrls = (fetchMock: ReturnType<typeof mockApi>) =>
+    fetchMock.mock.calls.map(([url]) => url).filter(isModels)

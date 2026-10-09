@@ -38,7 +38,7 @@ describe('the Overview page', () => {
         ).toBeVisible()
     })
 
-    it('has one level-1 heading and the three panels under it as level 2, none skipped', async () => {
+    it('has one level-1 heading, the three panels under it as level 2, and the models inside the activity panel as level 3', async () => {
         const main = await open()
 
         expect(
@@ -51,6 +51,7 @@ describe('the Overview page', () => {
         ).toEqual([
             ['Overview', 'H1'],
             ['Trace activity', '2'],
+            ['Models', 'H3'],
             ['Needs attention', '2'],
             ['Agent performance', '2'],
         ])

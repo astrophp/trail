@@ -788,17 +788,27 @@ describe('asking for data', () => {
                     ? 'meta'
                     : url.includes('/api/agents')
                       ? 'agents'
-                      : url,
+                      : url.includes('/api/usage/breakdown')
+                        ? 'models'
+                        : url,
         )
 
         expect(overviewUrls(fetchMock)).toHaveLength(1)
         expect(kinds.filter((kind) => kind === 'overview')).toHaveLength(1)
         expect(kinds.filter((kind) => kind === 'attention')).toHaveLength(1)
         expect(kinds.filter((kind) => kind === 'agents')).toHaveLength(1)
+        // The list of models beside the chart is a request of its own, made once.
+        expect(kinds.filter((kind) => kind === 'models')).toHaveLength(1)
         expect(
             kinds.filter(
                 (kind) =>
-                    !['overview', 'attention', 'agents', 'meta'].includes(kind),
+                    ![
+                        'overview',
+                        'attention',
+                        'agents',
+                        'models',
+                        'meta',
+                    ].includes(kind),
             ),
         ).toEqual([])
     })
@@ -860,11 +870,15 @@ describe('the states', () => {
         expect(content).toHaveClass('opacity-60')
         expect(content).toHaveTextContent('Jan 2, 10:00–11:00')
         expect(within(of).getByText(/Traces started per hour/)).toBeVisible()
-        // The announcement is outside the busy part, where a screen reader may mute it.
-        const status = within(of).getByRole('status')
+        // The announcement is outside the busy part, where a screen reader may mute it. The panel
+        // holds a second one, the list of models', after it, which has nothing to say yet.
+        const statuses = within(of).getAllByRole('status')
 
-        expect(status).toHaveTextContent('Loading the activity chart')
-        expect(content).not.toContainElement(status)
+        expect(statuses.map((one) => one.textContent)).toEqual([
+            'Loading the activity chart',
+            '',
+        ])
+        expect(content).not.toContainElement(statuses[0])
 
         next.resolve(
             await json(
@@ -889,6 +903,10 @@ describe('the states', () => {
         expect(
             rows(within(of).getByRole('table')).map((row) => row[0]),
         ).toEqual(['Jan 1'])
-        expect(within(of).getByRole('status')).toBeEmptyDOMElement()
+        expect(
+            within(of)
+                .getAllByRole('status')
+                .map((one) => one.textContent),
+        ).toEqual(['', ''])
     })
 })

@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import type { Series, Summary } from '@/api/types'
 import { Panel } from '@/components/patterns/panel'
 import { PanelContent } from '@/components/patterns/panel-content'
@@ -54,6 +55,12 @@ type ActivityChartProps = {
     onModeChange: (mode: ActivityMode) => void
     /** The series is the previous view's: it is drawn dimmed and announced as loading. */
     busy?: boolean
+    /**
+     * Something beside the chart: stacked under it on narrow screens, a column of its own on wide
+     * ones. It has its own states, so the dimming and the busy mark of a previous view cover the
+     * chart only; left out, the chart has the whole panel and the dimming covers all of it.
+     */
+    aside?: ReactNode
     className?: string
 }
 
@@ -69,6 +76,7 @@ export function ActivityChart({
     mode,
     onModeChange,
     busy = false,
+    aside,
     className,
 }: ActivityChartProps) {
     const timeZone = resolveTimeZone(useBoot().timezone)
@@ -78,7 +86,7 @@ export function ActivityChart({
             ? undefined
             : descriptions[mode](bucketSpans[series.bucket])
 
-    let body = <PanelLoading rows={6} />
+    let chart = <PanelLoading rows={6} />
 
     if (series !== undefined && summary !== undefined) {
         const labels = bucketLabels(series.bucket, series.buckets, timeZone)
@@ -100,40 +108,40 @@ export function ActivityChart({
             zeroLabel: zero[mode],
         }
 
-        body = (
-            // A container for the chart, which can take a second column beside it later.
-            <div data-slot="activity-content" className="grid gap-4">
-                <div className="flex min-w-0 flex-col gap-2">
-                    {mode === 'volume' ? (
-                        <TimeSeriesChart
-                            {...common}
-                            bars={volumeSeries(series.buckets)}
-                        />
-                    ) : (
-                        <TimeSeriesChart
-                            {...common}
-                            line={
-                                mode === 'duration'
-                                    ? durationSeries(series.buckets)
-                                    : costSeries(series.buckets)
-                            }
-                        />
-                    )}
-                    {note === null ? null : (
-                        <p
-                            data-slot="cost-caveat"
-                            className="text-caption text-muted-foreground"
-                        >
-                            {note}
-                        </p>
-                    )}
-                    <p className="text-caption text-muted-foreground">
-                        {timeZoneNote(timeZone)}
+        chart = (
+            <div className="flex min-w-0 flex-col gap-2">
+                {mode === 'volume' ? (
+                    <TimeSeriesChart
+                        {...common}
+                        bars={volumeSeries(series.buckets)}
+                    />
+                ) : (
+                    <TimeSeriesChart
+                        {...common}
+                        line={
+                            mode === 'duration'
+                                ? durationSeries(series.buckets)
+                                : costSeries(series.buckets)
+                        }
+                    />
+                )}
+                {note === null ? null : (
+                    <p
+                        data-slot="cost-caveat"
+                        className="text-caption text-muted-foreground"
+                    >
+                        {note}
                     </p>
-                </div>
+                )}
+                <p className="text-caption text-muted-foreground">
+                    {timeZoneNote(timeZone)}
+                </p>
             </div>
         )
     }
+
+    const fade = cn('motion-safe:transition-opacity', dimmed && 'opacity-60')
+    const busyMark = dimmed ? true : undefined
 
     return (
         <Panel className={className}>
@@ -152,13 +160,40 @@ export function ActivityChart({
                 }
             />
             <PanelContent
-                aria-busy={dimmed ? true : undefined}
-                className={cn(
-                    'motion-safe:transition-opacity',
-                    dimmed && 'opacity-60',
-                )}
+                aria-busy={aside === undefined ? busyMark : undefined}
+                className={aside === undefined ? fade : undefined}
             >
-                {body}
+                {aside === undefined ? (
+                    series !== undefined && summary !== undefined ? (
+                        // A container for the chart, which can take a second column beside it.
+                        <div
+                            data-slot="activity-content"
+                            className="grid gap-4"
+                        >
+                            {chart}
+                        </div>
+                    ) : (
+                        chart
+                    )
+                ) : (
+                    <div
+                        data-slot="activity-content"
+                        className="grid gap-4 lg:grid-cols-3"
+                    >
+                        <div
+                            aria-busy={busyMark}
+                            className={cn('min-w-0 lg:col-span-2', fade)}
+                        >
+                            {chart}
+                        </div>
+                        <div
+                            data-slot="activity-aside"
+                            className="min-w-0 border-t pt-4 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-4"
+                        >
+                            {aside}
+                        </div>
+                    </div>
+                )}
             </PanelContent>
         </Panel>
     )

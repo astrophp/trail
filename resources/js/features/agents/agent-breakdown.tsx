@@ -1,3 +1,4 @@
+import type { Leader } from '@/lib/refresh-policy'
 import { failureMessage } from '@/api/client'
 import { RefreshNote } from '@/components/patterns/refresh-note'
 import { ModelsPanel } from '@/features/agents/models-panel'
@@ -6,7 +7,7 @@ import { agentViewKey } from '@/features/agents/use-agent'
 import { useAgentBreakdown } from '@/features/agents/use-agent-breakdown'
 import { useFocusHandoff } from '@/hooks/use-focus-handoff'
 import { useQueryStatus } from '@/hooks/use-query-status'
-import type { Refreshing } from '@/lib/refresh-policy'
+import type {} from '@/lib/refresh-policy'
 import type { TimeRangePreset } from '@/lib/time-range'
 
 type AgentBreakdownProps = {
@@ -19,11 +20,7 @@ type AgentBreakdownProps = {
      */
     ownRuns: { runs: number; range: TimeRangePreset } | null
     /** The page's one query for the agent, which the breakdown follows once it settles. */
-    leader: {
-        dataUpdatedAt: number
-        isPlaceholderData: boolean
-        refreshing: Refreshing
-    }
+    leader: Leader
     /** The page already says that its last refresh failed, so this says it no more. */
     refreshNoted?: boolean
     className?: string

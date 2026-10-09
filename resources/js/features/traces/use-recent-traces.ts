@@ -1,6 +1,6 @@
 import { fetchTraces, traceKeys } from '@/api/traces'
 import { useFollowingQuery } from '@/hooks/use-following-query'
-import { failureLedger, type Refreshing } from '@/lib/refresh-policy'
+import { failureLedger, type Leader } from '@/lib/refresh-policy'
 import type { TimeRangePreset } from '@/lib/time-range'
 
 /** The failed refreshes in a row, by agent and range. */
@@ -10,11 +10,7 @@ const failures = failureLedger()
 export const forgetRecentTracesRefreshFailures = () => failures.reset()
 
 /** What the list of recent runs follows: the query of the page it sits on. */
-export type RecentTracesLeader = {
-    dataUpdatedAt: number
-    isPlaceholderData: boolean
-    refreshing: Refreshing
-}
+export type RecentTracesLeader = Leader
 
 /**
  * The latest runs of an agent in a range, newest first. The previous range's answer for the same
