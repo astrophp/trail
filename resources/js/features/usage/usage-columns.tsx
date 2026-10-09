@@ -75,6 +75,7 @@ export function usageColumns({
             <TokenCount
                 count={read(row.original)}
                 pending={row.original.usage.state === 'pending'}
+                pendingAmount="show"
             />
         ),
     })
@@ -120,7 +121,9 @@ export function usageColumns({
             ...numeric('tokens', 'Tokens', 'xs'),
             accessorFn: (row) => row.usage.total_tokens,
             enableSorting: true,
-            cell: ({ row }) => <TokenValue usage={row.original.usage} />,
+            cell: ({ row }) => (
+                <TokenValue usage={row.original.usage} pendingAmount="show" />
+            ),
         },
         // Input and output are always drawn: a count that was not reported says so, in the cell.
         count('input', 'Input tokens', (row) => row.usage.input_tokens, 'md'),

@@ -10,8 +10,22 @@ import { formatCount } from '@/lib/format'
 const comparable = (cost: Cost): number | null =>
     cost.state === 'estimated' ? cost.amount : null
 
+type CostMetricProps = MetricProps & {
+    /**
+     * Whether the count of runs with an unpriced step is said under the cost. `hide` is for a page
+     * where something else owns coverage and would say it twice.
+     */
+    unpricedRuns?: 'show' | 'hide'
+}
+
 /** What the runs of the range cost, in the state the endpoint gives it. */
-export function CostMetric({ summary, previous, range, link }: MetricProps) {
+export function CostMetric({
+    summary,
+    previous,
+    range,
+    link,
+    unpricedRuns = 'show',
+}: CostMetricProps) {
     const { unpriced_runs } = summary.cost_coverage
     const current = comparable(summary.cost)
     const before = previous === null ? null : comparable(previous.cost)
@@ -35,7 +49,7 @@ export function CostMetric({ summary, previous, range, link }: MetricProps) {
                 )
             }
             detail={
-                unpriced_runs > 0
+                unpricedRuns === 'show' && unpriced_runs > 0
                     ? `${formatCount(unpriced_runs)} unpriced ${unpriced_runs === 1 ? 'run' : 'runs'}`
                     : undefined
             }

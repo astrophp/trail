@@ -69,6 +69,8 @@ export function UsageTotals({ usage, range, className }: UsageTotalsProps) {
                         previous={null}
                         range={shown}
                         link={tracesLink}
+                        // The coverage figure owns the unpriced runs.
+                        unpricedRuns="hide"
                     />
                     <TokensMetric usage={summary.usage} />
                     <CoverageMetric

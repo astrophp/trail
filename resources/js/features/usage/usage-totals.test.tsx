@@ -139,12 +139,42 @@ describe('the estimated cost', () => {
 })
 
 describe('the tokens', () => {
-    it('says Pending for the total while runs are running, and no parts that can still grow', async () => {
+    it('shows what has been recorded so far while runs are running, with the total marked Pending', async () => {
         mockApi()
         renderApp('/usage')
         await totals()
 
-        expect(wordsOf('Total tokens')).toEqual(['Pending'])
+        const words = wordsOf('Total tokens')
+
+        expect(words[0]).toMatch(/7\.9M.*7,901,600 tokens.*Pending/)
+        expect(words[1]?.replaceAll(', still running, so far', '')).toBe(
+            'Input 7,280,000 (of which 430,200 cached) · Output 621,600',
+        )
+    })
+
+    it('says Pending, never zero, when runs are running and nothing was recorded yet', async () => {
+        mockApi(() =>
+            json(
+                usageWith({
+                    usage: {
+                        state: 'pending',
+                        input_tokens: null,
+                        output_tokens: null,
+                        cache_read_tokens: null,
+                        cache_write_tokens: null,
+                        reasoning_tokens: null,
+                        total_tokens: null,
+                    },
+                }),
+            ),
+        )
+        renderApp('/usage')
+        await totals()
+
+        expect(wordsOf('Total tokens')).toEqual([
+            'Pending',
+            'Input Pending · Output Pending',
+        ])
     })
 
     it('shows the total, the input with its cached part, and the output', async () => {
@@ -210,6 +240,23 @@ describe('the tokens', () => {
         expect(wordsOf('Total tokens')[1]).toBe(
             'Input Not reported · Output Not reported',
         )
+    })
+})
+
+describe('the strip', () => {
+    it('says how many runs are unpriced exactly once: the coverage figure owns it', async () => {
+        mockApi()
+        renderApp('/usage')
+        await totals()
+
+        const text = strip()?.textContent ?? ''
+
+        expect(text.match(/(?<!\d)8 (unpriced )?runs?(?![a-z])/g)).toHaveLength(
+            1,
+        )
+        expect(text).not.toContain('unpriced runs')
+        expect(wordsOf('Pricing coverage')[0]).toBe('8 runs')
+        expect(metric('Estimated cost')).toHaveTextContent(formatCost(11.48))
     })
 })
 

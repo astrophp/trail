@@ -41,5 +41,21 @@ export const catalogue: CatalogueEntry = {
                 </MemoryRouter>
             ),
         },
+        {
+            name: 'Without the unpriced runs line',
+            Component: () => (
+                <MemoryRouter>
+                    <MetricStrip>
+                        <CostMetric
+                            summary={summaryFixture}
+                            previous={null}
+                            range="24h"
+                            link={tracesLink}
+                            unpricedRuns="hide"
+                        />
+                    </MetricStrip>
+                </MemoryRouter>
+            ),
+        },
     ],
 }

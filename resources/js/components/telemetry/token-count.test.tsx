@@ -28,4 +28,28 @@ describe('TokenCount', () => {
         expect(screen.getByText('Pending')).toBeInTheDocument()
         expect(screen.queryByText('120')).not.toBeInTheDocument()
     })
+
+    it('shows the count so far for a pending count when asked, flagged for assistive technology', () => {
+        render(<TokenCount count={120} pending pendingAmount="show" />)
+
+        expect(screen.getByText(/^120/)).toBeInTheDocument()
+        expect(screen.getByText(', still running, so far')).toHaveClass(
+            'sr-only',
+        )
+        expect(screen.queryByText('Pending')).not.toBeInTheDocument()
+    })
+
+    it('says Pending, never zero, for a pending count that was not recorded, even when asked to show', () => {
+        render(<TokenCount count={null} pending pendingAmount="show" />)
+
+        expect(screen.getByText('Pending')).toBeInTheDocument()
+        expect(screen.queryByText('0')).not.toBeInTheDocument()
+    })
+
+    it('keeps a settled count as it is when asked to show pending ones', () => {
+        render(<TokenCount count={5} pendingAmount="show" />)
+
+        expect(screen.getByText('5')).toBeInTheDocument()
+        expect(screen.queryByText(/still running/)).not.toBeInTheDocument()
+    })
 })

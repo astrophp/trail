@@ -365,7 +365,7 @@ describe('what a row says about its cost and coverage', () => {
         expect(cellOf(row, 'Tokens')).toHaveTextContent('Not reported')
     })
 
-    it('shows the amount so far for a row with a step still running, and no final tokens', async () => {
+    it('shows the amount and tokens so far for a row with a step still running, marked', async () => {
         mockQuietApi(() =>
             json(
                 breakdownOf('model', [
@@ -389,8 +389,10 @@ describe('what a row says about its cost and coverage', () => {
         const row = rowOf('gpt-4.1')
 
         expect(cellOf(row, 'Est. cost')).toHaveTextContent('So far')
+        expect(cellOf(row, 'Tokens')).toHaveTextContent('15')
         expect(cellOf(row, 'Tokens')).toHaveTextContent('Pending')
-        expect(cellOf(row, 'Input tokens')).toHaveTextContent('Pending')
+        expect(cellOf(row, 'Input tokens')).toHaveTextContent(/^10/)
+        expect(cellOf(row, 'Output tokens')).toHaveTextContent(/^5/)
     })
 })
 

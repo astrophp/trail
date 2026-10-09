@@ -8,6 +8,18 @@ export const catalogue: CatalogueEntry = {
         { name: 'Zero', Component: () => <TokenCount count={0} /> },
         { name: 'Not reported', Component: () => <TokenCount count={null} /> },
         {
+            name: 'Pending, count so far shown',
+            Component: () => (
+                <TokenCount count={1_234} pending pendingAmount="show" />
+            ),
+        },
+        {
+            name: 'Pending, nothing recorded, so far shown',
+            Component: () => (
+                <TokenCount count={null} pending pendingAmount="show" />
+            ),
+        },
+        {
             name: 'Pending',
             Component: () => <TokenCount count={null} pending />,
         },
