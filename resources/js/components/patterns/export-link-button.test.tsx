@@ -17,11 +17,11 @@ describe('ExportLinkButton', () => {
         expect(link).not.toHaveAttribute('title')
     })
 
-    it('says its own words, and a longer name and a hint when it is given them', () => {
+    it('says its own words, and a name that adds what is exported, and a hint when it is given them', () => {
         render(
             <ExportLinkButton
                 href="/x"
-                label="Export the breakdown by model as CSV"
+                detail="the breakdown by model"
                 title="Up to 1,000 rows"
             >
                 Export CSV
@@ -29,7 +29,7 @@ describe('ExportLinkButton', () => {
         )
 
         const link = screen.getByRole('link', {
-            name: 'Export the breakdown by model as CSV',
+            name: 'Export CSV: the breakdown by model',
         })
 
         expect(link).toHaveTextContent('Export CSV')

@@ -14,10 +14,10 @@ beforeEach(() => {
 })
 
 const breakdownLink = (by = 'model') =>
-    screen.getByRole('link', { name: `Export the breakdown by ${by} as CSV` })
+    screen.getByRole('link', { name: `Export CSV: the breakdown by ${by}` })
 const spendLink = () =>
     screen.getByRole('link', {
-        name: 'Export the estimated cost and its projection as CSV',
+        name: 'Export CSV: the estimated cost and its projection',
     })
 
 async function open(route = '/usage') {
@@ -83,7 +83,7 @@ describe('exporting the breakdown', () => {
         )
         expect(
             screen.queryByRole('link', {
-                name: 'Export the breakdown by model as CSV',
+                name: 'Export CSV: the breakdown by model',
             }),
         ).toBeNull()
 

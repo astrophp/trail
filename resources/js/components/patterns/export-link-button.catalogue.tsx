@@ -14,7 +14,7 @@ export const catalogue: CatalogueEntry = {
                 <ExportLinkButton
                     href="#export"
                     size="sm"
-                    label="Export the breakdown by model as CSV"
+                    detail="the breakdown by model"
                     title="Up to 1,000 rows"
                 >
                     Export CSV

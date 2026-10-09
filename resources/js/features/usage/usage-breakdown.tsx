@@ -112,7 +112,7 @@ export function UsageBreakdown({
                                 by,
                                 sort,
                             })}
-                            label={`Export the breakdown by ${groups[by]} as CSV`}
+                            detail={`the breakdown by ${groups[by]}`}
                             title="Every page of this view"
                             size="sm"
                         >

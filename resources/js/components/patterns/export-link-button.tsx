@@ -7,8 +7,11 @@ type ExportLinkButtonProps = {
     href: string
     /** What the button says. Defaults to "Export". */
     children?: string
-    /** The accessible name, when the words alone do not say what is exported. */
-    label?: string
+    /**
+     * What is exported, when the words alone do not say. The accessible name is the words, then
+     * this: "Export CSV: the breakdown by model", so it always contains what is seen.
+     */
+    detail?: string
     /** Said on hover: the limits of the file, for example. */
     title?: string
     size?: ComponentProps<typeof Button>['size']
@@ -23,14 +26,21 @@ type ExportLinkButtonProps = {
 export function ExportLinkButton({
     href,
     children = 'Export',
-    label,
+    detail,
     title,
     size,
     className,
 }: ExportLinkButtonProps) {
     return (
         <Button asChild variant="outline" size={size} className={className}>
-            <a href={href} download title={title} aria-label={label}>
+            <a
+                href={href}
+                download
+                title={title}
+                aria-label={
+                    detail === undefined ? undefined : `${children}: ${detail}`
+                }
+            >
                 <DownloadIcon aria-hidden="true" />
                 {children}
             </a>
