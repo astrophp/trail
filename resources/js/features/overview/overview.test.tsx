@@ -6,6 +6,7 @@ import { forgetOverviewRefreshFailures } from '@/features/overview/use-overview'
 import { maxFailedRefreshes, refreshEvery } from '@/lib/refresh-policy'
 import { createQueryClient } from '@/app/providers/query-provider'
 import { renderApp } from '@/test/render-app'
+import { until } from '@/test/wait'
 import {
     deferred,
     expectSearch,
@@ -14,6 +15,7 @@ import {
     overviewFixture,
     overviewFor,
     overviewUrls,
+    quietOverviewFor,
     overviewWith,
     paramsOf,
     runs,
@@ -80,7 +82,8 @@ const empty: Summary = {
 
 describe('the Overview page', () => {
     it('has the title, a description and the time range, and asks for the default range', async () => {
-        const fetchMock = mockApi()
+        // Nothing is running, so the page asks for nothing again while the test lists its requests.
+        const fetchMock = mockApi((url) => json(quietOverviewFor(url)))
         await open()
 
         expect(
@@ -280,7 +283,7 @@ describe('the Overview page', () => {
 
                 return attempts === 1
                     ? json({ message: 'Overview is down.' }, 500)
-                    : json(overviewFor(url))
+                    : json(quietOverviewFor(url))
             })
             renderApp('/')
 
@@ -423,7 +426,7 @@ describe('the Overview page', () => {
 
     describe('the range', () => {
         it('is chosen in the select, kept in the URL and asked of the API', async () => {
-            const fetchMock = mockApi()
+            const fetchMock = mockApi((url) => json(quietOverviewFor(url)))
             await open()
 
             await pickRange('Last 7 days')
@@ -542,12 +545,12 @@ describe('refreshing by itself', () => {
         expect(overviewUrls(fetchMock)).toHaveLength(1)
 
         await tick()
-        expect(overviewUrls(fetchMock)).toHaveLength(2)
+        await until(() => expect(overviewUrls(fetchMock)).toHaveLength(2))
 
         answers = nothingRunning
         await tick()
+        await until(() => expect(overviewUrls(fetchMock)).toHaveLength(3))
         await waitFor(() => expect(valueOf('Traces')).toBe('32'))
-        expect(overviewUrls(fetchMock)).toHaveLength(3)
 
         await tick(3)
         expect(overviewUrls(fetchMock)).toHaveLength(3)
@@ -572,7 +575,14 @@ describe('refreshing by itself', () => {
         await open()
         fail = true
 
-        await tick(maxFailedRefreshes)
+        // One tick, one request: the next tick comes once that request has been made.
+        for (let failed = 1; failed <= maxFailedRefreshes; failed++) {
+            await tick()
+            await until(() =>
+                expect(overviewUrls(fetchMock)).toHaveLength(1 + failed),
+            )
+        }
+
         await screen.findByText('Refreshing stopped after repeated failures.')
 
         const asked = overviewUrls(fetchMock).length
@@ -597,7 +607,9 @@ describe('refreshing by itself', () => {
         await tick()
 
         // The retry itself, then the first tick of the interval that started again.
-        expect(overviewUrls(fetchMock)).toHaveLength(asked + 2)
+        await until(() =>
+            expect(overviewUrls(fetchMock)).toHaveLength(asked + 2),
+        )
     })
 })
 
@@ -706,14 +718,15 @@ describe('what a range owns', () => {
             (url) => paramsOf(url).range === '24h',
         ).length
 
-        await tick()
-        await tick()
-
-        expect(
+        const ofDay = () =>
             overviewUrls(fetchMock).filter(
                 (url) => paramsOf(url).range === '24h',
-            ),
-        ).toHaveLength(asked + 2)
+            )
+
+        await tick()
+        await until(() => expect(ofDay()).toHaveLength(asked + 1))
+        await tick()
+        await until(() => expect(ofDay()).toHaveLength(asked + 2))
         expect(screen.queryByText(/Refreshing stopped/)).toBeNull()
     })
 })

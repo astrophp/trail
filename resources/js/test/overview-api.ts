@@ -101,6 +101,26 @@ export function overviewWithSeries(
     return { ...base, data: { ...base.data, series: { bucket, buckets } } }
 }
 
+/**
+ * The fixture as the range asked for would have it, with nothing running: the same 32 runs, all
+ * of them finished. A page that shows it asks for nothing again by itself, so a test that counts
+ * or lists requests and is not about refreshing uses this one.
+ */
+export function quietOverviewFor(url: string): OverviewResponse {
+    const answer = overviewFor(url)
+
+    return {
+        ...answer,
+        data: {
+            ...answer.data,
+            summary: {
+                ...answer.data.summary,
+                runs: runs({ completed: 32 }),
+            },
+        },
+    }
+}
+
 /** The attention fixture as the range asked for would have it. */
 export function attentionFor(url: string): AttentionResponse {
     const preset = new URL(url, 'http://x').searchParams.get('range')
