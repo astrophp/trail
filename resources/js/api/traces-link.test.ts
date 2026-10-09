@@ -227,4 +227,22 @@ describe('linkRows', () => {
         expect(row.to).toBeNull()
         expect(row.reason).toContain('"agent"')
     })
+
+    it.each([[' '], [' lead'], ['trail ']])(
+        'gives a row whose value %j has whitespace at its ends no link: the list trims it',
+        (agent) => {
+            const [row] = linkRows([{ filters: { agent } }], '24h')
+
+            expect(row.to).toBeNull()
+            expect(row.reason).toContain('whitespace')
+        },
+    )
+
+    it('keeps whitespace inside a value', () => {
+        const [row] = linkRows([{ filters: { agent: 'a  b' } }], '24h')
+
+        expect(
+            search(row.to as ReturnType<typeof tracesLinkFor>).get('agent'),
+        ).toBe('a  b')
+    })
 })

@@ -44,16 +44,16 @@ const keyOf = (row: UsageBreakdownRow): string =>
           ? `${row.provider} ${row.model}`
           : row.provider
 
-const numeric = (id: string, header: string, hideBelow?: 'xs' | 'md') => ({
+const numeric = (id: string, header: string, hideBelow?: 'xs') => ({
     id,
     header,
     sortDescFirst: true,
     meta: { align: 'end' as const, hideBelow },
 })
 
-// The columns are dropped so the table does not have to scroll sideways at a width the page offers
-// it: the sidebar takes a fifth of the width from 961 pixels up, so the token columns that say
-// least wait for the roomier breakpoints, and a phone keeps the name, the runs, the tokens (whose sort needs a header) and the cost.
+// A phone keeps the name, the runs and the cost; tokens and the input and output come with `xs`,
+// and the rest (steps, cache and reasoning counts, coverage) wait for `roomy`, so the cost is in view
+// at every width.
 //
 // The id of a sortable column is the API's name for the field it sorts by (see `toApiSort` in
 // lib/table-sort.ts). The server sorts, so the accessors only make the column sortable.
@@ -66,7 +66,7 @@ export function usageColumns({
         id: string,
         header: string,
         read: (row: UsageBreakdownRow) => number | null,
-        hideBelow: 'xs' | 'md' | 'wide' | 'roomy',
+        hideBelow: 'xs' | 'roomy',
     ): DataTableColumn<UsageBreakdownRow> => ({
         id,
         header,
@@ -114,11 +114,11 @@ export function usageColumns({
         {
             id: 'steps',
             header: 'Steps',
-            meta: { align: 'end', hideBelow: 'md' },
+            meta: { align: 'end', hideBelow: 'roomy' },
             cell: ({ row }) => formatCount(row.original.steps),
         },
         {
-            ...numeric('tokens', 'Tokens'),
+            ...numeric('tokens', 'Tokens', 'xs'),
             accessorFn: (row) => row.usage.total_tokens,
             enableSorting: true,
             cell: ({ row }) => (
@@ -139,7 +139,7 @@ export function usageColumns({
                       'cache_read',
                       'Cache read',
                       (row) => row.usage.cache_read_tokens,
-                      'wide',
+                      'roomy',
                   ),
               ]
             : []),
@@ -149,7 +149,7 @@ export function usageColumns({
                       'cache_write',
                       'Cache write',
                       (row) => row.usage.cache_write_tokens,
-                      'wide',
+                      'roomy',
                   ),
               ]
             : []),
@@ -178,9 +178,12 @@ export function usageColumns({
         {
             id: 'coverage',
             header: 'Coverage',
-            meta: { hideBelow: 'md' },
+            meta: { hideBelow: 'roomy' },
             cell: ({ row }) => (
-                <CoverageCell coverage={row.original.coverage} />
+                <CoverageCell
+                    coverage={row.original.coverage}
+                    pending={row.original.cost.state === 'pending'}
+                />
             ),
         },
     ]

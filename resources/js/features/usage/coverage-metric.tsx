@@ -8,10 +8,12 @@ const plural = (count: number, one: string, other: string) =>
     `${formatCount(count)} ${count === 1 ? one : other}`
 
 /**
- * How much of the usage could be priced, counted in what was left out: the runs, the steps and the
- * tokens that had no rate. It is never a share of the money. When the unpriced steps reported no
- * token count there is no token figure, rather than a zero or a made-up word. The runs lead to the
- * traces list kept to the runs with an unpriced step.
+ * How much of the usage could be priced, counted in what was left out and never as a share of the
+ * money. It is built from the figures above zero, so it agrees with the cost beside it: the
+ * unpriced runs lead (and link to those runs); when no run is unpriced but steps are, the steps
+ * lead; the sub-line carries the other figures that are known and above zero (the tokens are
+ * left out when the unpriced steps reported none). Only when there are no unpriced runs and no
+ * unpriced steps does it say everything was priced, and "so far" while runs are running.
  */
 export function CoverageMetric({
     summary,
@@ -24,18 +26,29 @@ export function CoverageMetric({
 }) {
     const { unpriced_runs } = summary.cost_coverage
     const { unpriced_steps, unpriced_tokens, reported_steps } = coverage
+    const pending =
+        summary.cost.state === 'pending' || summary.usage.state === 'pending'
 
-    if (unpriced_steps === 0) {
+    if (unpriced_runs === 0 && unpriced_steps === 0) {
         return (
             <Metric label="Pricing coverage">
                 <span className="text-ui font-normal">
                     {reported_steps === 0
                         ? 'No step reported usage'
-                        : 'Every step that reported usage was priced'}
+                        : `Every step that reported usage was priced${pending ? ' so far' : ''}`}
                 </span>
             </Metric>
         )
     }
+
+    const known = [
+        unpriced_runs > 0 && unpriced_steps > 0
+            ? plural(unpriced_steps, 'step', 'steps')
+            : null,
+        unpriced_tokens !== null && unpriced_tokens > 0
+            ? `${formatTokens(unpriced_tokens)} ${unpriced_tokens === 1 ? 'token' : 'tokens'}`
+            : null,
+    ].filter((figure) => figure !== null)
 
     return (
         <Metric
@@ -46,16 +59,14 @@ export function CoverageMetric({
                     : undefined
             }
             detail={
-                <>
-                    {plural(unpriced_steps, 'step', 'steps')}
-                    {unpriced_tokens === null
-                        ? null
-                        : ` · ${formatTokens(unpriced_tokens)} ${unpriced_tokens === 1 ? 'token' : 'tokens'}`}{' '}
-                    without a rate
-                </>
+                known.length === 0 ? undefined : (
+                    <>{known.join(' \u00b7 ')} without a rate</>
+                )
             }
         >
-            {plural(unpriced_runs, 'unpriced run', 'unpriced runs')}
+            {unpriced_runs > 0
+                ? plural(unpriced_runs, 'unpriced run', 'unpriced runs')
+                : plural(unpriced_steps, 'unpriced step', 'unpriced steps')}
         </Metric>
     )
 }

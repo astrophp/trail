@@ -170,6 +170,52 @@ describe('refreshing by itself', () => {
         expect(screen.getByText('claude-sonnet-4-5')).toBeVisible()
     })
 
+    it('says the last refresh of the breakdown failed while the totals are fine, and recovers on request with focus kept', async () => {
+        fakeInterval()
+        let quiet = false
+        let healthy = true
+        mockApi(
+            (url) => json(quiet ? quietUsageFor(url) : usageFor(url)),
+            (url) =>
+                healthy
+                    ? json(breakdownFor(url))
+                    : json({ message: 'Down.' }, 500),
+        )
+        renderApp('/usage')
+        await totals()
+        await screen.findByText('claude-sonnet-4-5')
+
+        // The runs finish, so the breakdown is asked for again, and that fails.
+        healthy = false
+        quiet = true
+        await tick()
+        await screen.findByText(
+            'The last refresh failed. What is shown is from before it.',
+        )
+
+        expect(screen.getAllByText(/refresh failed/)).toHaveLength(1)
+        expect(screen.getByText('claude-sonnet-4-5')).toBeVisible()
+        expect(screen.queryByRole('alert')).toBeNull()
+
+        healthy = true
+
+        const button = screen.getByRole('button', { name: 'Try again' })
+
+        button.focus()
+        await userEvent.click(button)
+        await waitFor(() =>
+            expect(screen.queryByText(/refresh failed/)).toBeNull(),
+        )
+
+        // The button went away with the note: focus goes to the page heading, not nowhere.
+        await waitFor(() =>
+            expect(
+                screen.getByRole('heading', { level: 1, name: 'Usage & cost' }),
+            ).toHaveFocus(),
+        )
+        expect(screen.getByText('claude-sonnet-4-5')).toBeVisible()
+    })
+
     it('gives up after repeated failures, says so and starts again on request', async () => {
         fakeInterval()
         let fail = false

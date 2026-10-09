@@ -6,7 +6,14 @@ import { formatCount } from '@/lib/format'
  * so quietly; one with steps that had no rate says how many of the steps that reported usage, and
  * how many tokens when that is known (it is not when those steps reported no count).
  */
-export function CoverageCell({ coverage }: { coverage: UsageRowCoverage }) {
+export function CoverageCell({
+    coverage,
+    pending = false,
+}: {
+    coverage: UsageRowCoverage
+    /** A step of the row is still running, so "priced" holds only so far. */
+    pending?: boolean
+}) {
     const { reported_steps, unpriced_steps, unpriced_tokens } = coverage
 
     if (unpriced_steps > 0) {
@@ -28,7 +35,11 @@ export function CoverageCell({ coverage }: { coverage: UsageRowCoverage }) {
 
     return (
         <span className="text-muted-foreground">
-            {reported_steps === 0 ? 'No usage reported' : 'Priced'}
+            {reported_steps === 0
+                ? 'No usage reported'
+                : pending
+                  ? 'Priced so far'
+                  : 'Priced'}
         </span>
     )
 }

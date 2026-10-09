@@ -113,7 +113,8 @@ export type LinkedRow<T> = { row: T; to: To | null; reason: string | null }
  * for, narrowed by exactly the filters the API gave it, so the list holds as many runs as the row
  * says. A filter the list does not keep in its address (or a value it would not read) would lead to
  * other runs, so that row has no link and says why, for the console. A row that names no filter at
- * all has no link either: it would lead to every run, which is not what it counted.
+ * all has no link either: it would lead to every run, which is not what it counted. Nor has a row
+ * with a value that has whitespace at its ends: the list trims what it is asked for.
  */
 export function linkRows<T extends { filters?: Record<string, string> }>(
     rows: T[],
@@ -126,6 +127,16 @@ export function linkRows<T extends { filters?: Record<string, string> }>(
                 Object.keys(row.filters).length === 0
             ) {
                 throw new Error('The row names no filter to link by.')
+            }
+
+            // The list reads a value as the framework's request does, trimmed: a value with
+            // whitespace at its ends cannot reproduce the row's count there.
+            for (const [name, value] of Object.entries(row.filters)) {
+                if (value !== value.trim()) {
+                    throw new Error(
+                        `The traces list cannot filter on "${name}" with whitespace at its ends.`,
+                    )
+                }
             }
 
             return { row, to: tracesLinkFor(range, row.filters), reason: null }

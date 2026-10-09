@@ -342,6 +342,19 @@ describe('what a row says about its cost and coverage', () => {
         expect(cost).not.toHaveTextContent('Unpriced')
     })
 
+    it('says a priced row is priced only so far while one of its steps is running', async () => {
+        only({
+            ...haiku,
+            cost: { state: 'pending', amount: 0.0045 },
+            usage: { ...haiku.usage, state: 'pending' },
+        })
+        await open()
+
+        expect(cellOf(rowOf('claude-haiku-4-5'), 'Coverage')).toHaveTextContent(
+            /^Priced so far$/,
+        )
+    })
+
     it('says a fully priced row is priced, and has nothing to count', async () => {
         mockQuietApi()
         await open()
@@ -495,6 +508,64 @@ describe('a row whose runs cannot be linked', () => {
         )
     })
 
+    it.each([[' '], [' lead'], ['trail ']])(
+        'is no link for the agent %j: the list trims what it is asked for, so it could not reproduce the count',
+        async (name) => {
+            const error = vi
+                .spyOn(console, 'error')
+                .mockImplementation(() => {})
+            mockQuietApi(() =>
+                json(
+                    breakdownOf('agent', [
+                        agentRow(name, haiku),
+                        agentRow('Research', haiku),
+                    ]),
+                ),
+            )
+            await open('/usage?by=agent')
+
+            const unlinked = dataRows().find((row) =>
+                row.textContent?.includes('Its runs could not be linked'),
+            )
+
+            expect(unlinked).toBeDefined()
+            expect(
+                within(unlinked as HTMLElement).queryByRole('link'),
+            ).toBeNull()
+            expect(within(rowOf('Research')).getByRole('link')).toBeVisible()
+            // Reported once for the one row, not once per render.
+            expect(
+                error.mock.calls.filter(([message]) =>
+                    String(message).includes('Trail could not link'),
+                ),
+            ).toHaveLength(1)
+        },
+    )
+
+    it.each([
+        ['Q&A bot'],
+        ['a+b'],
+        ['C#/Go'],
+        ['two  spaces inside'],
+        ['Zoë – 数据'],
+    ])(
+        'links the agent %j with its name exactly as the list will read it',
+        async (name) => {
+            mockQuietApi(() =>
+                json(breakdownOf('agent', [agentRow(name, haiku)])),
+            )
+            await open('/usage?by=agent')
+
+            const href = within(dataRows()[0])
+                .getByRole('link')
+                .getAttribute('href')
+
+            expect(
+                new URL(href ?? '', 'http://x').searchParams.get('agent'),
+            ).toBe(name)
+        },
+    )
+
     it('is no link for an agent with no name, which the list would read as every agent', async () => {
         vi.spyOn(console, 'error').mockImplementation(() => {})
         mockQuietApi(() =>
@@ -516,12 +587,14 @@ describe('a row whose runs cannot be linked', () => {
 })
 
 describe('pages', () => {
+    const secondPage = { ...haiku, model: 'second-page-model' }
     const sixty = (url: string) =>
         json(
-            breakdownOf('model', modelRows, {
-                page: Number(paramsOf(url).page ?? 1),
-                total: 60,
-            }),
+            breakdownOf(
+                'model',
+                paramsOf(url).page === '2' ? [secondPage] : modelRows,
+                { page: Number(paramsOf(url).page ?? 1), total: 60 },
+            ),
         )
 
     it('pages through the rows with the shared pagination, in the address', async () => {
@@ -537,6 +610,10 @@ describe('pages', () => {
         expect(lastBreakdownUrl(fetchMock)).toBe(
             '/trail/api/usage/breakdown?range=24h&by=model&sort=-cost&page=2',
         )
+        // The rows are the second page's, and the first page's are gone.
+        expect(rowOf('second-page-model')).toBeVisible()
+        expect(dataRows()).toHaveLength(1)
+        expect(screen.queryByText('claude-sonnet-4-5')).not.toBeInTheDocument()
     })
 
     it('draws no pagination when everything fits on one page', async () => {

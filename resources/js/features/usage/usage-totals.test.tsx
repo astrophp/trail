@@ -333,11 +333,12 @@ describe('the pricing coverage', () => {
         ])
     })
 
-    it('says every step was priced when none was left out', async () => {
+    it('says every step was priced when none was left out and nothing is running', async () => {
         mockApi(() =>
             json(
                 usageWith(
                     {
+                        ...quietUsage().data.summary,
                         cost_coverage: {
                             unpriced_runs: 0,
                             runs_without_amount: 0,
@@ -361,11 +362,110 @@ describe('the pricing coverage', () => {
         ).not.toBeInTheDocument()
     })
 
+    it('says priced so far while runs are running', async () => {
+        mockApi(() =>
+            json(
+                usageWith(
+                    {
+                        cost_coverage: {
+                            unpriced_runs: 0,
+                            runs_without_amount: 0,
+                        },
+                    },
+                    { unpriced_steps: 0, unpriced_tokens: 0 },
+                ),
+            ),
+        )
+        renderApp('/usage')
+        await totals()
+
+        expect(wordsOf('Pricing coverage')).toEqual([
+            'Every step that reported usage was priced so far',
+        ])
+    })
+
+    it('leads with the unpriced runs when no step of them is known, as for a run stored before per-run summaries', async () => {
+        mockApi(() =>
+            json(
+                usageWith(
+                    {
+                        cost_coverage: {
+                            unpriced_runs: 2,
+                            runs_without_amount: 2,
+                        },
+                    },
+                    { unpriced_steps: 0, unpriced_tokens: 0 },
+                ),
+            ),
+        )
+        renderApp('/usage')
+        await totals()
+
+        expect(wordsOf('Pricing coverage')).toEqual(['2 unpriced runs'])
+        expect(
+            within(metric('Pricing coverage'))
+                .getByRole('link')
+                .getAttribute('href'),
+        ).toBe('/trail/traces?unpriced=1')
+    })
+
+    it('leads with the unpriced steps when no run is counted unpriced, and never prints zero runs', async () => {
+        mockApi(() =>
+            json(
+                usageWith(
+                    {
+                        cost_coverage: {
+                            unpriced_runs: 0,
+                            runs_without_amount: 0,
+                        },
+                    },
+                    { unpriced_steps: 3, unpriced_tokens: 30 },
+                ),
+            ),
+        )
+        renderApp('/usage')
+        await totals()
+
+        expect(wordsOf('Pricing coverage')).toEqual([
+            '3 unpriced steps',
+            '30 tokens without a rate',
+        ])
+        expect(metric('Pricing coverage')).not.toHaveTextContent(/\b0\b/)
+        expect(
+            within(metric('Pricing coverage')).queryByRole('link'),
+        ).not.toBeInTheDocument()
+    })
+
+    it('has only the steps when no run is unpriced and their tokens were not reported', async () => {
+        mockApi(() =>
+            json(
+                usageWith(
+                    {
+                        cost_coverage: {
+                            unpriced_runs: 0,
+                            runs_without_amount: 0,
+                        },
+                    },
+                    { unpriced_steps: 1, unpriced_tokens: null },
+                ),
+            ),
+        )
+        renderApp('/usage')
+        await totals()
+
+        expect(wordsOf('Pricing coverage')).toEqual(['1 unpriced step'])
+    })
+
     it('does not call a range priced when no step reported usage', async () => {
         mockApi(() =>
             json(
                 usageWith(
-                    {},
+                    {
+                        cost_coverage: {
+                            unpriced_runs: 0,
+                            runs_without_amount: 0,
+                        },
+                    },
                     {
                         reported_steps: 0,
                         unpriced_steps: 0,

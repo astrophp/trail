@@ -60,7 +60,10 @@ export function quietUsage(preset: TimeRangePreset = '24h'): UsageResponse {
         {
             runs: runs({ completed: summary.runs.all }),
             usage: { ...summary.usage, state: 'reported' },
-            cost: { state: 'partial', amount: summary.cost.amount ?? 0 },
+            cost:
+                summary.cost.amount === null
+                    ? { state: 'not_captured', amount: null }
+                    : { state: 'partial', amount: summary.cost.amount },
         },
         {},
         preset,
