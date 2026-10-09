@@ -12,6 +12,8 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Validation\ValidationException;
+use JsonException;
+use stdClass;
 
 /**
  * A model's saved price is its row of the prices table. Models are never created here: only one the
@@ -27,8 +29,7 @@ class PriceController
     {
         [$provider, $model, $observed] = $this->known($request, $prices);
 
-        $body = $request->isJson() ? $request->json()->all() : $request->request->all();
-        $rates = RateInput::from($body);
+        $rates = RateInput::from($this->body($request));
 
         $this->save($provider, $model, $rates);
 
@@ -64,6 +65,10 @@ class PriceController
 
         abort_unless($provider !== null && $model !== null && self::possible($provider) && self::possible($model), 404);
 
+        // These endpoints read the prices fresh, not the copy this process holds for a minute: another
+        // worker may have saved or reset one, and the list must show what the table holds.
+        $prices->flush();
+
         foreach ($prices->catalogue() as $entry) {
             if ($entry['provider'] === $provider && $entry['model'] === $model) {
                 return [$entry['provider'], $entry['model'], $entry['observed']];
@@ -71,6 +76,33 @@ class PriceController
         }
 
         abort(404);
+    }
+
+    /**
+     * The JSON object of the request, decoded from its content so that `{}` (every rate blank) can be
+     * told from a list, from a failure and from no body at all.
+     *
+     * @return array<array-key, mixed>
+     *
+     * @throws ValidationException when the body is not a JSON object
+     */
+    private function body(Request $request): array
+    {
+        $decoded = null;
+
+        if ($request->isJson()) {
+            try {
+                $decoded = json_decode($request->getContent(), false, 512, JSON_THROW_ON_ERROR);
+            } catch (JsonException) {
+                $decoded = null;
+            }
+        }
+
+        if (! $decoded instanceof stdClass) {
+            throw ValidationException::withMessages(['body' => ['The body must be a JSON object.']]);
+        }
+
+        return get_object_vars($decoded);
     }
 
     private static function possible(string $text): bool
@@ -85,28 +117,14 @@ class PriceController
      */
     private function save(string $provider, string $model, array $rates): void
     {
-        // Two requests that create the row together meet on the unique index; the second reads the first one's row.
+        $connection = (new Price)->getConnection();
+
+        // Two requests that create the row together meet on the unique index; the second reads the first one's
+        // row. Each attempt is a transaction of its own (a savepoint when nested), which a failed insert
+        // rolls back, since Postgres refuses every statement after one in the same transaction.
         for ($attempt = 1; ; $attempt++) {
-            $row = Price::query()->where('provider', $provider)->where('model', $model)->first();
-
-            // MySQL's unique index ignores case, so it would take this write for the other spelling's.
-            if ($row !== null && ($row->provider !== $provider || $row->model !== $model)) {
-                throw ValidationException::withMessages([
-                    'model' => ["A price is already saved as [{$row->provider}] [{$row->model}], which this database takes for the same model. Reset that one first."],
-                ]);
-            }
-
-            $row ??= new Price(['provider' => $provider, 'model' => $model]);
-
-            $row->fill($rates);
-
-            if ($row->exists) {
-                // Saving the same rates again is still a save: the moment is when it was last written.
-                $row->setUpdatedAt(Carbon::now());
-            }
-
             try {
-                $row->save();
+                $connection->transaction(fn () => $this->write($provider, $model, $rates));
 
                 return;
             } catch (UniqueConstraintViolationException $e) {
@@ -115,6 +133,34 @@ class PriceController
                 }
             }
         }
+    }
+
+    /**
+     * @param  array<string, ?string>  $rates
+     *
+     * @throws ValidationException when a row of another spelling holds the model's place
+     */
+    private function write(string $provider, string $model, array $rates): void
+    {
+        $row = Price::query()->where('provider', $provider)->where('model', $model)->first();
+
+        // MySQL's unique index ignores case, so it would take this write for the other spelling's.
+        if ($row !== null && ($row->provider !== $provider || $row->model !== $model)) {
+            throw ValidationException::withMessages([
+                'model' => ["A price is already saved as [{$row->provider}] [{$row->model}], which this database takes for the same model. Reset that one first."],
+            ]);
+        }
+
+        $row ??= new Price(['provider' => $provider, 'model' => $model]);
+
+        $row->fill($rates);
+
+        if ($row->exists) {
+            // Saving the same rates again is still a save: the moment is when it was last written.
+            $row->setUpdatedAt(Carbon::now());
+        }
+
+        $row->save();
     }
 
     private function price(PriceBook $prices, string $provider, string $model, bool $observed): JsonResponse

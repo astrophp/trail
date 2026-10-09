@@ -69,7 +69,7 @@ it('leaves the recorded runs alone when the price is reset, and prices the next 
 });
 
 it('leaves a run unpriced when its model was saved with no rate', function () {
-    $this->putJson('/trail/api/prices?provider=anthropic&model='.FakeAnthropic::MODEL, [])->assertOk();
+    $this->call('PUT', '/trail/api/prices?provider=anthropic&model='.FakeAnthropic::MODEL, server: ['CONTENT_TYPE' => 'application/json', 'HTTP_ACCEPT' => 'application/json'], content: '{}')->assertOk();
 
     expect(($this->costs)(($this->record)()))->toBe(['run' => null, 'step' => null]);
 });

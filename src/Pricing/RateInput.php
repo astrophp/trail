@@ -35,6 +35,11 @@ final class RateInput
             $label = str_replace('_', ' ', $field);
             $value = $body[$field] ?? null;
 
+            // Whitespace around a text is no part of the number, and a text of nothing else is blank.
+            if (is_string($value)) {
+                $value = trim($value, " \t\n\r\v\f");
+            }
+
             if ($value === null || $value === '') {
                 $rates[$field] = null;
 

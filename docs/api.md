@@ -1385,13 +1385,19 @@ Each item is [The price](#the-price).
 - At most `limit.limit` (500) are sent; `total` is how many there are and `truncated` is `true` when
   some are left out.
 - It is read in two queries whatever the number of models: the saved prices and the observed models.
-  If the observed models cannot be read the error is reported and the list is the config models and
-  the saved ones.
+  The saved prices are read from the table on every request, not from the copy a long-lived process
+  keeps for a minute, so a save made by another worker shows at once.
+- If the observed models cannot be read the error is reported and the list is the config models and
+  the saved ones. If the saved prices cannot be read the error is reported and config applies: no
+  model is `saved`.
+- A database that compares text loosely (MySQL) lists one spelling of what it takes for one model:
+  models observed as `gpt-5` and `GPT-5` appear once, and the other spelling cannot be priced.
 
 ### `PUT /api/prices?provider=…&model=…`
 
-Saves a model's price. The body is JSON with any of the four rates, in US dollars per million
-tokens, and answers `200` with the price as it now resolves (`source` `saved`):
+Saves a model's price. The body is a JSON object, sent with a JSON content type, with any of the
+four rates, in US dollars per million tokens, and answers `200` with the price as it now resolves
+(`source` `saved`):
 
 ```json
 { "input": 3.5, "output": 16, "cache_read": "0.35" }
@@ -1409,11 +1415,17 @@ tokens, and answers `200` with the price as it now resolves (`source` `saved`):
 - Only a model in [the list](#get-apiprices) can be saved: no model is ever created. A provider and
   model that are not listed, compared exactly and case-sensitively, are a 404 and write nothing. The
   price is saved with the spelling of the list.
+- A body that is not a JSON object (invalid JSON, no content, a list, a string, a number, `null`, or
+  a content type that is not JSON) is a 422 with `errors.body`, and nothing is written. `{}` is valid:
+  every rate is blank.
+- The models are looked up in the saved prices as they are in the table now, not in a copy: a model
+  that is listed only through a saved price another worker has since reset is a 404.
 - All four rates are written every time: a rate that is absent, `null` or `""` is saved as `NULL`
   (unknown), it does not keep its previous value. All four `NULL` is a valid save, a model that is
   deliberately unpriced. `0` is saved as a free rate.
 - A rate is a JSON number that is finite and `0` or more, or text in plain decimal notation
-  (`3.75`, not `1e3`, `-1`, `.5` or `+1`). Any other value (a boolean, a list, text) is a 422 with
+  (`3.75`, not `1e3`, `-1`, `.5` or `+1`); whitespace around a text is ignored, and a text of nothing
+  else is blank. Any other value (a boolean, a list, text) is a 422 with
   `errors` keyed by the field, all the invalid fields together, and nothing is written.
 - The columns hold six decimal places and nothing above `999999.999999`. A value beyond that is a
   422 on its field, never rounded or cut: what is saved is what was sent.
@@ -1438,5 +1450,6 @@ Removes a model's saved price, and answers `200` with the price as it now resolv
 - A listed model that has no saved price is a `200` with its price unchanged, so it is idempotent.
 - Only the row of exactly that spelling is removed; a row that MySQL takes for the same model under
   another spelling stays.
-- Recorded costs and the other processes' copies of the prices are as for `PUT`.
+- Recorded costs and the other processes' copies of the prices are as for `PUT`: a long-lived
+  process that prices runs reads the table again when its copy is more than 60 seconds old.
 - Access and the request-forgery protection are as for `PUT`.

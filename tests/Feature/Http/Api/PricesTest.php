@@ -4,6 +4,7 @@ use Astro\Trail\Facades\Trail;
 use Astro\Trail\Http\Controllers\Api\PriceIndexController;
 use Astro\Trail\Pricing\CostCalculator;
 use Astro\Trail\Pricing\PriceBook;
+use Astro\Trail\Storage\Models\Price;
 use Astro\Trail\Tests\Fixtures\Http\AgentRows;
 use Astro\Trail\Tests\Fixtures\Pricing\FlakyResolver;
 use Astro\Trail\Tests\Fixtures\Storage\Rows;
@@ -13,6 +14,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Testing\TestResponse;
 
 beforeEach(function () {
     Carbon::setTestNow('2026-01-02 12:00:00');
@@ -23,14 +25,21 @@ beforeEach(function () {
     Trail::auth(fn () => true);
 });
 
-afterEach(fn () => Carbon::setTestNow());
+afterEach(function () {
+    Carbon::setTestNow();
+    // Some tests change the environment to see the CSRF check or the closed gate; a failed assertion must not leave it so.
+    $this->app['env'] = 'testing';
+});
 
 function priceUrl(string $provider, string $model): string
 {
     return '/trail/api/prices?provider='.rawurlencode($provider).'&model='.rawurlencode($model);
 }
 
-/** The raw row, as the database holds it: the model would cast a missing rate to 0.0 and a decimal to a float. */
+/**
+ * The raw row, as the database holds it. The model casts a rate to a float, which would turn a stored 0 and
+ * a stored '' or '0' into the same number; the tests are about what the column holds.
+ */
 function savedPrice(string $provider, string $model): ?stdClass
 {
     return DB::table('trail_prices')->where('provider', $provider)->where('model', $model)->first();
@@ -40,6 +49,12 @@ function savedPrice(string $provider, string $model): ?stdClass
 function placesOf(mixed $raw): ?string
 {
     return $raw === null ? null : number_format((float) $raw, 6, '.', '');
+}
+
+/** A request with the content as given, which putJson() cannot send: it encodes an empty array as a list. */
+function putRaw(string $url, string $content, string $type = 'application/json'): TestResponse
+{
+    return test()->call('PUT', $url, server: ['CONTENT_TYPE' => $type, 'HTTP_ACCEPT' => 'application/json'], content: $content);
 }
 
 function observedStep(string $provider, string $model): void
@@ -194,7 +209,13 @@ it('lists the config models when the database cannot be reached at all', functio
     config(['trail.pricing' => ['openai' => ['gpt-5' => ['input' => 1.25]]]]);
     app()->instance(PriceBook::class, new PriceBook(app('config'), new FlakyResolver(app(ConnectionResolverInterface::class))));
 
-    expect($this->getJson('/trail/api/prices')->assertOk()->json('data.*.model'))->toBe(['gpt-5']);
+    $rows = $this->getJson('/trail/api/prices')->assertOk()->json('data');
+
+    // The saved prices could not be read either: the config applies, and nothing is saved.
+    expect(array_column($rows, 'model'))->toBe(['gpt-5'])
+        ->and($rows[0]['source'])->toBe('config')
+        ->and($rows[0]['rates']['input'])->toBe(1.25)
+        ->and($rows[0]['saved_at'])->toBeNull();
 });
 
 describe('saving a price', function () {
@@ -282,7 +303,7 @@ describe('saving a price', function () {
     });
 
     it('saves a price with no rate at all: the model is deliberately unpriced', function () {
-        $this->putJson(priceUrl('openai', 'gpt-5'), [])->assertOk()->assertExactJson(['data' => priceOf(
+        putRaw(priceUrl('openai', 'gpt-5'), '{}')->assertOk()->assertExactJson(['data' => priceOf(
             'openai', 'gpt-5', ratesOf(null, null), 'saved',
             default: ['source' => 'config', 'via' => null, 'rates' => ratesOf(1.25, 10, 0.125)],
             savedAt: '2026-01-02T12:00:00.000Z',
@@ -290,11 +311,6 @@ describe('saving a price', function () {
 
         expect(DB::table('trail_prices')->count())->toBe(1);
         expect(app(CostCalculator::class)->cost('openai', 'gpt-5', 1000, 100))->toBeNull();
-    });
-
-    it('accepts a form body as well', function () {
-        $this->call('PUT', priceUrl('openai', 'gpt-5'), ['input' => '2', 'output' => ''], server: ['HTTP_ACCEPT' => 'application/json'])
-            ->assertOk()->assertJsonPath('data.rates', ratesOf(2, null));
     });
 
     it('saves a negative zero as the rate 0', function () {
@@ -396,7 +412,7 @@ describe('saving a price', function () {
 
         $this->putJson(priceUrl('openai', 'gpt-5'), ['input' => 100, 'output' => 100])->assertOk();
         $this->deleteJson(priceUrl('openai', 'gpt-5'))->assertOk();
-        $this->putJson(priceUrl('openai', 'gpt-5'), [])->assertOk();
+        putRaw(priceUrl('openai', 'gpt-5'), '{}')->assertOk();
 
         expect((float) DB::table('trail_traces')->where('id', $trace->id)->value('cost'))->toBe(0.0045)
             ->and((float) DB::table('trail_spans')->where('id', $span->id)->value('cost'))->toBe(0.0045);
@@ -514,6 +530,8 @@ it('is a 404 that does not reach the database when the provider or the model can
     'a provider over 255 characters' => ['?model=gpt-5&provider='.str_repeat('x', 256)],
     'a NUL byte in the model' => ['?provider=openai&model=a%00b'],
     'a NUL byte in the provider' => ['?provider=a%00b&model=gpt-5'],
+    'a model over 255 multibyte characters' => ['?provider=openai&model='.rawurlencode(str_repeat('é', 256))],
+    'a provider over 255 multibyte characters' => ['?model=gpt-5&provider='.rawurlencode(str_repeat('é', 256))],
     'a model that is not UTF-8' => ['?provider=openai&model=%FF'],
     'a provider that is not UTF-8' => ['?provider=%FF&model=gpt-5'],
 ]);
@@ -700,3 +718,165 @@ describe('access', function () {
         $this->app['env'] = 'testing';
     });
 });
+
+describe('the body of a save', function () {
+    beforeEach(function () {
+        config(['trail.pricing' => ['openai' => ['gpt-5' => ['input' => 1.25, 'output' => 10.0]]]]);
+        Rows::price(['provider' => 'openai', 'model' => 'gpt-5', 'input' => '7.000000', 'output' => '3.000000']);
+    });
+
+    it('is refused unless it is a JSON object, and the saved price is untouched', function (string $content, string $type) {
+        $before = (array) savedPrice('openai', 'gpt-5');
+
+        $response = putRaw(priceUrl('openai', 'gpt-5'), $content, $type)->assertUnprocessable();
+
+        expect($response->json('errors'))->toBe(['body' => ['The body must be a JSON object.']])
+            ->and((array) savedPrice('openai', 'gpt-5'))->toBe($before)
+            ->and(DB::table('trail_prices')->count())->toBe(1);
+    })->with([
+        'invalid JSON' => ['{bad json', 'application/json'],
+        'cut off JSON' => ['{"input":', 'application/json'],
+        'no content' => ['', 'application/json'],
+        'only whitespace' => ['  ', 'application/json'],
+        'a list' => ['[1,2]', 'application/json'],
+        'an empty list' => ['[]', 'application/json'],
+        'a string' => ['"x"', 'application/json'],
+        'a number' => ['5', 'application/json'],
+        'a boolean' => ['true', 'application/json'],
+        'null' => ['null', 'application/json'],
+        'a form' => ['input=2', 'application/x-www-form-urlencoded'],
+        'plain text' => ['input=2', 'text/plain'],
+        'an object sent as plain text' => ['{"input":2}', 'text/plain'],
+    ]);
+
+    it('creates no row for a body that is refused', function () {
+        config(['trail.pricing' => ['openai' => ['gpt-4o' => ['input' => 2.5]]]]);
+
+        putRaw(priceUrl('openai', 'gpt-4o'), '[1,2]')->assertUnprocessable();
+
+        expect(savedPrice('openai', 'gpt-4o'))->toBeNull();
+    });
+
+    it('takes an empty object as every rate blank', function () {
+        putRaw(priceUrl('openai', 'gpt-5'), '{}')->assertOk()->assertJsonPath('data.rates', ratesOf(null, null));
+
+        $row = savedPrice('openai', 'gpt-5');
+        expect([$row->input, $row->output, $row->cache_read, $row->cache_write])->toBe([null, null, null, null]);
+    });
+
+    it('is checked after the model: an unlisted model is a 404 whatever the body', function () {
+        putRaw(priceUrl('openai', 'nope'), '[1,2]')->assertNotFound();
+    });
+});
+
+describe('the prices of other workers', function () {
+    beforeEach(function () {
+        config(['trail.pricing' => ['openai' => ['gpt-5' => ['input' => 1.25, 'output' => 10.0]]]]);
+    });
+
+    it('are read fresh by the list, in two queries, whatever this process holds', function () {
+        // Warm the bound price book, which keeps the saved prices for a minute.
+        $this->getJson('/trail/api/prices')->assertOk();
+
+        $list = function () {
+            $body = null;
+            $statements = AgentRows::statements(function () use (&$body) {
+                $body = $this->getJson('/trail/api/prices')->assertOk()->json('data');
+            });
+
+            return [collect($body)->keyBy('model')->map(fn (array $row) => [$row['source'], $row['rates']['input']])->all(), $statements];
+        };
+
+        // Another worker inserts, updates and deletes rows behind this process's back.
+        DB::table('trail_prices')->insert(['provider' => 'openai', 'model' => 'gpt-5', 'input' => '2.000000', 'created_at' => '2026-01-02 12:00:00.000', 'updated_at' => '2026-01-02 12:00:00.000']);
+        DB::table('trail_prices')->insert(['provider' => 'acme', 'model' => 'tiny', 'input' => '0.500000', 'created_at' => '2026-01-02 12:00:00.000', 'updated_at' => '2026-01-02 12:00:00.000']);
+        [$inserted, $statements] = $list();
+        expect($inserted)->toEqual(['gpt-5' => ['saved', 2], 'tiny' => ['saved', 0.5]])
+            ->and($statements)->toHaveCount(2);
+
+        DB::table('trail_prices')->where('model', 'gpt-5')->update(['input' => '3.000000', 'updated_at' => '2026-01-02 12:05:00.000']);
+        [$updated, $statements] = $list();
+        expect($updated['gpt-5'])->toBe(['saved', 3])
+            ->and($statements)->toHaveCount(2);
+
+        DB::table('trail_prices')->delete();
+        [$deleted, $statements] = $list();
+        expect($deleted)->toBe(['gpt-5' => ['config', 1.25]])
+            ->and($statements)->toHaveCount(2);
+    });
+
+    it('show the saved_at another worker wrote', function () {
+        $this->getJson('/trail/api/prices')->assertOk();
+        DB::table('trail_prices')->insert(['provider' => 'openai', 'model' => 'gpt-5', 'input' => '2.000000', 'created_at' => '2026-01-02 11:00:00.000', 'updated_at' => '2026-01-02 11:30:00.250']);
+
+        expect($this->getJson('/trail/api/prices')->json('data.0.saved_at'))->toBe('2026-01-02T11:30:00.250Z');
+    });
+
+    it('do not make a model known once they are gone: a write for it is a 404', function (string $method) {
+        DB::table('trail_prices')->insert(['provider' => 'acme', 'model' => 'tiny', 'input' => '0.500000', 'created_at' => '2026-01-02 12:00:00.000', 'updated_at' => '2026-01-02 12:00:00.000']);
+        // This process holds the row, as a worker that listed it a moment ago does.
+        expect($this->getJson('/trail/api/prices')->json('data.*.model'))->toContain('tiny');
+
+        DB::table('trail_prices')->delete();
+
+        $this->json($method, priceUrl('acme', 'tiny'), ['input' => 1])->assertNotFound();
+        expect(DB::table('trail_prices')->count())->toBe(0);
+    })->with(['PUT', 'DELETE']);
+
+    it('are used by a price book that another process holds up to a minute after a reset', function () {
+        Rows::price(['provider' => 'openai', 'model' => 'gpt-5', 'input' => '2.000000']);
+        $worker = new PriceBook(app('config'), app(ConnectionResolverInterface::class));
+        expect($worker->rateFor('openai', 'gpt-5')?->input)->toBe(2.0);
+
+        $this->deleteJson(priceUrl('openai', 'gpt-5'))->assertOk()->assertJsonPath('data.source', 'config');
+
+        expect($worker->rateFor('openai', 'gpt-5')?->input)->toBe(2.0);
+
+        Carbon::setTestNow(Carbon::now()->addSeconds(PriceBook::REFRESH_SECONDS));
+        expect($worker->rateFor('openai', 'gpt-5')?->input)->toBe(2.0);
+
+        Carbon::setTestNow(Carbon::now()->addSecond());
+        expect($worker->rateFor('openai', 'gpt-5')?->input)->toBe(1.25);
+    });
+});
+
+it('saves the price when another request creates the same row first', function () {
+    config(['trail.pricing' => ['openai' => ['gpt-5' => ['input' => 1.25]]]]);
+    $fired = 0;
+
+    // The other request wins the race: its row appears just before this one's insert.
+    Price::creating(function (Price $price) use (&$fired) {
+        if (++$fired === 1) {
+            DB::table('trail_prices')->insert(['provider' => $price->provider, 'model' => $price->model, 'input' => '99.000000', 'created_at' => '2026-01-02 12:00:00.000', 'updated_at' => '2026-01-02 12:00:00.000']);
+        }
+    });
+
+    try {
+        $this->putJson(priceUrl('openai', 'gpt-5'), ['input' => 4, 'output' => 8])->assertOk()->assertJsonPath('data.rates', ratesOf(4, 8));
+    } finally {
+        Price::flushEventListeners();
+    }
+
+    $row = savedPrice('openai', 'gpt-5');
+    // The insert failed on the unique index and was tried again; the table holds one row, with this request's rates.
+    expect($fired)->toBe(2)
+        ->and(DB::table('trail_prices')->count())->toBe(1)
+        ->and([placesOf($row->input), placesOf($row->output)])->toBe(['4.000000', '8.000000']);
+});
+
+// MySQL's DISTINCT folds the two spellings of the observed models into one.
+it('lists one spelling of the models a loose database takes for one', function () {
+    config(['trail.pricing' => []]);
+    observedStep('openai', 'gpt-5');
+    observedStep('openai', 'GPT-5');
+
+    expect($this->getJson('/trail/api/prices')->assertOk()->json('data'))->toHaveCount(1);
+})->skip(fn () => DB::connection()->getDriverName() !== 'mysql', 'only MySQL compares the two spellings as one');
+
+it('lists both spellings of observed models where they are two models', function () {
+    config(['trail.pricing' => []]);
+    observedStep('openai', 'gpt-5');
+    observedStep('openai', 'GPT-5');
+
+    expect($this->getJson('/trail/api/prices')->assertOk()->json('data'))->toHaveCount(2);
+})->skip(fn () => DB::connection()->getDriverName() === 'mysql', 'MySQL compares the two spellings as one');

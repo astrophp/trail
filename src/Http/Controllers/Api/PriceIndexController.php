@@ -16,6 +16,9 @@ class PriceIndexController
 
     public function __invoke(PriceBook $prices): JsonResponse
     {
+        // Read the saved prices fresh, not the copy this process holds: another worker may have changed them.
+        $prices->flush();
+
         // Observed models that no rate was found for come first, then the other observed ones, then
         // the rest. The catalogue is sorted by provider and model, and the sort here is stable.
         $rows = array_map(
