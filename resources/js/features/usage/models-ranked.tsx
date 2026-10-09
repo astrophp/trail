@@ -1,4 +1,5 @@
-import { useMemo } from 'react'
+import type { Leader } from '@/lib/refresh-policy'
+import { useMemo, useRef } from 'react'
 import { Link } from 'react-router'
 import { failureMessage } from '@/api/client'
 import { linkRows, unlinkable } from '@/api/traces-link'
@@ -21,18 +22,14 @@ import { useFocusHandoff } from '@/hooks/use-focus-handoff'
 import { useQueryStatus } from '@/hooks/use-query-status'
 import { useTimeRange } from '@/hooks/use-time-range'
 import { useUnlinkedReport } from '@/hooks/use-unlinked-report'
-import type { Refreshing } from '@/lib/refresh-policy'
+import type {} from '@/lib/refresh-policy'
 import { cn } from '@/lib/utils'
 
 type ModelsRankedProps = {
     /** What the page's activity chart shows, which decides what the models are ranked by. */
     metric: ActivityMode
     /** The page's one query for its figures, which the list follows once it settles. */
-    leader: {
-        dataUpdatedAt: number
-        isPlaceholderData: boolean
-        refreshing: Refreshing
-    }
+    leader: Leader
     className?: string
 }
 
@@ -49,6 +46,7 @@ type ModelsRankedProps = {
 export function ModelsRanked({ metric, leader, className }: ModelsRankedProps) {
     const [range] = useTimeRange()
     const sort = rankingFor[metric]
+    const headingRef = useRef<HTMLHeadingElement>(null)
     const query = useRankedModels(range, sort, leader)
     const { data, isError, isPlaceholderData } = query
     const { failed, retrying, failure, loading } = useQueryStatus(
@@ -70,7 +68,7 @@ export function ModelsRanked({ metric, leader, className }: ModelsRankedProps) {
 
     useUnlinkedReport('model', unlinkable(linked))
     // The retry button goes away when the rows replace it.
-    useFocusHandoff(failed || outdated)
+    useFocusHandoff(failed || outdated, headingRef)
 
     const body = () => {
         if (failed) {
@@ -104,7 +102,7 @@ export function ModelsRanked({ metric, leader, className }: ModelsRankedProps) {
         return (
             <div className="flex flex-col gap-3">
                 <p className="text-caption text-muted-foreground">
-                    {rankingNote[metric]}
+                    {rankingNote(metric, data?.row_limit.truncated ?? false)}
                 </p>
                 <RankedList aria-label="Models in this range">
                     {linked.map(({ row, to }) => (
@@ -131,13 +129,20 @@ export function ModelsRanked({ metric, leader, className }: ModelsRankedProps) {
                 {dimmed ? 'Loading the models' : ''}
             </span>
             <div className="flex items-center justify-between gap-2">
-                <h3 className="text-ui font-medium">Models</h3>
+                <h3
+                    ref={headingRef}
+                    // Where focus goes when the control it was on goes away.
+                    tabIndex={-1}
+                    className="text-ui font-medium outline-none"
+                >
+                    Models
+                </h3>
                 {data !== undefined &&
                 !failed &&
                 data.pagination.total > rankedModelsShown ? (
                     <Button asChild variant="link" size="sm">
                         <Link
-                            to={usageModelsLink(counted)}
+                            to={usageModelsLink(counted, sort)}
                             aria-label="View all models"
                         >
                             View all

@@ -871,11 +871,14 @@ describe('the states', () => {
         expect(content).toHaveTextContent('Jan 2, 10:00–11:00')
         expect(within(of).getByText(/Traces started per hour/)).toBeVisible()
         // The announcement is outside the busy part, where a screen reader may mute it. The panel
-        // holds a second one, the list of models', after it.
-        const status = within(of).getAllByRole('status')[0]
+        // holds a second one, the list of models', after it, which has nothing to say yet.
+        const statuses = within(of).getAllByRole('status')
 
-        expect(status).toHaveTextContent('Loading the activity chart')
-        expect(content).not.toContainElement(status)
+        expect(statuses.map((one) => one.textContent)).toEqual([
+            'Loading the activity chart',
+            '',
+        ])
+        expect(content).not.toContainElement(statuses[0])
 
         next.resolve(
             await json(
@@ -900,6 +903,10 @@ describe('the states', () => {
         expect(
             rows(within(of).getByRole('table')).map((row) => row[0]),
         ).toEqual(['Jan 1'])
-        expect(within(of).getAllByRole('status')[0]).toBeEmptyDOMElement()
+        expect(
+            within(of)
+                .getAllByRole('status')
+                .map((one) => one.textContent),
+        ).toEqual(['', ''])
     })
 })

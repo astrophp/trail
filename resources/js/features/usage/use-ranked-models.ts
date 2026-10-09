@@ -1,7 +1,7 @@
 import { fetchUsageBreakdown, type UsageSort } from '@/api/usage'
 import { rankedModelsShown } from '@/features/usage/ranked-models'
 import { useFollowingQuery } from '@/hooks/use-following-query'
-import { failureLedger, type Refreshing } from '@/lib/refresh-policy'
+import { failureLedger, type Leader } from '@/lib/refresh-policy'
 import type { TimeRangePreset } from '@/lib/time-range'
 
 /** The failed refreshes in a row, by range and ranking. */
@@ -26,11 +26,7 @@ export const forgetRankedModelsRefreshFailures = () => failures.reset()
 export function useRankedModels(
     range: TimeRangePreset,
     sort: UsageSort,
-    leader: {
-        dataUpdatedAt: number
-        isPlaceholderData: boolean
-        refreshing: Refreshing
-    },
+    leader: Leader,
 ) {
     return useFollowingQuery({
         queryKey: [

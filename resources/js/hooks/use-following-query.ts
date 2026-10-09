@@ -10,7 +10,7 @@ import {
     keepsAsking,
     refreshState,
     type FailureLedger,
-    type Refreshing,
+    type Leader,
 } from '@/lib/refresh-policy'
 
 type FollowingQuery<TData> = {
@@ -21,11 +21,7 @@ type FollowingQuery<TData> = {
     /** What is being asked, which a failure and a refresh belong to: a range, or an agent in a range. */
     ledgerKey: string
     /** The query this one follows: it is asked for again whenever the leader of the same view is. */
-    leader: {
-        dataUpdatedAt: number
-        isPlaceholderData: boolean
-        refreshing: Refreshing
-    }
+    leader: Leader
     /** Whether the previous view's answer belongs to this view; see `useRefreshingQuery`. */
     keepsPlaceholder?: (previousKey: QueryKey) => boolean
     /** Asks for nothing while `false`, such as for a view that names nothing to ask about. */

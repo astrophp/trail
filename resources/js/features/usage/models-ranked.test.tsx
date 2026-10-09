@@ -214,8 +214,34 @@ describe('the list', () => {
             within(part())
                 .getByRole('link', { name: 'View all models' })
                 .getAttribute('href'),
-        ).toBe('/trail/usage?by=model')
+        ).toBe('/trail/usage?by=model&sort=-runs')
     })
+
+    it.each([
+        ['volume', '/trail/usage?by=model&sort=-runs'],
+        ['duration', '/trail/usage?by=model&sort=-runs'],
+        // The Usage page ranks by cost unless told otherwise.
+        ['cost', '/trail/usage?by=model'],
+    ])(
+        'opens the Usage page ranked as the list is under %s',
+        async (chart, href) => {
+            mockApi(
+                quiet,
+                undefined,
+                undefined,
+                undefined,
+                models(seven.slice(0, 5), seven.length),
+            )
+            renderApp(`/?chart=${chart}`)
+            await list()
+
+            expect(
+                within(part())
+                    .getByRole('link', { name: 'View all models' })
+                    .getAttribute('href'),
+            ).toBe(href)
+        },
+    )
 
     it('keeps the range of the page in the link to the rest', async () => {
         mockApi(
@@ -232,7 +258,7 @@ describe('the list', () => {
             within(part())
                 .getByRole('link', { name: 'View all models' })
                 .getAttribute('href'),
-        ).toBe('/trail/usage?by=model&range=1h')
+        ).toBe('/trail/usage?by=model&range=1h&sort=-runs')
     })
 })
 
@@ -389,7 +415,110 @@ describe('what it ranks by', () => {
     })
 })
 
+describe('a ranking over part of the models', () => {
+    it.each([
+        [true, 'Ranked by runs among the models read; some were not.'],
+        [false, 'Ranked by runs.'],
+    ])(
+        'says so only when the breakdown was cut (truncated: %s)',
+        async (truncated, note) => {
+            mockApi(quiet, undefined, undefined, undefined, (url) =>
+                json(
+                    breakdownOf('model', [sonnet, haiku], {
+                        preset: rangeOf(url),
+                        truncated,
+                    }),
+                ),
+            )
+            renderApp('/')
+            await list()
+
+            expect(within(part()).getByText(note)).toBeVisible()
+            expect(within(part()).queryByText(/some were not/) === null).toBe(
+                !truncated,
+            )
+        },
+    )
+
+    it.each([
+        [
+            'duration',
+            'Models are ranked by runs because duration is not recorded per model among the models read; some were not.',
+        ],
+        [
+            'cost',
+            'Ranked by estimated cost among the models read; some were not.',
+        ],
+    ])('says it under %s as well', async (chart, note) => {
+        mockApi(quiet, undefined, undefined, undefined, (url) =>
+            json(
+                breakdownOf('model', [sonnet], {
+                    preset: rangeOf(url),
+                    truncated: true,
+                }),
+            ),
+        )
+        renderApp(`/?chart=${chart}`)
+        await list()
+
+        expect(within(part()).getByText(note)).toBeVisible()
+    })
+})
+
 describe('its states', () => {
+    it('never shows the previous figure’s rows under the new note while the new ones load', async () => {
+        const cost = deferred()
+
+        mockApi(quiet, undefined, undefined, undefined, (url) =>
+            paramsOf(url).sort === '-cost'
+                ? cost.promise
+                : models([sonnet])(url),
+        )
+        renderApp('/')
+        await list()
+        await userEvent.click(screen.getByRole('radio', { name: 'Cost' }))
+
+        await waitFor(() =>
+            expect(
+                part().querySelector('[data-slot="ranked-list-skeleton"]'),
+            ).not.toBeNull(),
+        )
+        expect(within(part()).queryByText(/2 runs/)).toBeNull()
+        expect(within(part()).queryByText(/^Ranked by/)).toBeNull()
+        expect(
+            within(part()).queryByRole('list', {
+                name: 'Models in this range',
+            }),
+        ).toBeNull()
+
+        cost.resolve(await models([haiku])('/api/usage/breakdown?range=24h'))
+
+        expect(await list()).toBeVisible()
+        expect(
+            within(part()).getByText('Ranked by estimated cost.'),
+        ).toBeVisible()
+        expect(within(part()).getByText('$0.0045')).toBeVisible()
+    })
+
+    it('asks nothing more when the chart goes Volume, Duration, Volume: it is one entry', async () => {
+        const fetchMock = mockApi(
+            quiet,
+            undefined,
+            undefined,
+            undefined,
+            models([sonnet]),
+        )
+        renderApp('/')
+        await list()
+
+        await userEvent.click(screen.getByRole('radio', { name: 'Duration' }))
+        await within(part()).findByText(/duration is not recorded/)
+        await userEvent.click(screen.getByRole('radio', { name: 'Volume' }))
+        await within(part()).findByText('Ranked by runs.')
+
+        expect(modelUrls(fetchMock)).toHaveLength(1)
+    })
+
     it('draws placeholder rows while loading, and the Overview is usable meanwhile', async () => {
         const held = deferred()
 
@@ -465,8 +594,10 @@ describe('its states', () => {
 
         expect(await list()).toBeVisible()
         expect(within(part()).queryByRole('alert')).toBeNull()
-        // The button went away with focus on it: focus is not lost to the page body.
-        await waitFor(() => expect(document.body).not.toHaveFocus())
+        // The button went away with focus on it: focus goes to the list's own heading.
+        await waitFor(() =>
+            expect(document.activeElement).toBe(part().querySelector('h3')),
+        )
     })
 
     it('dims the previous range’s rows, and keeps their links, until the next range arrives', async () => {
@@ -611,5 +742,44 @@ describe('refreshing', () => {
             rowsOf(within(part()).getByRole('list')).map((row) => row.text),
         ).toEqual(['claude-sonnet-4-5anthropic2 runs'])
         expect(within(part()).queryByRole('alert')).toBeNull()
+    })
+
+    it('asks again from the note, and puts focus on the list’s heading when it recovers', async () => {
+        fakeInterval()
+        let overview = overviewFixture
+        let asked = 0
+
+        const fetchMock = mockApi(
+            () => json(overview),
+            undefined,
+            undefined,
+            undefined,
+            (url) => {
+                asked += 1
+
+                return asked === 2
+                    ? json({ message: 'The usage could not be read.' }, 500)
+                    : models(asked === 1 ? [sonnet] : [haiku])(url)
+            },
+        )
+
+        renderApp('/')
+        await list()
+        overview = overviewWith({ runs: runs({ completed: 32 }) })
+        await tick()
+        await screen.findByText(/The last refresh failed/)
+
+        const retry = within(part()).getByRole('button', { name: 'Try again' })
+
+        await userEvent.click(retry)
+        await until(() => expect(modelUrls(fetchMock)).toHaveLength(3))
+
+        await waitFor(() =>
+            expect(
+                rowsOf(within(part()).getByRole('list')).map((row) => row.text),
+            ).toEqual(['claude-haiku-4-5anthropic2 runs']),
+        )
+        expect(within(part()).queryByText(/The last refresh failed/)).toBeNull()
+        expect(document.activeElement).toBe(part().querySelector('h3'))
     })
 })

@@ -1,7 +1,7 @@
 import { agentKeys, fetchAgentBreakdown } from '@/api/agents'
 import { agentViewKey } from '@/features/agents/use-agent'
 import { useFollowingQuery } from '@/hooks/use-following-query'
-import { failureLedger, type Refreshing } from '@/lib/refresh-policy'
+import { failureLedger, type Leader } from '@/lib/refresh-policy'
 import type { TimeRangePreset } from '@/lib/time-range'
 
 /** The failed refreshes in a row, by agent and range. */
@@ -25,11 +25,7 @@ export const forgetBreakdownRefreshFailures = () => failures.reset()
 export function useAgentBreakdown(
     name: string,
     range: TimeRangePreset,
-    leader: {
-        dataUpdatedAt: number
-        isPlaceholderData: boolean
-        refreshing: Refreshing
-    },
+    leader: Leader,
 ) {
     return useFollowingQuery({
         queryKey: agentKeys.breakdown(name, range),

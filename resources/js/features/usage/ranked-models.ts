@@ -1,5 +1,6 @@
 import type { To } from 'react-router'
 import type { UsageSort } from '@/api/usage'
+import { usageListParams } from '@/api/usage-list-view'
 import type { ActivityMode } from '@/components/telemetry/activity-mode'
 import { timeRangeParam, type TimeRangePreset } from '@/lib/time-range'
 import { writeState } from '@/lib/url-state'
@@ -17,20 +18,30 @@ export const rankingFor: Record<ActivityMode, UsageSort> = {
     cost: '-cost',
 }
 
-/** The sentence under the heading that says which figure ranks, so no ranking is left to be guessed. */
-export const rankingNote: Record<ActivityMode, string> = {
-    volume: 'Ranked by runs.',
-    duration:
-        'Models are ranked by runs because duration is not recorded per model.',
-    cost: 'Ranked by estimated cost.',
+/**
+ * The sentence under the heading that says which figure ranks, so no ranking is left to be
+ * guessed. When the breakdown read only part of the models (`truncated`), it says the ranking is
+ * among those read and never claims a complete one.
+ */
+export function rankingNote(metric: ActivityMode, truncated: boolean): string {
+    const among = truncated ? ' among the models read; some were not' : ''
+
+    if (metric === 'duration') {
+        return `Models are ranked by runs because duration is not recorded per model${among}.`
+    }
+
+    return `Ranked by ${metric === 'cost' ? 'estimated cost' : 'runs'}${among}.`
 }
 
-/** The Usage page's breakdown by model for a range, written with the pages' own range parameter. */
-export function usageModelsLink(range: TimeRangePreset): To {
+/**
+ * The Usage page's breakdown by model for a range, ranked as the list is: written with the page's
+ * own parameters, so a value the page would use anyway (its default range and sort) is left out.
+ */
+export function usageModelsLink(range: TimeRangePreset, sort: UsageSort): To {
     const search = writeState(
-        { range: timeRangeParam },
+        { range: timeRangeParam, sort: usageListParams.sort },
         new URLSearchParams({ by: 'model' }),
-        { range },
+        { range, sort },
     ).toString()
 
     return { pathname: '/usage', search: `?${search}` }

@@ -1,3 +1,4 @@
+import type { Leader } from '@/lib/refresh-policy'
 import { useMemo, type ReactNode } from 'react'
 import { isNotFound } from '@/api/client'
 import { tracesLink, tracesLinkers } from '@/api/traces-link'
@@ -14,7 +15,7 @@ import { useFocusHandoff } from '@/hooks/use-focus-handoff'
 import { usePageTitle } from '@/hooks/use-page-title'
 import { useQueryStatus } from '@/hooks/use-query-status'
 import { useTimeRange } from '@/hooks/use-time-range'
-import type { Refreshing } from '@/lib/refresh-policy'
+import type {} from '@/lib/refresh-policy'
 import type { TimeRangePreset } from '@/lib/time-range'
 
 /** What a page that places something beside the agent's figures is told about the agent and its range. */
@@ -24,11 +25,7 @@ export type AgentSlot = {
     /** The range of the data shown, which whatever is placed follows. */
     range: TimeRangePreset
     /** The agent's own query: whatever is placed keeps up with it while a run is running. */
-    leader: {
-        dataUpdatedAt: number
-        isPlaceholderData: boolean
-        refreshing: Refreshing
-    }
+    leader: Leader
 }
 
 type AgentViewProps = {

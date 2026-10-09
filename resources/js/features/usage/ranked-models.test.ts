@@ -1,22 +1,60 @@
 import { describe, expect, it } from 'vitest'
-import { rankingFor, usageModelsLink } from '@/features/usage/ranked-models'
+import {
+    rankingFor,
+    rankingNote,
+    usageModelsLink,
+} from '@/features/usage/ranked-models'
 
 describe('usageModelsLink', () => {
     it.each([
-        ['24h', '?by=model'],
-        ['1h', '?by=model&range=1h'],
-        ['7d', '?by=model&range=7d'],
-    ] as const)('leads to the usage by model for %s', (range, search) => {
-        expect(usageModelsLink(range)).toEqual({ pathname: '/usage', search })
-    })
+        ['24h', '-cost', '?by=model'],
+        ['24h', '-runs', '?by=model&sort=-runs'],
+        ['1h', '-cost', '?by=model&range=1h'],
+        ['7d', '-runs', '?by=model&range=7d&sort=-runs'],
+    ] as const)(
+        'leads to the usage by model for %s ranked by %s',
+        (range, sort, search) => {
+            expect(usageModelsLink(range, sort)).toEqual({
+                pathname: '/usage',
+                search,
+            })
+        },
+    )
 })
 
 describe('rankingFor', () => {
-    it('ranks by cost only for Cost, and by runs for the rest, since duration is not kept per model', () => {
-        expect(rankingFor).toEqual({
-            volume: '-runs',
-            duration: '-runs',
-            cost: '-cost',
-        })
+    it('is runs for Volume and Duration, whose figure is not kept per model, and cost for Cost', () => {
+        expect(rankingFor.volume).toBe('-runs')
+        expect(rankingFor.duration).toBe('-runs')
+        expect(rankingFor.cost).toBe('-cost')
+    })
+})
+
+describe('rankingNote', () => {
+    it.each([
+        ['volume', false, 'Ranked by runs.'],
+        ['cost', false, 'Ranked by estimated cost.'],
+        [
+            'duration',
+            false,
+            'Models are ranked by runs because duration is not recorded per model.',
+        ],
+        [
+            'volume',
+            true,
+            'Ranked by runs among the models read; some were not.',
+        ],
+        [
+            'cost',
+            true,
+            'Ranked by estimated cost among the models read; some were not.',
+        ],
+        [
+            'duration',
+            true,
+            'Models are ranked by runs because duration is not recorded per model among the models read; some were not.',
+        ],
+    ] as const)('says for %s (cut: %s) %s', (metric, cut, note) => {
+        expect(rankingNote(metric, cut)).toBe(note)
     })
 })

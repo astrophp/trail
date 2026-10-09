@@ -1,3 +1,4 @@
+import type { Leader } from '@/lib/refresh-policy'
 import { ChartColumnIcon } from 'lucide-react'
 import { failureMessage } from '@/api/client'
 import { usageExportUrl, type UsageGrouping } from '@/api/usage'
@@ -17,7 +18,7 @@ import { useUsageList } from '@/features/usage/use-usage-list'
 import { useFocusHandoff } from '@/hooks/use-focus-handoff'
 import { useListStatus } from '@/hooks/use-list-status'
 import { formatCount } from '@/lib/format'
-import type { Refreshing } from '@/lib/refresh-policy'
+import type {} from '@/lib/refresh-policy'
 import { timeRangeLabels } from '@/lib/time-range'
 
 const tabs: (CountTab & { value: UsageGrouping })[] = [
@@ -38,11 +39,7 @@ const isGrouping = (value: string): value is UsageGrouping =>
 
 type UsageBreakdownProps = {
     /** The page's one query for the totals, which the breakdown follows once it settles. */
-    leader: {
-        dataUpdatedAt: number
-        isPlaceholderData: boolean
-        refreshing: Refreshing
-    }
+    leader: Leader
     /** The page already says that its last refresh failed, so this says it no more. */
     refreshNoted?: boolean
     className?: string

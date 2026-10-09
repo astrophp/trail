@@ -16,6 +16,13 @@ const finalStatuses = new Set([401, 403, 404, 419])
  * - `final`: the answer was final (it is gone, or the session or access is); asking stopped.
  * - `ended`: nothing is running, so there is nothing to refresh.
  */
+/** What a query that follows another one needs to know of it: the leader's last answer and where its refreshing stands. */
+export type Leader = {
+    dataUpdatedAt: number
+    isPlaceholderData: boolean
+    refreshing: Refreshing
+}
+
 export type Refreshing = 'polling' | 'retrying' | 'stopped' | 'final' | 'ended'
 
 /**

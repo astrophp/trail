@@ -1,3 +1,4 @@
+import type { Leader } from '@/lib/refresh-policy'
 import type { ReactNode } from 'react'
 import { tracesLinkFor, type TracesLinker } from '@/api/traces-link'
 import type { AgentResponse } from '@/api/types'
@@ -11,7 +12,7 @@ import { AgentBreakdown } from '@/features/agents/agent-breakdown'
 import { agentTitle } from '@/features/agents/agent-words'
 import { DelegatedFacts } from '@/features/agents/delegated-facts'
 import { formatCount } from '@/lib/format'
-import type { Refreshing } from '@/lib/refresh-policy'
+import type {} from '@/lib/refresh-policy'
 import type { TimeRangePreset } from '@/lib/time-range'
 
 type AgentLoadedProps = {
@@ -31,11 +32,7 @@ type AgentLoadedProps = {
     /** What the page places under the models and tools; drawn for an agent with runs of its own. */
     recent?: ReactNode
     /** The page's one query for the agent. */
-    leader: {
-        dataUpdatedAt: number
-        isPlaceholderData: boolean
-        refreshing: Refreshing
-    }
+    leader: Leader
     /** The page already says its last refresh failed. */
     refreshNoted: boolean
 }

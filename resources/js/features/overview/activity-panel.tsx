@@ -1,3 +1,4 @@
+import type { Leader } from '@/lib/refresh-policy'
 import type { ReactNode } from 'react'
 import { ActivityChart } from '@/components/telemetry/activity-chart'
 import {
@@ -8,18 +9,14 @@ import { useOverview } from '@/features/overview/use-overview'
 import { useQueryStatus } from '@/hooks/use-query-status'
 import { useTimeRange } from '@/hooks/use-time-range'
 import { useUrlState } from '@/hooks/use-url-state'
-import type { Refreshing } from '@/lib/refresh-policy'
+import type {} from '@/lib/refresh-policy'
 
 /** What a page that places something beside the chart is told about the chart and the overview behind it. */
 export type OverviewSlot = {
     /** What the chart shows, which whatever is placed beside it can follow. */
     metric: ActivityMode
     /** The overview's own query: whatever is placed keeps up with it while a run is running. */
-    leader: {
-        dataUpdatedAt: number
-        isPlaceholderData: boolean
-        refreshing: Refreshing
-    }
+    leader: Leader
 }
 
 type ActivityPanelProps = {

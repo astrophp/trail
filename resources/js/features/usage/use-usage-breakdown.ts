@@ -1,7 +1,7 @@
 import { usageApiParams, type UsageListView } from '@/api/usage-list-view'
 import { fetchUsageBreakdown, usageKeys } from '@/api/usage'
 import { useFollowingQuery } from '@/hooks/use-following-query'
-import { failureLedger, type Refreshing } from '@/lib/refresh-policy'
+import { failureLedger, type Leader } from '@/lib/refresh-policy'
 
 /** The failed refreshes in a row, by view. */
 const failures = failureLedger()
@@ -20,14 +20,7 @@ export const forgetUsageBreakdownRefreshFailures = () => failures.reset()
  * groups by the same thing: rows of models say nothing about rows of agents. A caller must check
  * `isPlaceholderData` before treating it as the answer.
  */
-export function useUsageBreakdown(
-    view: UsageListView,
-    leader: {
-        dataUpdatedAt: number
-        isPlaceholderData: boolean
-        refreshing: Refreshing
-    },
-) {
+export function useUsageBreakdown(view: UsageListView, leader: Leader) {
     const params = usageApiParams(view)
 
     return useFollowingQuery({
