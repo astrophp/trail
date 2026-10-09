@@ -22,5 +22,5 @@ it('serves the page for everything else, including look-alikes of the api space'
 it('registers the fallback before the page', function () {
     $names = collect(Route::getRoutes()->getRoutes())->map->getName()->filter(fn ($name) => str_starts_with((string) $name, 'trail.'))->values()->all();
 
-    expect($names)->toBe(['trail.api.meta', 'trail.api.overview', 'trail.api.overview.attention', 'trail.api.agents.index', 'trail.api.agents.show', 'trail.api.agents.breakdown', 'trail.api.conversations.index', 'trail.api.conversations.transcript', 'trail.api.traces.index', 'trail.api.traces.export', 'trail.api.traces.show', 'trail.api.traces.neighbours', 'trail.api.traces.bookmark.store', 'trail.api.traces.bookmark.destroy', 'trail.api.fallback', 'trail.dashboard']);
+    expect($names)->toBe(['trail.api.meta', 'trail.api.overview', 'trail.api.overview.attention', 'trail.api.agents.index', 'trail.api.agents.show', 'trail.api.agents.breakdown', 'trail.api.conversations.index', 'trail.api.conversations.transcript', 'trail.api.traces.index', 'trail.api.traces.export', 'trail.api.traces.show', 'trail.api.traces.neighbours', 'trail.api.traces.bookmark.store', 'trail.api.traces.bookmark.destroy', 'trail.api.prices.index', 'trail.api.prices.update', 'trail.api.prices.destroy', 'trail.api.fallback', 'trail.dashboard']);
 });

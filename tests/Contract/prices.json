@@ -1,0 +1,189 @@
+{
+    "data": [
+        {
+            "provider": "openai",
+            "model": "mystery",
+            "rates": {
+                "input": null,
+                "output": null,
+                "cache_read": null,
+                "cache_write": null
+            },
+            "source": "none",
+            "via": null,
+            "default": {
+                "source": "none",
+                "via": null,
+                "rates": {
+                    "input": null,
+                    "output": null,
+                    "cache_read": null,
+                    "cache_write": null
+                }
+            },
+            "observed": true,
+            "saved_at": null
+        },
+        {
+            "provider": "anthropic",
+            "model": "claude-sonnet-4-5",
+            "rates": {
+                "input": 3,
+                "output": 15,
+                "cache_read": 0.3,
+                "cache_write": 3.75
+            },
+            "source": "config",
+            "via": null,
+            "default": {
+                "source": "config",
+                "via": null,
+                "rates": {
+                    "input": 3,
+                    "output": 15,
+                    "cache_read": 0.3,
+                    "cache_write": 3.75
+                }
+            },
+            "observed": true,
+            "saved_at": null
+        },
+        {
+            "provider": "anthropic",
+            "model": "claude-sonnet-4-5-20250929",
+            "rates": {
+                "input": 3,
+                "output": 15,
+                "cache_read": 0.3,
+                "cache_write": 3.75
+            },
+            "source": "prefix",
+            "via": {
+                "model": "claude-sonnet-4-5",
+                "saved": false
+            },
+            "default": {
+                "source": "prefix",
+                "via": {
+                    "model": "claude-sonnet-4-5",
+                    "saved": false
+                },
+                "rates": {
+                    "input": 3,
+                    "output": 15,
+                    "cache_read": 0.3,
+                    "cache_write": 3.75
+                }
+            },
+            "observed": true,
+            "saved_at": null
+        },
+        {
+            "provider": "openai",
+            "model": "gpt-5-2025-08-07",
+            "rates": {
+                "input": 1,
+                "output": 8,
+                "cache_read": null,
+                "cache_write": null
+            },
+            "source": "prefix",
+            "via": {
+                "model": "gpt-5",
+                "saved": true
+            },
+            "default": {
+                "source": "prefix",
+                "via": {
+                    "model": "gpt-5",
+                    "saved": true
+                },
+                "rates": {
+                    "input": 1,
+                    "output": 8,
+                    "cache_read": null,
+                    "cache_write": null
+                }
+            },
+            "observed": true,
+            "saved_at": null
+        },
+        {
+            "provider": "openai",
+            "model": "gpt-4o",
+            "rates": {
+                "input": 2.5,
+                "output": 10,
+                "cache_read": 1.25,
+                "cache_write": null
+            },
+            "source": "config",
+            "via": null,
+            "default": {
+                "source": "config",
+                "via": null,
+                "rates": {
+                    "input": 2.5,
+                    "output": 10,
+                    "cache_read": 1.25,
+                    "cache_write": null
+                }
+            },
+            "observed": false,
+            "saved_at": null
+        },
+        {
+            "provider": "openai",
+            "model": "gpt-5",
+            "rates": {
+                "input": 1,
+                "output": 8,
+                "cache_read": null,
+                "cache_write": null
+            },
+            "source": "saved",
+            "via": null,
+            "default": {
+                "source": "config",
+                "via": null,
+                "rates": {
+                    "input": 1.25,
+                    "output": 10,
+                    "cache_read": 0.125,
+                    "cache_write": null
+                }
+            },
+            "observed": false,
+            "saved_at": "2026-01-02T12:00:00.000Z"
+        },
+        {
+            "provider": "openai",
+            "model": "gpt-5-mini",
+            "rates": {
+                "input": 0.25,
+                "output": 2,
+                "cache_read": 0,
+                "cache_write": null
+            },
+            "source": "saved",
+            "via": null,
+            "default": {
+                "source": "none",
+                "via": null,
+                "rates": {
+                    "input": null,
+                    "output": null,
+                    "cache_read": null,
+                    "cache_write": null
+                }
+            },
+            "observed": false,
+            "saved_at": "2026-01-02T12:00:00.000Z"
+        }
+    ],
+    "limit": {
+        "limit": 500,
+        "total": 7,
+        "truncated": false
+    }
+}

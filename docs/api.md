@@ -597,6 +597,52 @@ has this one shape.
   paths are kept for a span with very many. `truncated` can be `true` while it is empty, when
   something was dropped that has no original length.
 
+## The price
+
+A price is what a model costs per million tokens, as Trail would estimate a run with it, and where
+that comes from. Models are never created: the list holds those named by `trail.pricing`, by a
+saved price, and by a step or an embedding that was recorded. The same shape is returned by the
+list and by both writes.
+
+```json
+{
+  "provider": "anthropic",
+  "model": "claude-sonnet-4-5-20250929",
+  "rates": { "input": 3, "output": 15, "cache_read": 0.3, "cache_write": 3.75 },
+  "source": "prefix",
+  "via": { "model": "claude-sonnet-4-5", "saved": false },
+  "default": {
+    "source": "prefix",
+    "via": { "model": "claude-sonnet-4-5", "saved": false },
+    "rates": { "input": 3, "output": 15, "cache_read": 0.3, "cache_write": 3.75 }
+  },
+  "observed": true,
+  "saved_at": null
+}
+```
+
+- `rates` is what a run with this model is priced at now, in US dollars per million tokens. All four
+  keys are always there, each a number or `null`. `null` is unknown, never free: usage with tokens
+  of a kind that has no rate is given no cost at all. `0` is a real rate, a free one.
+- `source` says where `rates` comes from. `saved`: a saved price of exactly this provider and model.
+  `config`: the `trail.pricing` entry of exactly this id. `prefix`: this id extends a shorter listed
+  id with a version suffix (`-latest`, a date, a build number), and the shorter id's rates apply.
+  `none`: nothing applies, and all four rates are `null`.
+- `via` is `null` unless `source` is `prefix`. Then `model` is the listed id the rates come through
+  and `saved` says whether that id's rates are a saved price (`true`) or its config entry (`false`).
+- `default` is what would apply if this model's own saved price were removed, which is what a reset
+  returns to and what an editor can start from: `source` (`config`, `prefix` or `none`), `via` and
+  `rates` as above. The saved prices of other models still count, since a version can resolve through
+  one. For a model that is not `saved` it is the same as the price's own `source`, `via` and `rates`.
+- A saved price replaces the config entry as a whole. A rate left blank in it is unknown; it does not
+  fall back to the config value.
+- `observed` is whether a step or an embedding was recorded with exactly this provider and model.
+- `saved_at` is when the saved price was last written, as every time in this API, and `null` when the
+  model has none.
+- Trail is not a billing system: a cost is an estimate, frozen when the run is recorded. Saving or
+  resetting a price changes what later runs are priced at and never a cost already recorded. Nothing
+  is repriced.
+
 ## Endpoints
 
 ### `GET /api/meta`
@@ -1318,3 +1364,92 @@ was there before.
 - A write goes through the `web` middleware's request-forgery protection. Send the token in the
   `X-CSRF-TOKEN` header (`csrfToken` in `window.Trail`). A request that protection refuses is a
   `419`.
+
+### `GET /api/prices`
+
+Every model Trail knows and what it is priced at. Takes no time range and no parameters; ones it
+does not know are ignored.
+
+```json
+{
+  "data": [ { "provider": "anthropic", "model": "claude-sonnet-4-5-20250929", "source": "prefix" } ],
+  "limit": { "limit": 500, "total": 41, "truncated": false }
+}
+```
+
+Each item is [The price](#the-price).
+
+- The models are those of `trail.pricing`, the saved prices, and the steps and embeddings recorded.
+  Observed models that nothing prices (`source` `none`) come first, then the other observed models,
+  then the rest; each group is ordered by provider and then model, compared byte by byte.
+- At most `limit.limit` (500) are sent; `total` is how many there are and `truncated` is `true` when
+  some are left out.
+- It is read in two queries whatever the number of models: the saved prices and the observed models.
+  The saved prices are read from the table on every request, not from the copy a long-lived process
+  keeps for a minute, so a save made by another worker shows at once.
+- If the observed models cannot be read the error is reported and the list is the config models and
+  the saved ones. If the saved prices cannot be read the error is reported and config applies: no
+  model is `saved`.
+- A database that compares text loosely (MySQL) lists one spelling of what it takes for one model:
+  models observed as `gpt-5` and `GPT-5` appear once, and the other spelling cannot be priced.
+
+### `PUT /api/prices?provider=…&model=…`
+
+Saves a model's price. The body is a JSON object, sent with a JSON content type, with any of the
+four rates, in US dollars per million tokens, and answers `200` with the price as it now resolves
+(`source` `saved`):
+
+```json
+{ "input": 3.5, "output": 16, "cache_read": "0.35" }
+```
+
+```json
+{ "data": { "provider": "anthropic", "model": "claude-sonnet-4-5-20250929", "source": "saved" } }
+```
+
+- `provider` and `model` travel in the query, read from the raw query string and not trimmed, since a
+  model id can start or end with a space and hold a slash, a colon, a percent sign or a plus sign
+  (send them percent-encoded: a literal `+` is read as a space). A missing one, an empty one, a list,
+  one over 255 characters, one holding a NUL byte or one that is not valid UTF-8 is a 404 that is
+  answered without reading the database.
+- Only a model in [the list](#get-apiprices) can be saved: no model is ever created. A provider and
+  model that are not listed, compared exactly and case-sensitively, are a 404 and write nothing. The
+  price is saved with the spelling of the list.
+- A body that is not a JSON object (invalid JSON, no content, a list, a string, a number, `null`, or
+  a content type that is not JSON) is a 422 with `errors.body`, and nothing is written. `{}` is valid:
+  every rate is blank.
+- The models are looked up in the saved prices as they are in the table now, not in a copy: a model
+  that is listed only through a saved price another worker has since reset is a 404.
+- All four rates are written every time: a rate that is absent, `null` or `""` is saved as `NULL`
+  (unknown), it does not keep its previous value. All four `NULL` is a valid save, a model that is
+  deliberately unpriced. `0` is saved as a free rate.
+- A rate is a JSON number that is finite and `0` or more, or text in plain decimal notation
+  (`3.75`, not `1e3`, `-1`, `.5` or `+1`); whitespace around a text is ignored, and a text of nothing
+  else is blank. Any other value (a boolean, a list, text) is a 422 with
+  `errors` keyed by the field, all the invalid fields together, and nothing is written.
+- The columns hold six decimal places and nothing above `999999.999999`. A value beyond that is a
+  422 on its field, never rounded or cut: what is saved is what was sent.
+- A saved price replaces the model's row as a whole, and `saved_at` is the time of every save,
+  including one that sends the same rates.
+- A database that compares text loosely (MySQL ignores case) can take two spellings the list holds
+  for one model. When a price is already saved under another spelling, the write is a 422 on `model`
+  that names the saved spelling, and that row is not touched. Where the two spellings are two
+  models (SQLite, Postgres) they have a price each.
+- Runs that were recorded keep their cost; the next run is priced with the saved price. The process
+  that answers the request uses it at once. Another long-lived process (a queue worker) reads saved
+  prices again when the ones it holds are more than `PriceBook::REFRESH_SECONDS` (60) seconds old,
+  so it can price runs with the previous price for up to a minute.
+- The access check and the request-forgery protection are those of the bookmark endpoints: a denied
+  request is a `403`, one without a valid token a `419`.
+
+### `DELETE /api/prices?provider=…&model=…`
+
+Removes a model's saved price, and answers `200` with the price as it now resolves: its `default`.
+
+- `provider` and `model` are read, and refused with a 404, as in `PUT`.
+- A listed model that has no saved price is a `200` with its price unchanged, so it is idempotent.
+- Only the row of exactly that spelling is removed; a row that MySQL takes for the same model under
+  another spelling stays.
+- Recorded costs and the other processes' copies of the prices are as for `PUT`: a long-lived
+  process that prices runs reads the table again when its copy is more than 60 seconds old.
+- Access and the request-forgery protection are as for `PUT`.
