@@ -2,6 +2,9 @@
 
 use Astro\Trail\Enums\Status;
 use Astro\Trail\Http\Resources\Csv;
+use Astro\Trail\Queries\Page;
+use Astro\Trail\Queries\TimeRange;
+use Astro\Trail\Queries\UsageFilters;
 use Astro\Trail\Queries\UsageQuery;
 use Astro\Trail\Tests\Fixtures\Http\UsageRows;
 use Illuminate\Auth\GenericUser;
@@ -291,6 +294,20 @@ describe('amounts', function () {
     });
 });
 
+describe('amounts of many digits', function () {
+    it('writes exactly an amount of up to 15 significant digits', function () {
+        UsageRows::run('Agent', '2026-01-02 10:00:00', [
+            usageExportStep('acme', 'wide', ['cost' => 123456.123456789]),
+            usageExportStep('acme', 'whole', ['cost' => 12345678.5]),
+        ]);
+
+        $rows = array_column(usageExportAt($this)['rows'], null, 'model');
+
+        expect($rows['wide']['estimated_cost_usd'])->toBe('123456.123456789')
+            ->and($rows['whole']['estimated_cost_usd'])->toBe('12345678.5');
+    });
+});
+
 describe('escaping', function () {
     it('quotes names with a comma, a quote or a line break, and gets them back through the parser', function () {
         $names = ['comma' => 'a, b', 'quote' => 'say "hi"', 'newline' => "line one\nline two", 'crlf' => "one\r\ntwo", 'unicode' => 'Zoë 日本語'];
@@ -414,6 +431,23 @@ describe('the row limit', function () {
         'providers' => ['provider', 'provider', 2, ['anthropic', 'openai']],
         'agents' => ['agent', 'agent', 3, ['Alpha', 'Askonly', 'Bare']],
     ]);
+
+    it('uses the cap of the breakdown, which is 1000 by default', function () {
+        UsageRows::dataset();
+
+        // Both controllers read the UsageQuery the container resolves, so there is one cap and no second constant.
+        $limit = usageExportJsonAt($this)['row_limit'];
+
+        expect($limit)->toBe(['limit' => 1000, 'truncated' => false])
+            ->and(UsageQuery::LIMIT)->toBe(1000)
+            ->and(app(UsageQuery::class)->list(new TimeRange(null, now()->subDay()->toImmutable(), now()->toImmutable()), new UsageFilters, new Page)->limit)->toBe(1000);
+        usageExportAt($this)['response']->assertHeader('X-Trail-Export-Truncated', 'false');
+
+        $this->app->bind(UsageQuery::class, fn () => new UsageQuery(3));
+
+        expect(usageExportJsonAt($this)['row_limit']['limit'])->toBe(3);
+        usageExportAt($this)['response']->assertHeader('X-Trail-Export-Rows', '3')->assertHeader('X-Trail-Export-Truncated', 'true');
+    });
 
     it('is not truncated when the groups fill the limit exactly, and truncated one over', function () {
         UsageRows::dataset();

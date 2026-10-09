@@ -1181,7 +1181,7 @@ The file has one header row, then one row for each group. The columns that name 
 | `usage_state` | `reported`, `pending` or `not_reported` |
 | `input_tokens`, `output_tokens`, `cache_read_tokens`, `cache_write_tokens`, `reasoning_tokens`, `total_tokens` | counts, as in `usage` |
 | `cost_state` | `estimated`, `partial`, `unpriced`, `pending` or `not_captured` |
-| `estimated_cost_usd` | `cost.amount` as a plain decimal with the stored precision (up to 10 places), never in exponent notation. For a `pending` row it is what has been recorded so far; for a `partial` row it is the amount of the priced part |
+| `estimated_cost_usd` | `cost.amount` as a plain decimal with up to 10 places, never in exponent notation. Amounts are floats, so beyond about 15 significant digits a digit can differ from the stored decimal. For a `pending` row it is what has been recorded so far; for a `partial` row it is the amount of the priced part |
 | `reported_steps`, `unpriced_steps`, `unpriced_tokens` | `coverage`, as in the breakdown |
 
 - A value that was not captured is an **empty cell**, never `0`: a `0` in the file is a count or an
@@ -1193,7 +1193,9 @@ The file has one header row, then one row for each group. The columns that name 
   breakdown's `row_limit.truncated` is `true`, that is when there were more groups than
   `row_limit.limit` (1,000), and then the file holds those the breakdown reads.
 - The file is named `trail-usage-<by>-YYYYMMDD-HHMMSS.csv` (UTC).
-- The format, the guard against formulas, the failure guarantees and the streaming are those of
+- The rows are read before the first byte and then written out; nothing is read in chunks as the
+  traces export does, because the breakdown is capped at its group limit.
+- The format, the guard against formulas and the failure guarantees are those of
   [`GET /api/traces/export`](#get-apitracesexport): UTF-8 with a byte-order mark, `\r\n` line ends,
   RFC 4180 quoting, `text/csv; charset=UTF-8`, an attachment, `Cache-Control: no-store`,
   `X-Content-Type-Options: nosniff` and `X-Accel-Buffering: no`. Provider, model and agent names
@@ -1232,8 +1234,8 @@ each projected bucket (none unless the projection's `state` is `projected`):
   a cost and is not to be summed with one.
 - An amount that is missing is an **empty cell**, never `0`: a bucket without runs has a
   `cost_state` of `not_captured` and an empty `estimated_cost_usd`, and the cumulative columns stay
-  empty until the first bucket that has an amount. Amounts are plain decimals, as in the
-  breakdown's file.
+  empty until the first bucket that has an amount. Amounts are plain decimals with up to 10
+  places, as in the breakdown's file, and carry the same limit of about 15 significant digits.
 - A file always has the buckets of its range, so a range with nothing recorded is not an empty file:
   its rows are `not_captured`.
 - Headers: `X-Trail-Export-Rows` and `X-Trail-Export-Total` are the same number, the rows written
@@ -1241,6 +1243,8 @@ each projected bucket (none unless the projection's `state` is `projected`):
   the projection's `state` (`projected`, `not_enough_history` or `range_not_current`), so a reader of
   a file without projected rows can tell why. The file is named
   `trail-usage-estimated-cost-YYYYMMDD-HHMMSS.csv` (UTC).
+- The rows are read before the first byte and then written out, not in chunks: the series is bounded
+  by the buckets of the range (at most 92 days).
 - The file format and everything else about the response are those of
   [`GET /api/usage/export`](#get-apiusageexport) and [`GET /api/traces/export`](#get-apitracesexport).
 

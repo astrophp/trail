@@ -215,9 +215,11 @@ describe('the recorded series', function () {
 
         $export = spendExportAt($this);
         $amounts = array_column($export['rows'], 'estimated_cost_usd', 'from');
+        $cumulative = array_column($export['rows'], 'cumulative_estimated_cost_usd', 'from');
 
         expect($amounts['2026-01-02T11:00:00.000Z'])->toBe('0.0000000001')
             ->and($amounts['2026-01-02T10:00:00.000Z'])->toBe('98765.4321098765')
+            ->and($cumulative['2026-01-02T11:00:00.000Z'])->toBe('98765.4321098766')
             ->and($export['content'])->not->toContain('E-')->not->toContain('E+');
     });
 });
