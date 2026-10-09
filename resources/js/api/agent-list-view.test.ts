@@ -1,33 +1,30 @@
 import { describe, expect, it } from 'vitest'
 import {
     agentListApiParams,
-    readAgentListView,
+    agentListParams,
     type AgentListView,
 } from '@/api/agent-list-view'
+import { readState } from '@/lib/url-state'
 
-const read = (query: string) => readAgentListView(new URLSearchParams(query))
+/** What the list keeps in the URL besides the range, as a query string reads. */
+const read = (query: string) =>
+    readState(agentListParams, new URLSearchParams(query))
 
-const defaults: AgentListView = {
-    range: '24h',
-    sort: '-runs',
-    page: 1,
-    search: '',
-}
+const defaults = { sort: '-runs', page: 1, search: '' } as const
 
-describe('readAgentListView', () => {
+const view: AgentListView = { range: '24h', ...defaults }
+
+describe('the params the list keeps in the URL', () => {
     it('is the busiest-first view for an empty query', () => {
         expect(read('')).toEqual(defaults)
     })
 
-    it('reads the range, sort, page and search', () => {
-        expect(read('range=7d&sort=-error_rate&page=3&search=support')).toEqual(
-            {
-                range: '7d',
-                sort: '-error_rate',
-                page: 3,
-                search: 'support',
-            },
-        )
+    it('reads the sort, page and search', () => {
+        expect(read('sort=-error_rate&page=3&search=support')).toEqual({
+            sort: '-error_rate',
+            page: 3,
+            search: 'support',
+        })
     })
 
     it.each([
@@ -54,7 +51,6 @@ describe('readAgentListView', () => {
         ['page=0', 'page'],
         ['page=-2', 'page'],
         ['page=abc', 'page'],
-        ['range=forever', 'range'],
     ] as const)('falls back to the default for %s', (query, key) => {
         expect(read(query)[key]).toBe(defaults[key])
     })
@@ -84,6 +80,6 @@ describe('agentListApiParams', () => {
     })
 
     it('asks for a page size when it is given one', () => {
-        expect(agentListApiParams(defaults, 5).per_page).toBe(5)
+        expect(agentListApiParams(view, 5).per_page).toBe(5)
     })
 })

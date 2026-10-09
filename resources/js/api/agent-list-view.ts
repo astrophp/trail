@@ -1,7 +1,7 @@
 import { agentSorts, type AgentListParams, type AgentSort } from '@/api/agents'
 import { searchParam } from '@/lib/search'
-import { timeRangeParam, type TimeRangePreset } from '@/lib/time-range'
-import { enumParam, intParam, readState } from '@/lib/url-state'
+import type { TimeRangePreset } from '@/lib/time-range'
+import { enumParam, intParam } from '@/lib/url-state'
 
 export const defaultAgentSort: AgentSort = '-runs'
 
@@ -23,14 +23,6 @@ export type AgentListView = {
     sort: AgentSort
     page: number
     search: string
-}
-
-/** The list view a query string describes; a missing or invalid value is the list's default. */
-export function readAgentListView(search: URLSearchParams): AgentListView {
-    return {
-        range: readState({ range: timeRangeParam }, search).range,
-        ...readState(agentListParams, search),
-    }
 }
 
 /** What to ask the API for. `perPage` is left out for the endpoint's own page size. */

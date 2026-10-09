@@ -1,6 +1,6 @@
 import { BotIcon, SearchXIcon } from 'lucide-react'
 import { useLocation } from 'react-router'
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import { EmptyState } from '@/components/patterns/empty-state'
 import { ErrorState } from '@/components/patterns/error-state'
 import { HistorySearchField } from '@/components/patterns/history-search-field'
@@ -8,6 +8,7 @@ import { Notice } from '@/components/patterns/notice'
 import { Pagination } from '@/components/patterns/pagination'
 import { Button } from '@/components/ui/button'
 import { AgentsTable } from '@/features/agents/agents-table'
+import { SortSelect } from '@/features/agents/sort-select'
 import { useAgentList } from '@/features/agents/use-agent-list'
 import { useAgents } from '@/features/agents/use-agents'
 import { useFocusHandoff } from '@/hooks/use-focus-handoff'
@@ -37,6 +38,16 @@ export function AgentsList({ className }: { className?: string }) {
     const { pathname, search: query } = useLocation()
     const searchRef = useRef<HTMLInputElement>(null)
 
+    // The view the rows on screen belong to, as a `from` value. While the table shows the previous
+    // view's rows (placeholder data) their links keep leading back to that view; they switch when
+    // the new rows arrive, as the range in the links does.
+    const currentFrom = returnTo(pathname, query)
+    const [rowsFrom, setRowsFrom] = useState(currentFrom)
+
+    if (data !== undefined && !isPlaceholderData && rowsFrom !== currentFrom) {
+        setRowsFrom(currentFrom)
+    }
+
     const { failed, retrying, loading, empty, failure } = useListStatus({
         data,
         isError,
@@ -64,6 +75,7 @@ export function AgentsList({ className }: { className?: string }) {
                     inputRef={searchRef}
                     onCommit={(text, options) => setSearch(text, options)}
                 />
+                <SortSelect value={sort} onValueChange={setSort} />
                 {current && !failed ? (
                     <p className="text-caption text-muted-foreground md:ml-auto">
                         {formatCount(data.pagination.total)}{' '}
@@ -97,7 +109,7 @@ export function AgentsList({ className }: { className?: string }) {
                         agents={data?.data ?? []}
                         // The range the rows were counted over: the previous one while the next loads.
                         range={data?.range.preset ?? view.range}
-                        from={returnTo(pathname, query)}
+                        from={rowsFrom}
                         sort={sort}
                         onSortChange={setSort}
                         caption="Agents that ran in the selected range"

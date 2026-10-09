@@ -81,7 +81,7 @@ describe('a row of an agent with runs of its own', () => {
         ).toBe('2026-01-02T12:10:00.000Z')
     })
 
-    it('names the agent with a link, and under it the class in full on hover', () => {
+    it('names the agent with a link, and under it the class', () => {
         render(show([agentNamed('SupportAssistant')]))
 
         const cell = cellOf(rowOf('SupportAssistant'), 'Agent')
@@ -90,10 +90,8 @@ describe('a row of an agent with runs of its own', () => {
         expect(
             within(cell).getByRole('link', { name: 'SupportAssistant' }),
         ).toBeVisible()
-        expect(line).toHaveAttribute(
-            'title',
-            'App\\Ai\\Agents\\SupportAssistant',
-        )
+        // Nothing is cut off here, so nothing is said twice in a title (see the cell's own tests).
+        expect(line).not.toHaveAttribute('title')
     })
 
     it('has no second line for an agent without a class, and one for an agent that has it', () => {

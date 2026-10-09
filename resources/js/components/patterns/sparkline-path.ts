@@ -3,6 +3,9 @@ const extent = 100
 /** Room above and below, so the line is not cut off at the edges of the box. */
 const inset = 2
 
+/** Where the bottom of a sparkline is: its lowest value, or zero. */
+export type SparklineBaseline = 'range' | 'zero'
+
 const round = (value: number) => Number(value.toFixed(2))
 
 /**
@@ -11,8 +14,15 @@ const round = (value: number) => Number(value.toFixed(2))
  * two breaks is a zero-length segment, drawn as a dot by a round line cap, so it does not vanish.
  * With fewer than two values to draw the result is empty. All values equal is a flat line at mid
  * height. Values are spread evenly along x by position, nulls included.
+ *
+ * `baseline` says where the bottom of the drawing is. `range` (the default) is the lowest value, so
+ * every line fills the box. `zero` is 0 (or the lowest value when that is below 0): a line that
+ * never drops to zero is not stretched to the whole box, and a line of nothing but zeros is not drawn, since it is not a shape.
  */
-export function sparklinePath(values: (number | null)[]): string {
+export function sparklinePath(
+    values: (number | null)[],
+    baseline: SparklineBaseline = 'range',
+): string {
     const present = values.filter(
         (value): value is number =>
             typeof value === 'number' && Number.isFinite(value),
@@ -22,10 +32,16 @@ export function sparklinePath(values: (number | null)[]): string {
         return ''
     }
 
-    const low = Math.min(...present)
+    const low =
+        baseline === 'zero' ? Math.min(0, ...present) : Math.min(...present)
     const high = Math.max(...present)
     // Halved first, so the span of two huge values of opposite sign does not overflow.
     const range = high / 2 - low / 2
+
+    if (baseline === 'zero' && range === 0) {
+        return ''
+    }
+
     const lastIndex = values.length - 1
 
     const point = (value: number, index: number) => {

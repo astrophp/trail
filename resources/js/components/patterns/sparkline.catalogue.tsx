@@ -5,10 +5,12 @@ function Row({
     name,
     values,
     className,
+    baseline,
 }: {
     name: string
     values: (number | null)[]
     className?: string
+    baseline?: 'range' | 'zero'
 }) {
     return (
         <div className="flex items-center gap-3 text-ui">
@@ -16,6 +18,7 @@ function Row({
                 values={values}
                 summary={`${name}: ${values.length} values`}
                 className={className}
+                baseline={baseline}
             />
             <span className="text-muted-foreground">{name}</span>
         </div>
@@ -47,6 +50,32 @@ export const catalogue: CatalogueEntry = {
                         name="Another colour"
                         values={[3, 1, 4, 1, 5]}
                         className="text-chart-4"
+                    />
+                </div>
+            ),
+        },
+        {
+            name: 'Baseline: from the lowest value, and from zero',
+            Component: () => (
+                <div className="flex flex-col gap-2">
+                    <Row
+                        name="Lowest value: 3, 4, 3, 4"
+                        values={[3, 4, 3, 4]}
+                    />
+                    <Row
+                        name="Zero: 3, 4, 3, 4"
+                        values={[3, 4, 3, 4]}
+                        baseline="zero"
+                    />
+                    <Row
+                        name="Zero: 300, 400, 300, 400"
+                        values={[300, 400, 300, 400]}
+                        baseline="zero"
+                    />
+                    <Row
+                        name="Zero: all zeros draws nothing"
+                        values={[0, 0, 0, 0]}
+                        baseline="zero"
                     />
                 </div>
             ),

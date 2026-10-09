@@ -645,3 +645,53 @@ describe('DataTable', () => {
         })
     })
 })
+
+describe('DataTable column classes', () => {
+    const withClass: DataTableColumn<Fruit>[] = [
+        {
+            id: 'name',
+            accessorKey: 'name',
+            header: 'Name',
+            meta: { className: 'w-full max-w-0' },
+        },
+        { id: 'origin', accessorKey: 'origin', header: 'Origin' },
+    ]
+
+    function renderWith(loading: boolean) {
+        return render(
+            <DataTable
+                columns={withClass}
+                data={fruit}
+                getRowId={(row) => row.id}
+                sort={{ id: 'name', desc: false }}
+                onSortChange={() => {}}
+                caption="Fruit"
+                loading={loading}
+            />,
+        )
+    }
+
+    it('puts the classes of a column on its header and its cells, and on no other column', () => {
+        renderWith(false)
+
+        const [name, origin] = screen.getAllByRole('columnheader')
+
+        expect(name).toHaveClass('w-full', 'max-w-0')
+        expect(origin).not.toHaveClass('w-full')
+        for (const row of screen.getAllByRole('row').slice(1)) {
+            const [first, second] = [...row.children]
+
+            expect(first).toHaveClass('w-full', 'max-w-0')
+            expect(second).not.toHaveClass('w-full')
+        }
+    })
+
+    it('puts them on the skeleton cells too, so the rows do not change width on arrival', () => {
+        renderWith(true)
+
+        expect(document.querySelector('tbody tr td')).toHaveClass(
+            'w-full',
+            'max-w-0',
+        )
+    })
+})

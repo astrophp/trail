@@ -53,6 +53,40 @@ describe('Sparkline', () => {
         ).toHaveLength(2)
     })
 
+    it('draws from the lowest value by default, and from zero when asked', () => {
+        const drawn = (baseline?: 'range' | 'zero') => {
+            const { container, unmount } = render(
+                <Sparkline
+                    values={[3, 4, 3]}
+                    summary="A ripple"
+                    baseline={baseline}
+                />,
+            )
+            const d = container.querySelector('path')?.getAttribute('d')
+
+            unmount()
+
+            return d
+        }
+
+        expect(drawn()).toBe('M0 98L50 2L100 98')
+        expect(drawn('range')).toBe('M0 98L50 2L100 98')
+        expect(drawn('zero')).toBe('M0 26L50 2L100 26')
+    })
+
+    it('draws nothing from zero for a row of zeros, and still says the summary', () => {
+        const { container } = render(
+            <Sparkline
+                values={[0, 0, 0]}
+                summary="Nothing happened"
+                baseline="zero"
+            />,
+        )
+
+        expect(container.querySelector('svg')).toBeNull()
+        expect(screen.getByText('Nothing happened')).toBeInTheDocument()
+    })
+
     it('takes a class name, which can change the colour', () => {
         const { container } = render(
             <Sparkline

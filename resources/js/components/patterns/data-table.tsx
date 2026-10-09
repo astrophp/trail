@@ -34,6 +34,11 @@ export type DataTableColumnMeta = {
      * go first: give the least important the widest breakpoint.
      */
     hideBelow?: 'xs' | 'md' | 'wide' | 'roomy'
+    /**
+     * Classes for every cell of the column, header and skeleton included. For what the other keys
+     * do not say: a column that takes the width the others leave, for one.
+     */
+    className?: string
     /** The cell names its row: it is a row header for screen readers. */
     rowHeader?: boolean
     /**
@@ -87,6 +92,7 @@ function columnClasses(
     return cn(
         align[meta?.align ?? 'start'],
         meta?.hideBelow && hideBelow[meta.hideBelow],
+        meta?.className,
         index === 0 && 'max-md:sticky max-md:left-0 max-md:z-1',
         meta?.stickyEnd && stickyEnd,
     )

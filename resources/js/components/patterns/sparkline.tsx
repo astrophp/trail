@@ -1,4 +1,7 @@
-import { sparklinePath } from '@/components/patterns/sparkline-path'
+import {
+    sparklinePath,
+    type SparklineBaseline,
+} from '@/components/patterns/sparkline-path'
 import { cn } from '@/lib/utils'
 
 type SparklineProps = {
@@ -6,6 +9,12 @@ type SparklineProps = {
     values: (number | null)[]
     /** What the trend says, in words. Read by assistive technology; the drawing is hidden from it. */
     summary: string
+    /**
+     * Where the bottom of the line is. `range` (the default) is the row's lowest value, so any line
+     * fills the box; `zero` is 0, so a line that never drops to zero is not stretched to fill it. Each line still has
+     * its own scale: two sparklines are not comparable with each other.
+     */
+    baseline?: SparklineBaseline
     /** Sets the size and, with a text colour class, the colour of the line. */
     className?: string
 }
@@ -15,8 +24,13 @@ type SparklineProps = {
  * no axis and no scale of its own: the line is stretched between its lowest and highest value.
  * With fewer than two values to draw it draws nothing, and the summary is still there.
  */
-export function Sparkline({ values, summary, className }: SparklineProps) {
-    const path = sparklinePath(values)
+export function Sparkline({
+    values,
+    summary,
+    baseline = 'range',
+    className,
+}: SparklineProps) {
+    const path = sparklinePath(values, baseline)
 
     return (
         <span

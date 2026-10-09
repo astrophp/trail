@@ -51,9 +51,12 @@ export function agentColumns({
             enableSorting: sortable,
             meta: {
                 rowHeader: true,
+                // The column takes the width the others leave (the cell's own width is capped at
+                // nothing, so only the room decides where the text is cut).
+                className: 'w-full max-w-0',
                 // Two lines: the name, then the class.
                 skeleton: (
-                    <div className="flex w-24 flex-col gap-2 py-1.5 xs:w-45 md:w-50">
+                    <div className="flex w-24 max-w-full flex-col gap-2 py-1.5 xs:w-45">
                         <Skeleton
                             className={cn(skeletonBarClass, 'h-3.5 w-3/4')}
                         />
@@ -160,7 +163,12 @@ export function agentColumns({
         },
         {
             id: 'activity',
-            header: 'Activity',
+            // Each row is drawn from zero to its own busiest bucket: say so, so no one compares rows.
+            header: () => (
+                <span title="Each row is drawn on its own scale, from zero. Trends are not comparable between rows.">
+                    Activity
+                </span>
+            ),
             meta: { align: 'end', hideBelow: 'roomy' },
             cell: ({ row }) => (
                 <ActivityCell agent={row.original} period={periods[range]} />

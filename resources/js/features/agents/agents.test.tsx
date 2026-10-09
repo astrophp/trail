@@ -702,6 +702,244 @@ describe('the rows lead to the agent', () => {
     })
 })
 
+describe('the sort control for the widths without every header', () => {
+    const control = () => screen.getByRole('combobox', { name: 'Sort by' })
+    const pick = async (name: string) => {
+        await userEvent.click(control())
+        await userEvent.click(screen.getByRole('option', { name }))
+    }
+
+    it('is there only below the widest layout, and only as the headers’ other way', async () => {
+        renderApp('/agents')
+        await loaded()
+
+        // A test DOM has no layout, so these are the classes that show it below the roomy
+        // breakpoint and hide it from there, where every sortable column has its header.
+        const wrapper = document.querySelector('[data-slot="sort-select"]')
+
+        expect(wrapper).toContainElement(control())
+        expect(wrapper).toHaveClass('flex', 'roomy:hidden')
+        expect(wrapper?.className).not.toMatch(/(^|\s)hidden(\s|$)/)
+        expect(
+            [...screen.getAllByRole('columnheader')]
+                .filter((head) => head.hasAttribute('aria-sort'))
+                .map((head) => head.className.includes('hidden')),
+        ).toEqual([false, false, false, true, true, true])
+    })
+
+    it('lists all six sorts in both directions', async () => {
+        renderApp('/agents')
+        await loaded()
+        await userEvent.click(control())
+
+        expect(
+            screen.getAllByRole('option').map((option) => option.textContent),
+        ).toEqual([
+            'Runs, most first',
+            'Agent, A to Z',
+            'Agent, Z to A',
+            'Runs, fewest first',
+            'Error rate, lowest first',
+            'Error rate, highest first',
+            'Avg duration, fastest first',
+            'Avg duration, slowest first',
+            'Est. cost, lowest first',
+            'Est. cost, highest first',
+            'Last activity, oldest first',
+            'Last activity, newest first',
+        ])
+    })
+
+    it.each([
+        ['Agent, A to Z', '?sort=name', 'name'],
+        ['Agent, Z to A', '?sort=-name', '-name'],
+        ['Runs, fewest first', '?sort=runs', 'runs'],
+        ['Error rate, lowest first', '?sort=error_rate', 'error_rate'],
+        ['Error rate, highest first', '?sort=-error_rate', '-error_rate'],
+        ['Avg duration, fastest first', '?sort=duration', 'duration'],
+        ['Avg duration, slowest first', '?sort=-duration', '-duration'],
+        ['Est. cost, lowest first', '?sort=cost', 'cost'],
+        ['Est. cost, highest first', '?sort=-cost', '-cost'],
+        ['Last activity, oldest first', '?sort=last_activity', 'last_activity'],
+        [
+            'Last activity, newest first',
+            '?sort=-last_activity',
+            '-last_activity',
+        ],
+    ])(
+        'sets %s in the URL and the request, back on page 1 in one history entry',
+        async (name, search, sort) => {
+            const fetchMock = mockApi(sixty)
+            renderApp('/agents?page=2')
+            await loaded()
+
+            const entries = window.history.length
+
+            await pick(name)
+
+            await expectSearch(search)
+            expect(window.history.length).toBe(entries + 1)
+            await waitFor(() =>
+                expect(lastAgentUrl(fetchMock)).toBe(
+                    `/trail/api/agents?range=24h&sort=${sort}&page=1`,
+                ),
+            )
+        },
+    )
+
+    it('sets the default sort by leaving it out of the URL, and returns to page 1', async () => {
+        const fetchMock = mockApi(sixty)
+        renderApp('/agents?sort=name&page=2')
+        await loaded()
+
+        const entries = window.history.length
+
+        await pick('Runs, most first')
+
+        await expectSearch('')
+        expect(window.history.length).toBe(entries + 1)
+        await waitFor(() =>
+            expect(lastAgentUrl(fetchMock)).toBe(
+                '/trail/api/agents?range=24h&sort=-runs&page=1',
+            ),
+        )
+    })
+
+    it('keeps the search and the range when it sorts', async () => {
+        mockApi(sixty)
+        renderApp('/agents?range=7d&search=support&page=3')
+        await loaded()
+
+        await pick('Est. cost, highest first')
+
+        await expectSearch('?range=7d&sort=-cost&search=support')
+    })
+
+    it.each([
+        ['', 'Runs, most first'],
+        ['?sort=-cost', 'Est. cost, highest first'],
+        ['?sort=last_activity', 'Last activity, oldest first'],
+        ['?sort=-name&page=2', 'Agent, Z to A'],
+    ])('shows the sort the URL has: %j reads "%s"', async (query, label) => {
+        mockApi(sixty)
+        renderApp(`/agents${query}`)
+        await loaded()
+
+        expect(control()).toHaveTextContent(label)
+    })
+
+    it('shows the sort a header chose, and a header shows the one it chose', async () => {
+        mockApi(sixty)
+        renderApp('/agents')
+        await loaded()
+
+        await userEvent.click(sortButton(/Error rate/))
+        await expectSearch('?sort=-error_rate')
+
+        expect(control()).toHaveTextContent('Error rate, highest first')
+
+        await pick('Agent, A to Z')
+        await expectSearch('?sort=name')
+
+        expect(header(/^Agent/)).toHaveAttribute('aria-sort', 'ascending')
+        expect(header(/Error rate/)).toHaveAttribute('aria-sort', 'none')
+    })
+
+    it('follows Back to the sort before', async () => {
+        mockApi(sixty)
+        renderApp('/agents')
+        await loaded()
+
+        await pick('Est. cost, highest first')
+        await expectSearch('?sort=-cost')
+        await travel('back')
+        await expectSearch('')
+
+        await waitFor(() =>
+            expect(control()).toHaveTextContent('Runs, most first'),
+        )
+    })
+})
+
+describe('the way back that the rows carry', () => {
+    const fromOf = (name: string) =>
+        new URLSearchParams(
+            (
+                screen.getByRole('link', { name }).getAttribute('href') ?? ''
+            ).split('?')[1],
+        ).get('from')
+    const rangeOfLink = (name: string) =>
+        new URLSearchParams(
+            (
+                screen.getByRole('link', { name }).getAttribute('href') ?? ''
+            ).split('?')[1],
+        ).get('range')
+
+    it('stays the view that made the rows while a new range loads, then becomes the new one', async () => {
+        const fetchMock = mockApi(sixty)
+        renderApp('/agents?range=7d&sort=-cost')
+        await loaded()
+
+        expect(rangeOfLink('SupportAssistant')).toBe('7d')
+        expect(fromOf('SupportAssistant')).toBe('/agents?range=7d&sort=-cost')
+
+        const next = deferred()
+
+        answerWith(fetchMock, () => next.promise)
+        await pickRange('Last 24 hours')
+        await waitFor(() =>
+            expect(table()).toHaveAttribute('aria-busy', 'true'),
+        )
+
+        // The address is the new view; the dimmed rows are the old one, and so are their links.
+        expect(window.location.search).toBe('?sort=-cost')
+        expect(rangeOfLink('SupportAssistant')).toBe('7d')
+        expect(fromOf('SupportAssistant')).toBe('/agents?range=7d&sort=-cost')
+
+        next.resolve(
+            new Response(
+                JSON.stringify(
+                    listOf(agentFixture.data, { total: 60, preset: '24h' }),
+                ),
+            ),
+        )
+
+        await waitFor(() => expect(table()).not.toHaveAttribute('aria-busy'))
+        expect(rangeOfLink('SupportAssistant')).toBeNull()
+        expect(fromOf('SupportAssistant')).toBe('/agents?sort=-cost')
+    })
+
+    it('stays the page that made the rows while the next page loads', async () => {
+        const fetchMock = mockApi(sixty)
+        renderApp('/agents')
+        await loaded()
+
+        expect(fromOf('SupportAssistant')).toBe('/agents')
+
+        const next = deferred()
+
+        answerWith(fetchMock, () => next.promise)
+        await userEvent.click(nextButton())
+        await waitFor(() =>
+            expect(table()).toHaveAttribute('aria-busy', 'true'),
+        )
+
+        expect(window.location.search).toBe('?page=2')
+        expect(fromOf('SupportAssistant')).toBe('/agents')
+
+        next.resolve(
+            new Response(
+                JSON.stringify(
+                    listOf(agentFixture.data, { page: 2, total: 60 }),
+                ),
+            ),
+        )
+
+        await screen.findByText('Page 2 of 3')
+        expect(fromOf('SupportAssistant')).toBe('/agents?page=2')
+    })
+})
+
 describe('the refresh control', () => {
     it('asks for the list again', async () => {
         const fetchMock = mockApi()

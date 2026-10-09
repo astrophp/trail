@@ -57,7 +57,7 @@ function forbidden(value: string): boolean {
 
 /**
  * The page a `from` value points back to, or `null` when it is anything but a path inside the
- * dashboard that one of `allowed` (path patterns such as `/traces` or `/agents/:agent`) serves.
+ * dashboard that one of `allowed` (path patterns such as `/traces` or `/traces/:traceId`) serves.
  * The value comes from the address bar, so it is never trusted: it must start with exactly one
  * `/`, hold no whitespace, control character or backslash, no more than `maxLength` characters,
  * and read back as itself once parsed (so `..` segments, a fragment or a host cannot hide in it).

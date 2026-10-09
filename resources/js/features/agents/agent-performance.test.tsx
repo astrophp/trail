@@ -132,7 +132,24 @@ describe('the agent performance panel', () => {
 
         expect(row).toHaveTextContent('Sub-agent only')
         expect(row).toHaveTextContent('2 delegated runs')
-        expect(row?.querySelectorAll('.sr-only')).not.toHaveLength(0)
+
+        // The four cells of a figure that does not exist for it say so, each by itself.
+        const cells = [...(row?.children ?? [])]
+
+        expect(
+            cells.map(
+                (cell) => cell.querySelector('.sr-only')?.textContent ?? null,
+            ),
+        ).toEqual([
+            null,
+            null,
+            'Does not apply',
+            'Does not apply',
+            'Does not apply',
+            // Last activity: its own screen reader text is the whole date, not a missing figure.
+            expect.stringContaining('2026'),
+            'Does not apply',
+        ])
     })
 
     it('has no pagination, no search, no count and no sorting of its own', async () => {
@@ -389,6 +406,60 @@ describe('when no agent ran in the range', () => {
 
         expect(of).not.toHaveTextContent('No agents ran in this range')
         expect(of.querySelector('table')).not.toBeNull()
+    })
+})
+
+describe('the retry button of a failed panel', () => {
+    it('keeps focus while the retry runs, and hands it to the page heading when the rows replace it', async () => {
+        const { answer } = serve(() => json({ message: 'Down.' }, 500))
+        renderApp('/')
+        const of = await panel()
+
+        await within(of).findByRole('alert')
+
+        const retry = deferred()
+
+        answer(() => retry.promise)
+
+        const button = within(of).getByRole('button', { name: 'Try again' })
+
+        button.focus()
+        await userEvent.click(button)
+
+        // The failure stays on screen while it is asked for again, so focus is not dropped.
+        await waitFor(() => expect(button).toHaveFocus())
+        expect(within(of).getByRole('alert')).toBeVisible()
+        expect(button).toBeInTheDocument()
+
+        retry.resolve(
+            new Response(JSON.stringify(listOf(five, { perPage: 5 }))),
+        )
+
+        await waitFor(() => expect(rowsOf(of)).toHaveLength(5))
+        expect(button).not.toBeInTheDocument()
+        expect(
+            screen.getByRole('heading', { level: 1, name: 'Overview' }),
+        ).toHaveFocus()
+    })
+
+    it('leaves focus where it is when the person has moved it elsewhere', async () => {
+        const { answer } = serve(() => json({ message: 'Down.' }, 500))
+        renderApp('/')
+        const of = await panel()
+
+        await within(of).findByRole('alert')
+        answer(() => fiveFor())
+
+        await userEvent.click(
+            within(of).getByRole('button', { name: 'Try again' }),
+        )
+        await waitFor(() => expect(rowsOf(of)).toHaveLength(5))
+
+        // Focus went to the heading above; a later press on a link is not taken from it.
+        const link = linkTo(of)
+
+        link.focus()
+        expect(link).toHaveFocus()
     })
 })
 
