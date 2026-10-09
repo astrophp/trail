@@ -1,0 +1,435 @@
+{
+    "data": [
+        {
+            "name": "SupportAssistant",
+            "agent_class": "App\\Ai\\Agents\\SupportAssistant",
+            "type": "agent",
+            "top_level": {
+                "runs": {
+                    "all": 23,
+                    "completed": 21,
+                    "failed": 1,
+                    "incomplete": 0,
+                    "running": 1,
+                    "awaiting_approval": 0
+                },
+                "error_rate": {
+                    "rate": 0.0454545455,
+                    "failed": 1,
+                    "finished": 22
+                },
+                "duration": {
+                    "average_ms": 1087.639,
+                    "measured": 21,
+                    "not_measured": 2
+                },
+                "usage": {
+                    "state": "pending",
+                    "input_tokens": 1490,
+                    "output_tokens": 410,
+                    "cache_read_tokens": null,
+                    "cache_write_tokens": null,
+                    "reasoning_tokens": null,
+                    "total_tokens": 1900
+                },
+                "cost": {
+                    "state": "pending",
+                    "amount": 0.02825
+                },
+                "cost_coverage": {
+                    "unpriced_runs": 1,
+                    "runs_without_amount": 2
+                },
+                "last_activity_at": "2026-01-02T12:10:00.000Z"
+            },
+            "delegated": null,
+            "last_activity_at": "2026-01-02T12:10:00.000Z",
+            "activity": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                20,
+                0,
+                1,
+                1,
+                1
+            ]
+        },
+        {
+            "name": "ResearchAgent",
+            "agent_class": "App\\Ai\\Agents\\ResearchAgent",
+            "type": "agent",
+            "top_level": {
+                "runs": {
+                    "all": 1,
+                    "completed": 1,
+                    "failed": 0,
+                    "incomplete": 0,
+                    "running": 0,
+                    "awaiting_approval": 0
+                },
+                "error_rate": {
+                    "rate": 0,
+                    "failed": 0,
+                    "finished": 1
+                },
+                "duration": {
+                    "average_ms": 900,
+                    "measured": 1,
+                    "not_measured": 0
+                },
+                "usage": {
+                    "state": "reported",
+                    "input_tokens": 400,
+                    "output_tokens": 90,
+                    "cache_read_tokens": null,
+                    "cache_write_tokens": null,
+                    "reasoning_tokens": null,
+                    "total_tokens": 490
+                },
+                "cost": {
+                    "state": "estimated",
+                    "amount": 0.004
+                },
+                "cost_coverage": {
+                    "unpriced_runs": 0,
+                    "runs_without_amount": 0
+                },
+                "last_activity_at": "2026-01-02T09:00:00.000Z"
+            },
+            "delegated": {
+                "all": 1,
+                "failed": 0,
+                "incomplete": 0,
+                "last_activity_at": "2026-01-02T11:00:01.100Z"
+            },
+            "last_activity_at": "2026-01-02T11:00:01.100Z",
+            "activity": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                0,
+                0
+            ]
+        },
+        {
+            "name": "Embeddings",
+            "agent_class": null,
+            "type": "embedding",
+            "top_level": {
+                "runs": {
+                    "all": 1,
+                    "completed": 1,
+                    "failed": 0,
+                    "incomplete": 0,
+                    "running": 0,
+                    "awaiting_approval": 0
+                },
+                "error_rate": {
+                    "rate": 0,
+                    "failed": 0,
+                    "finished": 1
+                },
+                "duration": {
+                    "average_ms": 210.5,
+                    "measured": 1,
+                    "not_measured": 0
+                },
+                "usage": {
+                    "state": "reported",
+                    "input_tokens": 64,
+                    "output_tokens": null,
+                    "cache_read_tokens": null,
+                    "cache_write_tokens": null,
+                    "reasoning_tokens": null,
+                    "total_tokens": 64
+                },
+                "cost": {
+                    "state": "estimated",
+                    "amount": 2.0e-6
+                },
+                "cost_coverage": {
+                    "unpriced_runs": 0,
+                    "runs_without_amount": 0
+                },
+                "last_activity_at": "2026-01-02T08:00:00.000Z"
+            },
+            "delegated": null,
+            "last_activity_at": "2026-01-02T08:00:00.000Z",
+            "activity": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                0,
+                0,
+                0
+            ]
+        },
+        {
+            "name": "Summarizer",
+            "agent_class": null,
+            "type": "agent",
+            "top_level": null,
+            "delegated": {
+                "all": 2,
+                "failed": 1,
+                "incomplete": 0,
+                "last_activity_at": "2026-01-02T11:00:02.600Z"
+            },
+            "last_activity_at": "2026-01-02T11:00:02.600Z",
+            "activity": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+            ]
+        }
+    ],
+    "pagination": {
+        "page": 1,
+        "per_page": 25,
+        "total": 4,
+        "last_page": 1
+    },
+    "range": {
+        "preset": "24h",
+        "from": "2026-01-01T12:20:00.000Z",
+        "to": "2026-01-02T12:20:00.000Z"
+    },
+    "buckets": {
+        "bucket": "hour",
+        "edges": [
+            {
+                "from": "2026-01-01T12:20:00.000Z",
+                "to": "2026-01-01T13:00:00.000Z",
+                "full": false,
+                "in_progress": false
+            },
+            {
+                "from": "2026-01-01T13:00:00.000Z",
+                "to": "2026-01-01T14:00:00.000Z",
+                "full": true,
+                "in_progress": false
+            },
+            {
+                "from": "2026-01-01T14:00:00.000Z",
+                "to": "2026-01-01T15:00:00.000Z",
+                "full": true,
+                "in_progress": false
+            },
+            {
+                "from": "2026-01-01T15:00:00.000Z",
+                "to": "2026-01-01T16:00:00.000Z",
+                "full": true,
+                "in_progress": false
+            },
+            {
+                "from": "2026-01-01T16:00:00.000Z",
+                "to": "2026-01-01T17:00:00.000Z",
+                "full": true,
+                "in_progress": false
+            },
+            {
+                "from": "2026-01-01T17:00:00.000Z",
+                "to": "2026-01-01T18:00:00.000Z",
+                "full": true,
+                "in_progress": false
+            },
+            {
+                "from": "2026-01-01T18:00:00.000Z",
+                "to": "2026-01-01T19:00:00.000Z",
+                "full": true,
+                "in_progress": false
+            },
+            {
+                "from": "2026-01-01T19:00:00.000Z",
+                "to": "2026-01-01T20:00:00.000Z",
+                "full": true,
+                "in_progress": false
+            },
+            {
+                "from": "2026-01-01T20:00:00.000Z",
+                "to": "2026-01-01T21:00:00.000Z",
+                "full": true,
+                "in_progress": false
+            },
+            {
+                "from": "2026-01-01T21:00:00.000Z",
+                "to": "2026-01-01T22:00:00.000Z",
+                "full": true,
+                "in_progress": false
+            },
+            {
+                "from": "2026-01-01T22:00:00.000Z",
+                "to": "2026-01-01T23:00:00.000Z",
+                "full": true,
+                "in_progress": false
+            },
+            {
+                "from": "2026-01-01T23:00:00.000Z",
+                "to": "2026-01-02T00:00:00.000Z",
+                "full": true,
+                "in_progress": false
+            },
+            {
+                "from": "2026-01-02T00:00:00.000Z",
+                "to": "2026-01-02T01:00:00.000Z",
+                "full": true,
+                "in_progress": false
+            },
+            {
+                "from": "2026-01-02T01:00:00.000Z",
+                "to": "2026-01-02T02:00:00.000Z",
+                "full": true,
+                "in_progress": false
+            },
+            {
+                "from": "2026-01-02T02:00:00.000Z",
+                "to": "2026-01-02T03:00:00.000Z",
+                "full": true,
+                "in_progress": false
+            },
+            {
+                "from": "2026-01-02T03:00:00.000Z",
+                "to": "2026-01-02T04:00:00.000Z",
+                "full": true,
+                "in_progress": false
+            },
+            {
+                "from": "2026-01-02T04:00:00.000Z",
+                "to": "2026-01-02T05:00:00.000Z",
+                "full": true,
+                "in_progress": false
+            },
+            {
+                "from": "2026-01-02T05:00:00.000Z",
+                "to": "2026-01-02T06:00:00.000Z",
+                "full": true,
+                "in_progress": false
+            },
+            {
+                "from": "2026-01-02T06:00:00.000Z",
+                "to": "2026-01-02T07:00:00.000Z",
+                "full": true,
+                "in_progress": false
+            },
+            {
+                "from": "2026-01-02T07:00:00.000Z",
+                "to": "2026-01-02T08:00:00.000Z",
+                "full": true,
+                "in_progress": false
+            },
+            {
+                "from": "2026-01-02T08:00:00.000Z",
+                "to": "2026-01-02T09:00:00.000Z",
+                "full": true,
+                "in_progress": false
+            },
+            {
+                "from": "2026-01-02T09:00:00.000Z",
+                "to": "2026-01-02T10:00:00.000Z",
+                "full": true,
+                "in_progress": false
+            },
+            {
+                "from": "2026-01-02T10:00:00.000Z",
+                "to": "2026-01-02T11:00:00.000Z",
+                "full": true,
+                "in_progress": false
+            },
+            {
+                "from": "2026-01-02T11:00:00.000Z",
+                "to": "2026-01-02T12:00:00.000Z",
+                "full": true,
+                "in_progress": false
+            },
+            {
+                "from": "2026-01-02T12:00:00.000Z",
+                "to": "2026-01-02T12:20:00.000Z",
+                "full": false,
+                "in_progress": true
+            }
+        ]
+    },
+    "agent_limit": {
+        "limit": 1000,
+        "truncated": false
+    }
+}

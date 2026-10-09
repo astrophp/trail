@@ -64,12 +64,12 @@ final class OverviewMeasurement
     public function run(): void
     {
         foreach (array_filter(array_map('trim', explode(',', $this->databases))) as $driver) {
-            $name = $this->connect($driver);
+            $name = MeasureDatabase::connect($driver);
             $db = DB::connection($name);
             assert($db instanceof Connection);
 
             $this->log("\n## {$driver} ({$db->selectOne('select '.($driver === 'sqlite' ? 'sqlite_version()' : 'version()').' as version')->version})\n");
-            $this->migrate($name);
+            MeasureDatabase::migrate($name);
 
             // SQLite is only a sanity check here: an in-memory database with a few thousand rows.
             $volumes = $driver === 'sqlite' ? (is_string($rows = getenv('TRAIL_MEASURE_SQLITE_ROWS')) && $rows !== '' ? $rows : '5000') : $this->volumes;
@@ -95,7 +95,7 @@ final class OverviewMeasurement
         $db->table('trail_traces')->truncate();
         $start = hrtime(true);
         OverviewFixture::seed($db, $rows, $now);
-        $this->analyse($db, $driver);
+        MeasureDatabase::analyse($db, $driver);
         $this->log(sprintf("\n### %s, %s rows (seeded in %.1f s; analysed)\n", $driver, number_format($rows), (hrtime(true) - $start) / 1e9));
         $this->log($this->distribution($db));
         $this->log("| read | database | rows | range | scope | queries | median ms | per query (median ms) | found |\n| -- | -- | -- | -- | -- | -- | -- | -- | -- |");
@@ -154,7 +154,7 @@ final class OverviewMeasurement
 
             if ($driver !== 'sqlite' && ($median[$query] ?? 0.0) > self::PLAN_THRESHOLD) {
                 $this->log("\nPlan for {$query} of {$label}, median ".sprintf('%.1f', $median[$query])." ms:\n```");
-                $this->log($this->plan($db, $driver, $executed->sql, $executed->bindings));
+                $this->log(MeasureDatabase::plan($db, $driver, $executed->sql, $executed->bindings));
                 $this->log("```\n");
             }
         }
@@ -210,7 +210,7 @@ final class OverviewMeasurement
 
             if ($driver !== 'sqlite' && ($median[$query] ?? 0.0) > self::PLAN_THRESHOLD) {
                 $this->log("\nPlan for {$query} of the attention read, {$label}, median ".sprintf('%.1f', $median[$query])." ms:\n```");
-                $this->log($this->plan($db, $driver, $executed->sql, $executed->bindings));
+                $this->log(MeasureDatabase::plan($db, $driver, $executed->sql, $executed->bindings));
                 $this->log("```\n");
             }
         }
@@ -265,87 +265,11 @@ final class OverviewMeasurement
         });
     }
 
-    /**
-     * @param  list<mixed>  $bindings
-     */
-    private function plan(Connection $db, string $driver, string $sql, array $bindings): string
-    {
-        try {
-            $statement = $db->getQueryGrammar()->substituteBindingsIntoRawSql($sql, $bindings);
-            $lines = [];
-
-            foreach ($db->select(($driver === 'pgsql' ? 'explain (analyze, buffers) ' : 'explain analyze ').$statement) as $row) {
-                foreach (explode("\n", (string) array_values((array) $row)[0]) as $line) {
-                    $lines[] = mb_strlen($line) > 200 ? mb_substr($line, 0, 200).' ...' : $line;
-                }
-            }
-        } catch (\Throwable $exception) {
-            return 'The plan could not be read: '.mb_substr($exception->getMessage(), 0, 200);
-        }
-
-        preg_match_all('/trail_traces_\w*(?:index|pkey)/', implode("\n", $lines), $matches);
-        $indexes = array_values(array_unique($matches[0]));
-
-        return implode("\n", array_slice($lines, 0, 40))."\n-- index used: ".($indexes === [] ? 'none (full scan)' : implode(', ', $indexes));
-    }
-
-    private function analyse(Connection $db, string $driver): void
-    {
-        match ($driver) {
-            'mysql' => $db->select('analyze table trail_traces'),
-            'pgsql' => $db->statement('analyze trail_traces'),
-            default => null,
-        };
-    }
-
     private function distribution(Connection $db): string
     {
         $row = $db->selectOne("select count(*) as total, sum(case when name = ? then 1 else 0 end) as scoped, sum(case when status = 'running' then 1 else 0 end) as running, sum(case when status = 'running' and created_at < ? then 1 else 0 end) as stale, sum(case when duration_ms is null then 1 else 0 end) as no_duration from trail_traces", [OverviewFixture::SCOPED_AGENT, StaleRuns::cutoffColumn()]);
 
         return sprintf('Fixture: %s rows; the scoped agent holds %s (%.1f%%); running %s, of which stale %s; without a duration %s.', number_format((int) $row->total), number_format((int) $row->scoped), 100 * (int) $row->scoped / max(1, (int) $row->total), $row->running, $row->stale, number_format((int) $row->no_duration))."\n";
-    }
-
-    private function connect(string $driver): string
-    {
-        $name = "measure_{$driver}";
-        $env = fn (string $key, string $default): string => is_string($value = getenv($key)) && $value !== '' ? $value : $default;
-
-        $connection = match ($driver) {
-            'sqlite' => ['driver' => 'sqlite', 'database' => ':memory:', 'prefix' => ''],
-            'mysql' => [
-                'driver' => 'mysql', 'host' => $env('TRAIL_MEASURE_HOST', '127.0.0.1'), 'port' => $env('TRAIL_MEASURE_MYSQL_PORT', '33306'),
-                'database' => 'trail', 'username' => 'root', 'password' => $env('TRAIL_MEASURE_PASSWORD', 'password'),
-                'charset' => 'utf8mb4', 'collation' => 'utf8mb4_unicode_ci', 'prefix' => '', 'strict' => true,
-            ],
-            'pgsql' => [
-                'driver' => 'pgsql', 'host' => $env('TRAIL_MEASURE_HOST', '127.0.0.1'), 'port' => $env('TRAIL_MEASURE_PGSQL_PORT', '35432'),
-                'database' => 'trail', 'username' => 'postgres', 'password' => $env('TRAIL_MEASURE_PASSWORD', 'password'),
-                'charset' => 'utf8', 'prefix' => '', 'search_path' => 'public', 'sslmode' => 'prefer',
-            ],
-            default => throw new \InvalidArgumentException("Unknown database {$driver}."),
-        };
-
-        config(["database.connections.{$name}" => $connection, 'trail.storage.connection' => $name, 'database.default' => $name]);
-        DB::purge($name);
-
-        return $name;
-    }
-
-    /**
-     * The package's own migrations, dropped first so that a rerun starts clean.
-     */
-    private function migrate(string $name): void
-    {
-        $files = glob(dirname(__DIR__, 2).'/database/migrations/*.php') ?: [];
-        sort($files);
-
-        foreach (array_reverse($files) as $file) {
-            (require $file)->down();
-        }
-
-        foreach ($files as $file) {
-            (require $file)->up();
-        }
     }
 
     /**

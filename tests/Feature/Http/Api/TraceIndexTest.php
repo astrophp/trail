@@ -1,6 +1,7 @@
 <?php
 
 use Astro\Trail\Enums\IssueKind;
+use Astro\Trail\Enums\SpanType;
 use Astro\Trail\Enums\Status;
 use Astro\Trail\Facades\Trail;
 use Astro\Trail\Storage\Models\Trace;
@@ -150,6 +151,56 @@ describe('filters', function () {
         expect(sortedIdsAt($this, 'model=mistral-large'))->toBe(['late'])
             ->and(sortedIdsAt($this, 'provider=mistral&model=mistral-large'))->toBe(['late'])
             ->and(sortedIdsAt($this, 'provider=mistral&range=7d'))->toBe(['early', 'late']);
+    });
+
+    it('keeps the runs with a tool span of that name, in any agent of the run', function () {
+        $call = fn (string $trace, string $name, array $attributes = []) => Rows::span(Trace::query()->findOrFail($trace), [...['type' => SpanType::Tool, 'name' => $name, 'started_at' => '2026-01-02 10:00:00'], ...$attributes]);
+
+        $call('t1', 'lookup_order');
+        $call('t1', 'lookup_order');
+        $call('t2', 'send_email');
+        // A step named like the tool is not a tool, and an agent span of a delegated agent is not one either.
+        Rows::span(Trace::query()->findOrFail('t3'), ['type' => SpanType::Step, 'name' => 'lookup_order', 'started_at' => '2026-01-02 10:00:00']);
+        $delegated = Rows::span(Trace::query()->findOrFail('t4'), ['type' => SpanType::Agent, 'name' => 'lookup_order', 'parent_id' => 't4', 'started_at' => '2026-01-02 10:00:00']);
+        $call('t4', 'web_search', ['parent_id' => $delegated->id]);
+
+        expect(sortedIdsAt($this, 'tool=lookup_order'))->toBe(['t1'])
+            ->and(sortedIdsAt($this, 'tool=send_email'))->toBe(['t2'])
+            ->and(sortedIdsAt($this, 'tool=web_search'))->toBe(['t4'])
+            ->and(sortedIdsAt($this, 'tool=nothing'))->toBe([])
+            ->and(sortedIdsAt($this, 'tool=lookup_order&agent=Beta'))->toBe([])
+            ->and(sortedIdsAt($this, 'tool=lookup_order&agent=Alpha'))->toBe(['t1']);
+
+        // As the database compares text: MySQL's default collation ignores case, SQLite and Postgres match the exact case only.
+        $byDriver = ['mysql' => ['t1'], 'sqlite' => [], 'pgsql' => []];
+        $driver = DB::connection()->getDriverName();
+
+        expect($byDriver)->toHaveKey($driver)->and(sortedIdsAt($this, 'tool=Lookup_Order'))->toBe($byDriver[$driver]);
+
+        $this->getJson('/trail/api/traces?tool=lookup_order')->assertOk()
+            ->assertJsonPath('pagination.total', 1)
+            ->assertJsonPath('status_counts', ['all' => 1, 'completed' => 0, 'failed' => 1, 'incomplete' => 0, 'running' => 0, 'awaiting_approval' => 0]);
+    });
+
+    it('counts a run in status_counts under a tool filter without the status filter', function () {
+        foreach (['t1', 't2'] as $id) {
+            Rows::span(Trace::query()->findOrFail($id), ['type' => SpanType::Tool, 'name' => 'lookup_order', 'started_at' => '2026-01-02 10:00:00']);
+        }
+
+        $this->getJson('/trail/api/traces?tool=lookup_order&status=failed')->assertOk()
+            ->assertJsonPath('pagination.total', 1)
+            ->assertJsonPath('status_counts.all', 2)
+            ->assertJsonPath('status_counts.completed', 1);
+    });
+
+    it('finds a run through a tool that started after the range ended, and not through one before the run', function () {
+        $late = listed('late', ['started_at' => '2026-01-02 11:59:00']);
+        Rows::span($late, ['type' => SpanType::Tool, 'name' => 'slow_tool', 'started_at' => '2026-01-02 13:00:00']);
+        $early = listed('early', ['started_at' => '2026-01-01 11:00:00']);
+        Rows::span($early, ['type' => SpanType::Tool, 'name' => 'slow_tool', 'started_at' => '2026-01-01 11:00:01']);
+
+        expect(sortedIdsAt($this, 'tool=slow_tool'))->toBe(['late'])
+            ->and(sortedIdsAt($this, 'tool=slow_tool&range=7d'))->toBe(['early', 'late']);
     });
 
     it('reads each switch as on for 1 and true and as off for 0 and false', function (string $switch) {
@@ -462,6 +513,9 @@ describe('invalid input', function () {
         'agent array' => ['agent[]=a', 'agent'],
         'provider array' => ['provider[]=a', 'provider'],
         'model array' => ['model[]=a', 'model'],
+        'tool array' => ['tool[]=a', 'tool'],
+        'tool too long' => ['tool='.str_repeat('a', 256), 'tool'],
+        'tool not UTF-8' => ['tool=%FF', 'tool'],
         'conversation array' => ['conversation[]=a', 'conversation'],
         'user_id array' => ['user_id[]=1', 'user_id'],
         'user_type array' => ['user_id=1&user_type[]=a', 'user_type'],

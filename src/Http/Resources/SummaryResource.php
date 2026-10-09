@@ -12,9 +12,6 @@ use Astro\Trail\Queries\RunFigures;
  */
 final class SummaryResource
 {
-    /** Decimal places of an error rate and of a money amount. */
-    private const PLACES = 10;
-
     /**
      * @return array<string, mixed>
      */
@@ -23,17 +20,10 @@ final class SummaryResource
         $figures = $summary->figures;
         $runs = $figures->runs;
         $running = $runs['running'] > 0;
-        $tokens = $figures->tokens;
-
-        $finished = $runs['completed'] + $runs['failed'] + $runs['incomplete'];
 
         return [
             'runs' => $runs,
-            'error_rate' => [
-                'rate' => $finished === 0 ? null : round($runs['failed'] / $finished, self::PLACES),
-                'failed' => $runs['failed'],
-                'finished' => $finished,
-            ],
+            'error_rate' => self::errorRate($figures),
             'duration' => [
                 'average_ms' => self::average($figures),
                 'p95_ms' => $summary->p95Ms,
@@ -41,7 +31,7 @@ final class SummaryResource
                 'not_measured' => $runs['all'] - $figures->measured,
                 'p95_minimum' => OverviewQuery::P95_MINIMUM,
             ],
-            'usage' => Usage::of($running, $tokens['input'], $tokens['output'], $tokens['cache_read'], $tokens['cache_write'], $tokens['reasoning']),
+            'usage' => self::usage($figures),
             'usage_coverage' => [
                 'reported' => $figures->reported,
                 'not_reported' => $runs['all'] - $figures->reported,
@@ -55,11 +45,29 @@ final class SummaryResource
     }
 
     /**
+     * @return array{rate: ?float, failed: int, finished: int}
+     */
+    public static function errorRate(RunFigures $figures): array
+    {
+        return ['rate' => $figures->errorRate(), 'failed' => $figures->runs['failed'], 'finished' => $figures->finished()];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public static function usage(RunFigures $figures): array
+    {
+        $tokens = $figures->tokens;
+
+        return Usage::of($figures->runs['running'] > 0, $tokens['input'], $tokens['output'], $tokens['cache_read'], $tokens['cache_write'], $tokens['reasoning']);
+    }
+
+    /**
      * The mean duration of the runs that have one, rounded to 3 decimals.
      */
     public static function average(RunFigures $figures): ?float
     {
-        return $figures->measured === 0 || $figures->durationSum === null ? null : round($figures->durationSum / $figures->measured, 3);
+        return $figures->meanDuration();
     }
 
     /**
@@ -67,6 +75,6 @@ final class SummaryResource
      */
     public static function cost(RunFigures $figures, bool $running): array
     {
-        return Cost::of($figures->costSum === null ? null : round($figures->costSum, self::PLACES), $figures->unpricedSpans, $running);
+        return Cost::of($figures->costAmount(), $figures->unpricedSpans, $running);
     }
 }

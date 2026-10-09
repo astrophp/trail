@@ -1,5 +1,8 @@
 <?php
 
+use Astro\Trail\Http\Controllers\Api\AgentBreakdownController;
+use Astro\Trail\Http\Controllers\Api\AgentIndexController;
+use Astro\Trail\Http\Controllers\Api\AgentShowController;
 use Astro\Trail\Http\Controllers\Api\AttentionController;
 use Astro\Trail\Http\Controllers\Api\ConversationIndexController;
 use Astro\Trail\Http\Controllers\Api\ConversationTranscriptController;
@@ -21,6 +24,10 @@ Route::prefix('api')->middleware([RespondWithJson::class, Authorize::class])->gr
     Route::get('overview', OverviewController::class)->name('trail.api.overview');
     // Its own path, not a segment of the overview's: a route under "overview" never shadows it.
     Route::get('overview/attention', AttentionController::class)->name('trail.api.overview.attention');
+    Route::get('agents', AgentIndexController::class)->name('trail.api.agents.index');
+    // The agent's name travels in the query: it can hold any character, a slash among them.
+    Route::get('agents/show', AgentShowController::class)->name('trail.api.agents.show');
+    Route::get('agents/breakdown', AgentBreakdownController::class)->name('trail.api.agents.breakdown');
     Route::get('conversations', ConversationIndexController::class)->name('trail.api.conversations.index');
     // The conversation's id travels in the query: it can hold any character, a slash among them.
     Route::get('conversations/transcript', ConversationTranscriptController::class)->name('trail.api.conversations.transcript');
