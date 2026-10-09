@@ -11,6 +11,7 @@ import { matchPath } from 'react-router'
 import { agentPagePath } from '@/lib/agent-path'
 import { comparePath } from '@/lib/compare-path'
 import { transcriptPath } from '@/lib/conversation-path'
+import { AgentPage } from '@/pages/agent-page'
 import { AgentsPage } from '@/pages/agents-page'
 import { ComparePage } from '@/pages/compare-page'
 import { ConversationPage } from '@/pages/conversation-page'
@@ -97,7 +98,7 @@ export const routeTable: RouteDef[] = [
         // The agent's name travels in the query, so one path serves every name.
         path: agentPagePath,
         title: 'Agent',
-        element: <PlaceholderPage title="Agent" />,
+        element: <AgentPage />,
         section: 'agents',
         parent: '/agents',
     },

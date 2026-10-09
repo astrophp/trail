@@ -118,6 +118,28 @@ describe('fetchTraces', () => {
         )
     })
 
+    it('sends the model, the tool and the page size, whatever characters they hold', async () => {
+        await fetchTraces({
+            range: '24h',
+            agent: 'Support/Bot',
+            model: 'claude 3+5',
+            tool: 'lookup/order 1',
+            per_page: 8,
+        })
+
+        expect(
+            Object.fromEntries(
+                new URL(lastCall().url, 'http://x').searchParams,
+            ),
+        ).toEqual({
+            range: '24h',
+            agent: 'Support/Bot',
+            model: 'claude 3+5',
+            tool: 'lookup/order 1',
+            per_page: '8',
+        })
+    })
+
     it('does not send a switch that is off', async () => {
         await fetchTraces({ range: '24h', bookmarked: false })
 

@@ -30,6 +30,8 @@ type RefreshingQuery<TData> = {
      * belongs to this view: another view's answer is no placeholder, and `undefined` shows none.
      */
     keepsPlaceholder?: (previousKey: QueryKey) => boolean
+    /** Asks for nothing while `false`, such as for a view that names nothing to ask about. */
+    enabled?: boolean
 }
 
 /**
@@ -47,6 +49,7 @@ export function useRefreshingQuery<TData>({
     ledgerKey,
     isRunning,
     keepsPlaceholder,
+    enabled = true,
 }: RefreshingQuery<TData>) {
     const queryClient = useQueryClient()
     const loaded = queryClient.getQueryData(queryKey) !== undefined
@@ -74,6 +77,7 @@ export function useRefreshingQuery<TData>({
             keepsPlaceholder(previousQuery.queryKey)
                 ? keepPreviousData(previous)
                 : undefined,
+        enabled,
         ...(loaded ? { retry: false } : {}),
         refetchInterval: (current) =>
             keepsAsking(

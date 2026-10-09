@@ -28,6 +28,8 @@ type FollowingQuery<TData> = {
     }
     /** Whether the previous view's answer belongs to this view; see `useRefreshingQuery`. */
     keepsPlaceholder?: (previousKey: QueryKey) => boolean
+    /** Asks for nothing while `false`, such as for a view that names nothing to ask about. */
+    enabled?: boolean
 }
 
 /**
@@ -46,6 +48,7 @@ export function useFollowingQuery<TData>({
     ledgerKey,
     leader,
     keepsPlaceholder,
+    enabled = true,
 }: FollowingQuery<TData>) {
     const queryClient = useQueryClient()
     const loaded = queryClient.getQueryData(queryKey) !== undefined
@@ -73,6 +76,7 @@ export function useFollowingQuery<TData>({
             keepsPlaceholder(previousQuery.queryKey)
                 ? keepPreviousData(previous)
                 : undefined,
+        enabled,
         ...(loaded ? { retry: false } : {}),
     })
     const { refetch } = query

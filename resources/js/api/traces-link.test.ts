@@ -19,6 +19,24 @@ describe('tracesLinkFor', () => {
         })
     })
 
+    it('writes the model and the tool of a breakdown row, none dropped', () => {
+        const to = tracesLinkFor('7d', {
+            agent: 'Support/1 +',
+            provider: 'anthropic',
+            model: 'claude-sonnet-4-5',
+            tool: 'lookup_order',
+        })
+        const view = readTraceListView(search(to))
+
+        expect(view).toMatchObject({
+            range: '7d',
+            agent: 'Support/1 +',
+            provider: 'anthropic',
+            model: 'claude-sonnet-4-5',
+            tool: 'lookup_order',
+        })
+    })
+
     it('leaves the default range out, as the list does', () => {
         expect(tracesLinkFor('24h', { unpriced: '1' })).toEqual({
             pathname: '/traces',

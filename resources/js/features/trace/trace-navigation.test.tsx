@@ -300,6 +300,19 @@ describe('stepping through the list', () => {
         )
     })
 
+    it('carries the model and the tool into the neighbours request', async () => {
+        const fetchMock = serve()
+        await open(
+            `/traces/run-a?${new URLSearchParams({ from: '/traces?range=7d&agent=A&provider=p&model=m&tool=t%202&page=2' })}`,
+        )
+
+        await waitFor(() =>
+            expect(neighbourCalls(fetchMock)).toEqual([
+                '/trail/api/traces/run-a/neighbours?range=7d&sort=-started_at&agent=A&provider=p&model=m&tool=t+2',
+            ]),
+        )
+    })
+
     it('carries the slow filter into the neighbours request', async () => {
         const fetchMock = serve()
         await open(

@@ -18,6 +18,8 @@ const defaults: TraceListView = {
     search: '',
     agent: '',
     provider: '',
+    model: '',
+    tool: '',
     conversation: '',
     issue_kind: 'all',
     child_failed: false,
@@ -45,6 +47,8 @@ describe('readTraceListView', () => {
             search: 'hello',
             agent: 'Support',
             provider: 'openai',
+            model: '',
+            tool: '',
             conversation: 'support/ada 1042',
             issue_kind: 'all',
             child_failed: false,
@@ -52,6 +56,18 @@ describe('readTraceListView', () => {
             recovered: false,
             bookmarked: true,
             slow: true,
+        })
+    })
+
+    it('reads the model and the tool a breakdown links with, whatever characters they hold', () => {
+        expect(
+            read(
+                `provider=anthropic&model=${encodeURIComponent('claude/3 5+x%')}&tool=${encodeURIComponent(' lookup/order ')}`,
+            ),
+        ).toMatchObject({
+            provider: 'anthropic',
+            model: 'claude/3 5+x%',
+            tool: ' lookup/order ',
         })
     })
 
@@ -122,6 +138,8 @@ describe('traceListApiParams', () => {
             search: '',
             agent: '',
             provider: '',
+            model: '',
+            tool: '',
             conversation: '',
             issue_kind: undefined,
             child_failed: false,
@@ -139,6 +157,8 @@ describe('traceListApiParams', () => {
                 search: 'x',
                 agent: 'Support',
                 provider: 'openai',
+                model: 'gpt-x',
+                tool: 'lookup_order',
                 conversation: 'c-1',
                 issue_kind: 'tool_error',
                 child_failed: true,
@@ -155,6 +175,8 @@ describe('traceListApiParams', () => {
             search: 'x',
             agent: 'Support',
             provider: 'openai',
+            model: 'gpt-x',
+            tool: 'lookup_order',
             conversation: 'c-1',
             bookmarked: true,
             slow: true,

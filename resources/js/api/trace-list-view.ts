@@ -39,8 +39,8 @@ export const defaultTraceSort: TraceSort = '-started_at'
 /**
  * What the list keeps in the URL besides the time range. The names are the API's own
  * (`status`, `search`, `agent`, `provider`, `conversation`, `issue_kind`, `child_failed`,
- * `unpriced`, `recovered`, `bookmarked`, `slow`, `sort`, `page`); an empty `agent`, `provider` or
- * `conversation` means all, and so does `issue_kind` left out.
+ * `unpriced`, `recovered`, `bookmarked`, `slow`, `sort`, `page`) with `model` and `tool`; an empty
+ * `agent`, `provider`, `model`, `tool` or `conversation` means all, and so does `issue_kind` left out.
  */
 export const traceListParams = {
     sort: enumParam(traceSorts, defaultTraceSort),
@@ -49,6 +49,8 @@ export const traceListParams = {
     search: searchParam,
     agent: stringParam(),
     provider: stringParam(),
+    model: stringParam(),
+    tool: stringParam(),
     conversation: stringParam(),
     issue_kind: enumParam(issueKindFilters, 'all'),
     child_failed: boolParam(),
@@ -64,6 +66,8 @@ export const traceFilterKeys = [
     'search',
     'agent',
     'provider',
+    'model',
+    'tool',
     'conversation',
     'issue_kind',
     'child_failed',
@@ -84,6 +88,8 @@ export type TraceListView = {
     search: string
     agent: string
     provider: string
+    model: string
+    tool: string
     conversation: string
     issue_kind: IssueKindFilter
     child_failed: boolean
@@ -111,6 +117,8 @@ export function traceListApiParams(view: TraceListView): TraceListParams {
         search: view.search,
         agent: view.agent,
         provider: view.provider,
+        model: view.model,
+        tool: view.tool,
         conversation: view.conversation,
         issue_kind: view.issue_kind === 'all' ? undefined : view.issue_kind,
         child_failed: view.child_failed,

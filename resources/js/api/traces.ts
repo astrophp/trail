@@ -43,6 +43,8 @@ export type TraceListParams = {
     range: TimeRangePreset
     sort?: TraceSort
     page?: number
+    /** How many runs a page holds, 1 to 100; the API's own default when left out. */
+    per_page?: number
     status?: Status
     search?: string
     agent?: string
@@ -92,6 +94,8 @@ export function fetchTraces(
 export const traceKeys = {
     all: ['traces'] as const,
     list: ['traces', 'list'] as const,
+    /** The short lists of someone's latest runs that pages show beside other things. */
+    recent: ['traces', 'recent'] as const,
     detail: (id: string) => ['traces', 'detail', id] as const,
     /** A run's neighbours in one view of the list; the page is no part of the view. */
     neighbours: (id: string, params: TraceListParams) =>
