@@ -567,4 +567,81 @@ describe('DataTable', () => {
             expect(screen.queryByText('Nothing here')).not.toBeInTheDocument()
         })
     })
+
+    // jsdom has no layout, so none of this can show that a cell really stays in view: it asserts the
+    // classes that do it (checked in the browser and in the catalogue's narrow specimen). Without
+    // an opaque background the cells that slide under the pinned one show through it.
+    describe('a column pinned to the end', () => {
+        const pinned: DataTableColumn<Fruit>[] = [
+            ...columns.slice(0, 2),
+            {
+                id: 'pin',
+                header: () => <span className="sr-only">Pin</span>,
+                meta: { stickyEnd: true, skeleton: <span>bar</span> },
+                cell: () => <button>Pin it</button>,
+            },
+        ]
+
+        const renderPinned = (extra: { loading?: boolean } = {}) =>
+            render(
+                <MemoryRouter>
+                    <DataTable
+                        columns={pinned}
+                        data={fruit}
+                        getRowId={(row) => row.id}
+                        sort={{ id: 'name', desc: false }}
+                        onSortChange={() => {}}
+                        caption="Fruit"
+                        {...extra}
+                    />
+                </MemoryRouter>,
+            )
+
+        const stickyClasses = ['sticky', 'right-0', 'z-1']
+
+        it('sticks in the header and the rows, over an opaque background, and the other columns do not', () => {
+            renderPinned()
+
+            const header = screen.getByRole('columnheader', { name: 'Pin' })
+            const cell = screen.getAllByRole('cell', { name: 'Pin it' })[0]
+
+            expect(header).toHaveClass(...stickyClasses, 'bg-muted')
+            expect(cell).toHaveClass(
+                ...stickyClasses,
+                'bg-card',
+                // A hovered row keeps the cell opaque.
+                'group-hover/row:bg-accent',
+            )
+
+            for (const other of [
+                screen.getByRole('columnheader', { name: /Weight/ }),
+                screen.getByRole('cell', { name: '182' }),
+            ]) {
+                expect(other).not.toHaveClass('sticky')
+                expect(other).not.toHaveClass('right-0')
+            }
+        })
+
+        it('sticks in the skeleton rows too, over the card', () => {
+            const { container } = renderPinned({ loading: true })
+
+            const cells = container.querySelectorAll('tbody tr:first-child td')
+
+            expect(cells[2]).toHaveClass(...stickyClasses, 'bg-card')
+            expect(cells[1]).not.toHaveClass('sticky')
+        })
+
+        it('fades what slides under it, and continues the row link’s focus ring', () => {
+            renderPinned()
+
+            const classes = screen.getAllByRole('cell', { name: 'Pin it' })[0]
+                .className
+
+            expect(classes).toContain('before:bg-inherit')
+            expect(classes).toContain('before:right-full')
+            expect(classes).toContain(
+                'group-has-[[data-slot=row-link]:focus-visible]/row:after:border-r-3',
+            )
+        })
+    })
 })

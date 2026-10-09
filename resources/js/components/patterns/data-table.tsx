@@ -44,6 +44,12 @@ export type DataTableColumnMeta = {
     skeleton?: ReactNode
     /** Sits before the header's label, outside its sort button: a control for the whole column. */
     lead?: ReactNode
+    /**
+     * Wherever the table scrolls sideways, the column stays in view at the right edge (the first
+     * column does so at the left on narrow screens). For a narrow column of one control, which
+     * would otherwise be scrolled out of reach. It does nothing while the table fits.
+     */
+    stickyEnd?: boolean
 }
 
 // Written out in full, so the stylesheet can see every class.
@@ -59,9 +65,20 @@ const align = {
     end: 'text-right tabular-nums',
 } as const
 
+// A pinned end cell is opaque (each context gives it a background), sits above the cells that slide
+// under it, and fades them out where they meet it, with a mask on a copy of its own background.
+const stickyEnd =
+    'sticky right-0 z-1 before:pointer-events-none before:absolute before:inset-y-0 before:right-full before:w-3 before:bg-inherit before:[mask-image:linear-gradient(to_right,transparent,black)]'
+
+// The row link's focus ring (inset, over the whole row) is hidden under a pinned cell, so the cell
+// draws its share of it: the top, right and bottom edges. Below `md` the link covers its own cell only.
+const stickyEndRing =
+    'md:group-has-[[data-slot=row-link]:focus-visible]/row:after:pointer-events-none md:group-has-[[data-slot=row-link]:focus-visible]/row:after:absolute md:group-has-[[data-slot=row-link]:focus-visible]/row:after:inset-0 md:group-has-[[data-slot=row-link]:focus-visible]/row:after:border-y-3 md:group-has-[[data-slot=row-link]:focus-visible]/row:after:border-r-3 md:group-has-[[data-slot=row-link]:focus-visible]/row:after:border-ring/50'
+
 /**
  * The classes every cell of a column shares, in the header, the rows and the skeleton rows:
- * alignment, the breakpoint it is dropped at, and the first column staying in view.
+ * alignment, the breakpoint it is dropped at, the first column staying in view and a
+ * `stickyEnd` column staying in view at the other edge.
  */
 function columnClasses(
     meta: DataTableColumnMeta | undefined,
@@ -71,6 +88,7 @@ function columnClasses(
         align[meta?.align ?? 'start'],
         meta?.hideBelow && hideBelow[meta.hideBelow],
         index === 0 && 'max-md:sticky max-md:left-0 max-md:z-1',
+        meta?.stickyEnd && stickyEnd,
     )
 }
 
@@ -140,7 +158,8 @@ type DataTableProps<TData extends RowData> = {
 /**
  * A table of rows the server has already sorted and paged. It owns no data, no sort state and no
  * navigation: a row that leads somewhere has a `RowLink` in one of its cells. On narrow screens
- * the table scrolls sideways inside its card and the first column stays in view.
+ * the table scrolls sideways inside its card and the first column stays in view; a column with
+ * `meta.stickyEnd` stays in view at the right edge wherever the table scrolls.
  *
  * It also draws what is not the happy path: `loading` (skeleton rows), `busy` (rows kept while a
  * refresh runs) and `empty` (a slot for when there is nothing to show).
@@ -386,6 +405,8 @@ export function DataTable<TData extends RowData>({
                                                     // Controls other than the row link sit above its stretched hit area.
                                                     'h-auto border-b bg-card px-4 py-3 text-ui font-normal group-last/row:border-b-0 group-hover/row:bg-accent [&_a:not([data-slot=row-link])]:relative [&_a:not([data-slot=row-link])]:z-1 [&_button]:relative [&_button]:z-1',
                                                     columnClasses(meta, index),
+                                                    meta?.stickyEnd &&
+                                                        stickyEndRing,
                                                 )}
                                             >
                                                 <table.FlexRender cell={cell} />
