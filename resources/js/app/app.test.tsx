@@ -2,16 +2,19 @@ import { act, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderApp, appReady } from '@/test/render-app'
+import { agentsFor } from '@/test/agents-api'
 import { listFor as conversationsFor } from '@/test/conversations-api'
 import { json, listFor, mockApi } from '@/test/traces-api'
 
-// The Traces and Conversations pages ask for their lists when a test navigates to them.
+// The Traces, Conversations and Agents pages ask for their lists when a test navigates to them.
 beforeEach(() => {
     mockApi((url) =>
         json(
             url.includes('/api/conversations')
                 ? conversationsFor(url)
-                : listFor(url),
+                : url.includes('/api/agents')
+                  ? agentsFor(url)
+                  : listFor(url),
         ),
     )
 })
@@ -170,7 +173,7 @@ describe('document title', () => {
         ['/traces', 'Traces · Trail'],
         ['/traces/abc', 'Trace · Trail'],
         ['/conversations/transcript', 'Conversation · Trail'],
-        ['/agents/x', 'Agent · Trail'],
+        ['/agents/agent', 'Agent · Trail'],
         ['/usage', 'Usage & cost · Trail'],
         ['/nowhere', 'Page not found · Trail'],
     ])('at %s is "%s"', (route, title) => {

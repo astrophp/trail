@@ -52,6 +52,17 @@ function queryString(params: RequestOptions['params']): string {
     return text === '' ? '' : `?${text}`
 }
 
+/** A failure in a sentence: whether the server answered, and with what. */
+export function failureMessage(error: unknown): string {
+    if (error instanceof ApiError) {
+        return error.status === null
+            ? 'The server could not be reached. Check the connection and try again.'
+            : `The server answered with an error (${error.status}).`
+    }
+
+    return 'Something unexpected happened.'
+}
+
 /** Whether an error says the thing asked for does not exist: a 404. */
 export function isNotFound(error: unknown): boolean {
     return error instanceof ApiError && error.status === 404

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { parseReturn, returnTo } from '@/lib/return-context'
 
-const allowed = ['/traces', '/conversations/:id']
+const allowed = ['/traces', '/traces/:traceId']
 
 describe('returnTo', () => {
     it('joins the path and its query', () => {
@@ -44,8 +44,8 @@ describe('parseReturn', () => {
             pathname: '/traces',
             search: '',
         })
-        expect(parseReturn('/conversations/abc-1?page=2', allowed)).toEqual({
-            pathname: '/conversations/abc-1',
+        expect(parseReturn('/traces/abc-1?page=2', allowed)).toEqual({
+            pathname: '/traces/abc-1',
             search: '?page=2',
         })
     })
@@ -72,9 +72,9 @@ describe('parseReturn', () => {
         ['a target with a from of its own', '/traces?from=%2Ftraces'],
         ['a nested from after other parameters', '/traces?a=1&from=%2Fx'],
         ['a path that is no list', '/unknown-page'],
-        ['a page below a list', '/traces/abc'],
+        ['a page below a page of the list', '/traces/abc/def'],
         ['a trailing slash', '/traces/'],
-        ['a parameter segment left empty', '/conversations/'],
+        ['a parameter segment left empty', '/traces/'],
         ['a relative path', 'traces'],
     ])('rejects %s', (_name, value) => {
         expect(parseReturn(value, allowed)).toBeNull()
@@ -92,7 +92,7 @@ describe('parseReturn', () => {
     })
 
     it('accepts only the paths it is told about', () => {
-        expect(parseReturn('/traces', ['/agents/:agent'])).toBeNull()
+        expect(parseReturn('/traces', ['/traces/:traceId'])).toBeNull()
         expect(parseReturn('/traces', [])).toBeNull()
     })
 })

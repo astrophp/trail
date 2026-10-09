@@ -2,12 +2,13 @@ import { act, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderApp, appReady } from '@/test/render-app'
+import { mockApi } from '@/test/traces-api'
 
 let broken = true
 
 vi.mock('@/pages/placeholder-page', () => ({
     PlaceholderPage: ({ title }: { title: string }) => {
-        if (title === 'Agents' && broken) {
+        if (title === 'Usage & cost' && broken) {
             throw new Error('the page could not render')
         }
 
@@ -17,6 +18,8 @@ vi.mock('@/pages/placeholder-page', () => ({
 
 beforeEach(() => {
     broken = true
+    // The page the person navigates to asks for its list.
+    mockApi()
     // React logs the error the boundary catches.
     vi.spyOn(console, 'error').mockImplementation(() => {})
 })
@@ -29,7 +32,7 @@ const nav = () => screen.getByRole('navigation', { name: 'Main' })
 
 describe('a page that throws', () => {
     it('leaves the sidebar and top bar usable and shows an error in the page', async () => {
-        renderApp('/agents')
+        renderApp('/usage')
         await appReady()
 
         expect(screen.getByRole('alert')).toHaveTextContent(
@@ -46,11 +49,11 @@ describe('a page that throws', () => {
     })
 
     it('does not reset when only the search parameters change', async () => {
-        renderApp('/agents')
+        renderApp('/usage')
         await appReady()
 
         act(() => {
-            window.history.pushState({}, '', '/trail/agents?x=1')
+            window.history.pushState({}, '', '/trail/usage?x=1')
             window.dispatchEvent(new PopStateEvent('popstate'))
         })
         broken = false
@@ -60,26 +63,26 @@ describe('a page that throws', () => {
     })
 
     it('recovers when the person navigates away', async () => {
-        renderApp('/agents')
+        renderApp('/usage')
 
         await userEvent.click(
-            within(nav()).getByRole('link', { name: 'Usage & cost' }),
+            within(nav()).getByRole('link', { name: 'Traces' }),
         )
 
         expect(
             await screen.findByRole('heading', {
                 level: 1,
-                name: 'Usage & cost',
+                name: 'Traces',
             }),
         ).toBeVisible()
         expect(screen.queryByRole('alert')).not.toBeInTheDocument()
         // The shell still hands focus to the new page's heading.
         expect(screen.getByRole('heading', { level: 1 })).toHaveFocus()
-        expect(document.title).toContain('Usage & cost')
+        expect(document.title).toContain('Traces')
     })
 
     it('tries the page again, and focuses the recovered page’s heading', async () => {
-        renderApp('/agents')
+        renderApp('/usage')
         await appReady()
         broken = false
 
@@ -87,7 +90,7 @@ describe('a page that throws', () => {
 
         const heading = await screen.findByRole('heading', {
             level: 1,
-            name: 'Agents',
+            name: 'Usage & cost',
         })
 
         expect(heading).toHaveFocus()

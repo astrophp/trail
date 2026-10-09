@@ -13,6 +13,7 @@ export const metaFixture = contractFixture('meta') as MetaResponse
 export const bookmarkFixture = contractFixture('bookmark') as BookmarkResponse
 const overviewFixture = contractFixture('overview')
 const attentionFixture = contractFixture('attention')
+const agentsFixture = contractFixture('agents')
 
 export const lastPage = 3
 
@@ -80,7 +81,9 @@ export function mockApi(
                 ? attentionFixture
                 : url.includes('/api/overview')
                   ? overviewFixture
-                  : listFor(url),
+                  : url.includes('/api/agents')
+                    ? agentsFixture
+                    : listFor(url),
         ),
     bookmark: Handler = (url, init) =>
         json({

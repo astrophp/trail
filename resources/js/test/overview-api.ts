@@ -7,6 +7,7 @@ import type {
     Summary,
 } from '@/api/types'
 import type { TimeRangePreset } from '@/lib/time-range'
+import { agentsFor } from '@/test/agents-api'
 import { contractFixture } from '@/test/contract-fixture'
 import { json, metaFixture, type Handler } from '@/test/traces-api'
 
@@ -28,6 +29,7 @@ export const attentionFixture = contractFixture(
 ) as AttentionResponse
 
 const isAttention = (url: string) => url.includes('/api/overview/attention')
+const isAgents = (url: string) => url.includes('/api/agents')
 
 /**
  * The fixture with its summary changed by `patch` and, when given, its previous period replaced
@@ -152,20 +154,24 @@ export function runs(counts: Partial<Summary['runs']>): Summary['runs'] {
 }
 
 /**
- * Answers `/meta` with its fixture, `/overview` with `respond` and `/overview/attention` with
- * `attention` (by default its fixture).
+ * Answers `/meta` with its fixture, `/overview` with `respond`, `/overview/attention` with
+ * `attention` (by default its fixture) and `/agents` with `agents` (by default its fixture, as many
+ * rows as asked for).
  */
 export function mockApi(
     respond: Handler = (url) => json(overviewFor(url)),
     meta: Handler = () => json(metaFixture),
     attention: Handler = (url) => json(attentionFor(url)),
+    agents: Handler = (url) => json(agentsFor(url)),
 ) {
     const fetchMock = vi.fn<Handler>((url, init) =>
         url.includes('/api/meta')
             ? meta(url, init)
             : isAttention(url)
               ? attention(url, init)
-              : respond(url, init),
+              : isAgents(url)
+                ? agents(url, init)
+                : respond(url, init),
     )
     vi.stubGlobal('fetch', fetchMock)
 
@@ -177,6 +183,10 @@ export const overviewUrls = (fetchMock: ReturnType<typeof mockApi>) =>
     fetchMock.mock.calls
         .map(([url]) => url)
         .filter((url) => url.includes('/api/overview') && !isAttention(url))
+
+/** The agents list's requests made so far. */
+export const agentUrls = (fetchMock: ReturnType<typeof mockApi>) =>
+    fetchMock.mock.calls.map(([url]) => url).filter(isAgents)
 
 /** The attention list's requests made so far. */
 export const attentionUrls = (fetchMock: ReturnType<typeof mockApi>) =>

@@ -1,14 +1,21 @@
 import { useMemo } from 'react'
 import { useSearchParams } from 'react-router'
+import { agentPagePath } from '@/lib/agent-path'
 import { comparePath } from '@/lib/compare-path'
 import { transcriptPath } from '@/lib/conversation-path'
 import { parseReturn, type ReturnTarget } from '@/lib/return-context'
 
 /**
- * The pages a run can be opened from, as route patterns: the list of runs, the comparison and a
- * conversation's page. Agents join this list when they have a page that lists runs.
+ * The pages another page can be opened from, as route patterns: the list of runs, the comparison,
+ * a conversation's page, the list of agents and an agent's page.
  */
-const returnRoutes = ['/traces', comparePath, transcriptPath]
+const returnRoutes = [
+    '/traces',
+    comparePath,
+    transcriptPath,
+    '/agents',
+    agentPagePath,
+]
 
 /** The list a detail page leads back to when it was not opened from one. */
 const fallback = '/traces'
@@ -39,7 +46,13 @@ export function useBackLink(): {
     from: string | null
     source: BackSource
 } {
-    const target = useReturnTarget()
+    const returned = useReturnTarget()
+    // The agents' pages are places other pages return to, but a run is not opened from them yet:
+    // until it is, the run has no way back to them and no neighbours there.
+    const target =
+        returned?.pathname === '/agents' || returned?.pathname === agentPagePath
+            ? null
+            : returned
     const from = target === null ? null : `${target.pathname}${target.search}`
 
     const source: BackSource =

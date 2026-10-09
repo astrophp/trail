@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from 'react'
-import { ApiError } from '@/api/client'
+import { failureMessage } from '@/api/client'
 import { CountChip } from '@/components/patterns/count-chip'
 import { Panel } from '@/components/patterns/panel'
 import { PanelContent } from '@/components/patterns/panel-content'
@@ -15,17 +15,6 @@ import { useOverviewStatus } from '@/features/overview/use-overview-status'
 import { useFocusHandoff } from '@/hooks/use-focus-handoff'
 import { useTimeRange } from '@/hooks/use-time-range'
 import { cn } from '@/lib/utils'
-
-/** A failure in a sentence: whether the server answered, and with what. */
-function failureMessage(error: unknown): string {
-    if (error instanceof ApiError) {
-        return error.status === null
-            ? 'The server could not be reached. Check the connection and try again.'
-            : `The server answered with an error (${error.status}).`
-    }
-
-    return 'Something unexpected happened.'
-}
 
 /**
  * What in the range needs a look, most pressing first, each item a link to the runs behind it.

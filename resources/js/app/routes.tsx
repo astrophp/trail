@@ -8,8 +8,10 @@ import {
 } from 'lucide-react'
 import type { ReactElement } from 'react'
 import { matchPath } from 'react-router'
+import { agentPagePath } from '@/lib/agent-path'
 import { comparePath } from '@/lib/compare-path'
 import { transcriptPath } from '@/lib/conversation-path'
+import { AgentsPage } from '@/pages/agents-page'
 import { ComparePage } from '@/pages/compare-page'
 import { ConversationPage } from '@/pages/conversation-page'
 import { ConversationsPage } from '@/pages/conversations-page'
@@ -87,12 +89,13 @@ export const routeTable: RouteDef[] = [
     {
         path: '/agents',
         title: 'Agents',
-        element: <PlaceholderPage title="Agents" />,
+        element: <AgentsPage />,
         section: 'agents',
         icon: BotIcon,
     },
     {
-        path: '/agents/:agent',
+        // The agent's name travels in the query, so one path serves every name.
+        path: agentPagePath,
         title: 'Agent',
         element: <PlaceholderPage title="Agent" />,
         section: 'agents',

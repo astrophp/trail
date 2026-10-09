@@ -68,6 +68,53 @@ describe('sparklinePath', () => {
         }
     })
 
+    describe('from zero', () => {
+        it('puts zero at the bottom, so the scale of a row starts there', () => {
+            // The same shape, 1 and 500 high: from the lowest value they would be identical.
+            expect(sparklinePath([1, 2, 1])).toBe(sparklinePath([4, 8, 4]))
+            expect(sparklinePath([1, 2, 1], 'zero')).toBe(
+                sparklinePath([4, 8, 4], 'zero'),
+            )
+            expect(sparklinePath([4, 8, 4], 'zero')).toBe('M0 50L50 2L100 50')
+        })
+
+        it('does not stretch a small difference to the height of the box', () => {
+            // 3 and 4 runs in an hour: from the lowest value that is the whole box, from zero a ripple.
+            expect(sparklinePath([3, 4, 3, 4])).toBe(
+                'M0 98L33.33 2L66.67 98L100 2',
+            )
+            expect(sparklinePath([3, 4, 3, 4], 'zero')).toBe(
+                'M0 26L33.33 2L66.67 26L100 2',
+            )
+        })
+
+        it('leaves the default unchanged: from the lowest value', () => {
+            expect(sparklinePath([3, 5, 9])).toBe(
+                sparklinePath([3, 5, 9], 'range'),
+            )
+            expect(sparklinePath([3, 5, 9])).toBe('M0 98L50 66L100 2')
+            expect(sparklinePath([3, 5, 9], 'zero')).toBe(
+                'M0 66L50 44.67L100 2',
+            )
+        })
+
+        it('draws nothing for a row of zeros or of nothing, and a flat row above zero as a line', () => {
+            expect(sparklinePath([0, 0, 0], 'zero')).toBe('')
+            expect(sparklinePath([null, 0, null, 0], 'zero')).toBe('')
+            expect(sparklinePath([0, 0, 0])).toBe('M0 50L50 50L100 50')
+            expect(sparklinePath([5, 5, 5], 'zero')).toBe('M0 2L50 2L100 2')
+        })
+
+        it('goes below the line for a value below zero, and keeps the point inside the box', () => {
+            for (const value of numbers(
+                sparklinePath([-5, 3, 12, -1, 7], 'zero'),
+            )) {
+                expect(value).toBeGreaterThanOrEqual(0)
+                expect(value).toBeLessThanOrEqual(100)
+            }
+        })
+    })
+
     it('treats a value that is not a finite number as a break, not as 0', () => {
         expect(sparklinePath([1, Number.NaN, 3, 4])).toBe(
             sparklinePath([1, null, 3, 4]),
