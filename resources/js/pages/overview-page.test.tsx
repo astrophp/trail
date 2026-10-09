@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { forgetAttentionRefreshFailures } from '@/features/overview/use-attention'
 import { forgetOverviewRefreshFailures } from '@/features/overview/use-overview'
 import { renderApp } from '@/test/render-app'
-import { mockApi } from '@/test/overview-api'
+import { mockApi, modelUrls, overviewUrls, paramsOf } from '@/test/overview-api'
 
 beforeEach(() => {
     forgetOverviewRefreshFailures()
@@ -38,7 +38,7 @@ describe('the Overview page', () => {
         ).toBeVisible()
     })
 
-    it('has one level-1 heading and the three panels under it as level 2, none skipped', async () => {
+    it('has one level-1 heading, the three panels under it as level 2, and the models inside the activity panel as level 3', async () => {
         const main = await open()
 
         expect(
@@ -51,6 +51,7 @@ describe('the Overview page', () => {
         ).toEqual([
             ['Overview', 'H1'],
             ['Trace activity', '2'],
+            ['Models', 'H3'],
             ['Needs attention', '2'],
             ['Agent performance', '2'],
         ])
@@ -117,5 +118,45 @@ describe('the Overview page', () => {
         expect(activity.parentElement).toHaveClass('flex-col')
         expect(activity.className).not.toMatch(/col-span|grid-cols/)
         expect(attention.className).not.toMatch(/col-span|col-start/)
+    })
+})
+
+describe('the models beside the chart', () => {
+    it('are in the activity panel, after the chart, and not a panel of their own', async () => {
+        const main = await open()
+        const activity = screen
+            .getByRole('heading', { name: 'Trace activity' })
+            .closest('[data-slot="panel"]') as HTMLElement
+        const models = await within(activity).findByRole('heading', {
+            name: 'Models',
+            level: 3,
+        })
+        const chart = within(activity).getByRole('img', {
+            name: /traces started in this range/,
+        })
+
+        expect(before(chart, models)).toBe(true)
+        expect(models.closest('[data-slot="panel"]')).toBe(activity)
+        expect(main.querySelectorAll('[data-slot="panel"]')).toHaveLength(3)
+    })
+
+    it('are asked for once, as a request of their own, ranked by runs', async () => {
+        const fetchMock = mockApi()
+        renderApp('/')
+        await screen.findByRole('list', { name: 'Models in this range' })
+
+        expect(modelUrls(fetchMock).map(paramsOf)).toEqual([
+            {
+                range: '24h',
+                by: 'model',
+                sort: '-runs',
+                page: '1',
+                per_page: '5',
+            },
+        ])
+        // The overview's own request carries nothing of the list's.
+        expect(overviewUrls(fetchMock).map(paramsOf)).toEqual([
+            { range: '24h' },
+        ])
     })
 })
