@@ -1,9 +1,8 @@
 import { Change } from '@/components/patterns/change'
 import { Metric } from '@/components/patterns/metric'
 import { DurationValue } from '@/components/telemetry/duration-value'
-import { changeCaption, noEarlier } from '@/features/overview/comparison'
-import type { MetricProps } from '@/features/overview/metric-props'
-import { tracesLink } from '@/features/overview/traces-link'
+import { changeCaption, noEarlier } from '@/components/telemetry/comparison'
+import type { MetricProps } from '@/components/telemetry/metric-props'
 import { formatCount } from '@/lib/format'
 
 const measured = (duration_ms: number | null) => (
@@ -15,7 +14,12 @@ const measured = (duration_ms: number | null) => (
  * percentile, and the average takes its place under its own name, so a figure of one kind is
  * never passed off as the other.
  */
-export function DurationMetric({ summary, previous, range }: MetricProps) {
+export function DurationMetric({
+    summary,
+    previous,
+    range,
+    link,
+}: MetricProps) {
     const { average_ms, p95_ms, measured: runs, p95_minimum } = summary.duration
 
     if (p95_ms === null) {
@@ -45,7 +49,7 @@ export function DurationMetric({ summary, previous, range }: MetricProps) {
     return (
         <Metric
             label="p95 duration"
-            to={tracesLink(range, { slow: true })}
+            to={link(range, { slow: true })}
             change={
                 previous === null ? undefined : (
                     <Change

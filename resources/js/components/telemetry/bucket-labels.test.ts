@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { SeriesBucket } from '@/api/types'
-import { chartBuckets } from '@/features/overview/activity-series'
-import { bucketLabels } from '@/features/overview/bucket-labels'
+import { chartBuckets } from '@/components/telemetry/activity-series'
+import { bucketLabels } from '@/components/telemetry/bucket-labels'
 import { overviewFixture } from '@/test/overview-api'
 
 // An application zone that is neither UTC nor the machine's: a +3 offset all year.

@@ -1,23 +1,27 @@
 import { Change } from '@/components/patterns/change'
 import { Metric } from '@/components/patterns/metric'
 import { RateValue } from '@/components/telemetry/rate-value'
-import { changeCaption, noEarlier } from '@/features/overview/comparison'
-import type { MetricProps } from '@/features/overview/metric-props'
-import { tracesLink } from '@/features/overview/traces-link'
+import { changeCaption, noEarlier } from '@/components/telemetry/comparison'
+import type { MetricProps } from '@/components/telemetry/metric-props'
 import { formatCount } from '@/lib/format'
 
 /**
  * The share of finished runs that failed. Incomplete runs are finished and not failed, so the two
  * counts under it are told apart and never added.
  */
-export function ErrorRateMetric({ summary, previous, range }: MetricProps) {
+export function ErrorRateMetric({
+    summary,
+    previous,
+    range,
+    link,
+}: MetricProps) {
     const { rate, failed, finished } = summary.error_rate
     const { incomplete } = summary.runs
 
     return (
         <Metric
             label="Error rate"
-            to={tracesLink(range, { status: 'failed' })}
+            to={link(range, { status: 'failed' })}
             change={
                 previous === null ? undefined : (
                     <Change

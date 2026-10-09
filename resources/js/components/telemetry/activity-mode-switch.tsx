@@ -3,7 +3,7 @@ import {
     activityModeLabels,
     activityModes,
     type ActivityMode,
-} from '@/features/overview/activity-mode'
+} from '@/components/telemetry/activity-mode'
 
 type ActivityModeSwitchProps = {
     value: ActivityMode

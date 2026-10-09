@@ -4,7 +4,7 @@ import type {
     ChartSeries,
 } from '@/components/patterns/time-series-chart'
 import { formatCost, formatCount, formatDurationFromZero } from '@/lib/format'
-import type { ActivityMode } from '@/features/overview/activity-mode'
+import type { ActivityMode } from '@/components/telemetry/activity-mode'
 
 /** What each series is called, in the legend, the table and the chart's text equivalent. */
 export const seriesLabels = {

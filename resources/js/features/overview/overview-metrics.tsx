@@ -1,14 +1,11 @@
-import { MetricStrip } from '@/components/patterns/metric-strip'
 import { MetricStripSkeleton } from '@/components/patterns/metric-strip-skeleton'
 import { ErrorState } from '@/components/patterns/error-state'
 import { Notice } from '@/components/patterns/notice'
-import { CostMetric } from '@/features/overview/cost-metric'
-import { DurationMetric } from '@/features/overview/duration-metric'
-import { ErrorRateMetric } from '@/features/overview/error-rate-metric'
-import { RefreshNote } from '@/features/overview/refresh-note'
-import { TracesMetric } from '@/features/overview/traces-metric'
+import { RefreshNote } from '@/components/patterns/refresh-note'
+import { SummaryStrip } from '@/components/telemetry/summary-strip'
+import { tracesLink } from '@/api/traces-link'
 import { useOverview } from '@/features/overview/use-overview'
-import { useOverviewStatus } from '@/features/overview/use-overview-status'
+import { useQueryStatus } from '@/hooks/use-query-status'
 import { useFocusHandoff } from '@/hooks/use-focus-handoff'
 import { useTimeRange } from '@/hooks/use-time-range'
 import { timeRangePeriods } from '@/lib/time-range'
@@ -23,7 +20,7 @@ export function OverviewMetrics({ className }: { className?: string }) {
     const [range] = useTimeRange()
     const overview = useOverview(range)
     const { data, isError, isPlaceholderData, refetch } = overview
-    const { failed, retrying, failure, loading } = useOverviewStatus(
+    const { failed, retrying, failure, loading } = useQueryStatus(
         overview,
         range,
     )
@@ -51,7 +48,7 @@ export function OverviewMetrics({ className }: { className?: string }) {
     // The range the figures are for: the previous one while the next loads.
     const shown = data.range.preset ?? range
     const period = timeRangePeriods[shown]
-    const metric = { summary, previous, range: shown }
+    const metric = { summary, previous, range: shown, link: tracesLink }
 
     return (
         <div className={className}>
@@ -80,12 +77,7 @@ export function OverviewMetrics({ className }: { className?: string }) {
                         {shown === '7d' ? null : 'Try a longer range.'}
                     </Notice>
                 ) : null}
-                <MetricStrip>
-                    <TracesMetric {...metric} />
-                    <ErrorRateMetric {...metric} />
-                    <DurationMetric {...metric} />
-                    <CostMetric {...metric} />
-                </MetricStrip>
+                <SummaryStrip {...metric} />
                 {previous === null ? (
                     <p className="mt-3 text-caption text-muted-foreground">
                         No runs were recorded in the previous {period}

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { readTraceListView } from '@/api/trace-list-view'
-import { tracesLinkFor } from '@/features/overview/traces-link'
+import { tracesLink, tracesLinkFor, tracesLinkers } from '@/api/traces-link'
 import { attentionFixture } from '@/test/overview-api'
 
 const search = (to: ReturnType<typeof tracesLinkFor>) =>
@@ -84,6 +84,59 @@ describe('tracesLinkFor', () => {
         )
         expect(() => tracesLinkFor('24h', { unpriced: 'yes' })).toThrow(
             'does not read "yes"',
+        )
+    })
+})
+
+describe('a base every link carries', () => {
+    it('is written beside the filters of the link', () => {
+        expect(tracesLink('7d', { slow: true }, { agent: 'Support' })).toEqual({
+            pathname: '/traces',
+            search: '?range=7d&agent=Support&slow=1',
+        })
+        expect(
+            tracesLinkFor('7d', { status: 'failed' }, { agent: 'Support' }),
+        ).toEqual({
+            pathname: '/traces',
+            search: '?range=7d&status=failed&agent=Support',
+        })
+    })
+
+    it('encodes a name with a slash, spaces, a percent sign and a plus', () => {
+        const name = ' a/b %c+d '
+        const to = tracesLink('24h', {}, { agent: name })
+        const query = new URLSearchParams(
+            typeof to === 'string' ? '' : to.search,
+        )
+
+        expect(query.get('agent')).toBe(name)
+        expect(readTraceListView(query).agent).toBe(name)
+    })
+
+    it('is replaced by a filter of the same name', () => {
+        expect(
+            search(
+                tracesLink('24h', { agent: 'Other' }, { agent: 'Support' }),
+            ).get('agent'),
+        ).toBe('Other')
+    })
+
+    it('builds links of a page from one base', () => {
+        const { link, linkFor } = tracesLinkers({ agent: 'Support' })
+
+        expect(search(link('1h', { slow: true })).toString()).toBe(
+            'range=1h&agent=Support&slow=1',
+        )
+        expect(search(linkFor('1h', { unpriced: '1' })).toString()).toBe(
+            'range=1h&agent=Support&unpriced=1',
+        )
+    })
+
+    it('still refuses what the list cannot keep', () => {
+        const { linkFor } = tracesLinkers({ agent: 'Support' })
+
+        expect(() => linkFor('24h', { streamed: '1' })).toThrow(
+            'no "streamed" filter',
         )
     })
 })

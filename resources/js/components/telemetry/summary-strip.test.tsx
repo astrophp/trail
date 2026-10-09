@@ -1,14 +1,20 @@
-import { render, within } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import type { ReactElement } from 'react'
 import { MemoryRouter } from 'react-router'
 import { describe, expect, it } from 'vitest'
+import { tracesLink, tracesLinkers } from '@/api/traces-link'
 import type { Cost, Summary } from '@/api/types'
+import {
+    previousFixture,
+    summaryFixture,
+} from '@/components/telemetry/summary-fixtures'
+import { SummaryStrip } from '@/components/telemetry/summary-strip'
 import { MetricStrip } from '@/components/patterns/metric-strip'
-import { CostMetric } from '@/features/overview/cost-metric'
-import { DurationMetric } from '@/features/overview/duration-metric'
-import { ErrorRateMetric } from '@/features/overview/error-rate-metric'
-import type { MetricProps } from '@/features/overview/metric-props'
-import { TracesMetric } from '@/features/overview/traces-metric'
+import { CostMetric } from '@/components/telemetry/cost-metric'
+import { DurationMetric } from '@/components/telemetry/duration-metric'
+import { ErrorRateMetric } from '@/components/telemetry/error-rate-metric'
+import type { MetricProps } from '@/components/telemetry/metric-props'
+import { TracesMetric } from '@/components/telemetry/traces-metric'
 import { overviewFixture, runs } from '@/test/overview-api'
 import type { TimeRangePreset } from '@/lib/time-range'
 
@@ -21,6 +27,7 @@ const props = (over: Props = {}): MetricProps => ({
     summary: current,
     previous: earlier,
     range: '24h',
+    link: tracesLink,
     ...over,
 })
 
@@ -428,5 +435,80 @@ describe('the Estimated cost metric', () => {
     it('links to the runs sorted by cost, most expensive first', () => {
         expect(cost({ range: '7d' }).href).toBe('/traces?range=7d&sort=-cost')
         expect(cost().href).toBe('/traces?sort=-cost')
+    })
+})
+
+const hrefs = (scope: HTMLElement) =>
+    within(scope)
+        .getAllByRole('link')
+        .map((link) => link.getAttribute('href'))
+
+describe('SummaryStrip', () => {
+    it('links its four figures to the list over the range of the data', () => {
+        render(
+            <MemoryRouter>
+                <SummaryStrip
+                    summary={summaryFixture}
+                    previous={previousFixture}
+                    range="7d"
+                    link={tracesLink}
+                />
+            </MemoryRouter>,
+        )
+
+        expect(
+            hrefs(document.body).map((href) => href?.replace('/traces', '')),
+        ).toEqual([
+            '?range=7d',
+            '?range=7d&status=failed',
+            '?range=7d&slow=1',
+            '?range=7d&sort=-cost',
+        ])
+    })
+
+    it('adds what every link of the page carries', () => {
+        render(
+            <MemoryRouter>
+                <SummaryStrip
+                    summary={summaryFixture}
+                    previous={null}
+                    range="1h"
+                    link={tracesLinkers({ agent: 'A/B' }).link}
+                />
+            </MemoryRouter>,
+        )
+
+        const found = hrefs(document.body)
+
+        expect(found).toHaveLength(4)
+
+        for (const href of found) {
+            expect(new URLSearchParams(href?.split('?')[1]).get('agent')).toBe(
+                'A/B',
+            )
+        }
+    })
+
+    it('says what is under the count of traces, and only when told', () => {
+        const draw = (detail?: string) =>
+            render(
+                <MemoryRouter>
+                    <SummaryStrip
+                        summary={summaryFixture}
+                        previous={null}
+                        range="24h"
+                        link={tracesLink}
+                        tracesDetail={detail}
+                    />
+                </MemoryRouter>,
+            )
+        const first = draw('12 delegated runs')
+
+        expect(screen.getByText('12 delegated runs')).toBeVisible()
+
+        first.unmount()
+        draw()
+
+        expect(screen.queryByText(/delegated/)).not.toBeInTheDocument()
     })
 })

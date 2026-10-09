@@ -42,9 +42,23 @@ export function refreshState(
     return failed > 0 ? 'retrying' : 'polling'
 }
 
+/**
+ * The HTTP status a failed request carries (an `ApiError` has one), `null` when it had none: the
+ * network failed, or the error is no request's.
+ */
+export function failureStatus(error: unknown): number | null {
+    return error instanceof Error &&
+        'status' in error &&
+        typeof error.status === 'number'
+        ? error.status
+        : null
+}
+
 /** Whether the interval is to go on asking in this state. */
 export const keepsAsking = (state: Refreshing): boolean =>
     state === 'polling' || state === 'retrying'
+
+export type FailureLedger = ReturnType<typeof failureLedger>
 
 /**
  * The failed refreshes in a row, by what is refreshed. A key is absent while its last refresh

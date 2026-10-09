@@ -5,17 +5,39 @@ import { writeState, type State } from '@/lib/url-state'
 
 const linkParams = { range: timeRangeParam, ...traceListParams }
 
+/** The filters of the traces list, by the list's own parameters. */
+export type TraceLinkFilters = Partial<State<typeof traceListParams>>
+
+/**
+ * Builds the link to the traces list for the range of the data a link sits beside, narrowed by
+ * the given filters. A page that is about one agent passes a builder that adds the agent to every
+ * link, so its figures cannot lead to other agents' runs.
+ */
+export type TracesLinker = (
+    range: TimeRangePreset,
+    filters?: TraceLinkFilters,
+) => To
+
+/** The same, for the filters an API item names: parameters of `GET /api/traces` as strings. */
+export type TracesLinkerFor = (
+    range: TimeRangePreset,
+    filters: Record<string, string>,
+) => To
+
 /**
  * The traces list for a range, narrowed by `filters`, written with the list's own parameters:
  * what the list reads from the address is what this writes. A value the list would use anyway
- * (the default range, the default sort) is left out, as the list leaves it out.
+ * (the default range, the default sort) is left out, as the list leaves it out. `base` is what
+ * every link of a page carries; a filter of the same name given in `filters` takes its place.
  */
 export function tracesLink(
     range: TimeRangePreset,
-    filters: Partial<State<typeof traceListParams>> = {},
+    filters: TraceLinkFilters = {},
+    base: TraceLinkFilters = {},
 ): To {
     const search = writeState(linkParams, new URLSearchParams(), {
         range,
+        ...base,
         ...filters,
     }).toString()
 
@@ -33,6 +55,7 @@ export function tracesLink(
 export function tracesLinkFor(
     range: TimeRangePreset,
     filters: Record<string, string>,
+    base: TraceLinkFilters = {},
 ): To {
     const state: Record<string, unknown> = {}
 
@@ -56,5 +79,16 @@ export function tracesLinkFor(
         state[known] = value
     }
 
-    return tracesLink(range, state)
+    return tracesLink(range, state, base)
+}
+
+/** The builders of a page whose links all carry `base`. */
+export function tracesLinkers(base: TraceLinkFilters = {}): {
+    link: TracesLinker
+    linkFor: TracesLinkerFor
+} {
+    return {
+        link: (range, filters) => tracesLink(range, filters, base),
+        linkFor: (range, filters) => tracesLinkFor(range, filters, base),
+    }
 }

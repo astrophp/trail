@@ -6,8 +6,8 @@ import type {
     AttentionRow,
     IssueKind,
 } from '@/api/types'
-import { isAttentionKind } from '@/features/overview/attention-wording'
-import { tracesLinkFor } from '@/features/overview/traces-link'
+import { isAttentionKind } from '@/components/telemetry/attention-wording'
+import type { TracesLinkerFor } from '@/api/traces-link'
 import type { TimeRangePreset } from '@/lib/time-range'
 
 export type BreakdownEntry =
@@ -31,7 +31,11 @@ const isIssueKind = (kind: string): kind is IssueKind =>
 const reasonOf = (error: unknown) =>
     error instanceof Error ? error.message : 'Unknown failure.'
 
-function readRow(row: AttentionRow, range: TimeRangePreset): BreakdownEntry {
+function readRow(
+    row: AttentionRow,
+    range: TimeRangePreset,
+    linkFor: TracesLinkerFor,
+): BreakdownEntry {
     if (!isIssueKind(row.issue_kind)) {
         return {
             readable: false,
@@ -45,7 +49,7 @@ function readRow(row: AttentionRow, range: TimeRangePreset): BreakdownEntry {
             readable: true,
             row,
             issueKind: row.issue_kind,
-            to: tracesLinkFor(range, row.filters),
+            to: linkFor(range, row.filters),
         }
     } catch {
         return { readable: false, issueKind: row.issue_kind, count: row.count }
@@ -60,6 +64,7 @@ function readRow(row: AttentionRow, range: TimeRangePreset): BreakdownEntry {
 export function readAttention(
     items: AttentionItem[],
     range: TimeRangePreset,
+    linkFor: TracesLinkerFor,
 ): AttentionEntry[] {
     return items.map((item): AttentionEntry => {
         if (!isAttentionKind(item.kind)) {
@@ -76,8 +81,10 @@ export function readAttention(
                 readable: true,
                 item,
                 kind: item.kind,
-                to: tracesLinkFor(range, item.filters),
-                breakdown: item.breakdown.map((row) => readRow(row, range)),
+                to: linkFor(range, item.filters),
+                breakdown: item.breakdown.map((row) =>
+                    readRow(row, range, linkFor),
+                ),
             }
         } catch (error) {
             return {

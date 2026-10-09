@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { BucketUnit } from '@/api/types'
-import { activitySummary } from '@/features/overview/activity-series'
+import { activitySummary } from '@/components/telemetry/activity-series'
 import { overviewFixture } from '@/test/overview-api'
 
 const summary = overviewFixture.data.summary

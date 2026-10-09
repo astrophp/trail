@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
     failureLedger,
+    failureStatus,
     keepsAsking,
     maxFailedRefreshes,
     refreshEvery,
@@ -71,5 +72,22 @@ describe('failureLedger', () => {
         ledger.reset()
 
         expect(ledger.count('b')).toBe(0)
+    })
+})
+
+describe('failureStatus', () => {
+    it('is the status an error carries', () => {
+        expect(
+            failureStatus(Object.assign(new Error('x'), { status: 404 })),
+        ).toBe(404)
+    })
+
+    it('is null for an error without a status, a network failure and what is no error', () => {
+        expect(failureStatus(new Error('x'))).toBeNull()
+        expect(
+            failureStatus(Object.assign(new Error('x'), { status: null })),
+        ).toBeNull()
+        expect(failureStatus({ status: 500 })).toBeNull()
+        expect(failureStatus(undefined)).toBeNull()
     })
 })

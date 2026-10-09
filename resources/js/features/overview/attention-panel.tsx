@@ -1,5 +1,5 @@
-import { useEffect, useMemo } from 'react'
 import { failureMessage } from '@/api/client'
+import { tracesLinkFor } from '@/api/traces-link'
 import { CountChip } from '@/components/patterns/count-chip'
 import { Panel } from '@/components/patterns/panel'
 import { PanelContent } from '@/components/patterns/panel-content'
@@ -7,11 +7,10 @@ import { PanelEmpty } from '@/components/patterns/panel-empty'
 import { PanelError } from '@/components/patterns/panel-error'
 import { PanelHeader } from '@/components/patterns/panel-header'
 import { PanelLoading } from '@/components/patterns/panel-loading'
-import { AttentionCell } from '@/features/overview/attention-cell'
-import { readAttention, unreadable } from '@/features/overview/attention-items'
-import { RefreshNote } from '@/features/overview/refresh-note'
+import { AttentionCells } from '@/components/telemetry/attention-cells'
+import { RefreshNote } from '@/components/patterns/refresh-note'
 import { useAttention } from '@/features/overview/use-attention'
-import { useOverviewStatus } from '@/features/overview/use-overview-status'
+import { useQueryStatus } from '@/hooks/use-query-status'
 import { useFocusHandoff } from '@/hooks/use-focus-handoff'
 import { useTimeRange } from '@/hooks/use-time-range'
 import { cn } from '@/lib/utils'
@@ -26,7 +25,7 @@ export function AttentionPanel({ className }: { className?: string }) {
     const [range] = useTimeRange()
     const attention = useAttention(range)
     const { data, isError, isPlaceholderData } = attention
-    const { failed, retrying, failure, loading } = useOverviewStatus(
+    const { failed, retrying, failure, loading } = useQueryStatus(
         attention,
         range,
     )
@@ -37,20 +36,6 @@ export function AttentionPanel({ className }: { className?: string }) {
     const items = data?.data
     // The range the items were counted over: the previous one while the next loads.
     const shown = data?.range.preset ?? range
-    const entries = useMemo(
-        () => (items === undefined ? [] : readAttention(items, shown)),
-        [items, shown],
-    )
-    const unreadableReport = unreadable(entries).join('\n')
-
-    useEffect(() => {
-        // A bug to fix, not a state of the data: say so once where a developer looks.
-        if (unreadableReport !== '' && import.meta.env.DEV) {
-            console.error(
-                `Trail could not show every item of what needs attention:\n${unreadableReport}`,
-            )
-        }
-    }, [unreadableReport])
     // The count in the header is the current answer's, never the previous range's.
     const count =
         !isPlaceholderData && items !== undefined && items.length > 0
@@ -98,21 +83,11 @@ export function AttentionPanel({ className }: { className?: string }) {
                     {data.data.length === 0 ? (
                         <PanelEmpty title="Nothing needs attention in this range" />
                     ) : (
-                        // Cells keep the API's order, left to right and top to bottom.
-                        // Safari drops the list semantics of a list whose markers a reset removes.
-                        // eslint-disable-next-line jsx-a11y/no-redundant-roles
-                        <ul
-                            role="list"
-                            data-slot="attention-grid"
-                            className="grid gap-2 @2xl:grid-cols-2 @4xl:grid-cols-3"
-                        >
-                            {entries.map((entry, index) => (
-                                <AttentionCell
-                                    key={`${entry.kind}:${index}`}
-                                    entry={entry}
-                                />
-                            ))}
-                        </ul>
+                        <AttentionCells
+                            items={data.data}
+                            range={shown}
+                            linkFor={tracesLinkFor}
+                        />
                     )}
                 </div>
             </>
