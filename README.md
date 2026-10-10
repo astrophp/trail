@@ -134,7 +134,7 @@ repository that runs scripted agents.
         <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/astrophp/trail/main/art/palette-dark.png">
         <img src="https://raw.githubusercontent.com/astrophp/trail/main/art/palette-light.png" alt="The command palette open over the Traces list, with matching runs and agents in separate groups." width="420">
       </picture>
-      <br><sub><strong>Command palette.</strong> Press <kbd>⌘K</kbd> or <kbd>Ctrl</kbd> <kbd>K</kbd> to go to a page or find a run, a conversation or an agent.</sub>
+      <br><sub><strong>Command palette.</strong> Press <kbd>⌘K</kbd> or <kbd>Ctrl</kbd> <kbd>K</kbd> to go to a page, or to find a run, a conversation or an agent.</sub>
     </td>
   </tr>
 </table>
@@ -159,8 +159,8 @@ repository that runs scripted agents.
 - Serves a dashboard: an overview, a filterable list of runs with comparison, bookmarks and CSV
   export, the execution tree of each run, conversations as transcripts, per-agent reliability,
   latency and cost, and a usage and cost page with price management.
-- Has a command palette and keyboard shortcuts, to move between pages and find a run, a
-  conversation or an agent without leaving the keyboard.
+- Has a command palette on ⌘K or Ctrl K, to go to a page, copy the link or switch the theme, or
+  find a run, a conversation or an agent by text or id, and keyboard shortcuts that `?` lists.
 
 ### Operations
 
