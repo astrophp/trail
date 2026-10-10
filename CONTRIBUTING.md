@@ -100,8 +100,9 @@ everything Trail shows was recorded by Trail.
 - **Id columns are strings.** SDK ids are 36-character UUIDs, so they are `string` columns, never
   `char` or `ulid`.
 - **Documentation is checked.** A key added to `config/trail.php` must be added to
-  [docs/configuration.md](docs/configuration.md), or a test fails. Code samples in `docs/` are run
-  by the tests; see `tests/Feature/Docs`.
+  [docs/configuration.md](docs/configuration.md), or a test fails. The tests in `tests/Feature/Docs`
+  also check that the `php artisan trail:*` commands in the pages exist and run, and that links and
+  heading anchors resolve. Code samples are not run by the tests; run one by hand if you change it.
 - **The repository is public.** Do not commit secrets, credentials, real user data or anything
   specific to your machine.
 

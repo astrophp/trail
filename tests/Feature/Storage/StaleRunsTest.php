@@ -245,3 +245,23 @@ it('agrees with the store sweep for the same stored rows', function () {
         ->and(Trace::find('old')->status)->toBe(Status::Incomplete)
         ->and(Span::find('old-span')->status)->toBe(Status::Incomplete);
 });
+
+it('sweeps late in the repeated hour of a clock change, and never early', function () {
+    // Europe/Berlin sets its clocks back on 2026-10-25 at 03:00 (summer time, UTC+2) to 02:00 (UTC+1).
+    config(['app.timezone' => 'Europe/Berlin', 'trail.stale_after' => 3600]);
+
+    $written = StaleRuns::format(Carbon::parse('2026-10-25 02:55:00 +02:00'));
+    $staleAt = function (string $now) use ($written) {
+        $this->travelTo(Carbon::parse($now));
+
+        return StaleRuns::isStale(Status::Running, $written);
+    };
+
+    expect($written)->toBe('2026-10-25 02:55:00.000')
+        // 02:55:01 winter time is an hour and a second after the row was written.
+        ->and($staleAt('2026-10-25 02:55:01 +01:00'))->toBeTrue()
+        // At 03:10 winter time the row is 75 minutes old, but its stored 02:55 is not before the cutoff, 02:10.
+        ->and($staleAt('2026-10-25 03:10:00 +01:00'))->toBeFalse()
+        // The wall clock passes 02:55 again an hour later, when the row is two hours old.
+        ->and($staleAt('2026-10-25 03:56:00 +01:00'))->toBeTrue();
+});

@@ -31,7 +31,6 @@ else. The name and email the dashboard shows are looked up when a page is shown:
   service provider's `boot()`. The callback gets the user ids grouped by type and returns the users
   by type and id, or `null` for one it cannot find:
 
-<!-- sample: limits.users -->
 ```php
 use Astro\Trail\Facades\Trail;
 
