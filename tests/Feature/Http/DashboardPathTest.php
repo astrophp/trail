@@ -2,6 +2,11 @@
 
 use Astro\Trail\Tests\Fixtures\Http\ServesFromCustomPath;
 
+afterEach(function () {
+    // Some tests change the environment; a failed assertion must not leave it changed.
+    $this->app['env'] = 'testing';
+});
+
 uses(ServesFromCustomPath::class);
 
 it('serves the dashboard at the configured path with the slashes around it ignored', function () {

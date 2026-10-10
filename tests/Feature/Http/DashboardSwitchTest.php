@@ -6,6 +6,11 @@ use Astro\Trail\Tests\Fixtures\Http\DisablesDashboard;
 use Astro\Trail\Tests\Fixtures\Sdk\ObservesSdk;
 use Illuminate\Support\Facades\Route;
 
+afterEach(function () {
+    // Some tests change the environment; a failed assertion must not leave it changed.
+    $this->app['env'] = 'testing';
+});
+
 uses(DisablesDashboard::class, ObservesSdk::class);
 
 beforeEach(function () {

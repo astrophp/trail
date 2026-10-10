@@ -4,7 +4,16 @@ namespace Astro\Trail\Pricing;
 
 class CostCalculator
 {
-    public function __construct(private readonly PriceBook $prices) {}
+    public function __construct(private PriceBook $prices) {}
+
+    /**
+     * From now on price from `trail.pricing` alone, with no query for saved prices. Only this
+     * calculator changes: the price book it was given stays as it is for everything else.
+     */
+    public function useConfigOnlyPrices(): void
+    {
+        $this->prices = $this->prices->configOnly();
+    }
 
     /**
      * The cost in USD of one usage report, or null when it cannot be priced.

@@ -3,6 +3,11 @@
 use Astro\Trail\Tests\Fixtures\Sdk\DisablesTrail;
 use Illuminate\Support\Facades\Route;
 
+afterEach(function () {
+    // Some tests change the environment; a failed assertion must not leave it changed.
+    $this->app['env'] = 'testing';
+});
+
 uses(DisablesTrail::class);
 
 it('registers no Trail route and answers 404 when Trail is switched off', function () {

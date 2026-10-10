@@ -4,6 +4,20 @@ import type { CatalogueEntry } from '@/catalogue/types'
 
 type Of = ComponentProps<typeof ModelLabel>['of']
 
+const inlineModels: [string, Of][] = [
+    [
+        'Inline: model and provider',
+        { model: 'claude-sonnet-5-5', provider: 'anthropic', streamed: false },
+    ],
+    [
+        'Inline: streamed',
+        { model: 'gpt-4o', provider: 'openai', streamed: true },
+    ],
+    ['Inline: no provider', { model: 'gpt-4o', provider: null }],
+    ['Inline: no model', { model: null, provider: 'openai' }],
+    ['Inline: neither', { model: null, provider: null }],
+]
+
 const models: [string, Of, boolean?][] = [
     [
         'Model and provider',
@@ -40,10 +54,16 @@ const models: [string, Of, boolean?][] = [
 
 export const catalogue: CatalogueEntry = {
     title: 'Model label',
-    specimens: models.map(([name, of, expectResponding]) => ({
-        name,
-        Component: () => (
-            <ModelLabel of={of} expectResponding={expectResponding} />
-        ),
-    })),
+    specimens: [
+        ...models.map(([name, of, expectResponding]) => ({
+            name,
+            Component: () => (
+                <ModelLabel of={of} expectResponding={expectResponding} />
+            ),
+        })),
+        ...inlineModels.map(([name, of]) => ({
+            name,
+            Component: () => <ModelLabel of={of} layout="inline" />,
+        })),
+    ],
 }

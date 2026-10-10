@@ -2,6 +2,11 @@
 
 use Astro\Trail\Facades\Trail;
 
+afterEach(function () {
+    // Some tests change the environment; a failed assertion must not leave it changed.
+    $this->app['env'] = 'testing';
+});
+
 $html = ['Accept' => 'text/html'];
 
 it('answers an unknown api path with a JSON 404 even when HTML is asked for', function () use ($html) {

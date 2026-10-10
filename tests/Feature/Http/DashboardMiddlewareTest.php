@@ -2,6 +2,11 @@
 
 use Astro\Trail\Tests\Fixtures\Http\AddsMiddleware;
 
+afterEach(function () {
+    // Some tests change the environment; a failed assertion must not leave it changed.
+    $this->app['env'] = 'testing';
+});
+
 uses(AddsMiddleware::class);
 
 it('runs the middleware from the configuration', function () {
