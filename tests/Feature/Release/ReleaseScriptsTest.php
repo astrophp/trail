@@ -50,6 +50,47 @@ it('matches changelog headings literally', function () {
     expect($process->getExitCode())->toBe(1)->and($process->getErrorOutput())->toContain('no heading');
 });
 
+it('extracts only the requested dated changelog body', function () {
+    $file = releaseTemp().'/CHANGELOG.md';
+    file_put_contents($file, "## v0.1.0 - 2026-10-10\n\nFirst.\n\nSecond.\n\n## v0.0.9\n\nOld.\n");
+    $process = releaseRun('changelog-entry.sh', ['v0.1.0', $file]);
+    expect($process->getExitCode())->toBe(0)->and($process->getOutput())->toBe("First.\n\nSecond.\n");
+});
+
+it('refuses absent empty and similarly named changelog entries', function (string $tag, string $contents, string $message) {
+    $file = releaseTemp().'/CHANGELOG.md';
+    file_put_contents($file, $contents);
+    $process = releaseRun('changelog-entry.sh', [$tag, $file]);
+    expect($process->getExitCode())->toBe(1)->and($process->getErrorOutput())->toContain($message);
+})->with([
+    'longer version' => ['v0.1.0', "## v0.1.01\n\nNo.\n", 'no heading'],
+    'pre release heading' => ['v0.1.0', "## v0.1.0-rc.1\n\nNo.\n", 'no heading'],
+    'stable heading' => ['v0.1.0-rc.1', "## v0.1.0\n\nNo.\n", 'no heading'],
+    'empty entry' => ['v0.1.0', "## v0.1.0\n\n## v0.0.9\n", 'no release notes'],
+]);
+
+it('checks commits on main directly', function () {
+    $directory = releaseTemp();
+    foreach ([['git', 'init', '--initial-branch=main'], ['git', 'config', 'user.email', 't@e'], ['git', 'config', 'user.name', 'T'], ['git', 'commit', '--allow-empty', '-m', 'main']] as $command) {
+        (new Process($command, $directory))->mustRun();
+    }
+    $main = trim((new Process(['git', 'rev-parse', 'HEAD'], $directory))->mustRun()->getOutput());
+    expect(releaseRun('on-main.sh', [$main, 'main'], [], $directory)->getExitCode())->toBe(0);
+    (new Process(['git', 'checkout', '-b', 'feature'], $directory))->mustRun();
+    (new Process(['git', 'commit', '--allow-empty', '-m', 'feature'], $directory))->mustRun();
+    $process = releaseRun('on-main.sh', ['HEAD', 'main'], [], $directory);
+    expect($process->getExitCode())->toBe(1)->and($process->getErrorOutput())->toContain('not an ancestor');
+});
+
+it('classifies workflow runs with messages', function (string $input, int $code, string $message) {
+    $process = new Process([releaseRoot().'/scripts/release/runs-green.sh', 'tests.yml', 'abc', 'main'], releaseRoot());
+    $process->setInput($input);
+    $process->run();
+    expect($process->getExitCode())->toBe($code)->and($process->getOutput().$process->getErrorOutput())->toContain($message);
+})->with([
+    'success' => [runJson('completed', 'success'), 0, 'successful'], 'failure' => [runJson('completed', 'failure'), 1, 'without success'], 'cancelled' => [runJson('completed', 'cancelled'), 1, 'cancelled'], 'in progress' => [runJson('in_progress'), 2, 'in_progress'], 'none' => ['{"workflow_runs":[]}', 1, 'no push run'], 'other sha' => ['{"workflow_runs":[{"head_sha":"other","head_branch":"main","event":"push","status":"completed","conclusion":"success"}]}', 1, 'no push run'], 'other branch' => ['{"workflow_runs":[{"head_sha":"abc","head_branch":"feature","event":"push","status":"completed","conclusion":"success"}]}', 1, 'no push run'], 'invalid json' => ['no', 1, 'invalid runs JSON'],
+]);
+
 it('waits for runs and keeps fetch errors', function (array $responses, int $code, string $message) {
     $directory = releaseTemp();
     $fetcher = "$directory/fetch";
@@ -71,12 +112,30 @@ it('reports a failed run fetch', function () {
     expect($process->getExitCode())->toBe(1)->and($process->getErrorOutput())->toContain('unavailable');
 });
 
+it('stops polling after one failed run', function () {
+    $directory = releaseTemp();
+    $fetcher = "$directory/fetch";
+    $calls = "$directory/calls";
+    file_put_contents($fetcher, "#!/bin/sh\nprintf x >> \"\$CALLS\"\nprintf '%s' '\"'\"'{\"workflow_runs\":[{\"head_sha\":\"abc\",\"head_branch\":\"main\",\"event\":\"push\",\"status\":\"completed\",\"conclusion\":\"failure\"}]}'\"'\"'\n");
+    chmod($fetcher, 0755);
+    $process = releaseRun('wait-for-runs.sh', ['tests.yml', 'abc'], ['RELEASE_RUNS_FETCH_COMMAND' => $fetcher, 'CALLS' => $calls, 'RELEASE_RUNS_ATTEMPTS' => '2', 'RELEASE_RUNS_SLEEP_SECONDS' => '0']);
+    expect($process->getExitCode())->toBe(1)->and(file_get_contents($calls))->toBe('x');
+});
+
 it('requires exact Packagist versions', function (string $tag, string $listed, int $code) {
     $file = releaseTemp().'/metadata';
     file_put_contents($file, json_encode(['packages' => ['astrophp/trail' => [['version' => $listed]]]]));
     $process = releaseRun('packagist-wait.sh', [$tag], ['PACKAGIST_URL' => "file://$file", 'PACKAGIST_ATTEMPTS' => '1', 'PACKAGIST_SLEEP_SECONDS' => '0']);
     expect($process->getExitCode())->toBe($code);
 })->with([['v0.1.0', 'v0.1.0', 0], ['v0.1.0', 'v0.1.0-rc.1', 1], ['v0.1.0-rc.1', 'v0.1.0', 1]]);
+
+it('handles unavailable and normalized Packagist metadata', function () {
+    $bad = releaseRun('packagist-wait.sh', ['v0.1.0'], ['PACKAGIST_URL' => 'file:///missing-release-metadata', 'PACKAGIST_ATTEMPTS' => '2', 'PACKAGIST_SLEEP_SECONDS' => '0']);
+    expect($bad->getExitCode())->toBe(1)->and($bad->getErrorOutput())->toContain('hook did not deliver');
+    $file = releaseTemp().'/metadata';
+    file_put_contents($file, json_encode(['packages' => ['astrophp/trail' => [['version_normalized' => '0.1.0.0']]]]));
+    expect(releaseRun('packagist-wait.sh', ['v0.1.0'], ['PACKAGIST_URL' => "file://$file", 'PACKAGIST_ATTEMPTS' => '1'])->getExitCode())->toBe(0);
+});
 
 it('refuses an existing local preflight tag', function () {
     $directory = releaseTemp();
@@ -107,4 +166,10 @@ it('parses workflow permissions and trigger exactly', function () {
             }
         }
     } expect($writes)->toBe(1);
+    $text = file_get_contents(releaseRoot().'/.github/workflows/release.yml');
+    expect($text)->not->toMatch('/git push|git tag|--force|npm publish/')->not->toMatch('/secrets\\./');
+    preg_match_all('/uses: ([^\\s]+)/', $text, $matches);
+    foreach ($matches[1] as $action) {
+        expect(str_starts_with($action, 'actions/') || preg_match('/@[a-f0-9]{40}$/', $action) === 1)->toBeTrue();
+    }
 });
