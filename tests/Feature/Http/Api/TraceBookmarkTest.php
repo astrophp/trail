@@ -25,7 +25,11 @@ beforeEach(function () {
     Trail::auth(fn () => true);
 });
 
-afterEach(fn () => Carbon::setTestNow());
+afterEach(function () {
+    Carbon::setTestNow();
+    // Some tests change the environment; a failed assertion must not leave it changed.
+    $this->app['env'] = 'testing';
+});
 
 function bookmarkable(string $id = 'trace-1'): string
 {

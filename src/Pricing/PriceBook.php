@@ -30,6 +30,7 @@ class PriceBook
         private readonly Repository $config,
         private readonly ConnectionResolverInterface $resolver,
         private readonly ?string $connection = null,
+        private readonly bool $configOnly = false,
     ) {}
 
     public function rateFor(string $provider, string $model): ?Rate
@@ -69,6 +70,15 @@ class PriceBook
         }
 
         return $best === null ? new Resolution(null, PriceSource::None) : new Resolution($best, PriceSource::Prefix);
+    }
+
+    /**
+     * A price book that finds prices in `trail.pricing` alone: it never reads saved prices, so it
+     * makes no query. This book is left as it is.
+     */
+    public function configOnly(): self
+    {
+        return new self($this->config, $this->resolver, $this->connection, true);
     }
 
     /**
@@ -176,6 +186,10 @@ class PriceBook
      */
     private function databaseRows(): array
     {
+        if ($this->configOnly) {
+            return [];
+        }
+
         $now = Carbon::now()->getTimestamp();
 
         if ($this->rows !== null && $this->loadedAt !== null && $now - $this->loadedAt <= self::REFRESH_SECONDS) {

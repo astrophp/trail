@@ -4,6 +4,11 @@ use Astro\Trail\Tests\Fixtures\Storage\Rows;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 
+afterEach(function () {
+    // Some tests change the environment; a failed assertion must not leave it changed.
+    $this->app['env'] = 'testing';
+});
+
 uses(RefreshDatabase::class);
 
 function trailSeedEverything(): void

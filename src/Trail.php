@@ -5,6 +5,7 @@ namespace Astro\Trail;
 use Astro\Trail\Capture\Guard;
 use Astro\Trail\Capture\Recorder;
 use Astro\Trail\Capture\Sampler;
+use Astro\Trail\Pricing\CostCalculator;
 use Astro\Trail\Storage\ArrayTraceStore;
 use Astro\Trail\Storage\Contracts\TraceStore;
 use Astro\Trail\Storage\StaleRuns;
@@ -41,13 +42,15 @@ class Trail
     }
 
     /**
-     * Replace Trail's storage with an empty in-memory store, so tests never touch its tables.
+     * Replace Trail's storage with an empty in-memory store, and price what it records from
+     * `trail.pricing` alone, so tests never touch its tables.
      */
     public function fake(): ArrayTraceStore
     {
         $store = new ArrayTraceStore;
 
         $this->container->instance(TraceStore::class, $store);
+        $this->container->make(CostCalculator::class)->useConfigOnlyPrices();
 
         return $store;
     }
