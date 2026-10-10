@@ -81,6 +81,16 @@ function runJson(string $status, ?string $conclusion = null, string $sha = 'abc'
     return json_encode(['workflow_runs' => [['head_sha' => $sha, 'head_branch' => 'main', 'event' => 'push', 'status' => $status, 'conclusion' => $conclusion]]], JSON_THROW_ON_ERROR);
 }
 
+function run(int $number, string $status, ?string $conclusion = null, int $attempt = 1): array
+{
+    return ['head_sha' => 'abc', 'head_branch' => 'main', 'event' => 'push', 'run_number' => $number, 'run_attempt' => $attempt, 'created_at' => '2026-10-10T10:00:00Z', 'status' => $status, 'conclusion' => $conclusion];
+}
+
+function runsJson(array $runs): string
+{
+    return json_encode(['workflow_runs' => $runs], JSON_THROW_ON_ERROR);
+}
+
 function workflow(): array
 {
     return Yaml::parseFile(releaseRoot().'/.github/workflows/release.yml');
@@ -101,12 +111,12 @@ afterEach(function () {
 it('validates tags and detects pre-releases', function (string $tag, bool $pre) {
     $process = releaseRun('tag-version.sh', [$tag]);
     expect($process->getExitCode())->toBe(0)->and($process->getOutput())->toContain('prerelease='.($pre ? 'true' : 'false'));
-})->with([['v0.1.0', false], ['v10.20.30', false], ['v0.1.0-rc.1', true], ['v0.1.0-rc1', true], ['v0.1.0-RC2', true], ['v0.1.0-alpha', true], ['v0.1.0-beta.3', true]]);
+})->with([['v0.1.0', false], ['v10.20.30', false], ['v0.1.0-rc.1', true], ['v0.1.0-rc1', true], ['v0.1.0-RC2', true], ['v0.1.0-alpha1', true], ['v0.1.0-beta.3', true]]);
 
 it('refuses invalid tags', function (string $tag) {
     $process = releaseRun('tag-version.sh', [$tag]);
     expect($process->getExitCode())->toBe(1)->and($process->getErrorOutput())->toContain('Invalid release tag');
-})->with(['', 'v1.2', '0.1.0', 'vx', 'v0.1.0;echo', 'xv1.0.0', 'v1.0.0x', "v1.0.0\n", "v1.0.0\nv2.0.0", 'v1.0.0-foo', 'v1.0.0-dev', 'v1.0.0-patch1', 'v1.0.0-rc.', 'v1.0.0-rc.1.2', 'v1.0.0-', 'v1.0.0.1', 'v1.0.0+build']);
+})->with(['', 'v1.2', '0.1.0', 'vx', 'v0.1.0;echo', 'xv1.0.0', 'v1.0.0x', "v1.0.0\n", "v1.0.0\nv2.0.0", 'v1.0.0-foo', 'v1.0.0-dev', 'v1.0.0-patch1', 'v1.0.0-rc.', 'v1.0.0-rc', 'v1.0.0-beta', 'v1.0.0-alpha', 'v1.0.0-rc.1.2', 'v1.0.0-', 'v1.0.0.1', 'v1.0.0+build']);
 
 it('matches changelog headings literally', function () {
     $file = releaseTemp().'/CHANGELOG.md';
@@ -128,12 +138,29 @@ it('refuses absent empty and similarly named changelog entries', function (strin
     $process = releaseRun('changelog-entry.sh', [$tag, $file]);
     expect($process->getExitCode())->toBe(1)->and($process->getErrorOutput())->toContain($message);
 })->with([
-    'longer version' => ['v0.1.0', "## v0.1.01\n\nNo.\n", 'no heading'],
+    'longer version' => ['v0.1.0', "## v0.1.01\n\nNo.\n", 'no heading for v0.1.0'],
+    'text instead of a date' => ['v0.1.0', "## v0.1.0 - soon\n\nNo.\n", 'no heading for v0.1.0'],
+    'malformed date' => ['v0.1.0', "## v0.1.0 - 2026-1-1\n\nNo.\n", 'no heading for v0.1.0'],
+    'date without spaces' => ['v0.1.0', "## v0.1.0 -2026-10-10\n\nNo.\n", 'no heading for v0.1.0'],
     'pre release heading' => ['v0.1.0', "## v0.1.0-rc.1\n\nNo.\n", 'no heading'],
     'stable heading' => ['v0.1.0-rc.1', "## v0.1.0\n\nNo.\n", 'no heading'],
     'trailing text' => ['v0.1.0', "## v0.1.0 later\n\nNo.\n", 'no heading'],
-    'empty entry' => ['v0.1.0', "## v0.1.0\n\n## v0.0.9\n", 'no release notes'],
+    'empty entry' => ['v0.1.0', "## v0.1.0\n\n## v0.0.9\n", 'entry for v0.1.0 has no release notes'],
 ]);
+
+it('reads a CRLF changelog', function () {
+    $file = releaseTemp().'/CHANGELOG.md';
+    file_put_contents($file, "## v0.1.0 - 2026-10-10\r\n\r\nFirst.\r\n\r\n### Added\r\n\r\n- Second.\r\n\r\n## v0.0.9\r\n\r\nOld.\r\n");
+    $process = releaseRun('changelog-entry.sh', ['v0.1.0', $file]);
+    expect($process->getExitCode())->toBe(0)->and($process->getOutput())->toBe("First.\n\n### Added\n\n- Second.\n")->and($process->getOutput())->not->toContain("\r");
+    file_put_contents($file, "## v0.1.0\r\n\r\nPlain.\r\n");
+    expect(releaseRun('changelog-entry.sh', ['v0.1.0', $file])->getOutput())->toBe("Plain.\n");
+});
+
+it('names the tag when the changelog file is missing', function () {
+    $process = releaseRun('changelog-entry.sh', ['v0.1.0', releaseTemp().'/none.md']);
+    expect($process->getExitCode())->toBe(1)->and($process->getErrorOutput())->toContain('v0.1.0 needs release notes');
+});
 
 it('checks commits on main directly', function () {
     $directory = releaseRepo();
@@ -160,6 +187,15 @@ it('classifies workflow runs with messages', function (string $input, int $code,
     'other branch' => ['{"workflow_runs":[{"head_sha":"abc","head_branch":"feature","event":"push","status":"completed","conclusion":"success"}]}', 3, 'no push run'],
     'pull request run' => ['{"workflow_runs":[{"head_sha":"abc","head_branch":"main","event":"pull_request","status":"completed","conclusion":"success"}]}', 3, 'no push run'],
     'invalid json' => ['no', 1, 'invalid runs JSON'],
+    'success then a later run in progress' => [runsJson([run(1, 'completed', 'success'), run(2, 'in_progress')]), 2, 'in_progress'],
+    'failure then a later success' => [runsJson([run(1, 'completed', 'failure'), run(2, 'completed', 'success')]), 0, 'successful'],
+    'success then a later failure' => [runsJson([run(1, 'completed', 'success'), run(2, 'completed', 'failure')]), 1, 'failure'],
+    'success then a later cancelled run' => [runsJson([run(2, 'completed', 'cancelled'), run(1, 'completed', 'success')]), 1, 'cancelled'],
+    'same run, higher attempt succeeds' => [runsJson([run(1, 'completed', 'failure', 1), run(1, 'completed', 'success', 2)]), 0, 'successful'],
+    'same run, higher attempt fails' => [runsJson([run(1, 'completed', 'success', 1), run(1, 'completed', 'failure', 2)]), 1, 'failure'],
+    'equal runs, one failure' => [runsJson([run(1, 'completed', 'success'), run(1, 'completed', 'failure')]), 1, 'failure'],
+    'equal runs, one in progress' => [runsJson([run(1, 'completed', 'success'), run(1, 'queued')]), 2, 'queued'],
+    'equal runs, both succeed' => [runsJson([run(1, 'completed', 'success'), run(1, 'completed', 'success')]), 0, 'successful'],
 ]);
 
 function sequenceFetcher(string $directory, array $responses): string
@@ -258,6 +294,19 @@ it('handles unavailable and normalized Packagist metadata', function () {
     expect(releaseRun('packagist-wait.sh', ['v0.1.0'], ['PACKAGIST_URL' => "file://$file", 'PACKAGIST_TIMEOUT_SECONDS' => '0'])->getExitCode())->toBe(0);
 });
 
+it('says why Packagist did not list the version', function (string $body, string $url, string $reason) {
+    $directory = releaseTemp();
+    if ($body !== '') {
+        file_put_contents("$directory/metadata", $body);
+    }
+    $process = releaseRun('packagist-wait.sh', ['v0.1.0'], ['PACKAGIST_URL' => $url === '' ? "file://$directory/metadata" : $url, 'PACKAGIST_TIMEOUT_SECONDS' => '0']);
+    expect($process->getExitCode())->toBe(1)->and($process->getErrorOutput())->toContain($reason)->and($process->getErrorOutput())->toContain('Last reason: '.$reason);
+})->with([
+    'missing package' => ['', 'file:///missing-release-metadata', 'the package is not on Packagist yet (HTTP 404)'],
+    'invalid json' => ['<html>', '', 'the Packagist response is not valid JSON'],
+    'version not listed' => ['{"packages":{"astrophp/trail":[{"version":"v0.0.9"}]}}', '', 'the Packagist metadata does not list v0.1.0'],
+]);
+
 it('polls Packagist with a cache-busting query and retries until listed', function () {
     $directory = releaseTemp();
     mkdir("$directory/bin");
@@ -342,7 +391,7 @@ function preflightSetup(string $changelog = "## v0.1.0\n\nNotes.\n"): array
 it('prints the checked commit and tag commands in preflight', function () {
     [, $clone, $sha] = preflightSetup();
     $process = releaseRun('preflight.sh', ['v0.1.0'], ['PREFLIGHT_SKIP_RUNS' => '1'], $clone);
-    expect($process->getExitCode())->toBe(0)->and($process->getOutput())->toContain("Checked commit $sha")->and($process->getOutput())->toContain("git tag v0.1.0 $sha && git push origin v0.1.0");
+    expect($process->getExitCode())->toBe(0)->and($process->getOutput())->toContain("Checked commit $sha")->and($process->getOutput())->toContain("git tag v0.1.0 $sha && git push origin v0.1.0")->and($process->getOutput())->toContain('Nothing has checked that the committed dist/');
     expect(git($clone, 'tag'))->toBe('');
 });
 
@@ -408,7 +457,8 @@ it('checks the workflow runs in preflight without waiting', function () {
     executable("$directory/bin/gh", 'exit 0');
     $env = ['PATH' => "$directory/bin:".getenv('PATH'), 'GH_REPO' => 'o/r', 'RELEASE_RUNS_SLEEP_SECONDS' => '30'];
     $green = executable("$directory/green", 'printf \'{"workflow_runs":[{"head_sha":"%s","head_branch":"main","event":"push","status":"completed","conclusion":"success"}]}\' "$2"');
-    expect(releaseRun('preflight.sh', ['v0.1.0'], $env + ['RELEASE_RUNS_FETCH_COMMAND' => $green], $clone)->getExitCode())->toBe(0);
+    $passed = releaseRun('preflight.sh', ['v0.1.0'], $env + ['RELEASE_RUNS_FETCH_COMMAND' => $green], $clone);
+    expect($passed->getExitCode())->toBe(0)->and($passed->getOutput())->toContain('covered by the green tests run')->and($passed->getOutput())->not->toContain('Nothing has checked');
 
     $red = executable("$directory/red", 'printf \'{"workflow_runs":[{"head_sha":"%s","head_branch":"main","event":"push","status":"completed","conclusion":"failure"}]}\' "$2"');
     $failed = releaseRun('preflight.sh', ['v0.1.0'], $env + ['RELEASE_RUNS_FETCH_COMMAND' => $red], $clone);

@@ -1,8 +1,8 @@
 # Releasing Trail
 
 1. Merge a `CHANGELOG.md` entry for the version: a heading `## vX.Y.Z`, optionally followed by
-   ` - YYYY-MM-DD`, then the release notes. The heading must match the tag exactly and the entry
-   must not be empty; any other heading shape is refused. `CHANGELOG.md` must exist on `main`
+   ` - YYYY-MM-DD` (a date in exactly that shape; other text after the version is refused), then
+   the release notes. The heading must match the tag exactly and the entry must not be empty; any other heading shape is refused. `CHANGELOG.md` must exist on `main`
    before the first tag.
 2. Wait until the `tests` and `install` workflow runs for the head of `main` are green.
 3. Run `scripts/release/preflight.sh vX.Y.Z`, then run the `git tag … && git push …` command it
@@ -10,10 +10,13 @@
 4. Watch the `release` workflow (`gh run watch`, or the Actions tab).
 5. Check that [the package page](https://packagist.org/packages/astrophp/trail) lists the version.
 
-Tags are `vMAJOR.MINOR.PATCH`, optionally with `-alpha`, `-beta` or `-rc` and a number
-(`v0.2.0-rc.1`); a suffixed tag becomes a GitHub pre-release. The preflight fetches `origin/main`
+Tags are `vMAJOR.MINOR.PATCH`, optionally with `-alpha`, `-beta` or `-rc` followed by a required
+number (`v0.2.0-rc.1`, `v0.2.0-beta2`; a bare `-rc` is refused); a suffixed tag becomes a GitHub pre-release. The preflight fetches `origin/main`
 but creates no tag and pushes nothing; it waits for no workflow run (a run still in progress is
-reported and it exits non-zero; set `PREFLIGHT_WAIT_SECONDS` to wait).
+reported and it exits non-zero; set `PREFLIGHT_WAIT_SECONDS` to wait). It does not build: the
+committed `dist/` is covered by the green `tests` run it checks, whose Frontend job fails when a
+fresh build differs from `dist/`. With `PREFLIGHT_SKIP_RUNS=1` nothing has checked the build; run
+`npm ci && npm run build && scripts/release/dist-clean.sh` on that commit first.
 
 ## When a job fails
 

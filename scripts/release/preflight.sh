@@ -54,5 +54,9 @@ else
 fi
 
 printf 'Checked commit %s (%s).\n' "$sha" "$remote/$branch"
-printf 'The workflow also verifies that a fresh build matches dist/; locally: npm ci && npm run build && scripts/release/dist-clean.sh\n'
+if [ "${PREFLIGHT_SKIP_RUNS:-0}" = 1 ]; then
+    printf 'Nothing has checked that the committed dist/ matches a fresh build (workflow runs were skipped). Check it on that commit: npm ci && npm run build && scripts/release/dist-clean.sh\n'
+else
+    printf 'The committed dist/ is covered by the green tests run for this commit: its Frontend job fails when a fresh build differs from dist/. The release workflow checks it again.\n'
+fi
 printf 'To release, run:\n  git tag %s %s && git push %s %s\n' "$tag" "$sha" "$remote" "$tag"
