@@ -504,14 +504,16 @@ describe('access', function () {
     it('answers a denied request with a JSON 403 outside local, and the gate lets it through', function () {
         $this->app['env'] = 'production';
 
-        $this->get('/trail/api/search?q=refund', ['Accept' => 'text/html'])->assertForbidden()->assertJsonStructure(['message']);
+        try {
+            $this->get('/trail/api/search?q=refund', ['Accept' => 'text/html'])->assertForbidden()->assertJsonStructure(['message']);
 
-        Trail::auth(fn () => true);
+            Trail::auth(fn () => true);
 
-        $this->get('/trail/api/search?q=refund', ['Accept' => 'text/html'])->assertOk();
-
-        // Rolling back this test's migrations asks for confirmation in production.
-        $this->app['env'] = 'local';
+            $this->get('/trail/api/search?q=refund', ['Accept' => 'text/html'])->assertOk();
+        } finally {
+            // Rolling back this test's migrations asks for confirmation in production.
+            $this->app['env'] = 'testing';
+        }
     });
 
     it('answers a JSON 404 when the dashboard is switched off', function () {
