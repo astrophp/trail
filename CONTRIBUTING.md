@@ -27,6 +27,7 @@ npm run typecheck    # tsc
 npm test             # vitest
 npm run build        # resources/js -> dist/app.js + dist/app.css (commit the result)
 npm run catalogue    # component catalogue (dev only), http://localhost:5175
+scripts/install-test.sh 13   # fresh Laravel app: require, migrate, record (12 or 13; commit first)
 ```
 
 Run `composer test` for a change to PHP and `npm run lint`, `npm run typecheck` and `npm test` for
