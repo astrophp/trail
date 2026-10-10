@@ -285,6 +285,18 @@ export default defineConfig(
         extends: [tseslint.configs.disableTypeChecked],
         languageOptions: { globals: globals.node },
     },
+    {
+        // The screenshot script runs in Node, but passes functions to Playwright that run in the
+        // page, where these two exist. They are declared for this file alone.
+        files: ['scripts/art-shots.mjs'],
+        languageOptions: {
+            globals: {
+                ...globals.node,
+                document: 'readonly',
+                getComputedStyle: 'readonly',
+            },
+        },
+    },
 
     // 1. Layers
     {
