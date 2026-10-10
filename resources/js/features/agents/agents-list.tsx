@@ -12,9 +12,11 @@ import { SortSelect } from '@/features/agents/sort-select'
 import { useAgentList } from '@/features/agents/use-agent-list'
 import { useAgents } from '@/features/agents/use-agents'
 import { useFocusHandoff } from '@/hooks/use-focus-handoff'
+import { pageShortcuts, useListShortcuts } from '@/hooks/use-list-shortcuts'
 import { useListStatus } from '@/hooks/use-list-status'
 import { formatCount } from '@/lib/format'
 import { returnTo } from '@/lib/return-context'
+import { keyCaps } from '@/lib/shortcuts'
 
 /**
  * The agents that ran in the chosen range: a search by name, how many there are, and the table,
@@ -37,6 +39,7 @@ export function AgentsList({ className }: { className?: string }) {
         useAgents(view)
     const { pathname, search: query } = useLocation()
     const searchRef = useRef<HTMLInputElement>(null)
+    const tableRef = useRef<HTMLDivElement>(null)
 
     // The view the rows on screen belong to, as a `from` value. While the table shows the previous
     // view's rows (placeholder data) their links keep leading back to that view; they switch when
@@ -62,6 +65,20 @@ export function AgentsList({ className }: { className?: string }) {
     // The retry button, or the button of the no-match state, goes away when rows replace it.
     useFocusHandoff(failed || (empty && hasFilters))
 
+    useListShortcuts({
+        table: tableRef,
+        search: searchRef,
+        // The page the rows on screen belong to, not the one the URL has moved to.
+        pages:
+            data === undefined || loading
+                ? undefined
+                : {
+                      page: data.pagination.page,
+                      last: data.pagination.last_page,
+                      go: setPage,
+                  },
+    })
+
     // Counts outside the dimmed table are the current answer's, never the previous view's.
     const current = data !== undefined && !isPlaceholderData && !loading
 
@@ -73,6 +90,7 @@ export function AgentsList({ className }: { className?: string }) {
                     aria-label="Search agents"
                     value={search}
                     inputRef={searchRef}
+                    shortcutHint={keyCaps('search')[0]}
                     onCommit={(text, options) => setSearch(text, options)}
                 />
                 <SortSelect value={sort} onValueChange={setSort} />
@@ -108,6 +126,7 @@ export function AgentsList({ className }: { className?: string }) {
                     <AgentsTable
                         agents={data?.data ?? []}
                         // The range the rows were counted over: the previous one while the next loads.
+                        ref={tableRef}
                         range={data?.range.preset ?? view.range}
                         from={rowsFrom}
                         sort={sort}
@@ -152,6 +171,7 @@ export function AgentsList({ className }: { className?: string }) {
                                     total={data.pagination.total}
                                     lastPage={data.pagination.last_page}
                                     onPageChange={setPage}
+                                    shortcuts={pageShortcuts()}
                                     noun={{ one: 'agent', other: 'agents' }}
                                 />
                             )

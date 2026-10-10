@@ -67,6 +67,11 @@ The first release. Requires PHP 8.3 or newer, Laravel 12 or 13 and `laravel/ai` 
 - Traces: a filterable list, side-by-side comparison, bookmarks and CSV export, and an inspector
   with the execution tree, timing and the evidence for each step.
 - Conversations as readable transcripts, and Agents with reliability, latency and cost per agent.
+- A command palette on ⌘K or Ctrl K: go to a page, copy the link or switch the theme, or find a run,
+  a conversation or an agent by text or id.
+- Keyboard shortcuts: `?` lists them. `g` then a letter goes to a page; on lists `/` searches, `j`
+  and `k` move between rows, `[` and `]` change the page; on a run `j`, `k` and `g` then `b` step
+  and go back.
 - Usage & cost: breakdowns by model, provider and agent, price management, a spend projection and
   CSV export.
 - Access control with the `viewTrail` gate (open in `local`), `Trail::auth()`, an optional guard,

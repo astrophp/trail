@@ -363,4 +363,13 @@ export default defineConfig(
             '@typescript-eslint/no-unnecessary-type-assertion': 'off',
         },
     },
+
+    // 5. components/ui/input-group.tsx is vendored as the shadcn CLI wrote it (it comes with the command palette's input); its addon forwards a click to the input beside it, which the input's own keyboard access already covers.
+    {
+        files: ['resources/js/components/ui/input-group.tsx'],
+        rules: {
+            'jsx-a11y/click-events-have-key-events': 'off',
+            'jsx-a11y/no-noninteractive-element-interactions': 'off',
+        },
+    },
 )

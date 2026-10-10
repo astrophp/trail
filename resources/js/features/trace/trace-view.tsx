@@ -1,3 +1,4 @@
+import { useNavigate } from 'react-router'
 import { isNotFound } from '@/api/client'
 import { ErrorState } from '@/components/patterns/error-state'
 import { LoadedTrace } from '@/features/trace/loaded-trace'
@@ -9,6 +10,8 @@ import {
     useRetryRefresh,
     useTrace,
 } from '@/features/trace/use-trace'
+import { useShortcuts } from '@/hooks/use-shortcuts'
+import { useBackLink } from '@/hooks/use-return-target'
 import { cn } from '@/lib/utils'
 
 type TraceViewProps = {
@@ -36,6 +39,11 @@ export function TraceView({
     const { data, error } = query
     const notFound = isNotFound(error)
     const retryRefresh = useRetryRefresh(traceId)
+    // The same place the "Back to …" links lead to, with the view the run was opened from.
+    const { to: back } = useBackLink()
+    const navigate = useNavigate()
+
+    useShortcuts({ 'trace-back': () => void navigate(back) })
 
     return (
         <div data-slot="trace-view" className={cn(className)}>

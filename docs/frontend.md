@@ -107,6 +107,8 @@ Do not rewrite any of them in a feature.
   above the row's link, so a click on its padding would otherwise do nothing.
 - **`useListStatus`** (`hooks`): from the query, whether to draw `failed`, `loading` or `empty`, and
   the move off a page past the end.
+- **`useListShortcuts`** (`hooks`): the keys of a list (see Keyboard shortcuts). Give it the
+  `DataTable`'s `ref`, the search field's ref and the page the rows on screen belong to.
 
 Two guarantees come with these pieces; keep them when adding a list:
 
@@ -117,6 +119,121 @@ Two guarantees come with these pieces; keep them when adding a list:
   it. Rows from a placeholder are the previous view's rows: `DataTable` draws them `busy` (dimmed).
   Any count, total or page number shown outside the dimmed table must also check the query's
   `isPlaceholderData`; `loading` being false does not make a count current.
+
+## The command palette
+
+⌘K / Ctrl K opens a palette from any page: go to a page, run a small action, or find a run, a
+conversation or an agent. The shell mounts it once (`PaletteProvider` and `PaletteTrigger` from
+`@/features/palette`); the dialog itself is the `CommandPalette` pattern, which knows nothing of Trail.
+What goes into it, and how:
+
+- **A page** is an entry of `lib/nav-pages`, the one list the sidebar, the route table and the palette
+  read. A page that is not in the navigation is not offered.
+- **An action** is an item of `ActionGroup` in the palette feature. Only what needs no confirmation
+  and already exists elsewhere in the dashboard (the theme, copying a link); reuse its code, do not
+  copy it.
+- **A result** comes from `GET /api/search` and is a group in `search-groups.tsx`: a real link (its
+  address built with the path helpers, never by hand), built from the `telemetry` components, so a
+  missing value reads `Not captured` or `Sub-agent only` and is never formatted or zero. A group the
+  API cut ends with the list that holds the rest, written with that list's own link helper.
+- **Never the answer to another text.** The search is keyed by its text and range, keeps no
+  placeholder data, shows loading while the text waits out its pause or its request is out, and
+  aborts the request of a text that was replaced. Do not add `placeholderData` to it.
+- The palette is not navigation: opening it changes no URL and remounts no page, so a page must not
+  rely on losing focus or state when it opens. Its key is the `palette` entry of the table of
+  shortcuts (`usePaletteShortcut` binds it), the one shortcut that also works while typing in a field.
+- **Keyboard shortcuts** is an action of the palette, with `?` beside it. The palette closes and the
+  help opens through `useShortcutHelp`, and gives it the focus it was going to return.
+
+## Keyboard shortcuts
+
+Every shortcut is one entry of the table in `lib/shortcuts.ts`: an id, its keys, a label and a
+scope (`everywhere`, `list`, `trace`, `conversation`). `useShortcuts` binds by id and the help
+dialog lists the table, so a key that is bound is always listed and a listed key is always bound.
+The table has no React in it; one `keydown` listener (in `hooks/use-shortcuts.ts`) serves every
+component, sequences included.
+
+| Keys | Does | Scope |
+| --- | --- | --- |
+| `?` | shows the shortcuts | everywhere |
+| `⌘K` / `Ctrl K` | opens or closes the palette | everywhere |
+| `g` then `o` `t` `c` `a` `u` | goes to Overview, Traces, Conversations, Agents, Usage | everywhere |
+| `/` | focuses the search field | list |
+| `j` / `k` | focuses the next / previous row | list |
+| `Enter` | opens the row that has focus (the browser follows its link) | list |
+| `]` / `[` | next / previous page | list |
+| `j` / `k` | next / previous run in the list or conversation it was opened from | trace |
+| `g` then `b` | back to where the run was opened from | trace |
+| `g` then `b` | back to the list of conversations | conversation |
+
+`g` then a letter goes where the sidebar's link goes: the page's own path, so the time range and
+the page's filters are not carried (the sidebar's links do not carry them either). The second key
+must come within 1.5 seconds. A key that is not the second key ends the sequence and does nothing
+itself (`g` then `j` is not a `j`); a modifier key going down on its own does not, and a chord
+such as `⌘K` still works in the middle of one.
+
+Rules that hold for every shortcut, enforced in `useShortcuts`:
+
+- Nothing fires while the person types (a text input, textarea, select, `role=textbox`, `combobox`
+  or `searchbox`, or editable content). An input that takes no text (checkbox, radio, button,
+  range, file, color) is not a field, so a ticked row's checkbox leaves the keys working. A focused
+  select's trigger is a combobox and still blocks them: its typeahead owns the letters.
+  Nothing fires also with Ctrl, Alt or Command held, while a key repeats, during an
+  IME composition, or while a dialog, menu or select is open. The two exceptions are declared in the
+  table: the palette's `mod+` chord works in a field, and a shortcut with an `ownLayer` (the palette,
+  the help) is not stopped by its own dialog, so the same key closes it.
+- A shortcut that finds nothing to do (no row that way, the last page, a busy table) returns
+  `false`, and the key is then left to the browser; one that acts is taken from it. A first key
+  waiting for its second is forgotten when the location changes.
+- The help lists, under the scopes that apply to the page, only what can be done on it now (the ids
+  `useShortcuts` has a handler for, and Enter where a row has a link). A page without a search has
+  no `/` there, a run without neighbours no `j` / `k`. Paging keys count as available whenever the
+  list has loaded, even on its only page. The other scopes are listed whole, as reference.
+- On a list the row and paging keys do nothing while the table is busy (`aria-busy`): the rows and
+  the page count on screen answer for the previous view. A row is reached by focusing its own link,
+  so the focus ring, Enter and a screen reader are those of any link. At the first and last row, and
+  on the first and last page, the key does nothing: the list does not wrap and does not turn the
+  page for a row key.
+- A control that has a shortcut says so with `aria-keyshortcuts`, written by `ariaKeyShortcuts(id)`
+  (`Meta+K` or `Control+K`, `/`, `]`), and draws its key with `keyCaps(id)`. Never type a key as a
+  string. The attribute cannot say "one key, then another", so a sequence has none.
+
+To add a shortcut:
+
+1. Add its entry to `lib/shortcuts.ts`. A single key, a `mod+` key only if it must work in a field,
+   or a sequence starting with `g`. The table test fails when two shortcuts that can be active
+   together share keys, when a key is both single and the start of a sequence, or when anything
+   but the palette has a modifier.
+2. Bind it by id with `useShortcuts`, in the component that owns what it does. A shortcut with no
+   handler is off. If the browser does it itself (Enter on a link), mark the entry `native`: it is
+   listed and cannot be bound.
+3. A page with shortcuts of its own sets `shortcuts` on its route (`app/routes.tsx`), so the help
+   puts that scope first.
+4. Add its proof to `proofs` in `app/shortcuts.test.tsx`; the object is typed by the table, so an
+   entry with no proof does not compile.
+5. If the shortcut acts on data a query returns, make it do nothing while that data is a
+   placeholder.
+
+What the set avoids, and why:
+
+- Browser keys: no shortcut uses `Ctrl`/`⌘` with a letter but the palette's `K` (which the browser
+  binds to its address or search bar in some browsers, and which the page takes only while the
+  dashboard is open), no `Alt`/`Option` letter (menus, and a typed character on a Mac), no
+  `Space`, `Backspace`, arrow, Home/End, Page or function key, and no `'`, which Firefox uses for
+  quick find of links. `/` is Firefox's quick find too: it is taken only on a list that has a search
+  field, and left to the browser on every other page.
+- Screen readers: as commonly configured, NVDA and JAWS in their browse modes use single letters
+  (`h`, `1`-`6`, `k`, `l`, `t`, `f`, `b`, `g`, `u`, ...) to move through the page, and VoiceOver
+  has a single-key quick nav setting, so a single-letter shortcut may not reach the page in those
+  modes; it does in focus or forms mode, or with the reader's pass-through key. No shortcut is the only way to do anything: each has a visible link or
+  button (the row link, the paging and step buttons, the sidebar, the back link, the palette's
+  button and its Keyboard shortcuts action).
+- Gmail-style `g` sequences are used on purpose, for going to a page; the sequence is only started
+  where a single `g` would not be typed text.
+- Layouts: `?` needs Shift on a US keyboard and the shortcut is the character, so it works on a
+  layout that types it with Shift. A layout that types `?`, `[` or `]` with AltGr reports Ctrl+Alt
+  (or Option on a Mac), which no shortcut accepts, so the key is rejected there; the buttons
+  (paging, the palette's Keyboard shortcuts action) are the way.
 
 ## The catalogue
 

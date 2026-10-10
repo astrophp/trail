@@ -9,7 +9,7 @@ import {
     type SortingState,
 } from '@tanstack/react-table'
 import { ArrowDownIcon, ArrowUpDownIcon, ArrowUpIcon } from 'lucide-react'
-import { useMemo, type ReactNode } from 'react'
+import { useMemo, type ReactNode, type Ref } from 'react'
 import { TableBusyContext } from '@/components/patterns/table-busy'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -159,6 +159,8 @@ type DataTableProps<TData extends RowData> = {
      */
     empty?: ReactNode
     className?: string
+    /** The table's card, for a caller that looks inside it (the list shortcuts find the rows there). */
+    ref?: Ref<HTMLDivElement>
 }
 
 /**
@@ -184,6 +186,7 @@ export function DataTable<TData extends RowData>({
     busy = false,
     empty,
     className,
+    ref,
 }: DataTableProps<TData>) {
     const sorting = useMemo<SortingState>(
         () => [{ id: sort.id, desc: sort.desc }],
@@ -222,6 +225,7 @@ export function DataTable<TData extends RowData>({
     return (
         <TableBusyContext value={busy}>
             <div
+                ref={ref}
                 data-slot="data-table"
                 className={cn(
                     'overflow-hidden rounded-xl border bg-card text-card-foreground',

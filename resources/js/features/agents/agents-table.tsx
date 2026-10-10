@@ -1,4 +1,4 @@
-import { useMemo, type ReactNode } from 'react'
+import { useMemo, type ReactNode, type Ref } from 'react'
 import { agentSorts, type AgentSort } from '@/api/agents'
 import type { Agent } from '@/api/types'
 import { DataTable } from '@/components/patterns/data-table'
@@ -25,6 +25,8 @@ type AgentsTableProps = {
     empty?: ReactNode
     footer?: ReactNode
     className?: string
+    /** The table's card; see `DataTable`. */
+    ref?: Ref<HTMLDivElement>
 }
 
 /**
@@ -45,6 +47,7 @@ export function AgentsTable({
     empty,
     footer,
     className,
+    ref,
 }: AgentsTableProps) {
     const sortable = onSortChange !== undefined
     const columns = useMemo(
@@ -54,6 +57,7 @@ export function AgentsTable({
 
     return (
         <DataTable
+            ref={ref}
             loading={loading}
             skeletonRows={skeletonRows}
             busy={busy}

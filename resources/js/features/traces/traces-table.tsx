@@ -1,5 +1,5 @@
 import { SearchXIcon } from 'lucide-react'
-import type { RefObject } from 'react'
+import { useRef, type RefObject } from 'react'
 import { traceSorts } from '@/api/traces'
 import { DataTable } from '@/components/patterns/data-table'
 import { EmptyState } from '@/components/patterns/empty-state'
@@ -10,6 +10,7 @@ import { traceColumns } from '@/features/traces/trace-columns'
 import { useTraceList } from '@/features/traces/use-trace-list'
 import { useTraces } from '@/features/traces/use-traces'
 import { useFocusHandoff } from '@/hooks/use-focus-handoff'
+import { pageShortcuts, useListShortcuts } from '@/hooks/use-list-shortcuts'
 import { useListStatus } from '@/hooks/use-list-status'
 import { toApiSort, toTableSort } from '@/lib/table-sort'
 
@@ -43,6 +44,22 @@ export function TracesTable({
     // The retry button, or the button of a no-match state, goes away when rows replace it.
     useFocusHandoff(failed || (empty && hasFilters))
 
+    const tableRef = useRef<HTMLDivElement>(null)
+
+    useListShortcuts({
+        table: tableRef,
+        search: searchRef,
+        // The page the rows on screen belong to, not the one the URL has moved to.
+        pages:
+            data === undefined || loading
+                ? undefined
+                : {
+                      page: data.pagination.page,
+                      last: data.pagination.last_page,
+                      go: setPage,
+                  },
+    })
+
     if (failed) {
         return (
             <ErrorState
@@ -57,6 +74,7 @@ export function TracesTable({
 
     return (
         <DataTable
+            ref={tableRef}
             loading={loading}
             busy={isPlaceholderData}
             columns={traceColumns}
@@ -103,6 +121,7 @@ export function TracesTable({
                         total={data.pagination.total}
                         lastPage={data.pagination.last_page}
                         onPageChange={setPage}
+                        shortcuts={pageShortcuts()}
                         noun={{ one: 'trace', other: 'traces' }}
                     />
                 )

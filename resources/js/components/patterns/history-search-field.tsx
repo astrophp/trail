@@ -14,6 +14,8 @@ type HistorySearchFieldProps = {
     inputRef: RefObject<HTMLInputElement | null>
     placeholder: string
     'aria-label': string
+    /** The key that focuses the box, drawn in it while it is empty; see `SearchField`. The caller binds it. */
+    shortcutHint?: string
     className?: string
 }
 
@@ -39,6 +41,7 @@ export function HistorySearchField({
     inputRef,
     placeholder,
     'aria-label': ariaLabel,
+    shortcutHint,
     className,
 }: HistorySearchFieldProps) {
     const { key } = useLocation()
@@ -119,6 +122,7 @@ export function HistorySearchField({
             aria-label={ariaLabel}
             maxLength={searchLength}
             inputRef={inputRef}
+            shortcutHint={shortcutHint}
             className={className}
             onCompositionStart={() => {
                 composing.current = true

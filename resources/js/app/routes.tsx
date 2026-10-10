@@ -1,16 +1,11 @@
-import {
-    BotIcon,
-    ChartColumnIcon,
-    LayoutDashboardIcon,
-    ListTreeIcon,
-    MessageSquareIcon,
-    type LucideIcon,
-} from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import type { ReactElement } from 'react'
 import { matchPath } from 'react-router'
 import { agentPagePath } from '@/lib/agent-path'
 import { comparePath } from '@/lib/compare-path'
 import { transcriptPath } from '@/lib/conversation-path'
+import { navPage, type Section } from '@/lib/nav-pages'
+import type { ShortcutScope } from '@/lib/shortcuts'
 import { AgentPage } from '@/pages/agent-page'
 import { AgentsPage } from '@/pages/agents-page'
 import { ComparePage } from '@/pages/compare-page'
@@ -22,8 +17,7 @@ import { TracePage } from '@/pages/trace-page'
 import { TracesPage } from '@/pages/traces-page'
 import { UsagePage } from '@/pages/usage-page'
 
-export type Section =
-    'overview' | 'traces' | 'conversations' | 'agents' | 'usage'
+export type { Section }
 
 export type RouteDef = {
     /** The route's path, relative to the dashboard's base path. */
@@ -33,6 +27,8 @@ export type RouteDef = {
     section: Section | null
     /** The path of the page this one sits under in the breadcrumb. */
     parent?: string
+    /** The page's own shortcuts: the scope of `lib/shortcuts` that applies here besides `everywhere`. */
+    shortcuts?: Exclude<ShortcutScope, 'everywhere'>
     /** Present on the pages that have a navigation item of their own. */
     icon?: LucideIcon
     /** The page itself. */
@@ -45,18 +41,13 @@ export type RouteDef = {
  */
 export const routeTable: RouteDef[] = [
     {
-        path: '/',
-        title: 'Overview',
+        ...navPage('overview'),
         element: <OverviewPage />,
-        section: 'overview',
-        icon: LayoutDashboardIcon,
     },
     {
-        path: '/traces',
-        title: 'Traces',
+        ...navPage('traces'),
+        shortcuts: 'list',
         element: <TracesPage />,
-        section: 'traces',
-        icon: ListTreeIcon,
     },
     {
         // Before the run page, so `compare` is never read as a run's id.
@@ -70,29 +61,27 @@ export const routeTable: RouteDef[] = [
         path: '/traces/:traceId',
         title: 'Trace',
         element: <TracePage />,
+        shortcuts: 'trace',
         section: 'traces',
         parent: '/traces',
     },
     {
-        path: '/conversations',
-        title: 'Conversations',
+        ...navPage('conversations'),
+        shortcuts: 'list',
         element: <ConversationsPage />,
-        section: 'conversations',
-        icon: MessageSquareIcon,
     },
     {
         path: transcriptPath,
         title: 'Conversation',
         element: <ConversationPage />,
+        shortcuts: 'conversation',
         section: 'conversations',
         parent: '/conversations',
     },
     {
-        path: '/agents',
-        title: 'Agents',
+        ...navPage('agents'),
+        shortcuts: 'list',
         element: <AgentsPage />,
-        section: 'agents',
-        icon: BotIcon,
     },
     {
         // The agent's name travels in the query, so one path serves every name.
@@ -103,11 +92,9 @@ export const routeTable: RouteDef[] = [
         parent: '/agents',
     },
     {
-        path: '/usage',
-        title: 'Usage & cost',
+        ...navPage('usage'),
+        shortcuts: 'list',
         element: <UsagePage />,
-        section: 'usage',
-        icon: ChartColumnIcon,
     },
 ]
 

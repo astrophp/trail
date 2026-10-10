@@ -23,6 +23,23 @@ describe('resolveRoute', () => {
         expect(resolveRoute(pathname)).toMatchObject({ section, title })
     })
 
+    it.each([
+        ['/', undefined],
+        ['/traces', 'list'],
+        ['/conversations', 'list'],
+        ['/agents', 'list'],
+        ['/usage', 'list'],
+        ['/traces/abc', 'trace'],
+        ['/conversations/transcript', 'conversation'],
+        ['/traces/compare', undefined],
+        ['/agents/agent', undefined],
+    ])(
+        '%s has the %s shortcuts besides the ones everywhere',
+        (pathname, scope) => {
+            expect(resolveRoute(pathname).shortcuts).toBe(scope)
+        },
+    )
+
     it('has no section for an unknown path, however close', () => {
         for (const pathname of [
             '/nope',

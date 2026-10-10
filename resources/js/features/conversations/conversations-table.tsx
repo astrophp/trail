@@ -1,5 +1,5 @@
 import { MessageSquareIcon, SearchXIcon } from 'lucide-react'
-import type { RefObject } from 'react'
+import { useRef, type RefObject } from 'react'
 import { conversationSorts } from '@/api/conversations'
 import { DataTable } from '@/components/patterns/data-table'
 import { EmptyState } from '@/components/patterns/empty-state'
@@ -10,6 +10,7 @@ import { conversationColumns } from '@/features/conversations/conversation-colum
 import { useConversationList } from '@/features/conversations/use-conversation-list'
 import { useConversations } from '@/features/conversations/use-conversations'
 import { useFocusHandoff } from '@/hooks/use-focus-handoff'
+import { pageShortcuts, useListShortcuts } from '@/hooks/use-list-shortcuts'
 import { useListStatus } from '@/hooks/use-list-status'
 import { toApiSort, toTableSort } from '@/lib/table-sort'
 
@@ -55,6 +56,22 @@ export function ConversationsTable({
 
     useFocusHandoff(failed || (empty && hasFilters && !onlyFailures))
 
+    const tableRef = useRef<HTMLDivElement>(null)
+
+    useListShortcuts({
+        table: tableRef,
+        search: searchRef,
+        // The page the rows on screen belong to, not the one the URL has moved to.
+        pages:
+            data === undefined || loading
+                ? undefined
+                : {
+                      page: data.pagination.page,
+                      last: data.pagination.last_page,
+                      go: setPage,
+                  },
+    })
+
     if (failed) {
         return (
             <ErrorState
@@ -70,6 +87,7 @@ export function ConversationsTable({
     return (
         <div className={className}>
             <DataTable
+                ref={tableRef}
                 loading={loading}
                 busy={isPlaceholderData}
                 columns={conversationColumns}
@@ -123,6 +141,7 @@ export function ConversationsTable({
                             total={data.pagination.total}
                             lastPage={data.pagination.last_page}
                             onPageChange={setPage}
+                            shortcuts={pageShortcuts()}
                             noun={{
                                 one: 'conversation',
                                 other: 'conversations',

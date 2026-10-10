@@ -25,6 +25,8 @@ Trail does not do today, see [Known limits](docs/limits.md).
 - Agents: reliability, latency and cost per agent.
 - Usage & cost: breakdowns by model, provider and agent, price management, and a spend
   projection.
+- Command palette: ⌘K to jump to a page or find a run, a conversation or an agent.
+- Keyboard shortcuts: one set across the dashboard, listed by `?`.
 
 **Operations**
 
