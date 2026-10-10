@@ -2,6 +2,7 @@ import type { RefObject } from 'react'
 import { HistorySearchField } from '@/components/patterns/history-search-field'
 import { SelectFilter } from '@/components/patterns/select-filter'
 import { useConversationList } from '@/features/conversations/use-conversation-list'
+import { keyCaps } from '@/lib/shortcuts'
 import { cn } from '@/lib/utils'
 
 type ConversationFiltersProps = {
@@ -29,6 +30,7 @@ export function ConversationFilters({
                 aria-label="Search conversations"
                 value={list.search}
                 inputRef={searchRef}
+                shortcutHint={keyCaps('search')[0]}
                 onCommit={(search, options) => list.setSearch(search, options)}
                 className="mr-1"
             />

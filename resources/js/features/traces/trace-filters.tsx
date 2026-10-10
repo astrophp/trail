@@ -4,6 +4,7 @@ import { HistorySearchField } from '@/components/patterns/history-search-field'
 import { SelectFilter } from '@/components/patterns/select-filter'
 import { ToggleFilter } from '@/components/patterns/toggle-filter'
 import { useTraceList } from '@/features/traces/use-trace-list'
+import { keyCaps } from '@/lib/shortcuts'
 import { cn } from '@/lib/utils'
 
 type TraceFiltersProps = {
@@ -36,6 +37,7 @@ export function TraceFilters({
                 aria-label="Search runs"
                 value={list.search}
                 inputRef={searchRef}
+                shortcutHint={keyCaps('search')[0]}
                 onCommit={(search, options) => list.setSearch(search, options)}
                 className="mr-1"
             />

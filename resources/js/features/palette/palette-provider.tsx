@@ -6,6 +6,7 @@ import {
     PaletteContext,
     type PaletteControls,
 } from '@/features/palette/palette-context'
+import { useShortcutHelp } from '@/hooks/use-shortcut-help'
 import { usePaletteShortcut } from '@/features/palette/use-palette-shortcut'
 
 /**
@@ -21,6 +22,7 @@ export function PaletteProvider({ children }: { children: ReactNode }) {
     const [open, setOpen] = useState(false)
     const [text, setText] = useState('')
     const navigate = useNavigate()
+    const help = useShortcutHelp()
     const openedOn = useRef('')
     const returnTo = useRef<HTMLElement | null>(null)
 
@@ -45,6 +47,15 @@ export function PaletteProvider({ children }: { children: ReactNode }) {
     }
 
     usePaletteShortcut(() => change(!open))
+
+    // The help takes over the focus the palette was going to give back, and gives it back itself.
+    function showHelp() {
+        const from = returnTo.current
+
+        returnTo.current = null
+        change(false)
+        help.show(from)
+    }
 
     const controls: PaletteControls = {
         open,
@@ -78,6 +89,7 @@ export function PaletteProvider({ children }: { children: ReactNode }) {
                     go={go}
                     followed={() => change(false)}
                     close={() => change(false)}
+                    showHelp={showHelp}
                 />
             </CommandPalette>
         </PaletteContext>

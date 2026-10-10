@@ -12,8 +12,3 @@ export function isApplePlatform(): boolean {
 
     return /mac|iphone|ipad|ipod/i.test(platform)
 }
-
-/** The shortcut that opens the command palette, as it is written on the platform: `⌘K` or `Ctrl K`. */
-export function paletteShortcutLabel(): string {
-    return isApplePlatform() ? '⌘K' : 'Ctrl K'
-}

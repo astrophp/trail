@@ -1,4 +1,4 @@
-import { LinkIcon, SunMoonIcon } from 'lucide-react'
+import { KeyboardIcon, LinkIcon, SunMoonIcon } from 'lucide-react'
 import { useLocation, type To } from 'react-router'
 import { failureMessage } from '@/api/client'
 import { searchMinimum } from '@/api/search'
@@ -15,6 +15,7 @@ import {
 } from '@/components/patterns/command-palette'
 import { useCopyLink } from '@/components/patterns/copy-link-button'
 import { Button } from '@/components/ui/button'
+import { Kbd } from '@/components/ui/kbd'
 import { SearchGroups } from '@/features/palette/search-groups'
 import {
     usePaletteSearch,
@@ -24,6 +25,7 @@ import { useTheme } from '@/hooks/use-theme'
 import { useTimeRange } from '@/hooks/use-time-range'
 import { navPages } from '@/lib/nav-pages'
 import { normalizeSearch } from '@/lib/search'
+import { keyCaps } from '@/lib/shortcuts'
 import { timeRangeLabels } from '@/lib/time-range'
 import type { SearchResponse } from '@/api/types'
 
@@ -36,6 +38,8 @@ type PaletteBodyProps = {
     followed: () => void
     /** An action was run: close. */
     close: () => void
+    /** Close, and open the keyboard shortcuts help. */
+    showHelp: () => void
 }
 
 const matches = (label: string, needle: string) =>
@@ -123,7 +127,13 @@ function rangeLine(range: SearchResponse['range']): string {
  * them what `GET /api/search` found for it. It exists only while the palette is open, so closing
  * it ends its request and forgets its state.
  */
-export function PaletteBody({ text, go, followed, close }: PaletteBodyProps) {
+export function PaletteBody({
+    text,
+    go,
+    followed,
+    close,
+    showHelp,
+}: PaletteBodyProps) {
     const [range] = useTimeRange()
     const query = normalizeSearch(text)
     const search = usePaletteSearch(query, range)
@@ -158,7 +168,11 @@ export function PaletteBody({ text, go, followed, close }: PaletteBodyProps) {
                         ))}
                     </CommandPaletteGroup>
                 )}
-                <ActionGroup needle={needle} close={close} />
+                <ActionGroup
+                    needle={needle}
+                    close={close}
+                    showHelp={showHelp}
+                />
                 {search.phase === 'ready' ? (
                     <SearchGroups
                         response={search.response}
@@ -203,7 +217,15 @@ export function PaletteBody({ text, go, followed, close }: PaletteBodyProps) {
 }
 
 /** The small actions that need no confirmation, filtered by the text like the pages. */
-function ActionGroup({ needle, close }: { needle: string; close: () => void }) {
+function ActionGroup({
+    needle,
+    close,
+    showHelp,
+}: {
+    needle: string
+    close: () => void
+    showHelp: () => void
+}) {
     const { resolvedTheme, setTheme } = useTheme()
     const { pathname, search } = useLocation()
     const copyLink = useCopyLink(`${pathname}${search}`)
@@ -222,6 +244,15 @@ function ActionGroup({ needle, close }: { needle: string; close: () => void }) {
             icon: <LinkIcon />,
             run: () => void copyLink(),
         },
+        {
+            value: 'action:shortcuts',
+            label: 'Keyboard shortcuts',
+            keywords: 'keys hotkeys help',
+            icon: <KeyboardIcon />,
+            // Hands the focus the palette would return on to the help (the close below is then a second one).
+            run: showHelp,
+            keys: keyCaps('help'),
+        },
     ].filter(
         ({ label, keywords }) =>
             matches(label, needle) || matches(keywords, needle),
@@ -233,7 +264,7 @@ function ActionGroup({ needle, close }: { needle: string; close: () => void }) {
 
     return (
         <CommandPaletteGroup heading="Actions">
-            {actions.map(({ value, label, icon, run }) => (
+            {actions.map(({ value, label, icon, run, keys }) => (
                 <CommandPaletteItem
                     key={value}
                     value={value}
@@ -242,7 +273,19 @@ function ActionGroup({ needle, close }: { needle: string; close: () => void }) {
                         close()
                     }}
                 >
-                    <CommandPaletteRow icon={icon} meta="Action">
+                    <CommandPaletteRow
+                        icon={icon}
+                        meta={
+                            <>
+                                {keys?.map((key) => (
+                                    <Kbd key={key} aria-hidden="true">
+                                        {key}
+                                    </Kbd>
+                                ))}
+                                Action
+                            </>
+                        }
+                    >
                         {label}
                     </CommandPaletteRow>
                 </CommandPaletteItem>

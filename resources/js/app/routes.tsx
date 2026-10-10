@@ -5,6 +5,7 @@ import { agentPagePath } from '@/lib/agent-path'
 import { comparePath } from '@/lib/compare-path'
 import { transcriptPath } from '@/lib/conversation-path'
 import { navPage, type Section } from '@/lib/nav-pages'
+import type { ShortcutScope } from '@/lib/shortcuts'
 import { AgentPage } from '@/pages/agent-page'
 import { AgentsPage } from '@/pages/agents-page'
 import { ComparePage } from '@/pages/compare-page'
@@ -26,6 +27,8 @@ export type RouteDef = {
     section: Section | null
     /** The path of the page this one sits under in the breadcrumb. */
     parent?: string
+    /** The page's own shortcuts: the scope of `lib/shortcuts` that applies here besides `everywhere`. */
+    shortcuts?: Exclude<ShortcutScope, 'everywhere'>
     /** Present on the pages that have a navigation item of their own. */
     icon?: LucideIcon
     /** The page itself. */
@@ -43,6 +46,7 @@ export const routeTable: RouteDef[] = [
     },
     {
         ...navPage('traces'),
+        shortcuts: 'list',
         element: <TracesPage />,
     },
     {
@@ -57,22 +61,26 @@ export const routeTable: RouteDef[] = [
         path: '/traces/:traceId',
         title: 'Trace',
         element: <TracePage />,
+        shortcuts: 'trace',
         section: 'traces',
         parent: '/traces',
     },
     {
         ...navPage('conversations'),
+        shortcuts: 'list',
         element: <ConversationsPage />,
     },
     {
         path: transcriptPath,
         title: 'Conversation',
         element: <ConversationPage />,
+        shortcuts: 'conversation',
         section: 'conversations',
         parent: '/conversations',
     },
     {
         ...navPage('agents'),
+        shortcuts: 'list',
         element: <AgentsPage />,
     },
     {
@@ -85,6 +93,7 @@ export const routeTable: RouteDef[] = [
     },
     {
         ...navPage('usage'),
+        shortcuts: 'list',
         element: <UsagePage />,
     },
 ]

@@ -8,7 +8,7 @@ import { HistorySearchField } from '@/components/patterns/history-search-field'
 const onCommit = vi.fn()
 
 /** The field wired the way a list page wires it: the URL's `q` is the value, a commit writes it. */
-function Harness() {
+function Harness({ shortcutHint }: { shortcutHint?: string }) {
     const [params] = useSearchParams()
     const navigate = useNavigate()
     const input = useRef<HTMLInputElement>(null)
@@ -18,6 +18,7 @@ function Harness() {
             <HistorySearchField
                 aria-label="Search things"
                 placeholder="Search things"
+                shortcutHint={shortcutHint}
                 value={params.get('q') ?? ''}
                 inputRef={input}
                 onCommit={(q, options) => {
@@ -37,11 +38,11 @@ const box = () => screen.getByRole('searchbox', { name: 'Search things' })
 const typing = () => userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
 const pause = (ms = 300) => act(() => vi.advanceTimersByTimeAsync(ms))
 
-function renderAt(url = '/') {
+function renderAt(url = '/', shortcutHint?: string) {
     window.history.replaceState({}, '', url)
     render(
         <BrowserRouter>
-            <Harness />
+            <Harness shortcutHint={shortcutHint} />
         </BrowserRouter>,
     )
 }
@@ -56,6 +57,25 @@ afterEach(() => {
 })
 
 describe('HistorySearchField', () => {
+    it('shows the key that focuses it while it is empty, and tells assistive technology', async () => {
+        const user = typing()
+        renderAt('/', '/')
+
+        expect(box()).toHaveAttribute('aria-keyshortcuts', '/')
+        expect(screen.getByText('/')).toBeInTheDocument()
+
+        await user.type(box(), 'a')
+
+        expect(screen.queryByText('/')).not.toBeInTheDocument()
+        expect(box()).toHaveAttribute('aria-keyshortcuts', '/')
+    })
+
+    it('says nothing of a key when it is given none', () => {
+        renderAt()
+
+        expect(box()).not.toHaveAttribute('aria-keyshortcuts')
+    })
+
     it('holds the box to the length the API reads', () => {
         renderAt()
 
