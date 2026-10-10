@@ -30,6 +30,29 @@ const previous = () => screen.getByRole('button', { name: 'Previous page' })
 const next = () => screen.getByRole('button', { name: 'Next page' })
 
 describe('Pagination', () => {
+    it('tells assistive technology the keys of its buttons when it is given them', () => {
+        const view = renderPagination({
+            shortcuts: { previous: '[', next: ']' },
+        })
+
+        expect(previous()).toHaveAttribute('aria-keyshortcuts', '[')
+        expect(next()).toHaveAttribute('aria-keyshortcuts', ']')
+
+        view.rerender(
+            <Pagination
+                page={1}
+                perPage={12}
+                total={1284}
+                lastPage={107}
+                noun={noun}
+                onPageChange={() => {}}
+            />,
+        )
+
+        expect(previous()).not.toHaveAttribute('aria-keyshortcuts')
+        expect(next()).not.toHaveAttribute('aria-keyshortcuts')
+    })
+
     it('is a navigation landmark whose summary is a live region', () => {
         renderPagination({ className: 'extra' })
 

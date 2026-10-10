@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { isApplePlatform, paletteShortcutLabel } from '@/lib/platform'
+import { isApplePlatform } from '@/lib/platform'
 
 afterEach(() => {
     vi.restoreAllMocks()
@@ -14,14 +14,12 @@ describe('isApplePlatform', () => {
         platformIs(platform)
 
         expect(isApplePlatform()).toBe(true)
-        expect(paletteShortcutLabel()).toBe('⌘K')
     })
 
     it.each(['Win32', 'Linux x86_64'])('is false on %s', (platform) => {
         platformIs(platform)
 
         expect(isApplePlatform()).toBe(false)
-        expect(paletteShortcutLabel()).toBe('Ctrl K')
     })
 
     it('prefers the platform the browser reports in userAgentData', () => {

@@ -561,6 +561,7 @@ describe('a short text', () => {
             'Usage & costPage',
             'Toggle themeAction',
             'Copy link to this pageAction',
+            'Keyboard shortcuts?Action',
         ])
         expect(
             within(palette()).queryByRole('group', { name: 'Runs' }),

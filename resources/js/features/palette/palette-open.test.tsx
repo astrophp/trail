@@ -238,7 +238,7 @@ describe('opening and closing', () => {
 })
 
 describe('the pages and the actions', () => {
-    it('lists the five pages with the sidebar’s names, then the two actions, before anything is typed', async () => {
+    it('lists the five pages with the sidebar’s names, then the three actions, before anything is typed', async () => {
         const user = clock()
         const fetchMock = mockSearch(() => json(searchFor('')))
         renderApp('/')
@@ -254,6 +254,7 @@ describe('the pages and the actions', () => {
             'Usage & costPage',
             'Toggle themeAction',
             'Copy link to this pageAction',
+            'Keyboard shortcuts?Action',
         ])
         expect(
             within(palette())

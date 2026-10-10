@@ -11,6 +11,7 @@ import {
 } from '@/features/trace/use-neighbours'
 import { useShortcuts } from '@/hooks/use-shortcuts'
 import { withTurn } from '@/lib/conversation-path'
+import { ariaKeyShortcuts, keyCaps, type ShortcutId } from '@/lib/shortcuts'
 import { cn } from '@/lib/utils'
 
 type TraceStepperProps = {
@@ -27,14 +28,18 @@ const stepped = { stepped: true }
 
 type Side = {
     label: string
-    hint: string
+    /** The shortcut that takes the step: its key is drawn beside the control and exposed on it. */
+    shortcut: ShortcutId
     /** Where the step goes; `null` when there is no run to go to. */
     to: To | null
     icon: typeof ChevronLeftIcon
 }
 
 /** One step: a real link when there is a run to go to, an inert control that says so when there is not. */
-function Step({ label, hint, to, icon: Icon }: Side) {
+function Step({ label, shortcut, to, icon: Icon }: Side) {
+    const hint = keyCaps(shortcut).join(' ')
+    const keys = ariaKeyShortcuts(shortcut)
+
     return (
         <span className="flex items-center gap-1.5">
             {to === null ? (
@@ -43,7 +48,7 @@ function Step({ label, hint, to, icon: Icon }: Side) {
                     variant="outline"
                     size="icon-sm"
                     aria-label={label}
-                    aria-keyshortcuts={hint}
+                    aria-keyshortcuts={keys}
                     aria-disabled="true"
                     className="pointer-events-none opacity-50"
                 >
@@ -55,7 +60,7 @@ function Step({ label, hint, to, icon: Icon }: Side) {
                         to={to}
                         state={stepped}
                         aria-label={label}
-                        aria-keyshortcuts={hint}
+                        aria-keyshortcuts={keys}
                         title={`${label} (${hint})`}
                     >
                         <Icon aria-hidden="true" />
@@ -125,7 +130,10 @@ function Steps({
     const go = (to: To | null) =>
         to === null ? undefined : () => void navigate(to, { state: stepped })
 
-    useShortcuts({ k: go(back), j: go(forward) })
+    useShortcuts({
+        'trace-previous': go(back),
+        'trace-next': go(forward),
+    })
 
     return (
         <div
@@ -145,13 +153,13 @@ function Steps({
             )}
             <Step
                 label={words.previous}
-                hint="k"
+                shortcut="trace-previous"
                 to={back}
                 icon={ChevronLeftIcon}
             />
             <Step
                 label={words.next}
-                hint="j"
+                shortcut="trace-next"
                 to={forward}
                 icon={ChevronRightIcon}
             />

@@ -69,7 +69,7 @@ export const searched = (url: string) =>
     new URL(url, 'http://x').searchParams.get('q')
 
 /** The lists the pages of the dashboard ask for, as their own tests answer them; the overview gets its default. */
-const otherPages: Handler = (url) =>
+export const otherPages: Handler = (url) =>
     url.includes('/api/overview')
         ? json(
               contractFixture(

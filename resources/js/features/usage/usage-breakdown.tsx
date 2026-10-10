@@ -1,4 +1,5 @@
 import type { Leader } from '@/lib/refresh-policy'
+import { useRef } from 'react'
 import { ChartColumnIcon } from 'lucide-react'
 import { failureMessage } from '@/api/client'
 import { usageExportUrl, type UsageGrouping } from '@/api/usage'
@@ -16,6 +17,7 @@ import { UsageTable } from '@/features/usage/usage-table'
 import { useUsageBreakdown } from '@/features/usage/use-usage-breakdown'
 import { useUsageList } from '@/features/usage/use-usage-list'
 import { useFocusHandoff } from '@/hooks/use-focus-handoff'
+import { pageShortcuts, useListShortcuts } from '@/hooks/use-list-shortcuts'
 import { useListStatus } from '@/hooks/use-list-status'
 import { formatCount } from '@/lib/format'
 import type {} from '@/lib/refresh-policy'
@@ -73,6 +75,21 @@ export function UsageBreakdown({
 
     // The retry button, or the one of the refresh note, goes away when the rows load.
     useFocusHandoff(failed || (isError && !refreshNoted))
+
+    const tableRef = useRef<HTMLDivElement>(null)
+
+    // The breakdown has no search field: `/` has nothing to focus here.
+    useListShortcuts({
+        table: tableRef,
+        pages:
+            data === undefined || loading
+                ? undefined
+                : {
+                      page: data.pagination.page,
+                      last: data.pagination.last_page,
+                      go: setPage,
+                  },
+    })
 
     // Counts and notes outside the dimmed table are the current answer's, never the previous view's.
     const current = data !== undefined && !isPlaceholderData && !loading
@@ -142,6 +159,7 @@ export function UsageBreakdown({
                         ) : (
                             <>
                                 <UsageTable
+                                    ref={tableRef}
                                     rows={data?.data ?? []}
                                     by={shownBy}
                                     range={shownRange}
@@ -176,6 +194,7 @@ export function UsageBreakdown({
                                                     data.pagination.last_page
                                                 }
                                                 onPageChange={setPage}
+                                                shortcuts={pageShortcuts()}
                                                 noun={{
                                                     one: groups[shownBy],
                                                     other: `${groups[shownBy]}s`,

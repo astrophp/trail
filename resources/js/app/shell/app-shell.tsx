@@ -2,6 +2,8 @@ import { useEffect, useRef } from 'react'
 import { NavigationType, useLocation, useNavigationType } from 'react-router'
 import { AppContent } from '@/app/shell/app-content'
 import { AppSidebar } from '@/app/shell/app-sidebar'
+import { usePageShortcuts } from '@/app/shell/page-shortcuts'
+import { ShortcutHelpProvider } from '@/app/shell/shortcut-help'
 import { TopBar } from '@/app/shell/top-bar'
 import { documentTitle, resolveRoute } from '@/app/routes'
 import { ErrorBoundary } from '@/components/patterns/error-boundary'
@@ -97,6 +99,7 @@ function Frame() {
     useDocumentTitle(documentTitle(resolveRoute(pathname), pageTitle))
     useFocusPageHeading(main)
     useIgnoreSidebarShortcut()
+    usePageShortcuts()
     useReturnFocusToTrigger(trigger)
 
     return (
@@ -151,9 +154,11 @@ export function AppShell() {
             }
         >
             <PageTitleProvider>
-                <PaletteProvider>
-                    <Frame />
-                </PaletteProvider>
+                <ShortcutHelpProvider>
+                    <PaletteProvider>
+                        <Frame />
+                    </PaletteProvider>
+                </ShortcutHelpProvider>
             </PageTitleProvider>
         </SidebarProvider>
     )

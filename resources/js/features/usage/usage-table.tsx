@@ -1,4 +1,4 @@
-import { useMemo, type ReactNode } from 'react'
+import { useMemo, type ReactNode, type Ref } from 'react'
 import type { To } from 'react-router'
 import { linkRows, unlinkable } from '@/api/traces-link'
 import type { UsageBreakdownRow } from '@/api/types'
@@ -23,6 +23,8 @@ type UsageTableProps = {
     empty?: ReactNode
     footer?: ReactNode
     className?: string
+    /** The table's card; see `DataTable`. */
+    ref?: Ref<HTMLDivElement>
 }
 
 /** A name is not a row's identity on its own: a model is a provider's. */
@@ -50,6 +52,7 @@ export function UsageTable({
     empty,
     footer,
     className,
+    ref,
 }: UsageTableProps) {
     const linked = useMemo(() => linkRows(rows, range), [rows, range])
     const links = useMemo(
@@ -79,6 +82,7 @@ export function UsageTable({
 
     return (
         <DataTable
+            ref={ref}
             loading={loading}
             busy={busy}
             loadingLabel="Loading the breakdown"

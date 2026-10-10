@@ -1,6 +1,6 @@
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { useContext, type ComponentProps } from 'react'
+import { createRef, useContext, type ComponentProps } from 'react'
 import { MemoryRouter } from 'react-router'
 import { describe, expect, it, vi } from 'vitest'
 import {
@@ -69,6 +69,7 @@ function renderTable(
             | 'busy'
             | 'empty'
             | 'data'
+            | 'ref'
         >
     > = {},
 ) {
@@ -88,6 +89,19 @@ function renderTable(
 }
 
 describe('DataTable', () => {
+    it('gives the caller its card, which holds the rows', () => {
+        const ref = createRef<HTMLDivElement>()
+
+        renderTable(undefined, undefined, { ref })
+
+        expect(ref.current).toBe(
+            document.querySelector('[data-slot="data-table"]'),
+        )
+        expect(
+            ref.current?.querySelectorAll('tbody [data-slot="row-link"]'),
+        ).toHaveLength(2)
+    })
+
     it('renders the headers and cells from the column definitions', () => {
         renderTable()
 

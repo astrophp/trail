@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router'
 import { ErrorState } from '@/components/patterns/error-state'
 import { LoadedTranscript } from '@/features/conversations/loaded-transcript'
 import { TranscriptHeader } from '@/features/conversations/transcript-header'
@@ -7,7 +8,9 @@ import { TranscriptSkeleton } from '@/features/conversations/transcript-skeleton
 import { useTranscript } from '@/features/conversations/use-transcript'
 import { useFocusHandoff } from '@/hooks/use-focus-handoff'
 import { usePageTitle } from '@/hooks/use-page-title'
+import { useShortcuts } from '@/hooks/use-shortcuts'
 import { conversationIdText } from '@/lib/conversation-id'
+import { navPage } from '@/lib/nav-pages'
 import { cn } from '@/lib/utils'
 
 type TranscriptViewProps = {
@@ -45,6 +48,13 @@ function Transcript({
     // itself, is somewhere in what is loaded and loads nothing.
     const [anchor, setAnchor] = useState(turn)
     const transcript = useTranscript(id, anchor)
+    const navigate = useNavigate()
+
+    // The breadcrumb's "Conversations": a conversation is opened from the list without a way back
+    // to carry, so the way back is the list itself.
+    useShortcuts({
+        'conversation-back': () => void navigate(navPage('conversations').path),
+    })
     const { conversation } = transcript
     // The id the response returns is the conversation's own spelling; until then, the address's.
     const shownId = conversation?.id ?? id

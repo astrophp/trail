@@ -12,6 +12,11 @@ type PaginationProps = {
     onPageChange: (page: number) => void
     /** What is being paged through, in both numbers: `{ one: 'trace', other: 'traces' }`. */
     noun: { one: string; other: string }
+    /**
+     * The shortcut keys of the two buttons, as `aria-keyshortcuts` writes them (`[`). The caller
+     * binds the keys; the buttons only say they have them.
+     */
+    shortcuts?: { previous?: string; next?: string }
     className?: string
 }
 
@@ -23,6 +28,7 @@ export function Pagination({
     lastPage,
     onPageChange,
     noun,
+    shortcuts,
     className,
 }: PaginationProps) {
     // Whatever the caller passes, show and emit only pages that exist.
@@ -67,6 +73,7 @@ export function Pagination({
                     variant="outline"
                     size="icon-sm"
                     aria-label="Previous page"
+                    aria-keyshortcuts={shortcuts?.previous}
                     aria-disabled={atStart}
                     className="size-7.5 rounded-lg aria-disabled:pointer-events-none aria-disabled:opacity-50"
                     onClick={() => {
@@ -81,6 +88,7 @@ export function Pagination({
                     variant="outline"
                     size="icon-sm"
                     aria-label="Next page"
+                    aria-keyshortcuts={shortcuts?.next}
                     aria-disabled={atEnd}
                     className="size-7.5 rounded-lg aria-disabled:pointer-events-none aria-disabled:opacity-50"
                     onClick={() => {
