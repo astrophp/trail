@@ -1,8 +1,10 @@
 <?php
 
+use Astro\Trail\Facades\Trail;
 use Astro\Trail\Storage\Models\Bookmark;
 use Astro\Trail\Storage\Models\Price;
 use Astro\Trail\Storage\Models\Trace;
+use Astro\Trail\Tests\Fixtures\Agents\AssistantAgent;
 use Astro\Trail\Tests\Fixtures\Storage\Rows;
 use Illuminate\Foundation\Testing\RefreshDatabaseState;
 use Illuminate\Support\Facades\DB;
@@ -56,3 +58,35 @@ it('migrates and writes on the configured storage connection', function () {
         ->and(Schema::connection('trail_secondary')->hasTable('trail_prices'))->toBeFalse()
         ->and(Schema::connection('trail_secondary')->hasTable('trail_bookmarks'))->toBeFalse();
 });
+
+/** A run inside a transaction on the default connection that is flushed there, then rolled back. */
+function runFlushedInsideRolledBackTransaction(): void
+{
+    AssistantAgent::fake(['Hello']);
+
+    DB::connection()->beginTransaction();
+    (new AssistantAgent)->prompt('Hi');
+    Trail::flush();
+    DB::connection()->rollBack();
+}
+
+it('loses a trace flushed inside a transaction that rolls back, when the tables are on the default connection', function () {
+    $this->artisan('migrate')->assertSuccessful();
+
+    runFlushedInsideRolledBackTransaction();
+
+    expect(DB::table('trail_traces')->count())->toBe(0);
+})->skip(fn () => DB::connection()->getDriverName() !== 'sqlite', 'the second connection is a second in-memory SQLite database');
+
+it('keeps that trace when the tables are on a connection of their own', function () {
+    config([
+        'database.connections.trail_secondary' => ['driver' => 'sqlite', 'database' => ':memory:', 'prefix' => ''],
+        'trail.storage.connection' => 'trail_secondary',
+    ]);
+    $this->artisan('migrate')->assertSuccessful();
+
+    runFlushedInsideRolledBackTransaction();
+
+    expect(DB::connection('trail_secondary')->table('trail_traces')->count())->toBe(1)
+        ->and(DB::connection('trail_secondary')->table('trail_traces')->value('status'))->toBe('completed');
+})->skip(fn () => DB::connection()->getDriverName() !== 'sqlite', 'the second connection is a second in-memory SQLite database');
