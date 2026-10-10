@@ -599,6 +599,9 @@ describe('access', function () {
         $this->app['env'] = 'production';
 
         $this->get('/trail/api/traces/export')->assertForbidden()->assertJsonStructure(['message']);
+
+        // Rolling back this test's migrations asks for confirmation in production.
+        $this->app['env'] = 'testing';
     });
 
     it('answers 404 as JSON when the dashboard is switched off', function () {

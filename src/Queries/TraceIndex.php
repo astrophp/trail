@@ -72,6 +72,43 @@ final class TraceIndex
     }
 
     /**
+     * The runs whose id is the text, then those whose id begins with it (see TraceIdPrefix), the
+     * latest first, whenever they started. At most $limit runs.
+     *
+     * @return Collection<int, Trace>
+     */
+    public function withId(string $text, int $limit): Collection
+    {
+        $found = new Collection;
+
+        if (! TraceId::isPossible($text)) {
+            return $found;
+        }
+
+        $exact = Trace::query()->select(self::COLUMNS)->whereKey($text)->first();
+
+        if ($exact !== null) {
+            $found->push($exact);
+        }
+
+        $bounds = TraceIdPrefix::bounds($text);
+
+        if ($bounds === null) {
+            return $found;
+        }
+
+        $query = Trace::query()->select(self::COLUMNS)
+            ->where('id', '>=', $bounds['from'])
+            ->when($bounds['to'] !== null, fn (Builder $query) => $query->where('id', '<', $bounds['to']))
+            ->where('id', 'like', $bounds['pattern'])
+            ->when($exact !== null, fn (Builder $query) => $query->whereKeyNot($exact?->id))
+            ->orderByDesc('started_at')->orderByDesc('id')
+            ->limit($limit);
+
+        return $found->concat($query->get())->take($limit)->values();
+    }
+
+    /**
      * The duration "slow" compares against: the nearest-rank 95th percentile of the runs in the
      * range that have a duration, whatever the other filters. Null when none has.
      */

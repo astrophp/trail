@@ -10,6 +10,7 @@ use Astro\Trail\Http\Controllers\Api\MetaController;
 use Astro\Trail\Http\Controllers\Api\OverviewController;
 use Astro\Trail\Http\Controllers\Api\PriceController;
 use Astro\Trail\Http\Controllers\Api\PriceIndexController;
+use Astro\Trail\Http\Controllers\Api\SearchController;
 use Astro\Trail\Http\Controllers\Api\TraceBookmarkController;
 use Astro\Trail\Http\Controllers\Api\TraceExportController;
 use Astro\Trail\Http\Controllers\Api\TraceIndexController;
@@ -31,6 +32,7 @@ Route::prefix('api')->middleware([RespondWithJson::class, Authorize::class])->gr
     Route::get('overview', OverviewController::class)->name('trail.api.overview');
     // Its own path, not a segment of the overview's: a route under "overview" never shadows it.
     Route::get('overview/attention', AttentionController::class)->name('trail.api.overview.attention');
+    Route::get('search', SearchController::class)->name('trail.api.search');
     Route::get('agents', AgentIndexController::class)->name('trail.api.agents.index');
     // The agent's name travels in the query: it can hold any character, a slash among them.
     Route::get('agents/show', AgentShowController::class)->name('trail.api.agents.show');

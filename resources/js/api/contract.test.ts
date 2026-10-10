@@ -44,6 +44,8 @@ import type {
     Span,
     SpanCost,
     SpanLimit,
+    SearchLimit,
+    SearchResponse,
     SpanType,
     BucketUnit,
     ErrorRate,
@@ -547,6 +549,27 @@ const agentListResponse = z.strictObject({
     agent_limit: z.strictObject({ limit: count, truncated: z.boolean() }),
 })
 
+const searchLimit = z.strictObject({ limit: count, truncated: z.boolean() })
+
+const searchResponse = z.strictObject({
+    data: z.strictObject({
+        traces: z.array(trace),
+        conversations: z.array(conversation),
+        agents: z.array(agent),
+    }),
+    query: z.strictObject({
+        q: z.string(),
+        minimum: count,
+        searched: z.boolean(),
+    }),
+    limits: z.strictObject({
+        traces: searchLimit,
+        conversations: searchLimit,
+        agents: searchLimit,
+    }),
+    range,
+})
+
 const agentResponse = z.strictObject({
     data: z.strictObject({
         agent,
@@ -931,6 +954,10 @@ describe('types', () => {
         expectTypeOf<
             z.infer<typeof conversationListResponse>
         >().toEqualTypeOf<ConversationListResponse>()
+        expectTypeOf<z.infer<typeof searchLimit>>().toEqualTypeOf<SearchLimit>()
+        expectTypeOf<
+            z.infer<typeof searchResponse>
+        >().toEqualTypeOf<SearchResponse>()
         expectTypeOf<z.infer<typeof errorRate>>().toEqualTypeOf<ErrorRate>()
         expectTypeOf<
             z.infer<typeof summary>['duration']
@@ -1385,6 +1412,34 @@ describe('tests/Contract/agents.json', () => {
         expect(agents.some((a) => (a.top_level?.runs.failed ?? 0) > 0)).toBe(
             true,
         )
+    })
+})
+
+describe('tests/Contract/search.json', () => {
+    const parsed = searchResponse.safeParse(contractFixture('search'))
+
+    it('is what the API types describe', () => {
+        expect(parsed.error?.issues).toBeUndefined()
+    })
+
+    const data = parsed.data?.data
+
+    it('has something in every group, searched for a text of the minimum length', () => {
+        expect(data?.traces.length).toBeGreaterThan(0)
+        expect(data?.conversations.length).toBeGreaterThan(0)
+        expect(data?.agents.length).toBeGreaterThan(0)
+        expect(parsed.data?.query.searched).toBe(true)
+        expect(parsed.data?.query.q.length).toBeGreaterThanOrEqual(
+            parsed.data?.query.minimum ?? Infinity,
+        )
+    })
+
+    it('holds no more in a group than its limit', () => {
+        for (const group of ['traces', 'conversations', 'agents'] as const) {
+            expect(data?.[group].length).toBeLessThanOrEqual(
+                parsed.data?.limits[group].limit ?? 0,
+            )
+        }
     })
 })
 
