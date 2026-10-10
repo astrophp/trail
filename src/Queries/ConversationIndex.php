@@ -62,6 +62,23 @@ final class ConversationIndex
     }
 
     /**
+     * The conversation whose id is the text, as the database compares text and spelt as its latest
+     * turn spells it, whenever it took place. Null when there is none. The conversation-and-start
+     * index serves it.
+     */
+    public function exact(string $id): ?string
+    {
+        if (! ConversationId::isPossible($id)) {
+            return null;
+        }
+
+        $found = Trace::query()->toBase()->where('conversation_id', $id)
+            ->orderByDesc('started_at')->limit(1)->value('conversation_id');
+
+        return is_string($found) ? $found : null;
+    }
+
+    /**
      * How many conversations the range, the agent, the user and the search leave, and how many of
      * those have a failed or incomplete turn. Neither number depends on the failed filter, so they
      * describe the same view whichever tab is selected; the list shows one of them. Read in a single

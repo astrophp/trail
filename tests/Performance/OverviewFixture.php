@@ -43,9 +43,10 @@ final class OverviewFixture
 
     /**
      * @param  bool  $spans  also fill `trail_spans`, from a random stream of its own so that the runs are the same either way
+     * @param  bool  $text  also give the runs the text the search reads, from the row's index so that the runs are the same either way
      * @return int how many runs were inserted
      */
-    public static function seed(Connection $db, int $rows, CarbonImmutable $now, int $seed = 20261007, bool $spans = false): int
+    public static function seed(Connection $db, int $rows, CarbonImmutable $now, int $seed = 20261007, bool $spans = false, bool $text = false): int
     {
         mt_srand($seed);
 
@@ -111,6 +112,10 @@ final class OverviewFixture
                 'updated_at' => $moment,
             ];
 
+            if ($text) {
+                $chunk[count($chunk) - 1] += self::text($index);
+            }
+
             if ($spanFixture !== null) {
                 array_push($spanChunk, ...$spanFixture->forRun(end($chunk), $startedAt));
             }
@@ -135,5 +140,29 @@ final class OverviewFixture
         }
 
         return $rows;
+    }
+
+    /**
+     * The text columns of a run, all from its index. About a tenth of the runs mention an invoice, a
+     * thousandth a refund, and none a "qqzzxx"; four in five belong to a conversation of four turns.
+     *
+     * @return array<string, string|null>
+     */
+    private static function text(int $index): array
+    {
+        $topics = ['order', 'shipping', 'password', 'address', 'warranty', 'discount', 'delivery', 'account', 'feedback'];
+        $topic = $topics[($index * 7) % count($topics)];
+
+        return [
+            'prompt_excerpt' => match (true) {
+                $index % 1000 === 7 => "Please refund order {$index}",
+                $index % 10 === 3 => "Where is the invoice for {$topic} {$index}?",
+                default => "Question about {$topic} number {$index}",
+            },
+            'conversation_id' => $index % 5 < 4 ? 'conversation-'.intdiv($index, 4) : null,
+            'provider' => ['openai', 'anthropic', 'google'][$index % 3],
+            'model' => ['gpt-5', 'claude-sonnet-4-5', 'gemini-2.5-pro'][$index % 3],
+            'user_id' => (string) ($index % 5000),
+        ];
     }
 }

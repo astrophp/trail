@@ -813,6 +813,122 @@ pressing first. A kind with no run in the range is absent, so a range with nothi
   `breakdown` of `[]`.
 - It is read in one query over the runs, whatever the range, and no span is read.
 
+### `GET /api/search`
+
+The few runs, conversations and agents that match a text, for a command palette. Takes `q` and a
+time range. It has no pagination: each group is cut at 5 and says whether more matched.
+
+```json
+{
+  "data": {
+    "traces": [{ "id": "…" }],
+    "conversations": [{ "id": "…" }],
+    "agents": [{ "name": "…" }]
+  },
+  "query": { "q": "refund", "minimum": 2, "searched": true },
+  "limits": {
+    "traces": { "limit": 5, "truncated": false },
+    "conversations": { "limit": 5, "truncated": false },
+    "agents": { "limit": 5, "truncated": true }
+  },
+  "range": { "preset": "24h", "from": "…", "to": "…" }
+}
+```
+
+Each item is the entity of the same name, [The trace](#the-trace), [The conversation](#the-conversation)
+and [The agent](#the-agent), as the lists return it. Nothing in it says where the dashboard shows it:
+the client builds the address from the `id` (the conversation's and the run's) or the `name`.
+
+- `q` is trimmed and may be at most 200 characters; longer is a 422, as for the lists' `search`. So is
+  an array, a NUL byte inside the text and a byte sequence that is not UTF-8. A NUL byte at either
+  end is trimmed away by the framework, as it is for the lists. A `%` or `_` in the text is taken
+  literally.
+- A `q` that is missing, empty or shorter than `query.minimum` (2) characters is not searched: the
+  answer is `200` with three empty groups and `query.searched` `false`, and nothing is read from the
+  database. `query.q` is the trimmed text that was used.
+- `limits` says, for each group, the most items it returns and whether more matched. `truncated` is
+  `true` when more than `limit` different items matched, and then the items returned are the first
+  `limit` of the group's order. `limits.conversations` is there so that the three groups look alike:
+  the conversations hold one item at most, so its `truncated` is always `false`.
+
+The runs and the agents are each a list of what matched by *id*, then what matched by *text*,
+without repeating an item that did both, cut at 5 in all. The conversations are found by id only.
+
+| Group | Matched by id, whenever it started | Matched by text, within the time range |
+| -- | -- | -- |
+| `traces` | the run whose id is `q`; then the runs whose id begins with `q`, the latest first | the runs the `search` of [`GET /api/traces`](#get-apitraces) keeps, the latest first |
+| `conversations` | the conversation whose id is `q` | none |
+| `agents` | none | the agents the `search` of [`GET /api/agents`](#get-apiagents) keeps, in that list's default order: most runs first |
+
+- A run's id is matched whole, or by its beginning when `q` is at least 8 characters, which is how
+  many characters of an id the dashboard shows before the ellipsis, and made of hexadecimal digits
+  and hyphens, which is what the SDK's ids are made of. Any other beginning is searched as text only.
+  The whole id is compared as typed, as the database compares text, as the run's own endpoint does.
+  The beginning is lowercased first, because the SDK's ids are lowercase, and then matched with
+  `LIKE`: an id stored with capital digits is found by its beginning only where the database's
+  `LIKE` ignores case (MySQL, SQLite), not on Postgres. It is always found by its whole id as the
+  database compares it, and, within the time range, by the text match, which ignores case on both
+  sides: on Postgres an uppercase `q` is not a whole-id match for a lowercase id, but the run is
+  still found as text. The reads by id take no time range, so a run from a month ago is found
+  by its id, and are served by the primary key.
+- A conversation is found by its whole id, as the database compares text, and by nothing else: not by
+  part of its id, not by a word of its turns, not by its user. Its time range does not apply either.
+  An id that could not be stored (empty, over 255 characters) is not looked up. What a conversation's
+  text would add is already there: the runs found by text carry their `conversation_id`, and the
+  search of runs matches the conversation id, the user id and the prompt excerpt.
+- A run's text is its id, agent name, provider, model, prompt excerpt, conversation id and user id,
+  as on the list. **A user is not found by name or email**: Trail stores only the user's id and type,
+  and the name and email come from the application's own users table afterwards, so only the id is
+  searched. An agent's text is its name. Case is ignored as on the lists.
+- A conversation found by its id with no turn in the range is returned like any other: its figures
+  cover all of its turns, as on the list.
+- An agent's `activity` is counted in the buckets that [`GET /api/agents`](#get-apiagents) describes
+  for the same range, which this response does not repeat: ask that endpoint for the `buckets`.
+
+**What bounds a search.** The reads by id are served by an index and cost the same however many
+runs there are. The reads by text are not: a text contained in a column is served by no index, so
+each one reads the runs that started in the time range, and nothing else bounds it. The read of
+runs goes from the newest and stops when it has enough matches, so a text found often is quick, and
+a text that matches no run reads the whole range. The read of agents groups every run of the range
+and cannot stop early. A long range is therefore the cost, and the default `24h` is the cheap one.
+The conversations are not searched by text for this reason: that read would group every run of the
+range as well, and the runs found by text already say which conversations they belong to.
+
+The endpoint runs at most 13 queries, plus one lookup of the users for each user type among the
+runs and again for the conversation: a run id, a prefix of a run id, the runs found by text, a
+conversation id, four to describe that conversation, four for the agents, and the bookmarks of the
+runs found. The count does not grow with the number of runs, conversations or agents that
+matched. It is smaller when there is nothing to describe: the four queries that describe the
+conversation run only when a conversation has the id `q`, the prefix read only when `q` can be the
+beginning of an id, the bookmarks only when runs were found, and the number of user lookups follows
+the user types among the runs and the conversation found.
+
+Measured with 1,000,000 runs spread over 14 days (about 71,000 in the last 24 hours and 500,000 in
+the last 7 days), the indexes of the migrations only and the `trail_spans` table empty, on a laptop
+with the database in a container on the same machine (Postgres 17 with its defaults, MySQL 8.4 with a
+1 GB buffer pool) and one request at a time (median of 5, in milliseconds, of the reads of the search: the runs, the conversation and the agents, without the
+bookmarks and users the response adds afterwards, which are a few more queries of about a
+millisecond each).
+Another measurement was running on the same machine for part of the time, so read them as an order
+of magnitude, not a promise:
+
+| `q` | Postgres 17, `24h` | Postgres 17, `7d` | MySQL 8.4, `24h` | MySQL 8.4, `7d` |
+| -- | -- | -- | -- | -- |
+| a word in a tenth of the runs | 50 | 132 | 225 | 414 |
+| a word in a thousandth of the runs | 70 | 281 | 252 | 420 |
+| a word in no run | 213 | 1,339 | 522 | 2,111 |
+| the beginning of a run id, 54 runs share it | 218 | 1,308 | 554 | 2,214 |
+
+What remains costly is the two reads that cannot stop early. The read of runs for a word in no
+run takes 176 ms (`24h`) and 1,140 ms (`7d`) on Postgres, and 302 ms and 1,824 ms on MySQL; it is
+most of the figures above for a word in no run and for a run id, which is also read as text. The
+read of agents is paid when the text is part of an agent's name, which the rows above do not do: for
+"assistant", which two of twelve agents contain, it took 136 ms (`24h`) and 582 ms (`7d`) on Postgres
+and 789 ms and 3,011 ms on MySQL, on top of the rest. That read is cheaper here than on an
+application with delegations, since the table of spans was empty. The reads of a run by its id or by
+its beginning, and of a conversation by its id, take about 1 ms a query, the plans showing the
+primary key or the conversation index on both databases.
+
 ### `GET /api/agents`
 
 The agents of a time range: a name under which a run started, or under which an agent span with a
