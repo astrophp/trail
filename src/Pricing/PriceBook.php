@@ -26,6 +26,8 @@ class PriceBook
 
     private ?int $loadedAt = null;
 
+    private bool $configOnly = false;
+
     public function __construct(
         private readonly Repository $config,
         private readonly ConnectionResolverInterface $resolver,
@@ -69,6 +71,16 @@ class PriceBook
         }
 
         return $best === null ? new Resolution(null, PriceSource::None) : new Resolution($best, PriceSource::Prefix);
+    }
+
+    /**
+     * From now on prices come from `trail.pricing` alone: saved prices are never read, so no query
+     * is made to find them. Used while Trail is faked; nothing turns it back off.
+     */
+    public function useConfigOnly(): void
+    {
+        $this->configOnly = true;
+        $this->flush();
     }
 
     /**
@@ -176,6 +188,10 @@ class PriceBook
      */
     private function databaseRows(): array
     {
+        if ($this->configOnly) {
+            return [];
+        }
+
         $now = Carbon::now()->getTimestamp();
 
         if ($this->rows !== null && $this->loadedAt !== null && $now - $this->loadedAt <= self::REFRESH_SECONDS) {

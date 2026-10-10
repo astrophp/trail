@@ -4,6 +4,11 @@
 was recorded without writing Trail's trace rows to a database. It returns the store, which has the
 assertions below.
 
+While faked, Trail also prices from the `trail.pricing` entries in your configuration alone. It runs
+no database query to find saved prices, so a test whose database has no `trail_prices` table reports
+nothing, and a price saved in that table is not used. This holds for the rest of the process, however
+long it runs.
+
 ```php
 use App\Ai\Agents\SupportAgent;
 use Astro\Trail\Enums\Status;
@@ -82,10 +87,8 @@ fields for one span, plus its parent, tokens, cost, input and output.
 
 ## What the fake does not replace
 
-- `Trail::fake()` replaces where traces are written. The price lookup still reads saved prices
-  from `trail_prices` on Trail's connection when a step reports usage. If that table does not
-  exist in your test database, the failure is reported to your exception handler (not thrown)
-  and the step is priced from `trail.pricing` alone.
+- The dashboard's own pages and API are not replaced: they still read the database, including the
+  saved prices and the recorded models. Only recording is faked.
 - The listeners stay registered, so recording behaves as it does in your application. To turn
   recording off in tests, set `TRAIL_ENABLED=false` in `phpunit.xml` or use
   `Trail::withoutRecording()`.
