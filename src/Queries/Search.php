@@ -5,9 +5,10 @@ namespace Astro\Trail\Queries;
 use Astro\Trail\Storage\Models\Trace;
 
 /**
- * The few runs, conversations and agents that best match a text, for a command palette. Each group
- * is read by the index behind the matching list, so it matches what that list's search matches,
- * with the ones found by id ahead of the ones found by text; only the id reads ignore the time range.
+ * The few runs, conversations and agents that best match a text, for a command palette. Runs and
+ * agents are read by the index behind the matching list, so they match what that list's search
+ * matches, the runs found by id ahead of the ones found by text; only the id reads ignore the time
+ * range. A conversation is found by its whole id only.
  *
  * Each group is cut at LIMIT and says whether more matched. A group reads LIMIT + 1 of each kind of
  * match: if the two kinds together hold more than LIMIT different items, at least LIMIT + 1 of them
@@ -38,18 +39,16 @@ final class Search
             ->unique(fn (Trace $trace) => $trace->id)
             ->values();
 
-        $ids = array_values(array_unique(array_merge(
-            array_filter([$this->conversationIndex->exact($term->text)]),
-            $this->conversationIndex->ids($range, new ConversationFilters(search: $term->text), new Page(1, $read)),
-        )));
+        // Only by id: what a conversation's text adds is reachable through the runs, which carry its id.
+        $exact = $this->conversationIndex->exact($term->text);
 
         $agents = $this->agents->list($range, new AgentFilters(search: $term->text), new Page(1, self::LIMIT));
 
         return new SearchResults(
             array_values($runs->take(self::LIMIT)->all()),
             $runs->count() > self::LIMIT,
-            $this->conversations->summaries(array_slice($ids, 0, self::LIMIT)),
-            count($ids) > self::LIMIT,
+            $this->conversations->summaries($exact === null ? [] : [$exact]),
+            false,
             $agents->agents,
             $agents->total > self::LIMIT,
         );

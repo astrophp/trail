@@ -848,15 +848,16 @@ the client builds the address from the `id` (the conversation's and the run's) o
   database. `query.q` is the trimmed text that was used.
 - `limits` says, for each group, the most items it returns and whether more matched. `truncated` is
   `true` when more than `limit` different items matched, and then the items returned are the first
-  `limit` of the group's order.
+  `limit` of the group's order. `limits.conversations` is there so that the three groups look alike:
+  the conversations hold one item at most, so its `truncated` is always `false`.
 
-Each group is a list of what matched by *id*, then what matched by *text*, without repeating an item
-that did both, cut at 5 in all.
+The runs and the agents are each a list of what matched by *id*, then what matched by *text*,
+without repeating an item that did both, cut at 5 in all. The conversations are found by id only.
 
 | Group | Matched by id, whenever it started | Matched by text, within the time range |
 | -- | -- | -- |
 | `traces` | the run whose id is `q`; then the runs whose id begins with `q`, the latest first | the runs the `search` of [`GET /api/traces`](#get-apitraces) keeps, the latest first |
-| `conversations` | the conversation whose id is `q` | the conversations the `search` of [`GET /api/conversations`](#get-apiconversations) keeps, by last activity, the latest first |
+| `conversations` | the conversation whose id is `q` | none |
 | `agents` | none | the agents the `search` of [`GET /api/agents`](#get-apiagents) keeps, in that list's default order: most runs first |
 
 - A run's id is matched whole, or by its beginning when `q` is at least 8 characters, which is how
@@ -865,15 +866,17 @@ that did both, cut at 5 in all.
   beginning is searched as text only. The whole id is compared as the database compares text, as
   the run's own endpoint does. These reads take no time range, so a run from a month ago is found
   by its id, and are served by the primary key.
-- A conversation's id is matched whole, as the database compares text, and takes no time range
-  either. An id that could not be stored (empty, over 255 characters) is not looked up.
+- A conversation is found by its whole id, as the database compares text, and by nothing else: not by
+  part of its id, not by a word of its turns, not by its user. Its time range does not apply either.
+  An id that could not be stored (empty, over 255 characters) is not looked up. What a conversation's
+  text would add is already there: the runs found by text carry their `conversation_id`, and the
+  search of runs matches the conversation id, the user id and the prompt excerpt.
 - A run's text is its id, agent name, provider, model, prompt excerpt, conversation id and user id,
   as on the list. **A user is not found by name or email**: Trail stores only the user's id and type,
   and the name and email come from the application's own users table afterwards, so only the id is
-  searched. A conversation's text is its id and the user ids and prompt excerpts of its turns. An
-  agent's is its name. Case is ignored as on the lists.
-- A conversation found only by its id, with no turn in the range, is returned like any other: its
-  figures cover all of its turns, as on the list.
+  searched. An agent's text is its name. Case is ignored as on the lists.
+- A conversation found by its id with no turn in the range is returned like any other: its figures
+  cover all of its turns, as on the list.
 - An agent's `activity` is counted in the buckets that [`GET /api/agents`](#get-apiagents) describes
   for the same range, which this response does not repeat: ask that endpoint for the `buckets`.
 
@@ -881,32 +884,39 @@ that did both, cut at 5 in all.
 runs there are. The reads by text are not: a text contained in a column is served by no index, so
 each one reads the runs that started in the time range, and nothing else bounds it. The read of
 runs goes from the newest and stops when it has enough matches, so a text found often is quick, and
-a text that matches nothing reads the whole range. The conversations and agents reads group every
-run of the range and cannot stop early. A long range is therefore the cost, and the default `24h`
-is the cheap one.
+a text that matches no run reads the whole range. The read of agents groups every run of the range
+and cannot stop early. A long range is therefore the cost, and the default `24h` is the cheap one.
+The conversations are not searched by text for this reason: that read would group every run of the
+range as well, and the runs found by text already say which conversations they belong to.
 
-The endpoint runs at most 14 queries, plus one lookup of the users for each user type among the
-runs and again among the conversations: a run id, a conversation id, a prefix of a run id, the
-runs found by text, the conversations found by text, four to describe those conversations, four for
-the agents, and the bookmarks of the runs found. The count does not depend on how much matched.
+The endpoint runs at most 13 queries, plus one lookup of the users for each user type among the
+runs and again for the conversation: a run id, a prefix of a run id, the runs found by text, a
+conversation id, four to describe that conversation, four for the agents, and the bookmarks of the
+runs found. The count does not depend on how much matched.
 
 Measured with 1,000,000 runs spread over 14 days (about 71,000 in the last 24 hours and 500,000 in
 the last 7 days), the indexes of the migrations only and the `trail_spans` table empty, on a laptop
-with the database in a container on the same machine and one request at a time (median of 5, in
-milliseconds, of the whole endpoint). They are an order of magnitude, not a promise:
+with the database in a container on the same machine (Postgres 17 with its defaults, MySQL 8.4 with a
+1 GB buffer pool) and one request at a time (median of 5, in milliseconds, of the whole endpoint).
+Another measurement was running on the same machine for part of the time, so read them as an order
+of magnitude, not a promise:
 
 | `q` | Postgres 17, `24h` | Postgres 17, `7d` | MySQL 8.4, `24h` | MySQL 8.4, `7d` |
 | -- | -- | -- | -- | -- |
-| a word in a tenth of the runs | 243 | 804 | 835 | 3,305 |
-| a word in a thousandth of the runs | 263 | 866 | 791 | 3,313 |
-| a word in no run (the worst case) | 385 | 2,068 | 1,039 | 5,360 |
-| the beginning of a run id, 54 runs share it | 408 | 1,888 | 1,032 | 5,628 |
+| a word in a tenth of the runs | 50 | 132 | 225 | 414 |
+| a word in a thousandth of the runs | 70 | 281 | 252 | 420 |
+| a word in no run | 213 | 1,339 | 522 | 2,111 |
+| the beginning of a run id, 54 runs share it | 218 | 1,308 | 554 | 2,214 |
 
-Most of it is the reads of the conversations and the agents. The read of the runs alone takes 1 to
-2 ms for a word in a tenth of the runs and 168 ms (`24h`) to 1,171 ms (`7d`) on Postgres, and 294 ms
-to 1,757 ms on MySQL, for a word in none; the reads of a run by its id or by its beginning, and of a conversation by its id, take about 1 ms
-a query, the plans showing the primary key or the conversation index on both databases. The delegated-agent read of the agents is cheaper here than on an application
-that has delegations, since the table of spans was empty.
+What remains costly is the two reads that cannot stop early. The read of runs for a word in no
+run takes 176 ms (`24h`) and 1,140 ms (`7d`) on Postgres, and 302 ms and 1,824 ms on MySQL; it is
+most of the figures above for a word in no run and for a run id, which is also read as text. The
+read of agents is paid when the text is part of an agent's name, which the rows above do not do: for
+"assistant", which two of twelve agents contain, it took 136 ms (`24h`) and 582 ms (`7d`) on Postgres
+and 789 ms and 3,011 ms on MySQL, on top of the rest. That read is cheaper here than on an
+application with delegations, since the table of spans was empty. The reads of a run by its id or by
+its beginning, and of a conversation by its id, take about 1 ms a query, the plans showing the
+primary key or the conversation index on both databases.
 
 ### `GET /api/agents`
 

@@ -70,7 +70,7 @@
                 "span_count": 0,
                 "prompt_excerpt": "Track an order",
                 "response_excerpt": null,
-                "conversation_id": null,
+                "conversation_id": "order",
                 "user": null,
                 "bookmarked": false,
                 "started_at": "2026-01-02T09:00:00.000Z",
@@ -79,75 +79,21 @@
         ],
         "conversations": [
             {
-                "id": "conversation-pending",
+                "id": "order",
                 "turns": {
-                    "all": 2,
-                    "completed": 1,
-                    "failed": 0,
-                    "incomplete": 0,
-                    "running": 1,
-                    "awaiting_approval": 0
-                },
-                "agents": [
-                    "SupportAssistant"
-                ],
-                "agent_count": 1,
-                "users": [
-                    {
-                        "id": "7",
-                        "type": "Astro\\Trail\\Tests\\Fixtures\\Users\\User",
-                        "name": "Ada",
-                        "email": "ada@example.test"
-                    }
-                ],
-                "user_count": 1,
-                "usage": {
-                    "state": "pending",
-                    "input_tokens": 1500,
-                    "output_tokens": 310,
-                    "cache_read_tokens": null,
-                    "cache_write_tokens": null,
-                    "reasoning_tokens": null,
-                    "total_tokens": 1810
-                },
-                "cost": {
-                    "state": "pending",
-                    "amount": 0.00945
-                },
-                "prompt_excerpt": "And the invoice?",
-                "first_activity_at": "2026-01-02T11:00:00.000Z",
-                "last_activity_at": "2026-01-02T11:55:00.000Z"
-            },
-            {
-                "id": "conversation-shared",
-                "turns": {
-                    "all": 2,
+                    "all": 1,
                     "completed": 1,
                     "failed": 0,
                     "incomplete": 0,
                     "running": 0,
-                    "awaiting_approval": 1
+                    "awaiting_approval": 0
                 },
                 "agents": [
-                    "Refunds",
-                    "SupportAssistant"
+                    "OrderAgent"
                 ],
-                "agent_count": 2,
-                "users": [
-                    {
-                        "id": "7",
-                        "type": "Astro\\Trail\\Tests\\Fixtures\\Users\\User",
-                        "name": "Ada",
-                        "email": "ada@example.test"
-                    },
-                    {
-                        "id": "8",
-                        "type": "Astro\\Trail\\Tests\\Fixtures\\Users\\User",
-                        "name": "Grace",
-                        "email": "grace@example.test"
-                    }
-                ],
-                "user_count": 2,
+                "agent_count": 1,
+                "users": [],
+                "user_count": 0,
                 "usage": {
                     "state": "not_reported",
                     "input_tokens": null,
@@ -161,8 +107,8 @@
                     "state": "not_captured",
                     "amount": null
                 },
-                "prompt_excerpt": "Approve it",
-                "first_activity_at": "2025-12-31T09:00:00.000Z",
+                "prompt_excerpt": "Track an order",
+                "first_activity_at": "2026-01-02T09:00:00.000Z",
                 "last_activity_at": "2026-01-02T09:00:00.000Z"
             }
         ],

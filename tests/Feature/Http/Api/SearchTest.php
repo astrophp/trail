@@ -223,36 +223,51 @@ describe('conversations', function () {
             ->and(foundIn($body, 'traces'))->toBe([]);
     });
 
-    it('finds the conversations the list of conversations searches, by last activity', function () {
-        foundRun('a', ['conversation_id' => 'chat-a', 'prompt_excerpt' => 'needle one', 'started_at' => '2026-01-02 08:00:00']);
-        foundRun('b', ['conversation_id' => 'chat-b', 'user_id' => 'needle-user', 'started_at' => '2026-01-02 09:00:00']);
-        foundRun('c', ['conversation_id' => 'needle-chat', 'started_at' => '2026-01-02 07:00:00']);
-        foundRun('d', ['conversation_id' => 'chat-d', 'prompt_excerpt' => 'needle old', 'started_at' => '2025-12-01 07:00:00']);
-        foundRun('e', ['conversation_id' => 'chat-e', 'prompt_excerpt' => 'other']);
+    it('does not find a conversation by part of its id, but finds its runs', function () {
+        foundRun('turn-1', ['conversation_id' => 'support/ada 1042', 'started_at' => '2026-01-02 09:00:00']);
+        foundRun('turn-2', ['conversation_id' => 'support/ada 1042', 'started_at' => '2026-01-02 10:00:00']);
 
-        $listed = array_column($this->getJson('/trail/api/conversations?search=needle')->assertOk()->json('data'), 'id');
+        $body = searchAt($this, 'q='.urlencode('ada 10'));
 
-        expect(foundIn(searchAt($this, 'q=needle'), 'conversations'))->toBe(['chat-b', 'chat-a', 'needle-chat'])
-            ->and($listed)->toBe(['chat-b', 'chat-a', 'needle-chat']);
+        expect(foundIn($body, 'conversations'))->toBe([])
+            ->and(foundIn($body, 'traces'))->toBe(['turn-2', 'turn-1'])
+            ->and(array_column($body['data']['traces'], 'conversation_id'))->toBe(['support/ada 1042', 'support/ada 1042']);
     });
 
-    it('lists a conversation found by id and by text once, and the one found by id first', function () {
-        foundRun('a', ['conversation_id' => 'chat-1042', 'started_at' => '2026-01-02 08:00:00']);
-        foundRun('b', ['conversation_id' => 'chat-1042-other', 'started_at' => '2026-01-02 09:00:00']);
+    it('does not find a conversation by a word of its turns or by its user', function () {
+        foundRun('turn-1', ['conversation_id' => 'chat-a', 'prompt_excerpt' => 'needle one', 'user_id' => 'needle-user']);
 
-        expect(foundIn(searchAt($this, 'q=chat-1042'), 'conversations'))->toBe(['chat-1042', 'chat-1042-other']);
+        $body = searchAt($this, 'q=needle');
+
+        expect(foundIn($body, 'conversations'))->toBe([])
+            ->and(foundIn($body, 'traces'))->toBe(['turn-1']);
     });
 
-    it('takes a percent sign and an underscore literally', function () {
-        foundRun('pct', ['conversation_id' => 'chat-a', 'prompt_excerpt' => 'discount 50% off']);
-        foundRun('und', ['conversation_id' => 'chat-b', 'prompt_excerpt' => 'file a_b']);
-        foundRun('plain', ['conversation_id' => 'chat-c', 'prompt_excerpt' => 'file axb costs 500']);
+    it('holds one conversation at most, and never reports a cut', function () {
+        foreach (range(1, 7) as $i) {
+            foundRun("turn-{$i}", ['conversation_id' => "chat-{$i}"]);
+        }
+        foundRun('turn-same', ['conversation_id' => 'chat-1']);
 
-        expect(foundIn(searchAt($this, 'q='.urlencode('0%')), 'conversations'))->toBe(['chat-a'])
-            ->and(foundIn(searchAt($this, 'q='.urlencode('a_')), 'conversations'))->toBe(['chat-b']);
+        $body = searchAt($this, 'q=chat-1');
+
+        expect(foundIn($body, 'conversations'))->toBe(['chat-1'])
+            ->and($body['data']['conversations'][0]['turns']['all'])->toBe(2)
+            ->and($body['limits']['conversations'])->toBe(['limit' => 5, 'truncated' => false]);
     });
 
-    it('does not find a run without a conversation', function () {
+    it('takes a percent sign and an underscore in the id literally', function () {
+        foundRun('a', ['conversation_id' => 'chat%1']);
+        foundRun('b', ['conversation_id' => 'chat_2']);
+        foundRun('c', ['conversation_id' => 'chatx2']);
+
+        expect(foundIn(searchAt($this, 'q='.urlencode('chat%1')), 'conversations'))->toBe(['chat%1'])
+            ->and(foundIn(searchAt($this, 'q='.urlencode('chat_2')), 'conversations'))->toBe(['chat_2'])
+            ->and(foundIn(searchAt($this, 'q='.urlencode('chat%')), 'conversations'))->toBe([])
+            ->and(foundIn(searchAt($this, 'q='.urlencode('chat_')), 'conversations'))->toBe([]);
+    });
+
+    it('does not find a run without a conversation as one', function () {
         foundRun('alone', ['prompt_excerpt' => 'needle']);
 
         $body = searchAt($this, 'q=needle');
@@ -292,13 +307,13 @@ describe('agents', function () {
 });
 
 it('finds one query in all three groups', function () {
-    foundRun('r1', ['name' => 'RefundAssistant', 'conversation_id' => 'refund-chat', 'prompt_excerpt' => 'please refund me']);
-    foundRun('r2', ['name' => 'Other', 'conversation_id' => 'chat-2', 'prompt_excerpt' => 'refund again', 'started_at' => '2026-01-02 11:00:00']);
+    foundRun('r1', ['name' => 'RefundAssistant', 'conversation_id' => 'refund', 'prompt_excerpt' => 'please refund me']);
+    foundRun('r2', ['name' => 'Other', 'conversation_id' => 'refund-chat', 'prompt_excerpt' => 'refund again', 'started_at' => '2026-01-02 11:00:00']);
 
     $body = searchAt($this, 'q=refund');
 
     expect(foundIn($body, 'traces'))->toBe(['r2', 'r1'])
-        ->and(foundIn($body, 'conversations'))->toBe(['chat-2', 'refund-chat'])
+        ->and(foundIn($body, 'conversations'))->toBe(['refund'])
         ->and(foundIn($body, 'agents'))->toBe(['RefundAssistant'])
         ->and($body['query'])->toBe(['q' => 'refund', 'minimum' => 2, 'searched' => true]);
 });
@@ -313,17 +328,6 @@ describe('the cap on a group', function () {
 
         expect(foundIn($body, 'traces'))->toBe(array_slice(['run-6', 'run-5', 'run-4', 'run-3', 'run-2', 'run-1'], $matching === 6 ? 0 : 1, 5))
             ->and($body['limits']['traces'])->toBe(['limit' => 5, 'truncated' => $truncated]);
-    })->with([[5, false], [6, true]]);
-
-    it('returns 5 conversations and says nothing is cut when exactly 5 match, and cuts at 5 when 6 do', function (int $matching, bool $truncated) {
-        foreach (range(1, $matching) as $i) {
-            foundRun("turn-{$i}", ['conversation_id' => "needle-{$i}", 'started_at' => '2026-01-02 0'.$i.':00:00']);
-        }
-
-        $body = searchAt($this, 'q=needle');
-
-        expect(foundIn($body, 'conversations'))->toBe(array_slice(['needle-6', 'needle-5', 'needle-4', 'needle-3', 'needle-2', 'needle-1'], $matching === 6 ? 0 : 1, 5))
-            ->and($body['limits']['conversations'])->toBe(['limit' => 5, 'truncated' => $truncated]);
     })->with([[5, false], [6, true]]);
 
     it('returns 5 agents and says nothing is cut when exactly 5 match, and cuts at 5 when 6 do', function (int $matching, bool $truncated) {
@@ -465,24 +469,26 @@ describe('queries', function () {
             }
         };
 
+        // The conversation whose id is the text, so that it is described too.
+        foundRun('whole', ['conversation_id' => 'needle', 'user_id' => (string) $user, 'user_type' => User::class]);
         $make(1, 1);
         $one = count(searchStatements($this, 'q=needle'));
 
         $make(2, 12);
         $many = count(searchStatements($this, 'q=needle'));
 
-        // Two reads of runs (a whole id, then text), two of conversations (a whole id, then text),
-        // four of agents, four to describe the conversations, the bookmarks of the runs, and one
-        // lookup of the users of each user type for the runs and again for the conversations.
-        expect($many)->toBe($one)->and($one)->toBe(15);
+        // Two reads of runs (a whole id, then text), one of the conversation (its whole id), four of
+        // agents, four to describe the conversation, the bookmarks of the runs, and one lookup of
+        // the users of each user type for the runs and again for the conversation.
+        expect($many)->toBe($one)->and($one)->toBe(14);
     });
 
     it('runs one more query when the text is also the beginning of an id', function () {
         $user = DB::table('users')->insertGetId(['name' => 'Ada', 'email' => 'ada@example.test', 'password' => 'x']);
-        foundRun('0199c2f4-0001-7000-8000-000000000000', ['name' => '0199c2f4 agent', 'conversation_id' => '0199c2f4-chat', 'user_id' => (string) $user, 'user_type' => User::class]);
+        foundRun('0199c2f4-0001-7000-8000-000000000000', ['name' => '0199c2f4 agent', 'conversation_id' => '0199c2f4', 'user_id' => (string) $user, 'user_type' => User::class]);
 
         // The most the endpoint reads: every group has a match, and the runs are looked up as a prefix too.
-        expect(count(searchStatements($this, 'q=0199c2f4')))->toBe(16);
+        expect(count(searchStatements($this, 'q=0199c2f4')))->toBe(15);
     });
 });
 

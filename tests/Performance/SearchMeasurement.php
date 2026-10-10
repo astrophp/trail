@@ -4,7 +4,6 @@ namespace Astro\Trail\Tests\Performance;
 
 use Astro\Trail\Queries\AgentFilters;
 use Astro\Trail\Queries\AgentIndex;
-use Astro\Trail\Queries\ConversationFilters;
 use Astro\Trail\Queries\ConversationIndex;
 use Astro\Trail\Queries\Page;
 use Astro\Trail\Queries\Search;
@@ -114,7 +113,6 @@ final class SearchMeasurement
 
             foreach (['frequent' => 'invoice', 'rare' => 'refund', 'none' => 'qqzzxx'] as $kind => $text) {
                 $this->measure($db, $driver, $timer, "runs: text, {$kind} (\"{$text}\")", $preset, fn () => $traces->rows($range, new TraceFilters(search: $text), null, new Page(1, 6))->count(), self::expect($kind));
-                $this->measure($db, $driver, $timer, "conversations: text, {$kind} (\"{$text}\")", $preset, fn () => count($conversations->ids($range, new ConversationFilters(search: $text), new Page(1, 6))), self::expect($kind));
             }
 
             foreach (['frequent' => 'assistant', 'none' => 'qqzzxx'] as $kind => $text) {

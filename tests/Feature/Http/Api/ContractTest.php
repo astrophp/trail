@@ -572,7 +572,7 @@ it('sends the agents response the dashboard expects', function () {
 
 it('sends the search response the dashboard expects', function () {
     conversationContractDataset();
-    AgentRows::run('OrderAgent', '2026-01-02 09:00:00', ['id' => 'run-order', 'agent_class' => 'App\\Ai\\Agents\\OrderAgent', 'prompt_excerpt' => 'Track an order']);
+    AgentRows::run('OrderAgent', '2026-01-02 09:00:00', ['id' => 'run-order', 'agent_class' => 'App\\Ai\\Agents\\OrderAgent', 'prompt_excerpt' => 'Track an order', 'conversation_id' => 'order']);
 
     assertContract('search', $this->getJson('/trail/api/search?q=order')->assertOk()->json());
 });
