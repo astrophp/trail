@@ -1,6 +1,38 @@
-# Trail
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/astrophp/trail/main/art/logo-dark.svg">
+    <img src="https://raw.githubusercontent.com/astrophp/trail/main/art/logo-light.svg" alt="Trail" width="240">
+  </picture>
+</p>
 
-[![tests](https://github.com/astrophp/trail/actions/workflows/tests.yml/badge.svg)](https://github.com/astrophp/trail/actions/workflows/tests.yml)
+<p align="center">
+  <strong>Observability for the Laravel AI SDK.</strong><br>
+  Every agent run, recorded in your own database and shown in your own app.
+</p>
+
+<p align="center">
+  <a href="https://github.com/astrophp/trail/actions/workflows/tests.yml"><img src="https://github.com/astrophp/trail/actions/workflows/tests.yml/badge.svg" alt="tests"></a>
+  <a href="https://packagist.org/packages/astrophp/trail"><img src="https://img.shields.io/packagist/v/astrophp/trail" alt="Latest version on Packagist"></a>
+  <a href="https://packagist.org/packages/astrophp/trail"><img src="https://img.shields.io/packagist/php-v/astrophp/trail" alt="PHP version"></a>
+  <a href="composer.json"><img src="https://img.shields.io/badge/Laravel-12%20%7C%2013-FF2D20?logo=laravel&logoColor=white" alt="Laravel 12 and 13"></a>
+  <a href="https://packagist.org/packages/astrophp/trail/stats"><img src="https://img.shields.io/packagist/dt/astrophp/trail" alt="Total downloads"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/astrophp/trail" alt="MIT licence"></a>
+</p>
+
+<p align="center">
+  <a href="#install">Install</a> ·
+  <a href="#what-it-looks-like">Screenshots</a> ·
+  <a href="#what-it-does">What it does</a> ·
+  <a href="#what-it-does-not-do">What it does not do</a> ·
+  <a href="#documentation">Documentation</a>
+</p>
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/astrophp/trail/main/art/overview-dark.png">
+    <img src="https://raw.githubusercontent.com/astrophp/trail/main/art/overview-light.png" alt="The Trail overview: counts of runs, error rate, average duration and estimated cost, a chart of runs started every five minutes, and a list of what needs attention." width="900">
+  </picture>
+</p>
 
 Trail records what your [Laravel AI SDK](https://github.com/laravel/ai) agents did (runs, model
 steps, tool calls, sub-agents, tokens and estimated cost) into your application's own database.
@@ -51,7 +83,65 @@ Then list who may pass in the `viewTrail` gate of `app/Providers/TrailServicePro
 Trail deletes nothing until you run `php artisan trail:prune`, which removes traces older than 14
 days by default. It never schedules its commands itself. See [Operations](docs/operations.md).
 
+## What it looks like
+
+These screenshots show runs that Trail recorded from the workbench, the small application in this
+repository that runs scripted agents.
+
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/astrophp/trail/main/art/traces-dark.png">
+        <img src="https://raw.githubusercontent.com/astrophp/trail/main/art/traces-light.png" alt="The Traces list: every recorded run with its agent, status, duration, tokens and estimated cost, with filters above it." width="420">
+      </picture>
+      <br><sub><strong>Traces.</strong> Every run, filterable, with comparison, bookmarks and export.</sub>
+    </td>
+    <td width="50%" valign="top">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/astrophp/trail/main/art/trace-dark.png">
+        <img src="https://raw.githubusercontent.com/astrophp/trail/main/art/trace-light.png" alt="The inspector of one run: an execution tree of model steps, a tool call and a delegated sub-agent with timing bars, and the evidence for the selected step beside it." width="420">
+      </picture>
+      <br><sub><strong>Trace inspector.</strong> The execution tree of one run with timing, and the evidence for the step you select.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/astrophp/trail/main/art/conversation-dark.png">
+        <img src="https://raw.githubusercontent.com/astrophp/trail/main/art/conversation-light.png" alt="A conversation shown as a transcript of several turns between a customer and an assistant." width="420">
+      </picture>
+      <br><sub><strong>Conversations.</strong> A multi-turn session read as a transcript.</sub>
+    </td>
+    <td width="50%" valign="top">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/astrophp/trail/main/art/agent-dark.png">
+        <img src="https://raw.githubusercontent.com/astrophp/trail/main/art/agent-light.png" alt="The page of one agent: its runs, error rate, latency and cost over the last hour." width="420">
+      </picture>
+      <br><sub><strong>Agents.</strong> Reliability, latency and cost of one agent.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/astrophp/trail/main/art/usage-dark.png">
+        <img src="https://raw.githubusercontent.com/astrophp/trail/main/art/usage-light.png" alt="Usage and cost: a chart of estimated spend over the last hour, a spend projection, and breakdowns by model, provider and agent." width="420">
+      </picture>
+      <br><sub><strong>Usage &amp; cost.</strong> Estimated spend over time, a projection, and breakdowns by model, provider and agent.</sub>
+    </td>
+    <td width="50%" valign="top">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/astrophp/trail/main/art/palette-dark.png">
+        <img src="https://raw.githubusercontent.com/astrophp/trail/main/art/palette-light.png" alt="The command palette open over the Traces list, with matching runs and agents in separate groups." width="420">
+      </picture>
+      <br><sub><strong>Command palette.</strong> Press <kbd>⌘K</kbd> or <kbd>Ctrl</kbd> <kbd>K</kbd> to go to a page or find a run, a conversation or an agent.</sub>
+    </td>
+  </tr>
+</table>
+
 ## What it does
+
+### Capture
 
 - Records agent runs, including streamed and queued ones, with their model steps, tool calls,
   sub-agents, embeddings, provider failover and tool-approval pauses, in one trace per run.
@@ -62,10 +152,21 @@ days by default. It never schedules its commands itself. See [Operations](docs/o
   cost is an estimate, frozen when the run is recorded. It is not billing.
 - Redacts secrets and cuts long strings before storing anything, and can sample runs, filter them
   in code, or pause recording from the command line.
+- Stores everything in your own database, on a connection you can choose.
+
+### Dashboard
+
 - Serves a dashboard: an overview, a filterable list of runs with comparison, bookmarks and CSV
   export, the execution tree of each run, conversations as transcripts, per-agent reliability,
   latency and cost, and a usage and cost page with price management.
-- Stores everything in your own database, on a connection you can choose.
+- Has a command palette and keyboard shortcuts, to move between pages and find a run, a
+  conversation or an agent without leaving the keyboard.
+
+### Operations
+
+- Controls who can open the dashboard with a gate, and can switch recording or the dashboard off.
+- Ships artisan commands to install, prune, sweep, clear, pause and resume. It never schedules them.
+- Gives your own tests `Trail::fake()` and its assertions.
 
 ## What it does not do
 

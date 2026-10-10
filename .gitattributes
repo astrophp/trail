@@ -28,3 +28,4 @@
 /testbench.yaml     export-ignore
 /scripts            export-ignore
 /workbench          export-ignore
+/art                export-ignore
