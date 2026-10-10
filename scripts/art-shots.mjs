@@ -323,8 +323,9 @@ try {
         await takeScreenshots(browser)
 
         const after = await recordingState()
-        if (after.total !== before.total || after.newest !== before.newest || after.running !== 0) {
-            throw new Unsuitable(`Runs were recorded while the screenshots were taken (${before.total} runs before, ${after.total} after). Stop the recorder and take them again.`)
+        // The total is not compared: the last hour slides, so runs leave it while the script works.
+        if (after.newest !== before.newest || after.running !== 0) {
+            throw new Unsuitable('A run was recorded while the screenshots were taken. Stop the recorder and take them again.')
         }
     }
 
