@@ -8,7 +8,7 @@ Trail ships six artisan commands. It never schedules any of them for you.
 | `trail:prune` | Deletes traces older than the retention period |
 | `trail:sweep` | Marks runs that never finished as incomplete |
 | `trail:clear` | Deletes every recorded trace |
-| `trail:pause` | Stops recording new runs, in every process |
+| `trail:pause` | Stops recording new runs in every process that shares your default cache store |
 | `trail:resume` | Starts recording again |
 
 The commands stay available when `trail.enabled` is `false`.
@@ -65,7 +65,8 @@ php artisan trail:pause
 php artisan trail:resume
 ```
 
-`trail:pause` stops recording new runs in every process, without a deploy, until
+`trail:pause` stops recording new runs in every process that shares your default cache store (it
+reaches only the issuing process with the `array` or `null` driver), without a deploy, until
 `trail:resume`. Runs already in progress finish recording. The dashboard shows a notice while
 recording is paused.
 
@@ -119,12 +120,16 @@ measurements found with generated data.
 ### SQLite and concurrent writers
 
 When Trail flushes a trace, its store reads and then writes inside one transaction, and makes up to
-three attempts at it when the database reports a concurrency error. On MySQL and Postgres that is
-enough. On SQLite it is not always: several processes writing at once can still fail with
-"database is locked". When that happens Trail reports the failure through Laravel's exception
-handler and **the trace is lost**: the flush writes nothing, and the run keeps the single row it
+three attempts at it when the database reports a concurrency error (a deadlock, a lock timeout,
+"database is locked"). Nothing promises that one of the three succeeds under continued contention,
+on any database. If all fail, Trail reports the failure through Laravel's exception handler and
+**the trace is lost**: the flush writes nothing, and the run keeps the single row it
 was given when it started, so it shows as Running, with no steps, until it is swept to Incomplete.
 Your AI call is unaffected.
+
+The only losses observed were on SQLite, in the trial below. MySQL and Postgres were not put
+through that trial. On SQLite, several processes writing at once can fail with "database is
+locked".
 
 A single process is not affected, which is the usual case for local development. The risk is
 several queue workers or web processes writing to one SQLite file.

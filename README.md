@@ -5,7 +5,8 @@
 Trail records what your [Laravel AI SDK](https://github.com/laravel/ai) agents did (runs, model
 steps, tool calls, sub-agents, tokens and estimated cost) into your application's own database.
 It serves a dashboard for those runs from your application, in the way Horizon and Telescope do. It
-is a package, not a hosted service: nothing leaves your database.
+is a package, not a hosted service: Trail stores recorded runs in your database and sends them to no
+service. Errors inside Trail go to your application's exception handler.
 
 ## Requirements
 

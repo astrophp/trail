@@ -82,7 +82,7 @@ it('names only artisan commands that exist', function () {
     $named = [];
 
     foreach (Pages::guides() as $page) {
-        preg_match_all('/php artisan ([a-z]+(?::[a-z]+)?)/', Pages::read($page), $matches);
+        preg_match_all('/php artisan ([a-z]+(?::[a-z-]+)?)/', Pages::read($page), $matches);
         array_push($named, ...$matches[1]);
     }
 

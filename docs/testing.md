@@ -34,7 +34,8 @@ Running.
 
 ## The assertions
 
-All of them return the store, so they chain. Each failure names the agent class.
+All of them return the store, so they chain. A failure names the agent class, except for
+`assertRecordedCount()` without a class and `assertNothingRecorded()`, which report counts.
 
 | Assertion | Passes when |
 | -- | -- |

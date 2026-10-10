@@ -114,7 +114,7 @@ it('gives the size of the dashboard bundle to within a tenth of what is built', 
     $page = Pages::read(Pages::root().'/docs/limits.md');
     $within = fn (float $documented, float $actual) => abs($documented - $actual) / $actual <= 0.1;
 
-    preg_match('/script is about [\d.]+ MB \(([\d,]+) bytes\), about (\d+) KB gzipped/', $page, $script);
+    preg_match('/script is about ([\d.]+) MB, about (\d+) KB\s+gzipped/', $page, $script);
     preg_match('/stylesheet is about (\d+) KB, about (\d+) KB\s+gzipped/', $page, $style);
 
     expect($script)->not->toBeEmpty()->and($style)->not->toBeEmpty();
@@ -122,7 +122,7 @@ it('gives the size of the dashboard bundle to within a tenth of what is built', 
     $js = Pages::read(Pages::root().'/dist/app.js');
     $css = Pages::read(Pages::root().'/dist/app.css');
 
-    expect($within((float) str_replace(',', '', $script[1]), strlen($js)))->toBeTrue('The script size on the limits page is out of date.')
+    expect($within((float) $script[1] * 1000000, strlen($js)))->toBeTrue('The script size on the limits page is out of date.')
         ->and($within((float) $script[2] * 1000, strlen((string) gzencode($js, 6))))->toBeTrue('The gzipped script size on the limits page is out of date.')
         ->and($within((float) $style[1] * 1000, strlen($css)))->toBeTrue('The stylesheet size on the limits page is out of date.')
         ->and($within((float) $style[2] * 1000, strlen((string) gzencode($css, 6))))->toBeTrue('The gzipped stylesheet size on the limits page is out of date.');

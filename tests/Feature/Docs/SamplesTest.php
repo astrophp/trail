@@ -19,6 +19,7 @@ use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Str;
 
 require_once __DIR__.'/../../Fixtures/Docs/Agents.php';
 
@@ -210,7 +211,7 @@ it('runs the operations.schedule sample: it schedules real commands, daily and e
     runSample('operations.schedule');
 
     $events = collect(app(ScheduleManager::class)->events());
-    $find = fn (string $command) => $events->first(fn ($event) => str_contains($event->command, $command));
+    $find = fn (string $command) => $events->first(fn ($event) => Str::afterLast($event->command, ' ') === $command);
 
     expect($find('trail:prune')->expression)->toBe('0 0 * * *')
         ->and($find('trail:sweep')->expression)->toBe('*/5 * * * *')

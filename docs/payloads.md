@@ -160,5 +160,6 @@ $answer = Trail::withoutRecording(function () {
 
 ## Pausing everywhere
 
-`php artisan trail:pause` stops recording in every process, without a deploy, until
+`php artisan trail:pause` stops recording in every process that shares your default cache store
+(only the issuing one with the `array` or `null` driver), without a deploy, until
 `php artisan trail:resume`. See [Operations](operations.md#pausing-and-resuming).

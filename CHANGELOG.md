@@ -40,7 +40,7 @@ The first release. Requires PHP 8.3 or newer, Laravel 12 or 13 and `laravel/ai` 
   (`capture.enabled`) and one for not reading the agent's instructions (`capture.system_prompt`).
 - Sampling (`trail.sampling`), `Trail::filter()` to choose runs in code and `Trail::withoutRecording()`
   to leave a block of code out.
-- `php artisan trail:pause` and `trail:resume` to stop and start recording in every process.
+- `php artisan trail:pause` and `trail:resume` to stop and start recording in every process that shares your default cache store.
 
 **Cost**
 

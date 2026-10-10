@@ -81,8 +81,8 @@ total.
 
 The dashboard's JavaScript and CSS are inlined into the page, so there is nothing to publish and
 no asset URL to configure. The cost is that every dashboard page load carries them. In this
-release the script is about 1.2 MB (1,239,142 bytes), about 370 KB gzipped
-(`gzip -c dist/app.js | wc -c` gives 369,001), and the stylesheet is about 125 KB, about 20 KB
+release the script is about 1.2 MB, about 370 KB gzipped
+(measure it with `gzip -c dist/app.js | wc -c`), and the stylesheet is about 125 KB, about 20 KB
 gzipped. Whether the page is compressed in transit depends on your web server. The size changes
 with every release that changes the dashboard.
 
@@ -91,6 +91,14 @@ with every release that changes the dashboard.
 With SQLite and more than one process writing, a trace can be lost. It is reported, and your AI
 call is unaffected. See [Operations](operations.md#sqlite-and-concurrent-writers) for what was
 observed and the settings that avoided it.
+
+## Errors inside Trail go to your exception handler
+
+When Trail cannot write, it reports the failure with Laravel's `report()`, so whatever your
+application sends exceptions to receives it. A failed write is described by its class, connection,
+SQLSTATE and driver code, and the SQL with placeholders, never the values. Other errors inside
+Trail are reported with their own messages; those were not audited for whether one could contain
+prompt text.
 
 ## Redaction does not find every secret
 
