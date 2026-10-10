@@ -2,100 +2,105 @@
 
 [![tests](https://github.com/astrophp/trail/actions/workflows/tests.yml/badge.svg)](https://github.com/astrophp/trail/actions/workflows/tests.yml)
 
-Observability for the [Laravel AI SDK](https://github.com/laravel/ai): Trail records what your
-agents did — runs, model steps, tool calls, sub-agents, tokens and estimated cost — into your
-application's own database, and serves a dashboard from your application.
-
-> **Status: early development.** Trail is being built in the open and is not ready for use yet.
-> There is no tagged release. See the [roadmap](ROADMAP.md) for what is planned.
-
-## Goals
-
-- Install the package, run the migrations, and it records. No changes to your agents or tools.
-- Your data stays in your database. Trail is a package, not a hosted service.
-- Find the exact model step, tool or sub-agent behind a slow, failed or expensive run.
-- Honest data: anything Trail could not capture is shown as missing, never as zero.
+Trail records what your [Laravel AI SDK](https://github.com/laravel/ai) agents did (runs, model
+steps, tool calls, sub-agents, tokens and estimated cost) into your application's own database.
+It serves a dashboard for those runs from your application, in the way Horizon and Telescope do. It
+is a package, not a hosted service: nothing leaves your database.
 
 ## Requirements
 
-- PHP 8.3+
+- PHP 8.3 or newer
 - Laravel 12 or 13
-- `laravel/ai` 1.1+
+- `laravel/ai` 1.1 or newer
+- SQLite, MySQL or Postgres
 
-## Dashboard access
+## Install
 
-The dashboard is served at `/trail`. In the `local` environment anyone can open it. Anywhere else a
-request must pass the `viewTrail` gate, defined in `App\Providers\TrailServiceProvider` (published by
-`php artisan trail:install`); nobody passes until you list who can. Prefer your own check? Override
-`authorization()` in that provider and call `Trail::auth(fn ($request) => ...)`, which replaces the
-gate everywhere, local included. A request that fails the check gets a 403, never a redirect.
-
-- `trail.path` / `TRAIL_PATH`, `trail.domain` / `TRAIL_DOMAIN`: where the dashboard is served.
-- `trail.middleware` (default `web`) and `trail.guard` / `TRAIL_GUARD`: the middleware and the guard whose user is checked. Trail's own access check is always added after the middleware.
-- `TRAIL_DASHBOARD_ENABLED=false` removes the dashboard routes and keeps recording; `TRAIL_ENABLED=false` stops both.
-
-## Known limits
-
-Trail records what the SDK reports through its events, so a few things cannot be recorded:
-
-- When an agent remembers conversations and generates a title for a new one, the SDK makes an extra
-  model call that no event reports. It is neither recorded nor priced.
-- Embeddings served from the SDK's embeddings cache fire no events, so they do not appear.
-- A run that resumes an approval pause is a separate trace from the run that paused. The two are
-  not linked.
-
-## Testing
-
-`Trail::fake()` swaps Trail's storage for an in-memory store, so your tests never touch Trail's tables.
-
-```php
-use Astro\Trail\Enums\Status;
-use Astro\Trail\Facades\Trail;
-use Astro\Trail\Storage\TraceRecord;
-
-it('records the support agent', function () {
-    $trail = Trail::fake();
-
-    // ... run the code under test ...
-
-    $trail->assertRecorded(SupportAgent::class, fn (TraceRecord $trace) => $trace->status === Status::Completed);
-});
-
-it('records nothing for a guest', function () {
-    $trail = Trail::fake();
-
-    // ... run the code under test ...
-
-    $trail->assertNothingRecorded();
-});
+```bash
+composer require astrophp/trail
+php artisan migrate
 ```
+
+That is all. Trail listens to the SDK's events, so your agents and tools need no change. Run an
+agent as you already do, then open `/trail` in your application. In the `local` environment anyone
+can open the dashboard.
+
+To try it without calling a provider, use the SDK's own fake. In `php artisan tinker`, with
+`App\Ai\Agents\SupportAgent` standing in for one of your agents:
+
+<!-- sample: readme.fake -->
+```php
+App\Ai\Agents\SupportAgent::fake(['Hello from a fake provider.']);
+(new App\Ai\Agents\SupportAgent)->prompt('Hi');
+```
+
+The run appears in the Traces list. A fake reports no token usage, so its tokens show as Not
+reported and its cost as Not captured.
+
+### Before production
+
+Outside `local`, nobody can open the dashboard until you say who can. Publish the service provider:
+
+```bash
+php artisan trail:install
+```
+
+Then list who may pass in the `viewTrail` gate of `app/Providers/TrailServiceProvider.php`. See
+[Access](docs/access.md). A request that fails the check gets a 403.
+
+Trail deletes nothing until you run `php artisan trail:prune`, which removes traces older than 14
+days by default. It never schedules its commands itself. See [Operations](docs/operations.md).
+
+## What it does
+
+- Records agent runs, including streamed and queued ones, with their model steps, tool calls,
+  sub-agents, embeddings, provider failover and tool-approval pauses, in one trace per run.
+- Records real timing, token usage (cache and reasoning tokens included) and failure details, and
+  shows anything it could not capture as missing (`Not captured`, `Pending`, `Unpriced`,
+  `Incomplete`), never as zero.
+- Estimates cost from a price table in `config/trail.php`. You can edit prices in the dashboard. A
+  cost is an estimate, frozen when the run is recorded. It is not billing.
+- Redacts secrets and cuts long strings before storing anything, and can sample runs, filter them
+  in code, or pause recording from the command line.
+- Serves a dashboard: an overview, a filterable list of runs with comparison, bookmarks and CSV
+  export, the execution tree of each run, conversations as transcripts, per-agent reliability,
+  latency and cost, and a usage and cost page with price management.
+- Stores everything in your own database, on a connection you can choose.
+
+## What it does not do
+
+- It is not billing, and its costs are estimates from list prices. The default prices use base
+  rates and do not model long-context surcharges.
+- It records agent runs and embeddings. It does not record classification, images, audio,
+  transcription or reranking.
+- It records only what the SDK reports through events. The extra model call that titles a new
+  conversation, and embeddings served from the SDK's cache, are not recorded.
+- A run that resumes a tool-approval pause is a separate trace from the run that paused. They are
+  not linked.
+- It does not find every secret. Redaction catches keys and recognisable token shapes, not a
+  password written in a sentence.
+- It has no users or accounts of its own, and no hosted version: access uses your application's gate.
+- With SQLite and several writers, a trace can be lost. See [Operations](docs/operations.md#sqlite-and-concurrent-writers).
+
+The full list is in [Known limits](docs/limits.md).
+
+## Documentation
+
+- [Installation and upgrading](docs/installation.md)
+- [Configuration](docs/configuration.md): every key, its environment variable and default
+- [Access](docs/access.md): the `viewTrail` gate, `Trail::auth()`, guard, middleware, path and domain
+- [What is recorded](docs/recording.md), and how to read what the dashboard shows
+- [Payloads and sampling](docs/payloads.md): redaction, truncation, `Trail::filter()`, `Trail::withoutRecording()`
+- [Cost](docs/cost.md): how prices are found and why a cost is an estimate
+- [Operations](docs/operations.md): the artisan commands, scheduling, queues, Octane and storage
+- [Testing your application](docs/testing.md): `Trail::fake()`
+- [Known limits](docs/limits.md)
+- [Roadmap](ROADMAP.md) and [changelog](CHANGELOG.md)
 
 ## Contributing
 
-```bash
-composer install
-composer test
-
-npm install
-npm run lint        # eslint + prettier --check
-npm run format      # prettier --write + eslint --fix
-npm run typecheck
-npm test
-npm run build       # builds dist/app.js and dist/app.css
-npm run catalogue   # component catalogue (dev only), http://localhost:5175
-```
-
-The compiled dashboard in `dist/` is committed; rebuild it whenever `resources/js` changes.
-
-### Workbench
-
-`composer serve` boots a small Testbench app with Trail installed, at `http://localhost:8000`. Its
-landing page and `php vendor/bin/testbench workbench:run --all` run agent scenarios (tool calls,
-sub-agents, failures, failover, streaming, approvals, embeddings, ...) through the real SDK, so
-everything Trail shows was recorded by Trail. Nothing is seeded, and traces survive restarts; wipe
-them with `php vendor/bin/testbench trail:clear`. With no provider key the scenarios run offline
-against scripted provider responses; copy `workbench/.env.example` to `workbench/.env` and set
-`ANTHROPIC_API_KEY` or `OPENAI_API_KEY` to run those that can against a real provider.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, the commands, and the workbench app that records
+scripted agent runs.
 
 ## Security
 
