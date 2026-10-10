@@ -1,0 +1,28 @@
+<?php
+
+namespace Astro\Trail\Facades;
+
+use Illuminate\Support\Facades\Facade;
+
+/**
+ * @method static \Astro\Trail\Storage\Contracts\TraceStore store()
+ * @method static \Astro\Trail\Storage\ArrayTraceStore fake()
+ * @method static void flush()
+ * @method static void filter(?\Closure $callback)
+ * @method static mixed withoutRecording(\Closure $callback)
+ * @method static void resolveUsersUsing(?\Closure $callback)
+ * @method static \Astro\Trail\Users\UserResolver users()
+ * @method static void auth(?\Closure $callback)
+ * @method static bool check(\Illuminate\Http\Request $request)
+ * @method static \Illuminate\Support\HtmlString css()
+ * @method static \Illuminate\Support\HtmlString js()
+ *
+ * @see \Astro\Trail\Trail
+ */
+class Trail extends Facade
+{
+    protected static function getFacadeAccessor(): string
+    {
+        return \Astro\Trail\Trail::class;
+    }
+}

@@ -1,0 +1,827 @@
+// The JSON the dashboard API returns, as docs/api.md describes it: snake_case,
+// exactly as sent. api/contract.test.ts checks these types against the output
+// of the PHP resources.
+
+import type { JsonObject, JsonValue } from '@/lib/json'
+import type { TimeRangePreset } from '@/lib/time-range'
+
+export type { JsonObject, JsonValue } from '@/lib/json'
+
+export type Status =
+    'running' | 'completed' | 'failed' | 'incomplete' | 'awaiting_approval'
+
+export type IssueKind =
+    | 'rate_limited'
+    | 'provider_overloaded'
+    | 'provider_connection'
+    | 'insufficient_credits'
+    | 'tool_error'
+    | 'exception'
+    | 'abandoned'
+
+export type CostState =
+    'estimated' | 'partial' | 'unpriced' | 'pending' | 'not_captured'
+
+export type UsageState = 'reported' | 'pending' | 'not_reported'
+
+/**
+ * What a run cost, and why. The amount is a number when something was priced,
+ * `null` when nothing was, and either while the run is still running.
+ */
+export type Cost =
+    | { state: 'estimated' | 'partial'; amount: number }
+    | { state: 'unpriced' | 'not_captured'; amount: null }
+    | { state: 'pending'; amount: number | null }
+
+/** Each count is `null` on its own when it was not reported. */
+export type Usage = {
+    state: UsageState
+    input_tokens: number | null
+    output_tokens: number | null
+    cache_read_tokens: number | null
+    cache_write_tokens: number | null
+    reasoning_tokens: number | null
+    total_tokens: number | null
+}
+
+/** `name` and `email` are `null` when the user can no longer be resolved. */
+export type User = {
+    id: string
+    type: string
+    name: string | null
+    email: string | null
+}
+
+/** One run, as every endpoint returns it. Dates are ISO 8601 in UTC. */
+export type Trace = {
+    id: string
+    type: 'agent' | 'embedding'
+    name: string
+    agent_class: string | null
+    status: Status
+    issue_kind: IssueKind | null
+    streamed: boolean
+    recovered: boolean
+    child_failed: boolean
+    provider: string | null
+    model: string | null
+    duration_ms: number | null
+    usage: Usage
+    cost: Cost
+    span_count: number
+    prompt_excerpt: string | null
+    response_excerpt: string | null
+    conversation_id: string | null
+    user: User | null
+    bookmarked: boolean
+    started_at: string
+    ended_at: string | null
+}
+
+export type { TimeRangePreset }
+
+/** The range a response used; `preset` is `null` for an explicit one. */
+export type Range = {
+    preset: TimeRangePreset | null
+    from: string
+    to: string
+}
+
+export type Pagination = {
+    page: number
+    per_page: number
+    total: number
+    last_page: number
+}
+
+export type StatusCounts = Record<'all' | Status, number>
+
+export type Meta = {
+    app: { name: string; environment: string; timezone: string }
+    version: string | null
+    recording: 'enabled' | 'paused' | 'disabled' | null
+    stale_after: number
+    traces: { any: boolean; running: number }
+    filters: {
+        agents: string[]
+        providers: string[]
+        models: { provider: string; model: string }[]
+    }
+}
+
+export type MetaResponse = {
+    data: Meta
+    range: Range
+}
+
+export type TraceListResponse = {
+    data: Trace[]
+    pagination: Pagination
+    range: Range
+    status_counts: StatusCounts
+    slow_threshold_ms: number | null
+}
+
+/**
+ * One conversation, as the list returns it: the runs that carry one conversation id, whole (every
+ * figure covers all of its turns, whatever time range listed it). `agents` and `users` are capped
+ * (5 and 3); `agent_count` and `user_count` are the real numbers.
+ */
+export type Conversation = {
+    id: string
+    turns: StatusCounts
+    agents: string[]
+    agent_count: number
+    users: User[]
+    user_count: number
+    usage: Usage
+    cost: Cost
+    prompt_excerpt: string | null
+    first_activity_at: string
+    last_activity_at: string
+}
+
+export type ConversationCounts = { all: number; failed: number }
+
+export type ConversationListResponse = {
+    data: Conversation[]
+    pagination: Pagination
+    range: Range
+    counts: ConversationCounts
+}
+
+/** The period before the range: no preset, `from` included, `to` excluded. */
+export type PreviousRange = { from: string; to: string }
+
+export type ErrorRate = {
+    /** `failed / finished` as a fraction, `null` when nothing has finished. Incomplete runs are in `finished`, not in `failed`. */
+    rate: number | null
+    failed: number
+    finished: number
+}
+
+export type SummaryDuration = {
+    /** The mean over the runs that have a duration, `null` when none has. */
+    average_ms: number | null
+    /** The nearest-rank 95th percentile, `null` below `p95_minimum` measured runs. */
+    p95_ms: number | null
+    measured: number
+    not_measured: number
+    p95_minimum: number
+}
+
+/** The figures of a set of runs: a range, the period before it, later one agent. */
+export type Summary = {
+    runs: StatusCounts
+    error_rate: ErrorRate
+    duration: SummaryDuration
+    usage: Usage
+    usage_coverage: { reported: number; not_reported: number }
+    cost: Cost
+    cost_coverage: { unpriced_runs: number; runs_without_amount: number }
+}
+
+export type BucketUnit = '5m' | 'hour' | 'day'
+
+/** The part of a clock bucket inside the range. `to` is excluded. */
+export type SeriesBucket = {
+    from: string
+    to: string
+    /** `false` when the bucket was cut at either end of the range. */
+    full: boolean
+    /** `true` only for the last bucket of a range that has not ended, while the clock bucket is still open. */
+    in_progress: boolean
+    runs: StatusCounts
+    duration: { average_ms: number | null; measured: number }
+    cost: Cost
+    unpriced_runs: number
+}
+
+/** The range cut into buckets of one length. */
+export type Series = { bucket: BucketUnit; buckets: SeriesBucket[] }
+
+export type OverviewResponse = {
+    data: {
+        summary: Summary
+        /** `null` when the previous period holds no runs. */
+        previous: Summary | null
+        series: Series
+    }
+    range: Range
+    previous_range: PreviousRange
+}
+
+export type AttentionKind =
+    | 'failed'
+    | 'incomplete'
+    | 'awaiting_approval'
+    | 'child_failed'
+    | 'unpriced'
+    | 'recovered'
+
+/** The failed runs of one issue kind. `filters` are the list's parameters that keep them. */
+export type AttentionRow = {
+    issue_kind: IssueKind
+    count: number
+    /** `null` only when the start time could not be read. */
+    latest_at: string | null
+    filters: Record<string, string>
+}
+
+/**
+ * A kind of run that needs a look. `count` is the `pagination.total` of the runs list with
+ * `filters` and the same time range. Only `failed` has a `breakdown`; its rows can add up to
+ * less than `count`, since a failed run without an issue kind is in no row.
+ */
+export type AttentionItem = {
+    kind: AttentionKind
+    count: number
+    /** `null` only when the start time could not be read. */
+    latest_at: string | null
+    filters: Record<string, string>
+    breakdown: AttentionRow[]
+}
+
+/** An empty `data` is a range with nothing to look at. */
+export type AttentionResponse = {
+    data: AttentionItem[]
+    range: Range
+}
+
+/**
+ * What an agent did as runs of its own ("top level"): the figures of a summary without the
+ * percentile and the usage coverage. `last_activity_at` is when its latest run started.
+ */
+export type AgentTopLevel = {
+    runs: StatusCounts
+    error_rate: ErrorRate
+    duration: {
+        average_ms: number | null
+        measured: number
+        not_measured: number
+    }
+    usage: Usage
+    cost: Cost
+    cost_coverage: { unpriced_runs: number; runs_without_amount: number }
+    /** `null` only when the start time could not be read. */
+    last_activity_at: string | null
+}
+
+/**
+ * The times an agent was delegated to: its agent spans that have a parent. A delegated run is a
+ * span of the run that delegated, so it has no usage, cost or status of a whole run, and none is
+ * given here.
+ */
+export type AgentDelegated = {
+    all: number
+    failed: number
+    incomplete: number
+    /** `null` only when the start time could not be read. */
+    last_activity_at: string | null
+}
+
+/**
+ * One agent, as the list and the agent page return it. `top_level` is `null` when it has no run
+ * of its own in the range and `delegated` when it was not delegated to. `activity` counts its own
+ * runs in each bucket of the response's `buckets`, and is all zeros without runs of its own.
+ */
+export type Agent = {
+    name: string
+    agent_class: string | null
+    type: 'agent' | 'embedding'
+    top_level: AgentTopLevel | null
+    delegated: AgentDelegated | null
+    /** The later of the two; `null` when the agent has neither in the range. */
+    last_activity_at: string | null
+    activity: number[]
+}
+
+export type AgentBucketEdge = {
+    from: string
+    to: string
+    full: boolean
+    in_progress: boolean
+}
+
+export type AgentListResponse = {
+    data: Agent[]
+    pagination: Pagination
+    range: Range
+    buckets: { bucket: BucketUnit; edges: AgentBucketEdge[] }
+    /** `truncated` when more agents than `limit` were found and the rest were not read. */
+    agent_limit: { limit: number; truncated: boolean }
+}
+
+/** One group of a search: `truncated` when more than `limit` items matched and the rest were not returned. */
+export type SearchLimit = { limit: number; truncated: boolean }
+
+/** The few runs, conversations and agents that match a text. `query.searched` is `false` when the text is shorter than `query.minimum` and nothing was read. */
+export type SearchResponse = {
+    data: { traces: Trace[]; conversations: Conversation[]; agents: Agent[] }
+    query: { q: string; minimum: number; searched: boolean }
+    limits: {
+        traces: SearchLimit
+        conversations: SearchLimit
+        agents: SearchLimit
+    }
+    range: Range
+}
+
+/** An agent's page: its figures as top-level runs, and what needs a look among those runs. */
+export type AgentResponse = {
+    data: {
+        agent: Agent
+        summary: Summary
+        previous: Summary | null
+        series: Series
+        attention: AttentionItem[]
+    }
+    range: Range
+    previous_range: PreviousRange
+}
+
+/** The model calls of an agent's runs; `filters` are the runs list's parameters that return exactly `runs`. */
+export type AgentModel = {
+    provider: string
+    model: string
+    /** The spans that called the model: steps, and embeddings calls. */
+    steps: number
+    runs: number
+    usage: Usage
+    cost: Cost
+    filters: Record<string, string>
+}
+
+export type AgentTool = {
+    name: string
+    calls: number
+    failed: number
+    runs: number
+    filters: Record<string, string>
+}
+
+/** A model used inside the agent's delegated runs. The list cannot filter on those, so it has no `filters`. */
+export type DelegatedModel = Omit<AgentModel, 'filters'>
+
+export type DelegatedTool = Omit<AgentTool, 'filters'>
+
+export type AgentBreakdownLimit = { limit: number; total: number }
+
+export type AgentBreakdownResponse = {
+    data: {
+        models: AgentModel[]
+        tools: AgentTool[]
+        delegated: { models: DelegatedModel[]; tools: DelegatedTool[] }
+    }
+    range: Range
+    limits: {
+        models: AgentBreakdownLimit
+        tools: AgentBreakdownLimit
+        delegated: {
+            models: AgentBreakdownLimit
+            tools: AgentBreakdownLimit
+        }
+    }
+}
+
+/** An intersection written out as one object type. */
+type Flat<T> = { [K in keyof T]: T[K] }
+
+/** How many of a set of steps could be priced: the steps that reported usage, and those that had no rate. */
+export type UsageRowCoverage = {
+    reported_steps: number
+    unpriced_steps: number
+    /** `null` when the unpriced steps reported neither input nor output tokens. */
+    unpriced_tokens: number | null
+}
+
+/** What the steps of a range add up to, beyond the summary of its runs. */
+export type UsageCoverage = Flat<UsageRowCoverage & { steps: number }>
+
+/** The usage page's totals: the summary of the range's runs, and how much of its usage was priced. */
+export type UsageResponse = {
+    data: { summary: Summary; coverage: UsageCoverage }
+    range: Range
+}
+
+/** What every row of the usage breakdown shares, whatever it groups by. */
+type UsageRowFigures = {
+    steps: number
+    runs: number
+    usage: Usage
+    cost: Cost
+    coverage: UsageRowCoverage
+    /** The traces list's parameters that return the runs behind the row. */
+    filters: Record<string, string>
+}
+
+export type UsageModelRow = Flat<
+    UsageRowFigures & { provider: string; model: string }
+>
+
+export type UsageAgentRow = Flat<UsageRowFigures & { agent: string }>
+
+export type UsageProviderRow = Flat<UsageRowFigures & { provider: string }>
+
+export type UsageBreakdownRow = UsageModelRow | UsageAgentRow | UsageProviderRow
+
+type UsageBreakdownBase = {
+    pagination: Pagination
+    /** `truncated` when more groups than `limit` were found and the rest were not read. */
+    row_limit: { limit: number; truncated: boolean }
+    range: Range
+}
+
+/** The usage of a range grouped by model, top-level agent or provider; `by` says which. */
+export type UsageBreakdownResponse =
+    | Flat<UsageBreakdownBase & { by: 'model'; data: UsageModelRow[] }>
+    | Flat<UsageBreakdownBase & { by: 'agent'; data: UsageAgentRow[] }>
+    | Flat<UsageBreakdownBase & { by: 'provider'; data: UsageProviderRow[] }>
+
+/** A bucket of the estimated cost series: the overview's bucket, and the cost recorded from the range's start through it. */
+export type SpendBucket = Flat<
+    SeriesBucket & {
+        /** `amount` is `null` until the first bucket that has one. */
+        cumulative: Cost
+    }
+>
+
+/** One bucket of the projection. `cumulative` is where the projected line sits; it is not a cost. */
+export type ProjectedBucket = {
+    from: string
+    to: string
+    amount: number
+    cumulative: number
+}
+
+/** What the recent window held that the projected rate does not include. */
+export type ProjectionLeftOut = {
+    unpriced_steps: number
+    /** `null` when the unpriced steps reported neither input nor output tokens. */
+    unpriced_tokens: number | null
+    unfinished_runs: number
+}
+
+/** The complete buckets the projected rate was taken from. */
+export type ProjectionWindow = {
+    from: string
+    to: string
+    buckets: number
+    with_usage: number
+}
+
+/** A projection of the next period at today's prices: a separate figure, never a cost. */
+export type SpendProjection =
+    | {
+          state: 'projected'
+          window: ProjectionWindow
+          per_bucket: number
+          total: number
+          buckets: ProjectedBucket[]
+          left_out: ProjectionLeftOut
+      }
+    | {
+          state: 'not_enough_history'
+          window: ProjectionWindow | null
+          per_bucket: null
+          total: null
+          buckets: []
+          left_out: ProjectionLeftOut
+      }
+    | {
+          state: 'range_not_current'
+          window: null
+          per_bucket: null
+          total: null
+          buckets: []
+          left_out: ProjectionLeftOut
+      }
+
+/** The estimated cost of each bucket of a range, and beside it the projection of the next period. */
+export type UsageSpendResponse = {
+    data: {
+        series: { bucket: BucketUnit; buckets: SpendBucket[] }
+        projection: SpendProjection
+    }
+    range: Range
+}
+
+/** The answer to a bookmark write: the run's bookmark state after it. */
+export type BookmarkResponse = {
+    data: { trace_id: string; bookmarked: boolean }
+}
+
+/** What a model costs per million tokens, in US dollars, for each kind of token. `null` is unknown, never free; `0` is a free rate. */
+export type PriceRates = {
+    input: number | null
+    output: number | null
+    cache_read: number | null
+    cache_write: number | null
+}
+
+/** Where a model's rates come from. `saved` is a price written through the dashboard. */
+export type PriceSource = 'saved' | 'config' | 'prefix' | 'none'
+
+/** The listed id a `prefix` price comes through, and whether that id's rates are themselves a saved price. */
+export type PriceVia = { model: string; saved: boolean }
+
+/** What would apply if the model's own saved price were removed: what a reset returns to. */
+export type PriceDefault = {
+    source: Exclude<PriceSource, 'saved'>
+    via: PriceVia | null
+    rates: PriceRates
+}
+
+/** A model, what it is priced at now and where that comes from. */
+export type Price = {
+    provider: string
+    model: string
+    rates: PriceRates
+    source: PriceSource
+    via: PriceVia | null
+    default: PriceDefault
+    /** A step or an embedding was recorded with exactly this provider and model. */
+    observed: boolean
+    /** When the saved price was last written; `null` when the model has none. */
+    saved_at: string | null
+}
+
+/** Every model Trail knows, observed models without a rate first. At most `limit.limit` are sent. */
+export type PriceListResponse = {
+    data: Price[]
+    limit: { limit: number; total: number; truncated: boolean }
+}
+
+/** The answer to a price write: the model's price as it now resolves. */
+export type PriceResponse = { data: Price }
+
+/** The runs the list shows just before and just after a run, in the view that was asked about. */
+export type TraceNeighbours = {
+    previous: string | null
+    next: string | null
+}
+
+export type TraceNeighboursResponse = {
+    data: TraceNeighbours
+}
+
+export type SpanType = 'agent' | 'step' | 'tool' | 'embedding'
+
+export type ErrorSource = 'step' | 'tool' | 'run'
+
+/**
+ * What one span cost. Never `partial`: a span is priced whole. `null` on the
+ * spans that do not bill (agents and tools), where `Span.cost` is `null`.
+ */
+export type SpanCost =
+    | { state: 'estimated'; amount: number }
+    | { state: 'unpriced' | 'not_captured'; amount: null }
+    | { state: 'pending'; amount: number | null }
+
+/** How a run or a span failed. Each part is `null` when it was not recorded. */
+export type TraceError = {
+    class: string | null
+    message: string | null
+    source: ErrorSource | null
+    http_status: number | null
+}
+
+/**
+ * One span of a run, in one shape for every type. `usage` and `cost` are `null`
+ * on agent and tool spans. `offset_ms` counts from the start of the run and can
+ * be negative. `input`, `output` and `metadata` are as stored, and
+ * `truncated_paths` maps a cut payload path to its original length.
+ */
+export type Span = {
+    id: string
+    parent_id: string | null
+    type: SpanType
+    name: string
+    agent_class: string | null
+    status: Status
+    issue_kind: IssueKind | null
+    attempt: number
+    sequence: number
+    step_number: number | null
+    provider: string | null
+    model: string | null
+    responding_model: string | null
+    duration_ms: number | null
+    offset_ms: number
+    started_at: string
+    ended_at: string | null
+    usage: Usage | null
+    cost: SpanCost | null
+    error: TraceError | null
+    input: JsonValue
+    output: JsonValue
+    metadata: JsonObject | null
+    redacted: boolean
+    truncated: boolean
+    truncated_paths: Record<string, number>
+}
+
+/** A tool call the run is waiting on. `arguments` and `reason` are `null` when not stored. */
+export type PendingApproval = {
+    tool_call_id: string
+    tool: string
+    arguments: JsonValue
+    reason: string | null
+}
+
+/** What the page shows beside the run: the run itself never carries these. */
+export type TraceDetail = {
+    error: TraceError | null
+    pending_approvals: PendingApproval[]
+    resolved_tool_call_ids: string[]
+}
+
+/** One step or embedding that billed, and the agent span it belongs to. */
+export type UsageRow = {
+    span_id: string
+    agent_span_id: string | null
+    type: 'step' | 'embedding'
+    name: string
+    attempt: number
+    step_number: number | null
+    provider: string | null
+    model: string | null
+    usage: Usage
+    cost: SpanCost
+}
+
+/** What one agent span used itself, leaving out the agents it delegated to. */
+export type AgentSubtotal = {
+    span_id: string
+    name: string
+    usage: Usage
+    cost: Cost
+}
+
+/** The totals are the run's; the rows and the subtotals describe the spans returned. */
+export type TraceUsageBreakdown = {
+    totals: { usage: Usage; cost: Cost }
+    rows: UsageRow[]
+    agents: AgentSubtotal[]
+}
+
+export type CoverageState =
+    'captured' | 'partial' | 'not_captured' | 'not_applicable'
+
+export type CoverageReason =
+    'unfinished' | 'not_reported' | 'streamed' | 'no_price' | 'not_stored'
+
+/** `reason` is `null` unless something is missing. */
+export type CoverageItem = {
+    state: CoverageState
+    captured: number
+    expected: number
+    reason: CoverageReason | null
+}
+
+export type Coverage = {
+    timing: CoverageItem
+    responding_model: CoverageItem
+    usage: CoverageItem
+    cost: CoverageItem
+    system_prompt: CoverageItem
+    payloads: CoverageItem
+}
+
+/** `truncated` is whether the run has more spans than `limit`; `total` counts them all. */
+export type SpanLimit = {
+    limit: number
+    total: number
+    truncated: boolean
+}
+
+export type TraceDetailResponse = {
+    data: {
+        trace: Trace
+        detail: TraceDetail
+        spans: Span[]
+        usage: TraceUsageBreakdown
+        coverage: Coverage
+    }
+    span_limit: SpanLimit
+}
+
+export type MessagePart = 'prompt' | 'response' | 'activity'
+
+/** What became of a tool call, the first that applies; see docs/api.md. */
+export type ToolCallLink =
+    'linked' | 'awaiting_approval' | 'not_started' | 'unlinked'
+
+/** The tool span that ran a call. Its status is the one the API shows. */
+export type ToolCallSpan = {
+    id: string
+    status: Status
+    issue_kind: IssueKind | null
+    duration_ms: number | null
+}
+
+/** The agent span a tool call delegated to. */
+export type ToolCallAgent = {
+    span_id: string
+    name: string
+    agent_class: string | null
+    status: Status
+    issue_kind: IssueKind | null
+    provider: string | null
+    model: string | null
+    duration_ms: number | null
+    pending_approvals: PendingApproval[]
+    resolved_tool_call_ids: string[]
+}
+
+/** One call a message asked for. `id`, `name` and `arguments` are as stored, `null` when absent. */
+export type ToolCall = {
+    id: string | null
+    name: string | null
+    arguments: JsonValue
+    link: ToolCallLink
+    span: ToolCallSpan | null
+    agent: ToolCallAgent | null
+}
+
+/** The result of a call, as stored; `span_id` is the span linked to the call with the same id. */
+export type ToolResult = {
+    id: string | null
+    name: string | null
+    result: JsonValue
+    span_id: string | null
+}
+
+/** Where a message is stored; `redacted` and `truncated` are the span's flags, not the message's. */
+export type MessageSource = {
+    span_id: string
+    path: string
+    redacted: boolean
+    truncated: boolean
+}
+
+/** One message of a turn. A key the stored message does not have is `null`. */
+export type Message = {
+    part: MessagePart
+    role: string | null
+    content: JsonValue
+    structured: JsonValue
+    attachments: JsonValue
+    tool_calls: ToolCall[] | null
+    tool_results: ToolResult[] | null
+    source: MessageSource
+    /** Each cut part of this message, relative to it, with its length before the cut. */
+    truncated_paths: Record<string, number>
+}
+
+export type MessagesState = 'stored' | 'partial' | 'not_stored'
+
+export type MessagesReason =
+    | 'span_limit'
+    | 'offset_gap'
+    | 'history_rewritten'
+    | 'history_boundary_unknown'
+    | 'step_input_missing'
+
+/** One attempt of a run that has a step or a tool; `error` is that of the attempt's span. */
+export type Attempt = {
+    attempt: number
+    provider: string | null
+    model: string | null
+    span_id: string | null
+    error: TraceError | null
+}
+
+/** One turn of a conversation: the run, and the messages its spans hold. */
+export type Turn = {
+    trace: Trace
+    detail: TraceDetail
+    root_span_id: string | null
+    shown_attempt: number | null
+    attempts: Attempt[]
+    messages_state: MessagesState
+    messages_reason: MessagesReason | null
+    history_count: number | null
+    messages: Message[]
+    span_limit: SpanLimit
+}
+
+/** The turns outside the window are counted by the database: `older` before the first, `newer` after the last. */
+export type TranscriptWindow = {
+    older: number
+    newer: number
+    anchor: {
+        param: 'turn' | 'before' | 'after'
+        id: string
+        found: boolean
+    } | null
+}
+
+/** `total` is the conversation's turns; `truncated` is whether turns lie outside the window. */
+export type TurnLimit = { limit: number; total: number; truncated: boolean }
+
+export type TranscriptResponse = {
+    data: { conversation: Conversation; turns: Turn[] }
+    turn_limit: TurnLimit
+    window: TranscriptWindow
+}

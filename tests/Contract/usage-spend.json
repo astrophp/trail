@@ -1,0 +1,824 @@
+{
+    "data": {
+        "series": {
+            "bucket": "hour",
+            "buckets": [
+                {
+                    "from": "2026-01-01T12:00:00.000Z",
+                    "to": "2026-01-01T13:00:00.000Z",
+                    "full": true,
+                    "in_progress": false,
+                    "runs": {
+                        "all": 0,
+                        "completed": 0,
+                        "failed": 0,
+                        "incomplete": 0,
+                        "running": 0,
+                        "awaiting_approval": 0
+                    },
+                    "duration": {
+                        "average_ms": null,
+                        "measured": 0
+                    },
+                    "cost": {
+                        "state": "not_captured",
+                        "amount": null
+                    },
+                    "unpriced_runs": 0,
+                    "cumulative": {
+                        "state": "not_captured",
+                        "amount": null
+                    }
+                },
+                {
+                    "from": "2026-01-01T13:00:00.000Z",
+                    "to": "2026-01-01T14:00:00.000Z",
+                    "full": true,
+                    "in_progress": false,
+                    "runs": {
+                        "all": 0,
+                        "completed": 0,
+                        "failed": 0,
+                        "incomplete": 0,
+                        "running": 0,
+                        "awaiting_approval": 0
+                    },
+                    "duration": {
+                        "average_ms": null,
+                        "measured": 0
+                    },
+                    "cost": {
+                        "state": "not_captured",
+                        "amount": null
+                    },
+                    "unpriced_runs": 0,
+                    "cumulative": {
+                        "state": "not_captured",
+                        "amount": null
+                    }
+                },
+                {
+                    "from": "2026-01-01T14:00:00.000Z",
+                    "to": "2026-01-01T15:00:00.000Z",
+                    "full": true,
+                    "in_progress": false,
+                    "runs": {
+                        "all": 0,
+                        "completed": 0,
+                        "failed": 0,
+                        "incomplete": 0,
+                        "running": 0,
+                        "awaiting_approval": 0
+                    },
+                    "duration": {
+                        "average_ms": null,
+                        "measured": 0
+                    },
+                    "cost": {
+                        "state": "not_captured",
+                        "amount": null
+                    },
+                    "unpriced_runs": 0,
+                    "cumulative": {
+                        "state": "not_captured",
+                        "amount": null
+                    }
+                },
+                {
+                    "from": "2026-01-01T15:00:00.000Z",
+                    "to": "2026-01-01T16:00:00.000Z",
+                    "full": true,
+                    "in_progress": false,
+                    "runs": {
+                        "all": 0,
+                        "completed": 0,
+                        "failed": 0,
+                        "incomplete": 0,
+                        "running": 0,
+                        "awaiting_approval": 0
+                    },
+                    "duration": {
+                        "average_ms": null,
+                        "measured": 0
+                    },
+                    "cost": {
+                        "state": "not_captured",
+                        "amount": null
+                    },
+                    "unpriced_runs": 0,
+                    "cumulative": {
+                        "state": "not_captured",
+                        "amount": null
+                    }
+                },
+                {
+                    "from": "2026-01-01T16:00:00.000Z",
+                    "to": "2026-01-01T17:00:00.000Z",
+                    "full": true,
+                    "in_progress": false,
+                    "runs": {
+                        "all": 0,
+                        "completed": 0,
+                        "failed": 0,
+                        "incomplete": 0,
+                        "running": 0,
+                        "awaiting_approval": 0
+                    },
+                    "duration": {
+                        "average_ms": null,
+                        "measured": 0
+                    },
+                    "cost": {
+                        "state": "not_captured",
+                        "amount": null
+                    },
+                    "unpriced_runs": 0,
+                    "cumulative": {
+                        "state": "not_captured",
+                        "amount": null
+                    }
+                },
+                {
+                    "from": "2026-01-01T17:00:00.000Z",
+                    "to": "2026-01-01T18:00:00.000Z",
+                    "full": true,
+                    "in_progress": false,
+                    "runs": {
+                        "all": 0,
+                        "completed": 0,
+                        "failed": 0,
+                        "incomplete": 0,
+                        "running": 0,
+                        "awaiting_approval": 0
+                    },
+                    "duration": {
+                        "average_ms": null,
+                        "measured": 0
+                    },
+                    "cost": {
+                        "state": "not_captured",
+                        "amount": null
+                    },
+                    "unpriced_runs": 0,
+                    "cumulative": {
+                        "state": "not_captured",
+                        "amount": null
+                    }
+                },
+                {
+                    "from": "2026-01-01T18:00:00.000Z",
+                    "to": "2026-01-01T19:00:00.000Z",
+                    "full": true,
+                    "in_progress": false,
+                    "runs": {
+                        "all": 0,
+                        "completed": 0,
+                        "failed": 0,
+                        "incomplete": 0,
+                        "running": 0,
+                        "awaiting_approval": 0
+                    },
+                    "duration": {
+                        "average_ms": null,
+                        "measured": 0
+                    },
+                    "cost": {
+                        "state": "not_captured",
+                        "amount": null
+                    },
+                    "unpriced_runs": 0,
+                    "cumulative": {
+                        "state": "not_captured",
+                        "amount": null
+                    }
+                },
+                {
+                    "from": "2026-01-01T19:00:00.000Z",
+                    "to": "2026-01-01T20:00:00.000Z",
+                    "full": true,
+                    "in_progress": false,
+                    "runs": {
+                        "all": 0,
+                        "completed": 0,
+                        "failed": 0,
+                        "incomplete": 0,
+                        "running": 0,
+                        "awaiting_approval": 0
+                    },
+                    "duration": {
+                        "average_ms": null,
+                        "measured": 0
+                    },
+                    "cost": {
+                        "state": "not_captured",
+                        "amount": null
+                    },
+                    "unpriced_runs": 0,
+                    "cumulative": {
+                        "state": "not_captured",
+                        "amount": null
+                    }
+                },
+                {
+                    "from": "2026-01-01T20:00:00.000Z",
+                    "to": "2026-01-01T21:00:00.000Z",
+                    "full": true,
+                    "in_progress": false,
+                    "runs": {
+                        "all": 0,
+                        "completed": 0,
+                        "failed": 0,
+                        "incomplete": 0,
+                        "running": 0,
+                        "awaiting_approval": 0
+                    },
+                    "duration": {
+                        "average_ms": null,
+                        "measured": 0
+                    },
+                    "cost": {
+                        "state": "not_captured",
+                        "amount": null
+                    },
+                    "unpriced_runs": 0,
+                    "cumulative": {
+                        "state": "not_captured",
+                        "amount": null
+                    }
+                },
+                {
+                    "from": "2026-01-01T21:00:00.000Z",
+                    "to": "2026-01-01T22:00:00.000Z",
+                    "full": true,
+                    "in_progress": false,
+                    "runs": {
+                        "all": 0,
+                        "completed": 0,
+                        "failed": 0,
+                        "incomplete": 0,
+                        "running": 0,
+                        "awaiting_approval": 0
+                    },
+                    "duration": {
+                        "average_ms": null,
+                        "measured": 0
+                    },
+                    "cost": {
+                        "state": "not_captured",
+                        "amount": null
+                    },
+                    "unpriced_runs": 0,
+                    "cumulative": {
+                        "state": "not_captured",
+                        "amount": null
+                    }
+                },
+                {
+                    "from": "2026-01-01T22:00:00.000Z",
+                    "to": "2026-01-01T23:00:00.000Z",
+                    "full": true,
+                    "in_progress": false,
+                    "runs": {
+                        "all": 0,
+                        "completed": 0,
+                        "failed": 0,
+                        "incomplete": 0,
+                        "running": 0,
+                        "awaiting_approval": 0
+                    },
+                    "duration": {
+                        "average_ms": null,
+                        "measured": 0
+                    },
+                    "cost": {
+                        "state": "not_captured",
+                        "amount": null
+                    },
+                    "unpriced_runs": 0,
+                    "cumulative": {
+                        "state": "not_captured",
+                        "amount": null
+                    }
+                },
+                {
+                    "from": "2026-01-01T23:00:00.000Z",
+                    "to": "2026-01-02T00:00:00.000Z",
+                    "full": true,
+                    "in_progress": false,
+                    "runs": {
+                        "all": 0,
+                        "completed": 0,
+                        "failed": 0,
+                        "incomplete": 0,
+                        "running": 0,
+                        "awaiting_approval": 0
+                    },
+                    "duration": {
+                        "average_ms": null,
+                        "measured": 0
+                    },
+                    "cost": {
+                        "state": "not_captured",
+                        "amount": null
+                    },
+                    "unpriced_runs": 0,
+                    "cumulative": {
+                        "state": "not_captured",
+                        "amount": null
+                    }
+                },
+                {
+                    "from": "2026-01-02T00:00:00.000Z",
+                    "to": "2026-01-02T01:00:00.000Z",
+                    "full": true,
+                    "in_progress": false,
+                    "runs": {
+                        "all": 0,
+                        "completed": 0,
+                        "failed": 0,
+                        "incomplete": 0,
+                        "running": 0,
+                        "awaiting_approval": 0
+                    },
+                    "duration": {
+                        "average_ms": null,
+                        "measured": 0
+                    },
+                    "cost": {
+                        "state": "not_captured",
+                        "amount": null
+                    },
+                    "unpriced_runs": 0,
+                    "cumulative": {
+                        "state": "not_captured",
+                        "amount": null
+                    }
+                },
+                {
+                    "from": "2026-01-02T01:00:00.000Z",
+                    "to": "2026-01-02T02:00:00.000Z",
+                    "full": true,
+                    "in_progress": false,
+                    "runs": {
+                        "all": 0,
+                        "completed": 0,
+                        "failed": 0,
+                        "incomplete": 0,
+                        "running": 0,
+                        "awaiting_approval": 0
+                    },
+                    "duration": {
+                        "average_ms": null,
+                        "measured": 0
+                    },
+                    "cost": {
+                        "state": "not_captured",
+                        "amount": null
+                    },
+                    "unpriced_runs": 0,
+                    "cumulative": {
+                        "state": "not_captured",
+                        "amount": null
+                    }
+                },
+                {
+                    "from": "2026-01-02T02:00:00.000Z",
+                    "to": "2026-01-02T03:00:00.000Z",
+                    "full": true,
+                    "in_progress": false,
+                    "runs": {
+                        "all": 0,
+                        "completed": 0,
+                        "failed": 0,
+                        "incomplete": 0,
+                        "running": 0,
+                        "awaiting_approval": 0
+                    },
+                    "duration": {
+                        "average_ms": null,
+                        "measured": 0
+                    },
+                    "cost": {
+                        "state": "not_captured",
+                        "amount": null
+                    },
+                    "unpriced_runs": 0,
+                    "cumulative": {
+                        "state": "not_captured",
+                        "amount": null
+                    }
+                },
+                {
+                    "from": "2026-01-02T03:00:00.000Z",
+                    "to": "2026-01-02T04:00:00.000Z",
+                    "full": true,
+                    "in_progress": false,
+                    "runs": {
+                        "all": 0,
+                        "completed": 0,
+                        "failed": 0,
+                        "incomplete": 0,
+                        "running": 0,
+                        "awaiting_approval": 0
+                    },
+                    "duration": {
+                        "average_ms": null,
+                        "measured": 0
+                    },
+                    "cost": {
+                        "state": "not_captured",
+                        "amount": null
+                    },
+                    "unpriced_runs": 0,
+                    "cumulative": {
+                        "state": "not_captured",
+                        "amount": null
+                    }
+                },
+                {
+                    "from": "2026-01-02T04:00:00.000Z",
+                    "to": "2026-01-02T05:00:00.000Z",
+                    "full": true,
+                    "in_progress": false,
+                    "runs": {
+                        "all": 0,
+                        "completed": 0,
+                        "failed": 0,
+                        "incomplete": 0,
+                        "running": 0,
+                        "awaiting_approval": 0
+                    },
+                    "duration": {
+                        "average_ms": null,
+                        "measured": 0
+                    },
+                    "cost": {
+                        "state": "not_captured",
+                        "amount": null
+                    },
+                    "unpriced_runs": 0,
+                    "cumulative": {
+                        "state": "not_captured",
+                        "amount": null
+                    }
+                },
+                {
+                    "from": "2026-01-02T05:00:00.000Z",
+                    "to": "2026-01-02T06:00:00.000Z",
+                    "full": true,
+                    "in_progress": false,
+                    "runs": {
+                        "all": 0,
+                        "completed": 0,
+                        "failed": 0,
+                        "incomplete": 0,
+                        "running": 0,
+                        "awaiting_approval": 0
+                    },
+                    "duration": {
+                        "average_ms": null,
+                        "measured": 0
+                    },
+                    "cost": {
+                        "state": "not_captured",
+                        "amount": null
+                    },
+                    "unpriced_runs": 0,
+                    "cumulative": {
+                        "state": "not_captured",
+                        "amount": null
+                    }
+                },
+                {
+                    "from": "2026-01-02T06:00:00.000Z",
+                    "to": "2026-01-02T07:00:00.000Z",
+                    "full": true,
+                    "in_progress": false,
+                    "runs": {
+                        "all": 0,
+                        "completed": 0,
+                        "failed": 0,
+                        "incomplete": 0,
+                        "running": 0,
+                        "awaiting_approval": 0
+                    },
+                    "duration": {
+                        "average_ms": null,
+                        "measured": 0
+                    },
+                    "cost": {
+                        "state": "not_captured",
+                        "amount": null
+                    },
+                    "unpriced_runs": 0,
+                    "cumulative": {
+                        "state": "not_captured",
+                        "amount": null
+                    }
+                },
+                {
+                    "from": "2026-01-02T07:00:00.000Z",
+                    "to": "2026-01-02T08:00:00.000Z",
+                    "full": true,
+                    "in_progress": false,
+                    "runs": {
+                        "all": 1,
+                        "completed": 1,
+                        "failed": 0,
+                        "incomplete": 0,
+                        "running": 0,
+                        "awaiting_approval": 0
+                    },
+                    "duration": {
+                        "average_ms": null,
+                        "measured": 0
+                    },
+                    "cost": {
+                        "state": "not_captured",
+                        "amount": null
+                    },
+                    "unpriced_runs": 0,
+                    "cumulative": {
+                        "state": "not_captured",
+                        "amount": null
+                    }
+                },
+                {
+                    "from": "2026-01-02T08:00:00.000Z",
+                    "to": "2026-01-02T09:00:00.000Z",
+                    "full": true,
+                    "in_progress": false,
+                    "runs": {
+                        "all": 1,
+                        "completed": 1,
+                        "failed": 0,
+                        "incomplete": 0,
+                        "running": 0,
+                        "awaiting_approval": 0
+                    },
+                    "duration": {
+                        "average_ms": null,
+                        "measured": 0
+                    },
+                    "cost": {
+                        "state": "estimated",
+                        "amount": 0.0002
+                    },
+                    "unpriced_runs": 0,
+                    "cumulative": {
+                        "state": "estimated",
+                        "amount": 0.0002
+                    }
+                },
+                {
+                    "from": "2026-01-02T09:00:00.000Z",
+                    "to": "2026-01-02T10:00:00.000Z",
+                    "full": true,
+                    "in_progress": false,
+                    "runs": {
+                        "all": 1,
+                        "completed": 1,
+                        "failed": 0,
+                        "incomplete": 0,
+                        "running": 0,
+                        "awaiting_approval": 0
+                    },
+                    "duration": {
+                        "average_ms": 900,
+                        "measured": 1
+                    },
+                    "cost": {
+                        "state": "estimated",
+                        "amount": 0.004
+                    },
+                    "unpriced_runs": 0,
+                    "cumulative": {
+                        "state": "estimated",
+                        "amount": 0.0042
+                    }
+                },
+                {
+                    "from": "2026-01-02T10:00:00.000Z",
+                    "to": "2026-01-02T11:00:00.000Z",
+                    "full": true,
+                    "in_progress": false,
+                    "runs": {
+                        "all": 0,
+                        "completed": 0,
+                        "failed": 0,
+                        "incomplete": 0,
+                        "running": 0,
+                        "awaiting_approval": 0
+                    },
+                    "duration": {
+                        "average_ms": null,
+                        "measured": 0
+                    },
+                    "cost": {
+                        "state": "not_captured",
+                        "amount": null
+                    },
+                    "unpriced_runs": 0,
+                    "cumulative": {
+                        "state": "estimated",
+                        "amount": 0.0042
+                    }
+                },
+                {
+                    "from": "2026-01-02T11:00:00.000Z",
+                    "to": "2026-01-02T12:00:00.000Z",
+                    "full": true,
+                    "in_progress": false,
+                    "runs": {
+                        "all": 2,
+                        "completed": 1,
+                        "failed": 0,
+                        "incomplete": 0,
+                        "running": 1,
+                        "awaiting_approval": 0
+                    },
+                    "duration": {
+                        "average_ms": 1840.412,
+                        "measured": 1
+                    },
+                    "cost": {
+                        "state": "pending",
+                        "amount": 0.00895
+                    },
+                    "unpriced_runs": 1,
+                    "cumulative": {
+                        "state": "pending",
+                        "amount": 0.01315
+                    }
+                }
+            ]
+        },
+        "projection": {
+            "state": "projected",
+            "window": {
+                "from": "2026-01-02T06:00:00.000Z",
+                "to": "2026-01-02T12:00:00.000Z",
+                "buckets": 6,
+                "with_usage": 3
+            },
+            "per_bucket": 0.00167151,
+            "total": 0.04011624,
+            "buckets": [
+                {
+                    "from": "2026-01-02T12:00:00.000Z",
+                    "to": "2026-01-02T13:00:00.000Z",
+                    "amount": 0.00167151,
+                    "cumulative": 0.01482151
+                },
+                {
+                    "from": "2026-01-02T13:00:00.000Z",
+                    "to": "2026-01-02T14:00:00.000Z",
+                    "amount": 0.00167151,
+                    "cumulative": 0.01649302
+                },
+                {
+                    "from": "2026-01-02T14:00:00.000Z",
+                    "to": "2026-01-02T15:00:00.000Z",
+                    "amount": 0.00167151,
+                    "cumulative": 0.01816453
+                },
+                {
+                    "from": "2026-01-02T15:00:00.000Z",
+                    "to": "2026-01-02T16:00:00.000Z",
+                    "amount": 0.00167151,
+                    "cumulative": 0.01983604
+                },
+                {
+                    "from": "2026-01-02T16:00:00.000Z",
+                    "to": "2026-01-02T17:00:00.000Z",
+                    "amount": 0.00167151,
+                    "cumulative": 0.02150755
+                },
+                {
+                    "from": "2026-01-02T17:00:00.000Z",
+                    "to": "2026-01-02T18:00:00.000Z",
+                    "amount": 0.00167151,
+                    "cumulative": 0.02317906
+                },
+                {
+                    "from": "2026-01-02T18:00:00.000Z",
+                    "to": "2026-01-02T19:00:00.000Z",
+                    "amount": 0.00167151,
+                    "cumulative": 0.02485057
+                },
+                {
+                    "from": "2026-01-02T19:00:00.000Z",
+                    "to": "2026-01-02T20:00:00.000Z",
+                    "amount": 0.00167151,
+                    "cumulative": 0.02652208
+                },
+                {
+                    "from": "2026-01-02T20:00:00.000Z",
+                    "to": "2026-01-02T21:00:00.000Z",
+                    "amount": 0.00167151,
+                    "cumulative": 0.02819359
+                },
+                {
+                    "from": "2026-01-02T21:00:00.000Z",
+                    "to": "2026-01-02T22:00:00.000Z",
+                    "amount": 0.00167151,
+                    "cumulative": 0.0298651
+                },
+                {
+                    "from": "2026-01-02T22:00:00.000Z",
+                    "to": "2026-01-02T23:00:00.000Z",
+                    "amount": 0.00167151,
+                    "cumulative": 0.03153661
+                },
+                {
+                    "from": "2026-01-02T23:00:00.000Z",
+                    "to": "2026-01-03T00:00:00.000Z",
+                    "amount": 0.00167151,
+                    "cumulative": 0.03320812
+                },
+                {
+                    "from": "2026-01-03T00:00:00.000Z",
+                    "to": "2026-01-03T01:00:00.000Z",
+                    "amount": 0.00167151,
+                    "cumulative": 0.03487963
+                },
+                {
+                    "from": "2026-01-03T01:00:00.000Z",
+                    "to": "2026-01-03T02:00:00.000Z",
+                    "amount": 0.00167151,
+                    "cumulative": 0.03655114
+                },
+                {
+                    "from": "2026-01-03T02:00:00.000Z",
+                    "to": "2026-01-03T03:00:00.000Z",
+                    "amount": 0.00167151,
+                    "cumulative": 0.03822265
+                },
+                {
+                    "from": "2026-01-03T03:00:00.000Z",
+                    "to": "2026-01-03T04:00:00.000Z",
+                    "amount": 0.00167151,
+                    "cumulative": 0.03989416
+                },
+                {
+                    "from": "2026-01-03T04:00:00.000Z",
+                    "to": "2026-01-03T05:00:00.000Z",
+                    "amount": 0.00167151,
+                    "cumulative": 0.04156567
+                },
+                {
+                    "from": "2026-01-03T05:00:00.000Z",
+                    "to": "2026-01-03T06:00:00.000Z",
+                    "amount": 0.00167151,
+                    "cumulative": 0.04323718
+                },
+                {
+                    "from": "2026-01-03T06:00:00.000Z",
+                    "to": "2026-01-03T07:00:00.000Z",
+                    "amount": 0.00167151,
+                    "cumulative": 0.04490869
+                },
+                {
+                    "from": "2026-01-03T07:00:00.000Z",
+                    "to": "2026-01-03T08:00:00.000Z",
+                    "amount": 0.00167151,
+                    "cumulative": 0.0465802
+                },
+                {
+                    "from": "2026-01-03T08:00:00.000Z",
+                    "to": "2026-01-03T09:00:00.000Z",
+                    "amount": 0.00167151,
+                    "cumulative": 0.04825171
+                },
+                {
+                    "from": "2026-01-03T09:00:00.000Z",
+                    "to": "2026-01-03T10:00:00.000Z",
+                    "amount": 0.00167151,
+                    "cumulative": 0.04992322
+                },
+                {
+                    "from": "2026-01-03T10:00:00.000Z",
+                    "to": "2026-01-03T11:00:00.000Z",
+                    "amount": 0.00167151,
+                    "cumulative": 0.05159473
+                },
+                {
+                    "from": "2026-01-03T11:00:00.000Z",
+                    "to": "2026-01-03T12:00:00.000Z",
+                    "amount": 0.00167151,
+                    "cumulative": 0.05326624
+                }
+            ],
+            "left_out": {
+                "unpriced_steps": 0,
+                "unpriced_tokens": 0,
+                "unfinished_runs": 1
+            }
+        }
+    },
+    "range": {
+        "preset": "24h",
+        "from": "2026-01-01T12:00:00.000Z",
+        "to": "2026-01-02T12:00:00.000Z"
+    }
+}

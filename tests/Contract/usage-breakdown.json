@@ -1,0 +1,132 @@
+{
+    "data": [
+        {
+            "provider": "anthropic",
+            "model": "claude-sonnet-4-5",
+            "steps": 3,
+            "runs": 2,
+            "usage": {
+                "state": "pending",
+                "input_tokens": 1230,
+                "output_tokens": 310,
+                "cache_read_tokens": 5,
+                "cache_write_tokens": null,
+                "reasoning_tokens": null,
+                "total_tokens": 1540
+            },
+            "cost": {
+                "state": "pending",
+                "amount": 0.00825
+            },
+            "coverage": {
+                "reported_steps": 2,
+                "unpriced_steps": 1,
+                "unpriced_tokens": 30
+            },
+            "filters": {
+                "provider": "anthropic",
+                "model": "claude-sonnet-4-5"
+            }
+        },
+        {
+            "provider": "anthropic",
+            "model": "claude-haiku-4-5",
+            "steps": 2,
+            "runs": 2,
+            "usage": {
+                "state": "reported",
+                "input_tokens": 800,
+                "output_tokens": 180,
+                "cache_read_tokens": null,
+                "cache_write_tokens": null,
+                "reasoning_tokens": null,
+                "total_tokens": 980
+            },
+            "cost": {
+                "state": "estimated",
+                "amount": 0.0045
+            },
+            "coverage": {
+                "reported_steps": 2,
+                "unpriced_steps": 0,
+                "unpriced_tokens": 0
+            },
+            "filters": {
+                "provider": "anthropic",
+                "model": "claude-haiku-4-5"
+            }
+        },
+        {
+            "provider": "openai",
+            "model": "text-embedding-3-small",
+            "steps": 2,
+            "runs": 2,
+            "usage": {
+                "state": "reported",
+                "input_tokens": 128,
+                "output_tokens": null,
+                "cache_read_tokens": null,
+                "cache_write_tokens": null,
+                "reasoning_tokens": null,
+                "total_tokens": 128
+            },
+            "cost": {
+                "state": "estimated",
+                "amount": 0.0004
+            },
+            "coverage": {
+                "reported_steps": 2,
+                "unpriced_steps": 0,
+                "unpriced_tokens": 0
+            },
+            "filters": {
+                "provider": "openai",
+                "model": "text-embedding-3-small"
+            }
+        },
+        {
+            "provider": "openai",
+            "model": "gpt-5",
+            "steps": 0,
+            "runs": 1,
+            "usage": {
+                "state": "not_reported",
+                "input_tokens": null,
+                "output_tokens": null,
+                "cache_read_tokens": null,
+                "cache_write_tokens": null,
+                "reasoning_tokens": null,
+                "total_tokens": null
+            },
+            "cost": {
+                "state": "not_captured",
+                "amount": null
+            },
+            "coverage": {
+                "reported_steps": 0,
+                "unpriced_steps": 0,
+                "unpriced_tokens": 0
+            },
+            "filters": {
+                "provider": "openai",
+                "model": "gpt-5"
+            }
+        }
+    ],
+    "by": "model",
+    "pagination": {
+        "page": 1,
+        "per_page": 25,
+        "total": 4,
+        "last_page": 1
+    },
+    "row_limit": {
+        "limit": 1000,
+        "truncated": false
+    },
+    "range": {
+        "preset": "24h",
+        "from": "2026-01-01T12:00:00.000Z",
+        "to": "2026-01-02T12:00:00.000Z"
+    }
+}

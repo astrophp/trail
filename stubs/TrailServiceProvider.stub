@@ -1,0 +1,31 @@
+<?php
+
+namespace App\Providers;
+
+use Astro\Trail\TrailApplicationServiceProvider;
+use Illuminate\Support\Facades\Gate;
+
+class TrailServiceProvider extends TrailApplicationServiceProvider
+{
+    /**
+     * Register any application services.
+     */
+    public function register(): void
+    {
+        //
+    }
+
+    /**
+     * Register the viewTrail gate.
+     *
+     * This gate determines who can access Trail outside the local environment.
+     */
+    protected function gate(): void
+    {
+        Gate::define('viewTrail', function ($user) {
+            return in_array($user->email, [
+                //
+            ]);
+        });
+    }
+}

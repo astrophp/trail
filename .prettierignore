@@ -1,0 +1,12 @@
+# Vendored by the shadcn CLI; kept byte-identical to upstream.
+/components.json
+/resources/js/components/ui
+/resources/js/lib/utils.ts
+package-lock.json
+/dist
+/vendor
+/node_modules
+/workbench
+composer.json
+composer.lock
+/resources/js/lib/cn-tables.ts

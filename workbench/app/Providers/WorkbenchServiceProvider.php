@@ -1,0 +1,70 @@
+<?php
+
+namespace Workbench\App\Providers;
+
+use Astro\Trail\Storage\Contracts\TraceStore;
+use Illuminate\Support\Facades\Route;
+use Illuminate\Support\ServiceProvider;
+use Laravel\Ai\AiServiceProvider;
+use ReflectionClass;
+use Workbench\App\Console\RunScenarioCommand;
+
+use function Orchestra\Testbench\workbench_path;
+
+/**
+ * Wires the workbench into whichever application boots it: the Testbench skeleton behind
+ * `composer serve`, or a test application.
+ */
+class WorkbenchServiceProvider extends ServiceProvider
+{
+    public function register(): void
+    {
+        if (blank(config('app.key'))) {
+            config(['app.key' => $this->localKey()]);
+        }
+
+        // The skeleton lives in vendor/, so without this the database would too. A DB_DATABASE of its own wins,
+        // and a test run never gets the file: refreshing the database there would wipe what was recorded.
+        if (! $this->app->runningUnitTests() && env('DB_DATABASE') === null && env('DB_CONNECTION', 'sqlite') === 'sqlite') {
+            $this->app->useDatabasePath(workbench_path('database'));
+
+            // Testbench falls back to an in-memory database while the skeleton's own file is missing.
+            config([
+                'database.default' => 'sqlite',
+                'database.connections.sqlite.database' => workbench_path('database', 'database.sqlite'),
+            ]);
+        }
+
+        // The skeleton's cache lasts for one process. A cache on disk lets "trail:pause" on the command line
+        // reach the server, so the dashboard can be seen with recording paused.
+        if (! $this->app->runningUnitTests() && env('CACHE_STORE') === null) {
+            config(['cache.default' => 'file']);
+        }
+    }
+
+    /**
+     * The key sessions and cookies are encrypted with when none is configured: stable for a checkout so
+     * that a form posted by one request is accepted by the next, and meaningless anywhere else.
+     */
+    private function localKey(): string
+    {
+        return 'base64:'.base64_encode(hash('sha256', 'trail-workbench:'.workbench_path(), true));
+    }
+
+    public function boot(): void
+    {
+        // A run left running reads as incomplete once it is this old; the least the store allows, so that the
+        // abandoned-stream scenario shows the change within a minute instead of an hour.
+        config(['trail.stale_after' => TraceStore::MINIMUM_STALE_SECONDS]);
+
+        // Conversations are stored in the SDK's own tables, which the SDK does not load by itself.
+        $this->loadMigrationsFrom(dirname((new ReflectionClass(AiServiceProvider::class))->getFileName(), 2).'/database/migrations');
+        $this->loadViewsFrom(workbench_path('resources', 'views'), 'workbench');
+
+        Route::middleware('web')->group(workbench_path('routes', 'web.php'));
+
+        if ($this->app->runningInConsole()) {
+            $this->commands([RunScenarioCommand::class]);
+        }
+    }
+}

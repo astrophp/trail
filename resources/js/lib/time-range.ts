@@ -1,0 +1,25 @@
+import { enumParam } from '@/lib/url-state'
+
+/** The ranges the dashboard offers, as the API's `range` parameter spells them. */
+export const timeRangePresets = ['1h', '24h', '7d'] as const
+
+export type TimeRangePreset = (typeof timeRangePresets)[number]
+
+export const defaultTimeRange: TimeRangePreset = '24h'
+
+/** The time range as the URL keeps it, under `range`. */
+export const timeRangeParam = enumParam(timeRangePresets, defaultTimeRange)
+
+/** The length of each range as a period, for "the previous 24 hours". */
+export const timeRangePeriods: Record<TimeRangePreset, string> = {
+    '1h': 'hour',
+    '24h': '24 hours',
+    '7d': '7 days',
+}
+
+/** How each range reads in the interface, in the order the presets are offered. */
+export const timeRangeLabels: Record<TimeRangePreset, string> = {
+    '1h': 'Last hour',
+    '24h': 'Last 24 hours',
+    '7d': 'Last 7 days',
+}

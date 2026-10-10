@@ -1,0 +1,104 @@
+import { render, screen } from '@testing-library/react'
+import { describe, expect, it } from 'vitest'
+import type { Status } from '@/api/types'
+import { StatusBadge, statusLabel } from '@/components/telemetry/status-badge'
+
+const cases: [Status, string][] = [
+    ['completed', 'Completed'],
+    ['failed', 'Failed'],
+    ['running', 'Running'],
+    ['incomplete', 'Incomplete'],
+    ['awaiting_approval', 'Awaiting approval'],
+]
+
+describe('StatusBadge', () => {
+    it.each(cases)('shows %s as an icon and the word %s', (status, label) => {
+        const { container } = render(<StatusBadge status={status} />)
+
+        expect(screen.getByText(label)).toBeInTheDocument()
+        expect(container.querySelector('svg')).toBeInTheDocument()
+    })
+
+    it.each(cases)('names %s as %s outside a badge', (status, label) => {
+        expect(statusLabel(status)).toBe(label)
+    })
+
+    it('gives every status its own label and icon, so colour is never the only difference', () => {
+        const markup = cases.map(([status]) => {
+            const { container, unmount } = render(
+                <StatusBadge status={status} />,
+            )
+            const html = container.querySelector('svg')!.innerHTML
+
+            unmount()
+
+            return html
+        })
+
+        expect(new Set(markup).size).toBe(cases.length)
+        expect(new Set(cases.map(([, label]) => label)).size).toBe(cases.length)
+    })
+
+    it('animates the icon of a running run only when motion is welcome', () => {
+        const { container } = render(<StatusBadge status="running" />)
+
+        expect(container.querySelector('svg')).toHaveClass(
+            'motion-safe:animate-spin',
+        )
+        expect(container.querySelector('svg')).not.toHaveClass('animate-spin')
+    })
+
+    it('does not animate any other status', () => {
+        const { container } = render(<StatusBadge status="completed" />)
+
+        expect(container.querySelector('svg')).not.toHaveClass(
+            'motion-safe:animate-spin',
+        )
+    })
+
+    it('accepts a className', () => {
+        const { container } = render(
+            <StatusBadge status="failed" className="extra" />,
+        )
+
+        expect(container.firstElementChild).toHaveClass('extra')
+    })
+
+    it.each([
+        ['completed', 'bg-success-soft'],
+        ['failed', 'bg-destructive-soft'],
+        ['running', 'bg-info-soft'],
+        ['incomplete', 'bg-warning-soft'],
+        ['awaiting_approval', 'bg-primary-soft'],
+    ] as const)(
+        'sits %s on its soft tint as a pill when tinted',
+        (status, tint) => {
+            const { container } = render(<StatusBadge status={status} tinted />)
+
+            expect(container.firstElementChild).toHaveClass(
+                'rounded-full',
+                tint,
+            )
+        },
+    )
+
+    it('has no tint by default', () => {
+        const { container } = render(<StatusBadge status="running" />)
+
+        expect(container.firstElementChild).not.toHaveClass('bg-info-soft')
+        expect(container.firstElementChild).not.toHaveClass('rounded-full')
+    })
+
+    it('can draw only the icon, keeping the given words for assistive technology and as a tooltip', () => {
+        const { container } = render(
+            <StatusBadge status="running" iconOnly label="2 running" />,
+        )
+
+        expect(container.firstElementChild).toHaveAttribute(
+            'title',
+            '2 running',
+        )
+        expect(screen.getByText('2 running')).toHaveClass('sr-only')
+        expect(screen.queryByText('Running')).not.toBeInTheDocument()
+    })
+})

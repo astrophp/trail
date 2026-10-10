@@ -1,0 +1,28 @@
+import { StrictMode } from 'react'
+import { createRoot } from 'react-dom/client'
+import { ThemeProvider } from '@/app/providers/theme-provider'
+import { CataloguePage } from '@/catalogue/catalogue-page'
+import { locateEntries } from '@/catalogue/entries'
+import { Toaster } from '@/components/ui/sonner'
+import type { CatalogueEntry } from '@/catalogue/types'
+import './catalogue.css'
+
+// Entries are discovered, not registered: any `name.catalogue.tsx` that
+// exports `catalogue` shows up here.
+const modules = import.meta.glob<{ catalogue: CatalogueEntry }>(
+    '../components/**/*.catalogue.tsx',
+    { eager: true },
+)
+
+const root = document.getElementById('catalogue')
+
+if (root) {
+    createRoot(root).render(
+        <StrictMode>
+            <ThemeProvider>
+                <CataloguePage entries={locateEntries(modules)} />
+                <Toaster position="top-center" />
+            </ThemeProvider>
+        </StrictMode>,
+    )
+}

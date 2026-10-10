@@ -1,0 +1,83 @@
+import { Fragment, type Ref } from 'react'
+import { Link, useLocation } from 'react-router'
+import { breadcrumbTrail, resolveRoute } from '@/app/routes'
+import { RefreshControl } from '@/app/shell/refresh-control'
+import {
+    Breadcrumb,
+    BreadcrumbItem,
+    BreadcrumbLink,
+    BreadcrumbList,
+    BreadcrumbPage,
+    BreadcrumbSeparator,
+} from '@/components/ui/breadcrumb'
+import { SidebarTrigger, useSidebar } from '@/components/ui/sidebar'
+import { PaletteTrigger } from '@/features/palette'
+import { useBoot } from '@/hooks/use-boot'
+import { useCurrentPageTitle } from '@/hooks/use-page-title'
+import { useReturnTarget } from '@/hooks/use-return-target'
+
+export function TopBar({ triggerRef }: { triggerRef: Ref<HTMLButtonElement> }) {
+    const boot = useBoot()
+    const { pathname } = useLocation()
+    const { openMobile } = useSidebar()
+    const back = useReturnTarget()
+    const trail = breadcrumbTrail(resolveRoute(pathname), useCurrentPageTitle())
+
+    return (
+        <header className="sticky top-0 z-10 flex h-13.5 shrink-0 items-center justify-between gap-4 border-b bg-background px-3.75 xs:px-4.5 md:h-14.25 md:px-5.75 wide:px-6.5 roomy:px-8">
+            <div className="flex min-w-0 items-center gap-2.5">
+                <SidebarTrigger
+                    ref={triggerRef}
+                    aria-label="Open navigation"
+                    aria-expanded={openMobile}
+                    className="md:hidden"
+                />
+                <Breadcrumb className="min-w-0">
+                    <BreadcrumbList className="flex-nowrap gap-2.5 text-caption md:text-xs">
+                        <BreadcrumbItem className="hidden md:inline-flex">
+                            <span className="truncate">
+                                {boot.appName ?? 'Laravel application'}
+                            </span>
+                        </BreadcrumbItem>
+                        <BreadcrumbSeparator className="hidden md:list-item">
+                            /
+                        </BreadcrumbSeparator>
+                        {trail.map((crumb, index) => (
+                            <Fragment key={crumb.title}>
+                                {index > 0 ? (
+                                    <BreadcrumbSeparator>/</BreadcrumbSeparator>
+                                ) : null}
+                                <BreadcrumbItem className="min-w-0">
+                                    {crumb.to ? (
+                                        <BreadcrumbLink asChild>
+                                            <Link
+                                                // Shortened with an ellipsis within the room left, never over the separator.
+                                                className="block truncate"
+                                                to={
+                                                    // A run opened from a list leads back to that view of it.
+                                                    back?.pathname === crumb.to
+                                                        ? `${back.pathname}${back.search}`
+                                                        : crumb.to
+                                                }
+                                            >
+                                                {crumb.title}
+                                            </Link>
+                                        </BreadcrumbLink>
+                                    ) : (
+                                        <BreadcrumbPage className="truncate">
+                                            {crumb.title}
+                                        </BreadcrumbPage>
+                                    )}
+                                </BreadcrumbItem>
+                            </Fragment>
+                        ))}
+                    </BreadcrumbList>
+                </Breadcrumb>
+            </div>
+            <div className="flex shrink-0 items-center gap-1">
+                <RefreshControl />
+                <PaletteTrigger />
+            </div>
+        </header>
+    )
+}

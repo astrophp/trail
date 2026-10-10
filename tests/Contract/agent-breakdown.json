@@ -1,0 +1,98 @@
+{
+    "data": {
+        "models": [
+            {
+                "provider": "anthropic",
+                "model": "claude-haiku-4-5",
+                "steps": 1,
+                "runs": 1,
+                "usage": {
+                    "state": "reported",
+                    "input_tokens": 400,
+                    "output_tokens": 90,
+                    "cache_read_tokens": null,
+                    "cache_write_tokens": null,
+                    "reasoning_tokens": null,
+                    "total_tokens": 490
+                },
+                "cost": {
+                    "state": "estimated",
+                    "amount": 0.004
+                },
+                "filters": {
+                    "agent": "ResearchAgent",
+                    "provider": "anthropic",
+                    "model": "claude-haiku-4-5"
+                }
+            }
+        ],
+        "tools": [
+            {
+                "name": "search",
+                "calls": 1,
+                "failed": 1,
+                "runs": 1,
+                "filters": {
+                    "agent": "ResearchAgent",
+                    "tool": "search"
+                }
+            }
+        ],
+        "delegated": {
+            "models": [
+                {
+                    "provider": "anthropic",
+                    "model": "claude-haiku-4-5",
+                    "steps": 1,
+                    "runs": 1,
+                    "usage": {
+                        "state": "reported",
+                        "input_tokens": 400,
+                        "output_tokens": 90,
+                        "cache_read_tokens": null,
+                        "cache_write_tokens": null,
+                        "reasoning_tokens": null,
+                        "total_tokens": 490
+                    },
+                    "cost": {
+                        "state": "estimated",
+                        "amount": 0.0005
+                    }
+                }
+            ],
+            "tools": [
+                {
+                    "name": "search",
+                    "calls": 1,
+                    "failed": 0,
+                    "runs": 1
+                }
+            ]
+        }
+    },
+    "limits": {
+        "models": {
+            "limit": 20,
+            "total": 1
+        },
+        "tools": {
+            "limit": 20,
+            "total": 1
+        },
+        "delegated": {
+            "models": {
+                "limit": 20,
+                "total": 1
+            },
+            "tools": {
+                "limit": 20,
+                "total": 1
+            }
+        }
+    },
+    "range": {
+        "preset": "24h",
+        "from": "2026-01-01T12:20:00.000Z",
+        "to": "2026-01-02T12:20:00.000Z"
+    }
+}
