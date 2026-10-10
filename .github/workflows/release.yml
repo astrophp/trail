@@ -1,0 +1,110 @@
+name: release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions: {}
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      notes: ${{ steps.notes.outputs.notes }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Verify tag and commit
+        env:
+          TAG: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+        run: |
+          scripts/release/tag-version.sh "$TAG"
+          git fetch origin main
+          scripts/release/on-main.sh "$SHA"
+
+      - name: Require successful checks
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          for workflow in tests.yml install.yml; do
+            for attempt in $(seq 1 40); do
+              if ! runs=$(gh api "repos/$REPOSITORY/actions/workflows/$workflow/runs?head_sha=$SHA&branch=main&event=push"); then
+                printf 'Could not query %s for %s.\n' "$workflow" "$SHA" >&2
+                exit 1
+              fi
+              if printf '%s' "$runs" | scripts/release/runs-green.sh "$workflow" "$SHA"; then
+                break
+              else
+                status=$?
+              fi
+              if [ "$status" -ne 2 ] || [ "$attempt" -eq 40 ]; then
+                exit "$status"
+              fi
+              sleep 30
+            done
+          done
+
+      - name: Verify committed build
+        run: |
+          npm ci
+          npm run build
+          git diff --exit-code -- dist resources/js/lib/cn-tables.ts
+
+      - name: Read release notes
+        id: notes
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          notes=$(scripts/release/changelog-entry.sh "$TAG")
+          printf 'notes=%s\n' "$(printf '%s' "$notes" | base64 --wrap=0)" >> "$GITHUB_OUTPUT"
+
+  release:
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          NOTES: ${{ needs.verify.outputs.notes }}
+        run: |
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            printf 'A GitHub release already exists for %s; refusing to change it.\n' "$TAG" >&2
+            exit 1
+          fi
+          printf '%s' "$NOTES" | base64 --decode > release-notes.md
+          args=(release create "$TAG" --verify-tag --title "$TAG" --notes-file release-notes.md)
+          case "$TAG" in *-*) args+=(--prerelease);; esac
+          gh "${args[@]}"
+
+  packagist:
+    needs: release
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    permissions: {}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: scripts/release
+
+      - name: Wait for Packagist
+        env:
+          TAG: ${{ github.ref_name }}
+        run: scripts/release/packagist-wait.sh "$TAG"
