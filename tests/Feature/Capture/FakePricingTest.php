@@ -3,10 +3,12 @@
 use Astro\Trail\Facades\Trail;
 use Astro\Trail\Pricing\PriceBook;
 use Astro\Trail\Tests\Fixtures\Agents\AssistantAgent;
+use Astro\Trail\Tests\Fixtures\Http\UsageRows;
 use Astro\Trail\Tests\Fixtures\Sdk\FakeAnthropic;
 use Astro\Trail\Tests\Fixtures\Storage\Rows;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Database\QueryException;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Schema;
@@ -115,4 +117,102 @@ it('stays config-only in a long-lived process once the refresh interval has pass
     expect($queries)->toHaveCount(0)
         ->and($fake->totals($first)->cost)->toEqualWithDelta(CONFIG_COST, 1e-9)
         ->and($fake->totals($second)->cost)->toEqualWithDelta(CONFIG_COST, 1e-9);
+});
+
+describe('the dashboard in a process that faked Trail', function () {
+    beforeEach(function () {
+        $this->app['env'] = 'testing';
+        Trail::auth(fn () => true);
+
+        Rows::price(['provider' => 'anthropic', 'model' => FakeAnthropic::MODEL, 'input' => 6, 'output' => 30]);
+        Rows::price(['provider' => 'anthropic', 'model' => 'saved-only', 'input' => 1, 'output' => 2]);
+
+        // Four steps of 1M tokens in and 100k out, in four complete hours of the projection's window.
+        $this->spend = function (): void {
+            Carbon::setTestNow('2026-01-02 12:30:00');
+
+            foreach (['2026-01-02 06:10:00', '2026-01-02 08:20:00', '2026-01-02 09:30:00', '2026-01-02 11:45:00'] as $started) {
+                UsageRows::run('Agent', $started, [
+                    UsageRows::step('anthropic', FakeAnthropic::MODEL, ['inputTokens' => 1_000_000, 'outputTokens' => 100_000, 'cost' => 3.0]),
+                ]);
+            }
+        };
+    });
+
+    afterEach(fn () => Carbon::setTestNow());
+
+    it('still lists the saved prices and the saved-only models', function () {
+        Trail::fake();
+
+        $rows = collect($this->getJson('/trail/api/prices')->assertOk()->json('data'))->keyBy('model');
+
+        expect($rows[FakeAnthropic::MODEL]['source'])->toBe('saved')
+            ->and($rows['saved-only']['source'])->toBe('saved');
+    });
+
+    it('lists the config price for the same model when no saved row exists', function () {
+        DB::table('trail_prices')->delete();
+        Trail::fake();
+
+        $rows = collect($this->getJson('/trail/api/prices')->assertOk()->json('data'))->keyBy('model');
+
+        expect($rows->has('saved-only'))->toBeFalse()
+            ->and($rows[FakeAnthropic::MODEL]['source'])->toBe('config');
+    });
+
+    it('answers a save with the saved price and deletes a saved-only model', function () {
+        Trail::fake();
+
+        $this->putJson('/trail/api/prices?provider=anthropic&model='.FakeAnthropic::MODEL, ['input' => 8, 'output' => 40])
+            ->assertOk()
+            ->assertJsonPath('data.source', 'saved');
+
+        $this->deleteJson('/trail/api/prices?provider=anthropic&model=saved-only')->assertOk();
+
+        expect(DB::table('trail_prices')->where('model', 'saved-only')->count())->toBe(0);
+    });
+
+    it('projects the spend at the saved price while a faked run is still priced from config', function () {
+        ($this->spend)();
+        $fake = Trail::fake();
+
+        // 1M in at 6 and 100k out at 30 is 9 a step, 36 over the six hours of the window.
+        expect($this->getJson('/trail/api/usage/spend')->assertOk()->json('data.projection.per_bucket'))->toEqual(6);
+
+        [$id, $queries] = ($this->run)();
+
+        expect($queries)->toHaveCount(0)
+            ->and($fake->totals($id)->cost)->toEqualWithDelta(CONFIG_COST, 1e-9);
+    });
+
+    it('projects the spend at the config price when there is no saved row', function () {
+        DB::table('trail_prices')->delete();
+        ($this->spend)();
+        Trail::fake();
+
+        // 1M in at 3 and 100k out at 15 is 4.5 a step, 18 over the six hours of the window.
+        expect($this->getJson('/trail/api/usage/spend')->assertOk()->json('data.projection.per_bucket'))->toEqual(3);
+    });
+});
+
+it('prices the next run without a query when Trail is faked after a run was already priced', function () {
+    ($this->run)();
+
+    $fake = Trail::fake();
+
+    [$id, $queries] = ($this->run)();
+
+    expect($queries)->toHaveCount(0)
+        ->and($fake->totals($id)->cost)->toEqualWithDelta(CONFIG_COST, 1e-9);
+});
+
+it('stays config-only when Trail is faked twice', function () {
+    Rows::price(['provider' => 'anthropic', 'model' => FakeAnthropic::MODEL, 'input' => 6, 'output' => 30]);
+    Trail::fake();
+    $fake = Trail::fake();
+
+    [$id, $queries] = ($this->run)();
+
+    expect($queries)->toHaveCount(0)
+        ->and($fake->totals($id)->cost)->toEqualWithDelta(CONFIG_COST, 1e-9);
 });

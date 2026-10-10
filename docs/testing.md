@@ -4,10 +4,11 @@
 was recorded without writing Trail's trace rows to a database. It returns the store, which has the
 assertions below.
 
-While faked, Trail also prices from the `trail.pricing` entries in your configuration alone. It runs
-no database query to find saved prices, so a test whose database has no `trail_prices` table reports
-nothing, and a price saved in that table is not used. This holds for the rest of the process, however
-long it runs.
+While faked, the runs Trail records are also priced from the `trail.pricing` entries in your
+configuration alone. Recording runs no database query to find saved prices, so a test whose database
+has no `trail_prices` table reports nothing from it, and a price saved in that table does not price
+a recorded run. This holds for the rest of the process, however long it runs, and whether you fake
+before or after the first run.
 
 ```php
 use App\Ai\Agents\SupportAgent;
@@ -87,8 +88,9 @@ fields for one span, plus its parent, tokens, cost, input and output.
 
 ## What the fake does not replace
 
-- The dashboard's own pages and API are not replaced: they still read the database, including the
-  saved prices and the recorded models. Only recording is faked.
+- The dashboard's pages and API are not replaced. They still read the database, and they still use
+  saved prices: the prices page lists them, saving or resetting a price works, and the spend
+  projection uses them. Only what recording writes and how it prices are faked.
 - The listeners stay registered, so recording behaves as it does in your application. To turn
   recording off in tests, set `TRAIL_ENABLED=false` in `phpunit.xml` or use
   `Trail::withoutRecording()`.

@@ -26,12 +26,11 @@ class PriceBook
 
     private ?int $loadedAt = null;
 
-    private bool $configOnly = false;
-
     public function __construct(
         private readonly Repository $config,
         private readonly ConnectionResolverInterface $resolver,
         private readonly ?string $connection = null,
+        private readonly bool $configOnly = false,
     ) {}
 
     public function rateFor(string $provider, string $model): ?Rate
@@ -74,13 +73,12 @@ class PriceBook
     }
 
     /**
-     * From now on prices come from `trail.pricing` alone: saved prices are never read, so no query
-     * is made to find them. Used while Trail is faked; nothing turns it back off.
+     * A price book that finds prices in `trail.pricing` alone: it never reads saved prices, so it
+     * makes no query. This book is left as it is.
      */
-    public function useConfigOnly(): void
+    public function configOnly(): self
     {
-        $this->configOnly = true;
-        $this->flush();
+        return new self($this->config, $this->resolver, $this->connection, true);
     }
 
     /**
