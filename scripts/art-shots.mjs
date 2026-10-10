@@ -4,9 +4,15 @@
 //
 //   scripts/art-shots.sh <workbench url> [--path /trail] [--out art] [--only overview,trace]
 //
-// It opens nothing by run id: it asks the dashboard's own API for a conversation with several
-// turns, a run with a tool call and a delegated sub-agent, and the busiest agent, and stops with a
-// message when the workbench has recorded nothing suitable.
+// It opens nothing by run id: it asks the dashboard's own API for what each page needs (a
+// conversation with several turns, a run with a tool call and a delegated sub-agent, the busiest
+// agent) and stops with a message when the workbench has recorded nothing suitable. It looks only
+// for what the screenshots asked for, so `--only overview` needs no conversation.
+//
+// A light shot and its dark shot show the same page in the same state: the page is loaded once,
+// shot, then the browser's colour scheme is switched, as a person's operating system does at
+// dusk, and it is shot again. The script refuses to start while runs are being recorded, and fails
+// when the page or the recorded data changed between the two shots.
 
 import { createRequire } from 'node:module'
 import { mkdirSync, readFileSync } from 'node:fs'
@@ -22,7 +28,10 @@ const { chromium } = createRequire(
 const VIEWPORT = { width: 1440, height: 900 }
 const SCALE = 2
 const RANGE = '1h'
-const THEMES = ['light', 'dark']
+// How long nothing may have been recorded before the screenshots start, in seconds.
+const QUIET_SECONDS = 15
+// How many times a page is shot again when it changed between its light and dark shot.
+const ATTEMPTS = 3
 
 const args = process.argv.slice(2)
 const option = (name, fallback) => {
@@ -33,7 +42,7 @@ const option = (name, fallback) => {
 const origin = (args.find((a) => /^https?:\/\//.test(a)) ?? '').replace(/\/$/, '')
 const path = option('--path', '/trail')
 const out = resolve(root, option('--out', 'art'))
-const only = option('--only', null)?.split(',')
+const only = option('--only', null)?.split(',') ?? null
 
 if (origin === '') {
     console.error('Usage: scripts/art-shots.sh <workbench url> [--path /trail] [--out art] [--only a,b]')
@@ -43,7 +52,7 @@ if (origin === '') {
 class Unsuitable extends Error {}
 
 const base = origin + path
-const api = async (endpoint) => {
+const body = async (endpoint) => {
     const response = await fetch(`${base}/api/${endpoint}`, {
         headers: { Accept: 'application/json' },
     })
@@ -52,69 +61,139 @@ const api = async (endpoint) => {
         throw new Unsuitable(`${base}/api/${endpoint} answered ${response.status}. Is the workbench running at ${origin}?`)
     }
 
-    return (await response.json()).data
+    return response.json()
+}
+const api = async (endpoint) => (await body(endpoint)).data
+
+/**
+ * What the recording looks like now: how many runs there are, the newest one, whether any is in
+ * flight and how long ago anything was recorded. Taken before the screenshots and after them.
+ */
+async function recordingState() {
+    const meta = await api('meta')
+    const list = await body(`traces?range=${RANGE}&per_page=1`)
+    const newest = list.data[0]
+    const touched = newest === undefined ? 0 : Math.max(Date.parse(newest.started_at), Date.parse(newest.ended_at ?? newest.started_at))
+
+    return {
+        running: meta.traces.running,
+        total: list.pagination.total,
+        newest: newest?.id ?? null,
+        quietFor: (Date.parse(list.range.to) - touched) / 1000,
+    }
 }
 
-/** What each screenshot opens, found through the API. */
-async function discover() {
-    const found = {}
+async function requireQuiet() {
+    const state = await recordingState()
 
-    const traces = await api(`traces?range=${RANGE}&per_page=100`)
-    if (traces.length < 20) {
-        throw new Unsuitable(`Only ${traces.length} runs in the last hour. Record more first (art/README.md).`)
+    if (state.running > 0) {
+        throw new Unsuitable(`${state.running} run(s) are still in flight. Stop the recorder (scripts/art-record.sh) and wait for them to finish, then take the screenshots at once.`)
+    }
+    if (state.quietFor < QUIET_SECONDS) {
+        throw new Unsuitable(`A run was recorded ${Math.round(state.quietFor)} s ago. Stop the recorder (scripts/art-record.sh), wait ${QUIET_SECONDS} s, then take the screenshots at once.`)
     }
 
-    // A completed run, with no failed child, with a tool call and a delegated sub-agent: the newest one with the most spans.
-    let best = null
-    for (const trace of traces.filter((t) => t.status === 'completed' && !t.child_failed)) {
-        const { spans } = await api(`traces/${trace.id}`)
-        const delegated = spans.some((s) => s.type === 'agent' && s.parent_id)
-        const tools = spans.filter((s) => s.type === 'tool').length
+    return state
+}
 
-        if (delegated && tools > 0 && (best === null || spans.length > best.spans)) {
-            best = { id: trace.id, spans: spans.length }
+// What each screenshot opens, found through the API when the screenshot needs it.
+const finders = {
+    // A completed run, with no failed child, with a tool call and a delegated sub-agent: the one
+    // with the most spans.
+    async trace() {
+        const traces = await api(`traces?range=${RANGE}&per_page=100`)
+        let best = null
+
+        for (const trace of traces.filter((t) => t.status === 'completed' && !t.child_failed)) {
+            const { spans } = await api(`traces/${trace.id}`)
+            const delegated = spans.some((s) => s.type === 'agent' && s.parent_id)
+            const tools = spans.filter((s) => s.type === 'tool').length
+
+            if (delegated && tools > 0 && (best === null || spans.length > best.spans)) {
+                best = { id: trace.id, spans: spans.length }
+            }
         }
-    }
-    if (best === null) {
-        throw new Unsuitable('No completed run with a tool call and a delegated sub-agent in the last hour. Run the delegation scenarios.')
-    }
-    found.trace = `/traces/${best.id}`
+        if (best === null) {
+            throw new Unsuitable('No completed run with a tool call and a delegated sub-agent in the last hour. Run the delegation scenarios.')
+        }
+
+        return `/traces/${best.id}`
+    },
 
     // A conversation of at least three turns that all completed: the one with the most turns.
-    const conversations = await api(`conversations?range=${RANGE}&per_page=100`)
-    const long = conversations
-        .filter((c) => c.turns.all >= 3 && c.turns.completed === c.turns.all)
-        .sort((a, b) => b.turns.all - a.turns.all)[0]
-    if (long === undefined) {
-        throw new Unsuitable('No conversation with three or more completed turns in the last hour. Run long-conversation.')
-    }
-    found.conversation = `/conversations/transcript?${new URLSearchParams({ id: long.id })}`
+    async conversation() {
+        const conversations = await api(`conversations?range=${RANGE}&per_page=100`)
+        const long = conversations
+            .filter((c) => c.turns.all >= 3 && c.turns.completed === c.turns.all)
+            .sort((a, b) => b.turns.all - a.turns.all)[0]
 
-    // The agent with the most runs.
-    const runsOf = (agent) => agent.top_level?.runs.all ?? 0
-    const agents = await api(`agents?range=${RANGE}`)
-    const busiest = agents.sort((a, b) => runsOf(b) - runsOf(a))[0]
-    if (busiest === undefined || runsOf(busiest) < 5) {
-        throw new Unsuitable('No agent with five runs in the last hour.')
-    }
-    found.agent = `/agents/agent?${new URLSearchParams({ name: busiest.name, range: RANGE })}`
-
-    // A search word that finds something in at least two groups, for the command palette.
-    let widest = 1
-    for (const word of ['return', 'order', 'assistant', 'refund', 'policy', 'help']) {
-        const result = await api(`search?q=${word}`)
-        const groups = Object.values(result).filter((rows) => rows.length > 0).length
-
-        if (groups > widest) {
-            found.query = word
-            widest = groups
+        if (long === undefined) {
+            throw new Unsuitable('No conversation with three or more completed turns in the last hour. Run long-conversation.')
         }
-    }
-    if (found.query === undefined) {
-        throw new Unsuitable('No search word returns results in two groups (runs, conversations, agents).')
-    }
 
-    return found
+        return `/conversations/transcript?${new URLSearchParams({ id: long.id })}`
+    },
+
+    // The agent with the most runs of its own.
+    async agent() {
+        const runsOf = (agent) => agent.top_level?.runs.all ?? 0
+        const busiest = (await api(`agents?range=${RANGE}`)).sort((a, b) => runsOf(b) - runsOf(a))[0]
+
+        if (busiest === undefined || runsOf(busiest) < 5) {
+            throw new Unsuitable('No agent with five runs in the last hour.')
+        }
+
+        return `/agents/agent?${new URLSearchParams({ name: busiest.name, range: RANGE })}`
+    },
+
+    // A search word that finds something in the most groups (runs, conversations, agents), at
+    // least two.
+    async query() {
+        let found = null
+        let widest = 1
+
+        for (const word of ['return', 'order', 'assistant', 'refund', 'policy', 'help']) {
+            const result = await api(`search?q=${word}`)
+            const groups = Object.values(result).filter((rows) => rows.length > 0).length
+
+            if (groups > widest) {
+                found = word
+                widest = groups
+            }
+        }
+        if (found === null) {
+            throw new Unsuitable('No search word returns results in two groups (runs, conversations, agents).')
+        }
+
+        return found
+    },
+}
+
+const shots = {
+    overview: { url: async () => `/?range=${RANGE}` },
+    traces: { url: async () => `/traces?range=${RANGE}` },
+    trace: {
+        url: finders.trace,
+        // Select the delegated sub-agent's tool call, so the inspector shows the evidence for it.
+        before: async (page) => {
+            await page.getByRole('treeitem').filter({ hasText: 'Tool call' }).first().click()
+        },
+    },
+    conversation: { url: finders.conversation },
+    agent: { url: finders.agent },
+    usage: { url: async () => `/usage?range=${RANGE}` },
+    palette: {
+        url: async () => `/traces?range=${RANGE}`,
+        before: async (page) => {
+            const query = await finders.query()
+
+            await page.keyboard.press('ControlOrMeta+k')
+            await page.getByRole('dialog').waitFor()
+            await page.keyboard.type(query, { delay: 40 })
+            await page.waitForLoadState('networkidle')
+            await page.waitForTimeout(800)
+        },
+    },
 }
 
 /** The page is done: network idle, no skeleton, charts drawn, nothing focused or hovered. */
@@ -129,63 +208,62 @@ async function settle(page) {
     await page.waitForTimeout(300)
 }
 
-const shots = (found) => ({
-    overview: { url: `/?range=${RANGE}` },
-    traces: { url: `/traces?range=${RANGE}` },
-    trace: {
-        url: found.trace,
-        // Select the delegated sub-agent's tool call, so the inspector shows the evidence for it.
-        before: async (page) => {
-            await page.getByRole('treeitem').filter({ hasText: 'Tool call' }).first().click()
-        },
-    },
-    conversation: { url: found.conversation },
-    agent: { url: found.agent },
-    usage: { url: `/usage?range=${RANGE}` },
-    palette: {
-        url: `/traces?range=${RANGE}`,
-        before: async (page) => {
-            await page.keyboard.press('ControlOrMeta+k')
-            await page.getByRole('dialog').waitFor()
-            await page.keyboard.type(found.query, { delay: 40 })
-            await page.waitForLoadState('networkidle')
-            await page.waitForTimeout(800)
-        },
-    },
-})
+/**
+ * What the page says, for comparing its two shots: its text, without the "Updated ... ago" label,
+ * which is the one text that moves by itself, and the dialog's text when one is open.
+ */
+const textOf = (page) =>
+    page.evaluate(() => document.body.innerText.replace(/Updated [^\n]*/g, '').replace(/\s+/g, ' ').trim())
 
-async function takeScreenshots(browser, found) {
-    const wanted = Object.entries(shots(found)).filter(([name]) => only === undefined || only === null || only.includes(name))
+async function takeScreenshots(browser) {
+    const names = Object.keys(shots).filter((name) => only === null || only.includes(name))
 
-    for (const theme of THEMES) {
-        // The theme is chosen the way the dashboard's own toggle keeps it: the `trail-theme` entry
-        // in local storage. The browser's colour scheme follows, as it would for a person.
-        const context = await browser.newContext({
-            viewport: VIEWPORT,
-            deviceScaleFactor: SCALE,
-            colorScheme: theme,
-        })
-        await context.addInitScript((value) => {
-            try {
-                localStorage.setItem('trail-theme', value)
-            } catch {
-                // Storage is a convenience; the colour scheme above still applies.
-            }
-        }, theme)
+    // The colour scheme is the browser's, which the dashboard follows until a person picks a theme
+    // of their own with its toggle. Switching it live is what an operating system does at dusk.
+    const context = await browser.newContext({
+        viewport: VIEWPORT,
+        deviceScaleFactor: SCALE,
+        colorScheme: 'light',
+    })
 
-        for (const [name, shot] of wanted) {
+    for (const name of names) {
+        const shot = shots[name]
+        const url = await shot.url()
+        let taken = false
+
+        for (let attempt = 1; attempt <= ATTEMPTS && !taken; attempt++) {
             const page = await context.newPage()
-            await page.goto(base + shot.url)
+
+            await page.emulateMedia({ colorScheme: 'light' })
+            await page.goto(base + url)
             await settle(page)
             await shot.before?.(page)
             await settle(page)
-            await page.screenshot({ path: `${out}/${name}-${theme}.png` })
+            await page.waitForFunction(() => !document.documentElement.classList.contains('dark'))
+            const lightText = await textOf(page)
+            await page.screenshot({ path: `${out}/${name}-light.png` })
+
+            await page.emulateMedia({ colorScheme: 'dark' })
+            await page.waitForFunction(() => document.documentElement.classList.contains('dark'))
+            await page.waitForTimeout(1200)
+            const darkText = await textOf(page)
+            await page.screenshot({ path: `${out}/${name}-dark.png` })
             await page.close()
-            console.log(`${name}-${theme}.png`)
+
+            if (lightText === darkText) {
+                taken = true
+                console.log(`${name}-light.png, ${name}-dark.png`)
+            } else {
+                console.log(`${name}: the page changed between its light and its dark shot (attempt ${attempt} of ${ATTEMPTS})`)
+            }
         }
 
-        await context.close()
+        if (!taken) {
+            throw new Unsuitable(`${name} kept changing between its light and its dark shot. Is something still recording?`)
+        }
     }
+
+    await context.close()
 }
 
 /** art/social-preview.png: 1280x640, from the logo and the hero screenshot. */
@@ -194,8 +272,7 @@ async function takeSocialPreview(browser) {
     const logo = readFileSync(`${out}/logo-light.svg`).toString('base64')
 
     // The dashboard's own colours and type, read from its page rather than copied here.
-    const page = await browser.newPage({ viewport: VIEWPORT })
-    await page.addInitScript(() => localStorage.setItem('trail-theme', 'light'))
+    const page = await browser.newPage({ viewport: VIEWPORT, colorScheme: 'light' })
     await page.goto(base + '/')
     await page.waitForLoadState('networkidle')
     const theme = await page.evaluate(() => {
@@ -230,16 +307,28 @@ async function takeSocialPreview(browser) {
 
 mkdirSync(out, { recursive: true })
 
+const wantsScreenshots = only === null || only.some((name) => name !== 'social-preview')
+const wantsSocial = only === null || only.includes('social-preview')
 let browser
+
 try {
-    const found = await discover()
+    const before = wantsScreenshots ? await requireQuiet() : null
+
     browser = await chromium.launch({
         // The installed Google Chrome by default. ART_BROWSER=chromium uses Playwright's own build.
         ...(process.env.ART_BROWSER === 'chromium' ? {} : { channel: 'chrome' }),
     })
-    await takeScreenshots(browser, found)
 
-    if (only === undefined || only === null || only.includes('social-preview')) {
+    if (wantsScreenshots) {
+        await takeScreenshots(browser)
+
+        const after = await recordingState()
+        if (after.total !== before.total || after.newest !== before.newest || after.running !== 0) {
+            throw new Unsuitable(`Runs were recorded while the screenshots were taken (${before.total} runs before, ${after.total} after). Stop the recorder and take them again.`)
+        }
+    }
+
+    if (wantsSocial) {
         await takeSocialPreview(browser)
     }
 } catch (error) {

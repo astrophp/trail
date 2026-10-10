@@ -1,13 +1,13 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/astrophp/trail/main/art/logo-dark.svg">
-    <img src="https://raw.githubusercontent.com/astrophp/trail/main/art/logo-light.svg" alt="Trail" width="240">
+    <img src="https://raw.githubusercontent.com/astrophp/trail/main/art/logo-light.svg" alt="Trail logo" width="240">
   </picture>
 </p>
 
 <p align="center">
   <strong>Observability for the Laravel AI SDK.</strong><br>
-  Every agent run, recorded in your own database and shown in your own app.
+  Agent runs recorded in your own database and shown in your own app.
 </p>
 
 <p align="center">

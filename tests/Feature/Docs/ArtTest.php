@@ -88,6 +88,33 @@ function artProblems(string $readme, array $files): array
         }
     }
 
+    foreach (artReferences($readme) as $url) {
+        if (preg_match('#(^|/)art/#', $url) === 1 && ! str_starts_with($url, ART_URL)) {
+            $problems[] = "{$url} is an art/ image but not an absolute URL on main";
+        }
+    }
+
+    preg_match_all('#<picture>(.*?)</picture>#s', $readme, $pictures);
+
+    foreach ($pictures[1] as $picture) {
+        $source = strpos($picture, '<source');
+        $image = strpos($picture, '<img');
+        preg_match('/<source\b[^>]*>/', $picture, $sourceTag);
+        preg_match('/\bsrcset="([^"]*)"/', $sourceTag[0] ?? '', $dark);
+        preg_match('/<img\b[^>]*\bsrc="([^"]*)"/', $picture, $light);
+        $label = basename($light[1] ?? 'picture');
+
+        if ($source === false || $image === false || $source > $image) {
+            $problems[] = "{$label}: the dark <source> must come before the <img>";
+        } elseif (! str_contains($sourceTag[0], 'media="(prefers-color-scheme: dark)"')) {
+            $problems[] = "{$label}: the <source> is not for prefers-color-scheme: dark";
+        } elseif (preg_match('/-dark\.\w+$/', $dark[1] ?? '') !== 1 || preg_match('/-light\.\w+$/', $light[1] ?? '') !== 1) {
+            $problems[] = "{$label}: the <source> must name the -dark file and the <img> the -light file";
+        } elseif (preg_replace('/-dark(\.\w+)$/', '-light$1', $dark[1]) !== $light[1]) {
+            $problems[] = "{$label}: the <source> and the <img> name different images";
+        }
+    }
+
     foreach ($files as $file) {
         if (! in_array($file, $named, true)) {
             $problems[] = "{$file} is in art/ but the README does not use it";
@@ -143,6 +170,29 @@ it('notices a missing file, a missing alt text, a lost variant and an orphan', f
         ->and(artProblems(str_replace('alt="A thing"', 'alt=""', $good), $files))->toBe([ART_URL.'a-light.png has no alt text'])
         ->and(artProblems(str_replace(' alt="A thing"', '', $good), $files))->toBe([ART_URL.'a-light.png has no alt text'])
         ->and(artProblems(preg_replace('/<source.*>\n/', '', $good), $files))
-        ->toBe(['a-light.png has no -dark variant in the README', 'a-dark.png is in art/ but the README does not use it'])
+        ->toBe(['a-light.png has no -dark variant in the README', 'a-light.png: the dark <source> must come before the <img>', 'a-dark.png is in art/ but the README does not use it'])
         ->and(artProblems($good, [...$files, 'old.png']))->toBe(['old.png is in art/ but the README does not use it']);
+});
+
+it('notices an image that is not an absolute URL on main, and a picture put together wrongly', function () {
+    $good = <<<'HTML'
+        <picture>
+          <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/astrophp/trail/main/art/a-dark.png">
+          <img src="https://raw.githubusercontent.com/astrophp/trail/main/art/a-light.png" alt="A thing" width="100">
+        </picture>
+        HTML;
+    $files = ['a-light.png', 'a-dark.png'];
+    $problems = fn (string $readme) => artProblems($readme, $files);
+
+    expect($problems(str_replace('https://raw.githubusercontent.com/astrophp/trail/main/', '', $good)))->not->toBe([])
+        ->and($problems(str_replace('/main/art/a-light', '/dev/art/a-light', $good)))
+        ->toContain('https://raw.githubusercontent.com/astrophp/trail/dev/art/a-light.png is an art/ image but not an absolute URL on main')
+        ->and($problems(preg_replace('#^(\s*)(<source.*>)\n(\s*)(<img.*>)#m', '$1$4'."\n".'$3$2', $good)))
+        ->toContain('a-light.png: the dark <source> must come before the <img>')
+        ->and($problems(str_replace('a-dark.png', 'a-light.png', $good)))
+        ->toContain('a-light.png: the <source> must name the -dark file and the <img> the -light file')
+        ->and($problems(str_replace('(prefers-color-scheme: dark)', '(min-width: 600px)', $good)))
+        ->toContain('a-light.png: the <source> is not for prefers-color-scheme: dark')
+        ->and($problems(str_replace('srcset="https://raw.githubusercontent.com/astrophp/trail/main/art/a-dark.png"', 'srcset="https://raw.githubusercontent.com/astrophp/trail/main/art/b-dark.png"', $good)))
+        ->toContain('a-light.png: the <source> and the <img> name different images');
 });
