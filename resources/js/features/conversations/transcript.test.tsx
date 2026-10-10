@@ -104,6 +104,35 @@ describe('the conversation page', () => {
         ).toBeVisible()
     })
 
+    it('shows the model and its provider together in one inline group beside the agent', async () => {
+        await open(
+            windowOf([
+                turnOf('a', {
+                    trace: {
+                        provider: 'anthropic',
+                        model: 'claude-sonnet-5-5',
+                    },
+                }),
+            ]),
+        )
+
+        const group = within(turn(1)).getByRole('group', {
+            name: 'Model and provider',
+        })
+
+        expect(group).toHaveTextContent(/^claude-sonnet-5-5\s*·\s*anthropic$/)
+        expect(
+            within(group)
+                .getByText('claude-sonnet-5-5')
+                .compareDocumentPosition(within(group).getByText('anthropic')) &
+                Node.DOCUMENT_POSITION_FOLLOWING,
+        ).toBeTruthy()
+        // Same row as the agent name, so the provider is not a line of its own under it.
+        expect(group.previousElementSibling).toHaveTextContent(
+            'SupportAssistant',
+        )
+    })
+
     it('shows a response as text, never as markup', async () => {
         await open(
             windowOf([

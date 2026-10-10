@@ -87,7 +87,11 @@ export function TurnResponse({ turn, number }: { turn: Turn; number: number }) {
                     <span className="text-xs font-medium wrap-anywhere">
                         {turn.trace.name}
                     </span>
-                    <ModelLabel of={turn.trace} className="text-caption" />
+                    <ModelLabel
+                        of={turn.trace}
+                        layout="inline"
+                        className="text-caption"
+                    />
                 </div>
                 {response === undefined ? (
                     <NoResponse turn={turn} />

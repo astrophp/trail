@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import { ModelLabel } from '@/components/telemetry/model-label'
 
@@ -141,5 +141,71 @@ describe('ModelLabel', () => {
         )
 
         expect(container.firstElementChild).toHaveClass('extra')
+    })
+
+    describe('inline', () => {
+        it('puts the model and the provider in one group, the model first', () => {
+            render(
+                <ModelLabel
+                    layout="inline"
+                    of={{
+                        model: 'claude-sonnet-5-5',
+                        provider: 'anthropic',
+                        streamed: false,
+                    }}
+                />,
+            )
+
+            const group = screen.getByRole('group', {
+                name: 'Model and provider',
+            })
+
+            expect(group).toHaveTextContent(
+                /^claude-sonnet-5-5\s*·\s*anthropic$/,
+            )
+            expect(within(group).getByText('claude-sonnet-5-5')).toBeVisible()
+            expect(within(group).getByText('anthropic')).toBeVisible()
+        })
+
+        it('keeps the wording for a model or provider that was not captured', () => {
+            const { rerender } = render(
+                <ModelLabel
+                    layout="inline"
+                    of={{ model: null, provider: 'openai' }}
+                />,
+            )
+
+            expect(screen.getByRole('group')).toHaveTextContent(
+                /^Not captured\s*·\s*openai$/,
+            )
+
+            rerender(
+                <ModelLabel
+                    layout="inline"
+                    of={{ model: 'gpt-4o', provider: null }}
+                />,
+            )
+
+            expect(screen.getByRole('group')).toHaveTextContent(
+                /^gpt-4o\s*·\s*Not captured$/,
+            )
+
+            rerender(
+                <ModelLabel
+                    layout="inline"
+                    of={{ model: null, provider: null }}
+                />,
+            )
+
+            expect(screen.getByRole('group')).toHaveTextContent(
+                /^Not captured\s*·\s*Not captured$/,
+            )
+        })
+
+        it('has no group when stacked', () => {
+            render(<ModelLabel of={{ model: 'gpt-4o', provider: 'openai' }} />)
+
+            expect(screen.queryByRole('group')).not.toBeInTheDocument()
+        })
     })
 })
