@@ -37,25 +37,11 @@ jobs:
       - name: Require successful checks
         env:
           GH_TOKEN: ${{ github.token }}
-          REPOSITORY: ${{ github.repository }}
+          GH_REPO: ${{ github.repository }}
           SHA: ${{ github.sha }}
         run: |
           for workflow in tests.yml install.yml; do
-            for attempt in $(seq 1 40); do
-              if ! runs=$(gh api "repos/$REPOSITORY/actions/workflows/$workflow/runs?head_sha=$SHA&branch=main&event=push"); then
-                printf 'Could not query %s for %s.\n' "$workflow" "$SHA" >&2
-                exit 1
-              fi
-              if printf '%s' "$runs" | scripts/release/runs-green.sh "$workflow" "$SHA"; then
-                break
-              else
-                status=$?
-              fi
-              if [ "$status" -ne 2 ] || [ "$attempt" -eq 40 ]; then
-                exit "$status"
-              fi
-              sleep 30
-            done
+            scripts/release/wait-for-runs.sh "$workflow" "$SHA"
           done
 
       - name: Verify committed build
@@ -82,11 +68,19 @@ jobs:
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
           TAG: ${{ github.ref_name }}
           NOTES: ${{ needs.verify.outputs.notes }}
         run: |
-          if gh release view "$TAG" > /dev/null 2>&1; then
+          lookup=$(mktemp)
+          if gh api "repos/$GH_REPO/releases/tags/$TAG" > "$lookup" 2>&1; then
             printf 'A GitHub release already exists for %s; refusing to change it.\n' "$TAG" >&2
+            exit 1
+          fi
+          # gh api exits non-zero for HTTP errors; only a 404 permits creation.
+          if ! grep -q 'HTTP 404' "$lookup"; then
+            cat "$lookup" >&2
+            printf 'Could not check whether a GitHub release exists for %s.\n' "$TAG" >&2
             exit 1
           fi
           printf '%s' "$NOTES" | base64 --decode > release-notes.md
@@ -98,7 +92,8 @@ jobs:
     needs: release
     runs-on: ubuntu-latest
     timeout-minutes: 12
-    permissions: {}
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v7
         with:
