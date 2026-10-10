@@ -14,7 +14,6 @@ Redaction runs before the cut, so a secret cut in half cannot slip past a patter
 
 ## Turning payload capture off
 
-<!-- sample: payloads.capture-off -->
 ```php
 'capture' => [
     'enabled' => false,
@@ -53,7 +52,6 @@ key blocks. They are kept narrow so ordinary text is left alone.
 **Adding your own.** A list you set replaces the default list; it does not extend it. To add to the
 defaults, keep them in your published `config/trail.php` and add yours at the end:
 
-<!-- sample: payloads.redaction -->
 ```php
 'keys' => [
     // ...the default keys, then yours:
@@ -104,7 +102,6 @@ not every fourth.
 `Astro\Trail\RecordingCandidate` when a top-level run starts. Return `false` to skip the run and
 everything under it. Any other return value records it.
 
-<!-- sample: payloads.filter -->
 ```php
 use Astro\Trail\Facades\Trail;
 use Astro\Trail\RecordingCandidate;
@@ -141,7 +138,6 @@ The filter is asked before the sampling rate is applied.
 `Trail::withoutRecording(Closure $callback): mixed` runs the callback and returns what it
 returns. Nothing that starts inside it is recorded.
 
-<!-- sample: payloads.without -->
 ```php
 use Astro\Trail\Facades\Trail;
 

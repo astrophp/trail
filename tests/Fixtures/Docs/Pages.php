@@ -49,83 +49,17 @@ final class Pages
     }
 
     /**
-     * The fenced blocks of a page, in order: the language, the code, and the name of the sample
-     * marker (an HTML comment on the line before the fence), or null when there is none.
+     * The fenced blocks of a page, in order: the language and the code.
      *
-     * @return list<array{language: string, code: string, sample: ?string}>
+     * @return list<array{language: string, code: string}>
      */
     public static function blocks(string $path): array
     {
-        preg_match_all('/(?:<!-- sample: ([\w.\-]+) -->\n)?^```(\w*)\n(.*?)^```$/ms', self::read($path), $matches, PREG_SET_ORDER);
+        preg_match_all('/^```(\w*)\n(.*?)^```$/ms', self::read($path), $matches, PREG_SET_ORDER);
 
         return array_map(fn (array $match) => [
-            'language' => $match[2],
-            'code' => $match[3],
-            'sample' => $match[1] !== '' ? $match[1] : null,
+            'language' => $match[1],
+            'code' => $match[2],
         ], $matches);
-    }
-
-    /**
-     * The sample of that name from the guides: its `use` lines and the rest of its code.
-     *
-     * @return array{uses: string, code: string}
-     */
-    public static function sample(string $name): array
-    {
-        foreach (self::guides() as $page) {
-            foreach (self::blocks($page) as $block) {
-                if ($block['sample'] === $name) {
-                    return self::split($block['code']);
-                }
-            }
-        }
-
-        throw new RuntimeException("No documentation sample is named [{$name}].");
-    }
-
-    /**
-     * Every sample name the guides declare.
-     *
-     * @return list<string>
-     */
-    public static function sampleNames(): array
-    {
-        $names = [];
-
-        foreach (self::guides() as $page) {
-            foreach (self::blocks($page) as $block) {
-                if ($block['sample'] !== null) {
-                    $names[] = $block['sample'];
-                }
-            }
-        }
-
-        return $names;
-    }
-
-    /**
-     * Splits the `use` lines at the top of a sample from the code after them, because a `use`
-     * statement has to come first in the file the sample is run from.
-     *
-     * @return array{uses: string, code: string}
-     */
-    private static function split(string $code): array
-    {
-        $uses = [];
-        $rest = [];
-
-        foreach (explode("\n", $code) as $line) {
-            if ($rest === [] && (str_starts_with($line, 'use ') || trim($line) === '')) {
-                if (str_starts_with($line, 'use ')) {
-                    $uses[] = $line;
-                }
-
-                continue;
-            }
-
-            $rest[] = $line;
-        }
-
-        return ['uses' => implode("\n", $uses), 'code' => implode("\n", $rest)];
     }
 }

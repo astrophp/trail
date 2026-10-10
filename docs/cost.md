@@ -55,7 +55,6 @@ does not fall back to the config value.
 
 Add it to `trail.pricing` in your published `config/trail.php`, under its provider driver:
 
-<!-- sample: cost.config -->
 ```php
 'pricing' => [
     // ...the default prices stay here; add yours under the provider driver:
