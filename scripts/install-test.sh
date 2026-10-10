@@ -6,6 +6,8 @@
 # `php artisan migrate`, and it records. Nothing else is done to the application: no provider
 # registration, no config publish, no middleware, no trait.
 #
+# composer.lock is not checked: the package is a library and tracks none.
+#
 # Usage:
 #   scripts/install-test.sh <12|13> [--lowest]
 #
@@ -117,8 +119,8 @@ quiet() {
 # The package, as a tag would ship it
 # --------------------------------------------------------------------------------------------
 
-step "composer validate --strict"
-(cd "$ROOT" && composer validate --strict) || fail "composer validate --strict failed"
+step "composer validate --strict --no-check-lock"
+(cd "$ROOT" && composer validate --strict --no-check-lock) || fail "composer validate --strict failed"
 
 step "Build the archive from HEAD ($(git -C "$ROOT" rev-parse --short HEAD))"
 mkdir -p "$PKG"
@@ -199,7 +201,7 @@ if [ "$LOWEST" = 1 ]; then
     esac
     case "${FRAMEWORK_VERSION#v}" in
         $MAJOR.0.*) ;;
-        *) printf '   note: laravel/framework resolved to %s, not %s.0.x: something in the tree pins it higher\n' "$FRAMEWORK_VERSION" "$MAJOR" ;;
+        *) printf '   note: laravel/framework resolved to %s, not %s.0.x: a dependency requires a newer release than the floor the package declares, so that floor itself is not exercised\n' "$FRAMEWORK_VERSION" "$MAJOR" ;;
     esac
 fi
 
