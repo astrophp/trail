@@ -355,8 +355,9 @@ it('checks origin/main even when local main is behind', function () {
 });
 
 it('refuses an invalid tag in preflight', function () {
-    [, $clone] = preflightSetup();
-    expect(releaseRun('preflight.sh', ['v1'], ['PREFLIGHT_SKIP_RUNS' => '1'], $clone)->getExitCode())->toBe(1);
+    [, $clone] = preflightSetup("## v0.1.0-foo\n\nNotes.\n");
+    $process = releaseRun('preflight.sh', ['v0.1.0-foo'], ['PREFLIGHT_SKIP_RUNS' => '1'], $clone);
+    expect($process->getExitCode())->toBe(1)->and($process->getErrorOutput())->toContain('Invalid release tag');
 });
 
 it('refuses an existing local preflight tag', function () {
