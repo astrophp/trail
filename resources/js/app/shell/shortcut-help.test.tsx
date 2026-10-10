@@ -37,11 +37,22 @@ const applying = () =>
 async function openOn(route: string) {
     renderApp(route)
     await appReady()
+
+    // A list is ready for its keys once its rows are in.
+    if (['/traces', '/usage', '/agents'].includes(route)) {
+        await until(() =>
+            expect(
+                document.querySelectorAll('tbody [data-slot="row-link"]')
+                    .length,
+            ).toBeGreaterThan(0),
+        )
+    }
+
     await userEvent.keyboard('?')
 }
 
 describe('the keyboard shortcuts help', () => {
-    it('lists exactly the table: the same ids, in the same number, with the table’s labels', async () => {
+    it('lists the whole table on a page where everything of its scopes can be done', async () => {
         await openOn('/traces')
 
         expect(rows().map((row) => row.dataset.shortcut)).toHaveLength(
@@ -65,6 +76,48 @@ describe('the keyboard shortcuts help', () => {
                 ),
             ).toEqual(entry.keys.map((keys) => chordLabel(keys, false)))
         }
+    })
+
+    it('lists under this page only what can be done on it', async () => {
+        await openOn('/usage')
+
+        const ids = rows().map((row) => row.dataset.shortcut)
+        const here = (group: string) => [
+            ...within(
+                within(help()).getByRole('group', {
+                    name: new RegExp(`^${group}`),
+                }),
+            )
+                .getAllByRole('listitem')
+                .map((item) => item.dataset.shortcut),
+        ]
+
+        // The usage breakdown has no search field, so `/` is not offered where it applies.
+        expect(here('Lists')).not.toContain('search')
+        expect(here('Lists')).toContain('row-next')
+        expect(ids).not.toContain('search')
+        // A scope that does not apply is reference: whole.
+        expect(here('Run page')).toEqual(
+            shortcuts.filter((e) => e.scope === 'trace').map((e) => e.id),
+        )
+    })
+
+    it('offers the search on a list that has one', async () => {
+        await openOn('/traces')
+
+        expect(rows().map((row) => row.dataset.shortcut)).toContain('search')
+    })
+
+    it('leaves out the steps of a run that has no neighbour, and offers the way back', async () => {
+        await openOn('/traces/run-a')
+
+        const ids = rows().map((row) => row.dataset.shortcut)
+
+        expect(ids).toContain('trace-back')
+        expect(ids).not.toContain('trace-next')
+        expect(ids).not.toContain('trace-previous')
+        // Reference only, in the group of a scope that does not apply: the list's.
+        expect(ids).toContain('search')
     })
 
     it('puts each shortcut in the group of its scope and names the groups', async () => {

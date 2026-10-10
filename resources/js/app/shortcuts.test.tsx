@@ -553,3 +553,50 @@ describe('aria-keyshortcuts, written from the table', () => {
         )
     })
 })
+
+describe('a first key waiting for its second', () => {
+    it('is forgotten when the page changes before the second comes', async () => {
+        serveApp()
+        renderApp('/traces')
+        await appReady()
+        const sidebar = () =>
+            within(screen.getByRole('navigation', { name: 'Main' }))
+
+        // Control: the pair on one page goes to Traces.
+        await userEvent.click(sidebar().getByRole('link', { name: 'Agents' }))
+        await userEvent.keyboard('gt')
+        expect(window.location.pathname).toBe('/trail/traces')
+
+        // The same two keys with a change of page between them do nothing.
+        await userEvent.keyboard('g')
+        await userEvent.click(sidebar().getByRole('link', { name: 'Agents' }))
+        await userEvent.keyboard('t')
+
+        expect(window.location.pathname).toBe('/trail/agents')
+    })
+})
+
+describe('a ticked row on the list of runs', () => {
+    it('does not stop the keys of the list or the help', async () => {
+        serveApp()
+        await openList(listPages[0])
+        const box = within(
+            rowLinks()[0].closest('tr') as HTMLElement,
+        ).getByRole('checkbox')
+
+        await userEvent.click(box)
+
+        expect(box).toBeChecked()
+        expect(box).toHaveFocus()
+
+        // The box is on the first row: j goes to the second.
+        await userEvent.keyboard('j')
+
+        expect(document.activeElement).toBe(rowLinks()[1])
+
+        box.focus()
+        await userEvent.keyboard('?')
+
+        expect(helpDialog()).toBeInTheDocument()
+    })
+})

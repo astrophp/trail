@@ -35,6 +35,9 @@ const rowLinks = 'tbody [data-slot="row-link"]'
  * not wrap, and does not turn the page). Focus inside a row (its checkbox, its bookmark) counts
  * as being on that row.
  *
+ * A key that has nothing to do (no row that way, the last page, a busy table) reports it and is
+ * left to the browser.
+ *
  * While the table is busy (the previous view's rows are shown, or the first load is on) the row
  * and paging keys do nothing: those rows and that page count answer for a view that is gone.
  */
@@ -50,9 +53,9 @@ export function useListShortcuts({
         )
     }
 
-    function step(by: 1 | -1) {
+    function step(by: 1 | -1): void | false {
         if (busy()) {
-            return
+            return false
         }
 
         const links = [
@@ -74,17 +77,21 @@ export function useListShortcuts({
             target.focus({ preventScroll: true })
             // Whatever the sticky bar covers, the row is brought fully into view.
             target.scrollIntoView({ block: 'nearest' })
+
+            return
         }
+
+        return false
     }
 
-    function turn(by: 1 | -1) {
+    function turn(by: 1 | -1): void | false {
         if (
             busy() ||
             pages === undefined ||
             pages.page + by < 1 ||
             pages.page + by > pages.last
         ) {
-            return
+            return false
         }
 
         pages.go(pages.page + by)
@@ -95,8 +102,12 @@ export function useListShortcuts({
             search === undefined
                 ? undefined
                 : () => {
-                      search.current?.focus()
-                      search.current?.select()
+                      if (search.current === null) {
+                          return false
+                      }
+
+                      search.current.focus()
+                      search.current.select()
                   },
         'row-next': () => step(1),
         'row-previous': () => step(-1),

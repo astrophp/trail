@@ -6,11 +6,12 @@ import {
     shortcuts,
     type BindableId,
     type Shortcut,
+    type ShortcutId,
 } from '@/lib/shortcuts'
 
 /** What the person is typing into: a key pressed there is text, not a shortcut. */
 const typing =
-    'input, textarea, select, [role="textbox"], [role="combobox"], [role="searchbox"], [contenteditable]:not([contenteditable="false" i])'
+    'input:not([type=checkbox i], [type=radio i], [type=button i], [type=submit i], [type=reset i], [type=range i], [type=file i], [type=color i], [type=image i]), textarea, select, [role="textbox"], [role="combobox"], [role="searchbox"], [contenteditable]:not([contenteditable="false" i])'
 
 /** Open layers that take the keyboard for themselves: dialogs, menus and open selects. */
 export const layers =
@@ -32,9 +33,15 @@ const modifierKeys = new Set([
     'OS',
 ])
 
+/**
+ * What a shortcut does. Returning `false` says it did nothing (no row to go to, the last page), and
+ * the key is then left to the browser; anything else says it acted, and the key is taken from it.
+ */
+export type ShortcutHandler = () => void | false
+
 /** The handlers of a component, by shortcut id. A shortcut without a handler is off. */
 export type ShortcutHandlers = Partial<
-    Record<BindableId, (() => void) | undefined>
+    Record<BindableId, ShortcutHandler | undefined>
 >
 
 /** Every mounted component's latest handlers; one listener serves all of them. */
@@ -43,6 +50,11 @@ const registered = new Set<{ current: ShortcutHandlers }>()
 /** The first key of a sequence that has been pressed, until its second comes or time runs out. */
 let pending: { first: string; timer: number } | null = null
 
+/** Forgets a first key that is waiting for its second (the page changed under it). */
+export function cancelSequence() {
+    forgetFirst()
+}
+
 function forgetFirst() {
     if (pending !== null) {
         window.clearTimeout(pending.timer)
@@ -50,7 +62,7 @@ function forgetFirst() {
     }
 }
 
-type Bound = { entry: Shortcut; handler: () => void }
+type Bound = { entry: Shortcut; handler: ShortcutHandler }
 
 /** What is bound right now. When two components bind one shortcut, the one mounted first has it. */
 function bound(): Bound[] {
@@ -69,6 +81,11 @@ function bound(): Bound[] {
     }
 
     return [...found.values()]
+}
+
+/** The ids that have a handler right now: what is on this page and can be done. */
+export function boundShortcutIds(): ShortcutId[] {
+    return bound().map(({ entry }) => entry.id)
 }
 
 const isTyping = (target: EventTarget | null) =>
@@ -121,8 +138,9 @@ function onKeyDown(event: KeyboardEvent) {
         )
 
         if (second !== undefined) {
-            event.preventDefault()
-            second.handler()
+            if (second.handler() !== false) {
+                event.preventDefault()
+            }
 
             return
         }
@@ -142,8 +160,9 @@ function onKeyDown(event: KeyboardEvent) {
     )
 
     if (single !== undefined) {
-        event.preventDefault()
-        single.handler()
+        if (single.handler() !== false) {
+            event.preventDefault()
+        }
 
         return
     }

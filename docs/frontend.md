@@ -174,11 +174,21 @@ such as `⌘K` still works in the middle of one.
 
 Rules that hold for every shortcut, enforced in `useShortcuts`:
 
-- Nothing fires while the person types (an input, textarea, select, `role=textbox`, `combobox` or
-  `searchbox`, or editable content), with Ctrl, Alt or Command held, while a key repeats, during an
+- Nothing fires while the person types (a text input, textarea, select, `role=textbox`, `combobox`
+  or `searchbox`, or editable content). An input that takes no text (checkbox, radio, button,
+  range, file, color) is not a field, so a ticked row's checkbox leaves the keys working. A focused
+  select's trigger is a combobox and still blocks them: its typeahead owns the letters.
+  Nothing fires also with Ctrl, Alt or Command held, while a key repeats, during an
   IME composition, or while a dialog, menu or select is open. The two exceptions are declared in the
   table: the palette's `mod+` chord works in a field, and a shortcut with an `ownLayer` (the palette,
   the help) is not stopped by its own dialog, so the same key closes it.
+- A shortcut that finds nothing to do (no row that way, the last page, a busy table) returns
+  `false`, and the key is then left to the browser; one that acts is taken from it. A first key
+  waiting for its second is forgotten when the location changes.
+- The help lists, under the scopes that apply to the page, only what can be done on it now (the ids
+  `useShortcuts` has a handler for, and Enter where a row has a link). A page without a search has
+  no `/` there, a run without neighbours no `j` / `k`. Paging keys count as available whenever the
+  list has loaded, even on its only page. The other scopes are listed whole, as reference.
 - On a list the row and paging keys do nothing while the table is busy (`aria-busy`): the rows and
   the page count on screen answer for the previous view. A row is reached by focusing its own link,
   so the focus ring, Enter and a screen reader are those of any link. At the first and last row, and
@@ -212,17 +222,18 @@ What the set avoids, and why:
   `Space`, `Backspace`, arrow, Home/End, Page or function key, and no `'`, which Firefox uses for
   quick find of links. `/` is Firefox's quick find too: it is taken only on a list that has a search
   field, and left to the browser on every other page.
-- Screen readers: NVDA and JAWS in browse mode keep single letters (`h`, `1`-`6`, `k`, `l`, `t`, `f`,
-  `b`, `g`, `u`, ...) for moving through the page, and VoiceOver's quick nav does the same with
-  arrow keys, so a single-letter shortcut reaches the page only in focus mode, or with the reader's
-  pass-through key. No shortcut is the only way to do anything: each has a visible link or
+- Screen readers: as commonly configured, NVDA and JAWS in their browse modes use single letters
+  (`h`, `1`-`6`, `k`, `l`, `t`, `f`, `b`, `g`, `u`, ...) to move through the page, and VoiceOver
+  has a single-key quick nav setting, so a single-letter shortcut may not reach the page in those
+  modes; it does in focus or forms mode, or with the reader's pass-through key. No shortcut is the only way to do anything: each has a visible link or
   button (the row link, the paging and step buttons, the sidebar, the back link, the palette's
   button and its Keyboard shortcuts action).
 - Gmail-style `g` sequences are used on purpose, for going to a page; the sequence is only started
   where a single `g` would not be typed text.
-- Layouts: `?` needs Shift on a US keyboard; the shortcut is the character, so it works wherever it
-  is typed. `[` and `]` need AltGr (Ctrl+Alt on Windows) on some layouts, which no shortcut accepts,
-  so the paging buttons are the way there.
+- Layouts: `?` needs Shift on a US keyboard and the shortcut is the character, so it works on a
+  layout that types it with Shift. A layout that types `?`, `[` or `]` with AltGr reports Ctrl+Alt
+  (or Option on a Mac), which no shortcut accepts, so the key is rejected there; the buttons
+  (paging, the palette's Keyboard shortcuts action) are the way.
 
 ## The catalogue
 

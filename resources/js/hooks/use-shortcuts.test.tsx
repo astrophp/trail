@@ -552,3 +552,81 @@ describe('a sequence', () => {
         expect(sequenceWindow).toBe(1500)
     })
 })
+
+describe('a key that does nothing', () => {
+    it('is left to the browser, and a key that acts is taken from it', () => {
+        render(<Page handlers={{ 'row-next': () => false }} />)
+
+        expect(down('j').defaultPrevented).toBe(false)
+
+        render(<Page handlers={{ 'row-previous': () => {} }} />)
+
+        expect(down('k').defaultPrevented).toBe(true)
+    })
+
+    it('is left to the browser in a sequence too', () => {
+        render(<Page handlers={{ 'go-traces': () => false }} />)
+
+        down('g')
+
+        expect(down('t').defaultPrevented).toBe(false)
+    })
+
+    it('is left to the browser for a modified shortcut', () => {
+        vi.spyOn(window.navigator, 'platform', 'get').mockReturnValue('Win32')
+        const palette = vi.fn(() => false as const)
+
+        render(<Page handlers={{ palette }} />)
+
+        expect(down('k', { ctrlKey: true }).defaultPrevented).toBe(false)
+        expect(palette).toHaveBeenCalledTimes(1)
+    })
+})
+
+describe('a focused control that takes no text', () => {
+    it.each(['checkbox', 'radio', 'button', 'range'])(
+        'is not a field: a %s lets the shortcut fire',
+        (type) => {
+            const j = vi.fn()
+            const view = render(
+                <Page handlers={{ 'row-next': j }}>
+                    <input type={type} aria-label="Control" />
+                </Page>,
+            )
+
+            down('j', {}, view.getByLabelText('Control'))
+
+            expect(j).toHaveBeenCalledTimes(1)
+        },
+    )
+
+    it.each(['text', 'search', 'email', 'number'])(
+        'a %s input is a field: nothing fires',
+        (type) => {
+            const j = vi.fn()
+            const view = render(
+                <Page handlers={{ 'row-next': j }}>
+                    <input type={type} aria-label="Field" />
+                </Page>,
+            )
+
+            down('j', {}, view.getByLabelText('Field'))
+
+            expect(j).not.toHaveBeenCalled()
+        },
+    )
+
+    it('still lets Space tick the checkbox', async () => {
+        const view = render(
+            <Page handlers={{ 'row-next': vi.fn() }}>
+                <input type="checkbox" aria-label="Control" />
+            </Page>,
+        )
+        const box = view.getByLabelText('Control')
+
+        box.focus()
+        await userEvent.keyboard(' ')
+
+        expect(box).toBeChecked()
+    })
+})
