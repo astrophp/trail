@@ -6,12 +6,12 @@ use Astro\Trail\Tests\Fixtures\Agents\AssistantAgent;
 use Astro\Trail\Tests\Fixtures\Http\UsageRows;
 use Astro\Trail\Tests\Fixtures\Sdk\FakeAnthropic;
 use Astro\Trail\Tests\Fixtures\Storage\Rows;
+use Illuminate\Database\ConnectionResolverInterface;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Exceptions;
-use Illuminate\Support\Facades\Schema;
 
 /*
 |--------------------------------------------------------------------------
@@ -25,6 +25,18 @@ use Illuminate\Support\Facades\Schema;
 
 beforeEach(function () {
     config(['trail.pricing.anthropic' => [FakeAnthropic::MODEL => ['input' => 3.0, 'output' => 15.0]]]);
+
+    // The price book reads a connection that has no trail_prices table. Dropping the table instead
+    // would end the test's transaction on MySQL (DDL commits) and leave the table gone for later tests.
+    $this->withoutPriceTable = function (): void {
+        config(['database.connections.trail_without_prices' => ['driver' => 'sqlite', 'database' => ':memory:', 'prefix' => '']]);
+
+        $this->app->singleton(PriceBook::class, fn ($app) => new PriceBook(
+            $app->make('config'),
+            $app->make(ConnectionResolverInterface::class),
+            'trail_without_prices',
+        ));
+    };
 
     // One step with usage, recorded and flushed; every query that runs meanwhile is returned.
     $this->run = function (): array {
@@ -65,8 +77,8 @@ it('reads the saved prices when the same run is not faked', function () {
         ->and((float) DB::table('trail_traces')->where('id', $id)->value('cost'))->toEqualWithDelta(CONFIG_COST, 1e-9);
 });
 
-it('reports nothing to the exception handler while faked, with the saved prices table dropped', function () {
-    Schema::drop('trail_prices');
+it('reports nothing to the exception handler while faked, with no saved prices table', function () {
+    ($this->withoutPriceTable)();
     Exceptions::fake();
     Trail::fake();
 
@@ -79,7 +91,7 @@ it('reports nothing to the exception handler while faked, with the saved prices 
 });
 
 it('reports the missing table when the same run is not faked', function () {
-    Schema::drop('trail_prices');
+    ($this->withoutPriceTable)();
     Exceptions::fake();
 
     ($this->run)();
