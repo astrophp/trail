@@ -1,0 +1,57 @@
+name: install
+
+# Installs the archive of the commit (what a tag ships) into a fresh Laravel application and checks
+# that it records. On main it runs for every push, with no path filter, so a release can require it
+# green for the tagged commit. On pull requests it runs only when something it covers changes.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'config/**'
+      - 'database/**'
+      - 'routes/**'
+      - 'resources/views/**'
+      - 'dist/**'
+      - 'stubs/**'
+      - 'composer.json'
+      - '.gitattributes'
+      - 'scripts/install-test.sh'
+      - 'tests/Install/**'
+      - '.github/workflows/install.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: install-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  install:
+    name: Laravel ${{ matrix.laravel }} / ${{ matrix.dependencies }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # The lowest legs run on PHP 8.3, the oldest the package allows, so the floor of every
+        # dependency is exercised on the oldest runtime. The stable legs run on 8.4: tests.yml
+        # already covers 8.3 to 8.5 for the package's own suite, and a fresh install today
+        # lands on a current PHP.
+        include:
+          - { laravel: '12', dependencies: stable, php: '8.4', flags: '' }
+          - { laravel: '12', dependencies: lowest, php: '8.3', flags: '--lowest' }
+          - { laravel: '13', dependencies: stable, php: '8.4', flags: '' }
+          - { laravel: '13', dependencies: lowest, php: '8.3', flags: '--lowest' }
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: pdo_sqlite
+          coverage: none
+
+      - name: Install test
+        run: scripts/install-test.sh ${{ matrix.laravel }} ${{ matrix.flags }}
