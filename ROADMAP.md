@@ -1,8 +1,10 @@
 # Roadmap
 
-Trail is in early development. This page lists what is planned; it is not a commitment to dates.
+This page lists what the first release contains and what is planned after it. What comes after is
+not a commitment to dates. For the detail of a release, see the [changelog](CHANGELOG.md); for what
+Trail does not do today, see [Known limits](docs/limits.md).
 
-## v0.1 — first release
+## v0.1.0 — first release
 
 **Recording**
 
@@ -28,12 +30,20 @@ Trail is in early development. This page lists what is planned; it is not a comm
 
 - Access control through a gate, like Horizon and Telescope, with an optional auth guard.
 - Switches to turn off recording or the dashboard.
-- Artisan commands to prune, sweep, clear, pause and resume.
+- Artisan commands to install, prune, sweep, clear, pause and resume.
 
-## After v0.1
+**Testing and documentation**
+
+- `Trail::fake()` and its assertions for your own tests.
+- User documentation in `docs/`.
+
+## After v0.1.0
+
+These are ideas, not promises.
 
 - More run types: classification, images, audio, transcription and reranking.
-- Linking runs that pause for tool approval to the run that resumes them.
+- Linking runs that pause for tool approval to the run that resumes them, which are separate
+  traces today.
 - Saved views shared between dashboard users.
 - Additional storage drivers and OpenTelemetry export.
 
