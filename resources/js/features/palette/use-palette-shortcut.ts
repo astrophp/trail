@@ -1,12 +1,16 @@
 import { useEffect, useRef } from 'react'
+import { layers } from '@/hooks/use-shortcuts'
 import { isApplePlatform } from '@/lib/platform'
 
 /**
- * Another dialog, sheet or alert dialog that is open and is not the palette itself (which marks
- * its content `data-palette`). The palette does not open on top of one.
+ * Whether a layer other than the palette is open: a dialog, sheet, alert dialog, menu or select
+ * (the definition `useShortcuts` has). What is inside the palette, its own listbox included, does
+ * not count, so the same key can close it.
  */
-const otherLayer =
-    '[role="dialog"]:not([data-palette]), [role="alertdialog"]:not([data-palette])'
+const otherLayerOpen = () =>
+    [...document.querySelectorAll(layers)].some(
+        (layer) => layer.closest('[data-palette]') === null,
+    )
 
 /**
  * The palette's one shortcut: ⌘K on an Apple platform, Ctrl K elsewhere, calls `toggle`. It works
@@ -41,7 +45,7 @@ export function usePaletteShortcut(toggle: () => void): void {
                 ? event.metaKey && !event.ctrlKey
                 : event.ctrlKey && !event.metaKey
 
-            if (!held || document.querySelector(otherLayer) !== null) {
+            if (!held || otherLayerOpen()) {
                 return
             }
 

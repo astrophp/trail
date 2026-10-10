@@ -47,6 +47,50 @@ const resultCount = (response: SearchResponse) =>
     response.data.conversations.length +
     response.data.agents.length
 
+const nouns = {
+    traces: ['run', 'runs'],
+    conversations: ['conversation', 'conversations'],
+    agents: ['agent', 'agents'],
+} as const
+
+const listOf = (items: string[]) =>
+    items.length < 2
+        ? items.join('')
+        : `${items.slice(0, -1).join(', ')} and ${items.at(-1)}`
+
+/**
+ * The answer in words. The API says only whether more than the limit matched, never how many, so
+ * a total is stated only when nothing was cut; otherwise the sentence says what is shown and which
+ * groups have more.
+ */
+function resultsSentence(response: SearchResponse, query: string): string {
+    const groups = (['traces', 'conversations', 'agents'] as const)
+        .map((key) => ({
+            key,
+            count: response.data[key].length,
+            more: response.limits[key].truncated,
+        }))
+        .filter(({ count }) => count > 0)
+    const total = groups.reduce((sum, { count }) => sum + count, 0)
+
+    if (total === 0) {
+        return `No runs, conversations or agents match “${query}”.`
+    }
+
+    if (!groups.some(({ more }) => more)) {
+        return `${total} ${total === 1 ? 'result' : 'results'} for “${query}”.`
+    }
+
+    const shown = groups.map(
+        ({ key, count }) => `${count} ${nouns[key][count === 1 ? 0 : 1]}`,
+    )
+    const cut = groups
+        .filter(({ more }) => more)
+        .map(({ key }) => nouns[key][1])
+
+    return `Showing ${listOf(shown)}; more ${listOf(cut)} match.`
+}
+
 /** What the search is doing, as one sentence: a new sentence for each text, so each answer is announced once. */
 function statusSentence(search: PaletteSearch, query: string): string | null {
     switch (search.phase) {
@@ -54,13 +98,8 @@ function statusSentence(search: PaletteSearch, query: string): string | null {
             return 'Searching…'
         case 'failed':
             return `The search could not be completed. ${failureMessage(search.error)}`
-        case 'ready': {
-            const count = resultCount(search.response)
-
-            return count === 0
-                ? `No runs, conversations or agents match “${query}”.`
-                : `${count} ${count === 1 ? 'result' : 'results'} for “${query}”.`
-        }
+        case 'ready':
+            return resultsSentence(search.response, query)
         case 'idle':
             return Array.from(query).length > 0 &&
                 Array.from(query).length < searchMinimum
@@ -154,7 +193,7 @@ export function PaletteBody({ text, go, followed, close }: PaletteBodyProps) {
                 </CommandPaletteHint>
                 <CommandPaletteHint keys={['enter']}>open</CommandPaletteHint>
                 {search.phase === 'ready' ? (
-                    <span className="ml-auto">
+                    <span className="w-full">
                         {rangeLine(search.response.range)}
                     </span>
                 ) : null}

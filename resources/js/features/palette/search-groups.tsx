@@ -10,12 +10,12 @@ import {
     CommandPaletteRow,
 } from '@/components/patterns/command-palette'
 import { AgentIcon } from '@/components/telemetry/agent-icon'
+import { NounCount } from '@/components/telemetry/noun-count'
 import { StatusBadge } from '@/components/telemetry/status-badge'
 import { Timestamp } from '@/components/telemetry/timestamp'
 import { TraceId } from '@/components/telemetry/trace-id'
 import { agentPath } from '@/lib/agent-path'
 import { conversationPath } from '@/lib/conversation-path'
-import { formatCount } from '@/lib/format'
 import type { TimeRangePreset } from '@/lib/time-range'
 import { tracePagePath } from '@/lib/trace-page-path'
 
@@ -115,7 +115,7 @@ function RunOption({ trace, go, followed }: { trace: Trace } & Navigate) {
                     icon={<StatusBadge status={trace.status} iconOnly />}
                     meta={
                         <>
-                            <TraceId id={trace.id} />
+                            <TraceId id={trace.id} className="max-sm:sr-only" />
                             <Timestamp
                                 at={trace.started_at}
                                 layout="relative"
@@ -151,10 +151,11 @@ function ConversationOption({
                     icon={<MessageSquareIcon />}
                     meta={
                         <>
-                            <span>
-                                {formatCount(turns)}{' '}
-                                {turns === 1 ? 'turn' : 'turns'}
-                            </span>
+                            <NounCount
+                                count={turns}
+                                singular="turn"
+                                plural="turns"
+                            />
                             <Timestamp
                                 at={conversation.last_activity_at}
                                 layout="relative"
@@ -196,10 +197,11 @@ function AgentOption({
                                 only
                             </span>
                         ) : (
-                            <span>
-                                {formatCount(own.runs.all)}{' '}
-                                {own.runs.all === 1 ? 'run' : 'runs'}
-                            </span>
+                            <NounCount
+                                count={own.runs.all}
+                                singular="run"
+                                plural="runs"
+                            />
                         )
                     }
                 >

@@ -150,6 +150,24 @@ describe('opening and closing', () => {
         expect(palette()).toBeInTheDocument()
     })
 
+    it('does not open over an open menu, and opens once it is closed', async () => {
+        const user = clock()
+        renderApp('/')
+        await appReady()
+
+        await user.click(screen.getByRole('button', { name: /^Theme:/ }))
+        expect(screen.getByRole('menu')).toBeInTheDocument()
+        await user.keyboard(chord)
+
+        expect(queryPalette()).not.toBeInTheDocument()
+
+        await user.keyboard('{Escape}')
+        await advance(50)
+        await user.keyboard(chord)
+
+        expect(palette()).toBeInTheDocument()
+    })
+
     it('opens while focus is in a field, and Escape puts focus back there', async () => {
         const user = clock()
         renderApp('/traces')

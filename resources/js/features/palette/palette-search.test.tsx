@@ -487,6 +487,67 @@ describe('what is announced', () => {
     })
 })
 
+describe('the sentence when a group was cut', () => {
+    const runs = (n: number) =>
+        Array.from({ length: n }, (_, i) => runWith({ id: `r${i}` }))
+    const agents = (n: number) =>
+        Array.from({ length: n }, (_, i) => agentWith({ name: `A${i}` }))
+    const said = async (answer: ReturnType<typeof searchFor>, text: string) => {
+        mockSearch(() => json(answer))
+        await typeInto('/', 'ab')
+        await advance(300)
+        await until(() => expect(status()).toHaveTextContent(text))
+        expect(status().textContent).toBe(text)
+    }
+
+    it('states a total when nothing was cut', () =>
+        said(
+            searchFor('ab', { traces: runs(2), agents: agents(1) }),
+            '3 results for “ab”.',
+        ))
+
+    it('says more runs match, without a total, when the runs were cut', () =>
+        said(
+            searchFor('ab', {
+                traces: runs(5),
+                agents: agents(3),
+                truncated: { traces: true },
+            }),
+            'Showing 5 runs and 3 agents; more runs match.',
+        ))
+
+    it('says more agents match when the agents were cut', () =>
+        said(
+            searchFor('ab', {
+                traces: runs(1),
+                agents: agents(5),
+                truncated: { agents: true },
+            }),
+            'Showing 1 run and 5 agents; more agents match.',
+        ))
+
+    it('names both when both were cut', () =>
+        said(
+            searchFor('ab', {
+                traces: runs(5),
+                agents: agents(5),
+                truncated: { traces: true, agents: true },
+            }),
+            'Showing 5 runs and 5 agents; more runs and agents match.',
+        ))
+
+    it('lists the conversation among what is shown', () =>
+        said(
+            searchFor('ab', {
+                traces: runs(5),
+                conversations: [fixtureConversation],
+                agents: agents(2),
+                truncated: { traces: true },
+            }),
+            'Showing 5 runs, 1 conversation and 2 agents; more runs match.',
+        ))
+})
+
 describe('a short text', () => {
     it('makes no request and shows the pages and actions only', async () => {
         const fetchMock = mockSearch(() => json(searchFixture))

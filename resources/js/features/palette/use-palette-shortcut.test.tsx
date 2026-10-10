@@ -111,7 +111,7 @@ describe('usePaletteShortcut', () => {
         expect(toggle).not.toHaveBeenCalled()
     })
 
-    it.each(['dialog', 'alertdialog'])(
+    it.each(['dialog', 'alertdialog', 'menu', 'listbox'])(
         'does nothing while another %s is open, and works again when it is gone',
         (role) => {
             onPlatform('Win32')
@@ -131,6 +131,23 @@ describe('usePaletteShortcut', () => {
             expect(toggle).toHaveBeenCalledTimes(1)
         },
     )
+
+    it('is not stopped by the listbox inside the palette, so the same key closes it', () => {
+        onPlatform('Win32')
+        const toggle = vi.fn()
+        render(<Harness toggle={toggle} />)
+        const own = document.createElement('div')
+        own.setAttribute('role', 'dialog')
+        own.setAttribute('data-palette', '')
+        const list = document.createElement('div')
+        list.setAttribute('role', 'listbox')
+        own.append(list)
+        document.body.append(own)
+
+        press('k', { ctrlKey: true })
+
+        expect(toggle).toHaveBeenCalledTimes(1)
+    })
 
     it('is not stopped by the palette’s own dialog, so the same key closes it', () => {
         onPlatform('Win32')
