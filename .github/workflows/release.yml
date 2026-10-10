@@ -6,19 +6,27 @@ on:
 
 permissions: {}
 
+defaults:
+  run:
+    shell: bash
+
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # Up to 20 minutes waiting for tests and install, then npm ci and the build.
+    timeout-minutes: 40
     permissions:
       contents: read
       actions: read
     outputs:
       notes: ${{ steps.notes.outputs.notes }}
     steps:
+      # Full history brings every branch (origin/main) and tag; the repository is public, so
+      # nothing later needs the checkout token and it is not kept.
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - uses: actions/setup-node@v7
         with:
@@ -26,37 +34,34 @@ jobs:
           cache: npm
 
       - name: Verify tag and commit
+        id: commit
         env:
           TAG: ${{ github.ref_name }}
-          SHA: ${{ github.sha }}
         run: |
           scripts/release/tag-version.sh "$TAG"
-          git fetch origin main
-          scripts/release/on-main.sh "$SHA"
+          sha=$(git rev-parse "refs/tags/$TAG^{commit}")
+          [ "$(git rev-parse HEAD)" = "$sha" ] || { echo "Checked out commit is not the tagged commit $sha." >&2; exit 1; }
+          scripts/release/on-main.sh "$sha"
+          printf 'sha=%s\n' "$sha" >> "$GITHUB_OUTPUT"
 
       - name: Require successful checks
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          SHA: ${{ github.sha }}
-        run: |
-          for workflow in tests.yml install.yml; do
-            scripts/release/wait-for-runs.sh "$workflow" "$SHA"
-          done
+          SHA: ${{ steps.commit.outputs.sha }}
+        run: scripts/release/wait-for-checks.sh "$SHA"
 
       - name: Verify committed build
         run: |
           npm ci
           npm run build
-          git diff --exit-code -- dist resources/js/lib/cn-tables.ts
+          scripts/release/dist-clean.sh
 
       - name: Read release notes
         id: notes
         env:
           TAG: ${{ github.ref_name }}
-        run: |
-          notes=$(scripts/release/changelog-entry.sh "$TAG")
-          printf 'notes=%s\n' "$(printf '%s' "$notes" | base64 --wrap=0)" >> "$GITHUB_OUTPUT"
+        run: scripts/release/changelog-entry.sh "$TAG" | scripts/release/encode-notes.sh >> "$GITHUB_OUTPUT"
 
   release:
     needs: verify
@@ -65,6 +70,22 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: scripts/release
+          persist-credentials: false
+
+      - name: Refuse an existing release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          gh api --paginate "repos/$GH_REPO/releases?per_page=100" --jq '.[].tag_name' > release-tags.txt
+          if scripts/release/release-exists.sh "$TAG" < release-tags.txt; then
+            exit 1
+          fi
+
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -72,32 +93,21 @@ jobs:
           TAG: ${{ github.ref_name }}
           NOTES: ${{ needs.verify.outputs.notes }}
         run: |
-          lookup=$(mktemp)
-          if gh api "repos/$GH_REPO/releases/tags/$TAG" > "$lookup" 2>&1; then
-            printf 'A GitHub release already exists for %s; refusing to change it.\n' "$TAG" >&2
-            exit 1
-          fi
-          # gh api exits non-zero for HTTP errors; only a 404 permits creation.
-          if ! grep -q 'HTTP 404' "$lookup"; then
-            cat "$lookup" >&2
-            printf 'Could not check whether a GitHub release exists for %s.\n' "$TAG" >&2
-            exit 1
-          fi
-          printf '%s' "$NOTES" | base64 --decode > release-notes.md
-          args=(release create "$TAG" --verify-tag --title "$TAG" --notes-file release-notes.md)
-          case "$TAG" in *-*) args+=(--prerelease);; esac
-          gh "${args[@]}"
+          scripts/release/decode-notes.sh release-notes.md
+          scripts/release/create-release.sh "$TAG" release-notes.md
 
   packagist:
     needs: release
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    # Up to 20 minutes of polling.
+    timeout-minutes: 30
     permissions:
       contents: read
     steps:
       - uses: actions/checkout@v7
         with:
           sparse-checkout: scripts/release
+          persist-credentials: false
 
       - name: Wait for Packagist
         env:
