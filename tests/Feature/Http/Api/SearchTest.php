@@ -105,6 +105,14 @@ describe('runs by id', function () {
             ->and(foundIn(searchAt($this, 'q=0199c29f'), 'traces'))->toBe([]);
     });
 
+    it('finds a run by an uppercase beginning of its lowercase id, as a prefix or as text', function () {
+        // In the range, so that the text match finds it where the prefix read (lowercased, compared with LIKE) cannot.
+        foundRun('0199c2f4-0001-7000-8000-000000000000');
+
+        expect(foundIn(searchAt($this, 'q=0199C2F4'), 'traces'))->toBe(['0199c2f4-0001-7000-8000-000000000000'])
+            ->and(foundIn(searchAt($this, 'q=0199C2F4-0001-7000-8000-000000000000'), 'traces'))->toBe(['0199c2f4-0001-7000-8000-000000000000']);
+    });
+
     it('does not take 7 characters for the beginning of an id', function () {
         foundRun(SEARCH_RUN, ['started_at' => '2025-12-01 09:00:00']);
 
@@ -460,7 +468,7 @@ describe('validation', function () {
 });
 
 describe('queries', function () {
-    it('runs the same number of queries for one match as for many', function () {
+    it('runs no more queries for twelve matching runs than for one', function () {
         $user = DB::table('users')->insertGetId(['name' => 'Ada', 'email' => 'ada@example.test', 'password' => 'x']);
 
         $make = function (int $from, int $to) use ($user) {
@@ -483,7 +491,7 @@ describe('queries', function () {
         expect($many)->toBe($one)->and($one)->toBe(14);
     });
 
-    it('runs one more query when the text is also the beginning of an id', function () {
+    it('runs the most queries when every group has a hit and the text is also the beginning of an id', function () {
         $user = DB::table('users')->insertGetId(['name' => 'Ada', 'email' => 'ada@example.test', 'password' => 'x']);
         foundRun('0199c2f4-0001-7000-8000-000000000000', ['name' => '0199c2f4 agent', 'conversation_id' => '0199c2f4', 'user_id' => (string) $user, 'user_type' => User::class]);
 

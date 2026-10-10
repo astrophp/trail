@@ -862,9 +862,14 @@ without repeating an item that did both, cut at 5 in all. The conversations are 
 
 - A run's id is matched whole, or by its beginning when `q` is at least 8 characters, which is how
   many characters of an id the dashboard shows before the ellipsis, and made of hexadecimal digits
-  and hyphens, which is what the SDK's ids are made of; the digits' case does not matter. Any other
-  beginning is searched as text only. The whole id is compared as the database compares text, as
-  the run's own endpoint does. These reads take no time range, so a run from a month ago is found
+  and hyphens, which is what the SDK's ids are made of. Any other beginning is searched as text only.
+  The whole id is compared as typed, as the database compares text, as the run's own endpoint does.
+  The beginning is lowercased first, because the SDK's ids are lowercase, and then matched with
+  `LIKE`: an id stored with capital digits is found by its beginning only where the database's
+  `LIKE` ignores case (MySQL, SQLite), not on Postgres. It is always found by its whole id as the
+  database compares it, and, within the time range, by the text match, which ignores case on both
+  sides: on Postgres an uppercase `q` is not a whole-id match for a lowercase id, but the run is
+  still found as text. The reads by id take no time range, so a run from a month ago is found
   by its id, and are served by the primary key.
 - A conversation is found by its whole id, as the database compares text, and by nothing else: not by
   part of its id, not by a word of its turns, not by its user. Its time range does not apply either.
@@ -892,12 +897,18 @@ range as well, and the runs found by text already say which conversations they b
 The endpoint runs at most 13 queries, plus one lookup of the users for each user type among the
 runs and again for the conversation: a run id, a prefix of a run id, the runs found by text, a
 conversation id, four to describe that conversation, four for the agents, and the bookmarks of the
-runs found. The count does not depend on how much matched.
+runs found. The count does not grow with the number of runs, conversations or agents that
+matched. It is smaller when there is nothing to describe: the four queries that describe the
+conversation run only when a conversation has the id `q`, the prefix read only when `q` can be the
+beginning of an id, the bookmarks only when runs were found, and the number of user lookups follows
+the user types among the runs and the conversation found.
 
 Measured with 1,000,000 runs spread over 14 days (about 71,000 in the last 24 hours and 500,000 in
 the last 7 days), the indexes of the migrations only and the `trail_spans` table empty, on a laptop
 with the database in a container on the same machine (Postgres 17 with its defaults, MySQL 8.4 with a
-1 GB buffer pool) and one request at a time (median of 5, in milliseconds, of the whole endpoint).
+1 GB buffer pool) and one request at a time (median of 5, in milliseconds, of the reads of the search: the runs, the conversation and the agents, without the
+bookmarks and users the response adds afterwards, which are a few more queries of about a
+millisecond each).
 Another measurement was running on the same machine for part of the time, so read them as an order
 of magnitude, not a promise:
 
