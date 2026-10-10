@@ -2,6 +2,7 @@ import { act, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderApp, appReady } from '@/test/render-app'
+import { stubResizeObserver } from '@/test/resize-observer'
 import { agentsFor } from '@/test/agents-api'
 import { listFor as conversationsFor } from '@/test/conversations-api'
 import { json, listFor, mockApi } from '@/test/traces-api'
@@ -165,10 +166,15 @@ describe('top bar', () => {
         )
     })
 
-    it('has a search control that is not wired up yet', () => {
+    it('has a search control that opens the command palette', async () => {
+        stubResizeObserver()
         renderApp('/')
 
-        expect(screen.getByRole('button', { name: 'Search' })).toBeDisabled()
+        await userEvent.click(screen.getByRole('button', { name: 'Search' }))
+
+        expect(
+            screen.getByRole('dialog', { name: 'Search' }),
+        ).toBeInTheDocument()
     })
 })
 

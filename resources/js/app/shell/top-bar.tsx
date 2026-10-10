@@ -1,4 +1,3 @@
-import { SearchIcon } from 'lucide-react'
 import { Fragment, type Ref } from 'react'
 import { Link, useLocation } from 'react-router'
 import { breadcrumbTrail, resolveRoute } from '@/app/routes'
@@ -11,9 +10,8 @@ import {
     BreadcrumbPage,
     BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb'
-import { Button } from '@/components/ui/button'
-import { Kbd } from '@/components/ui/kbd'
 import { SidebarTrigger, useSidebar } from '@/components/ui/sidebar'
+import { PaletteTrigger } from '@/features/palette'
 import { useBoot } from '@/hooks/use-boot'
 import { useCurrentPageTitle } from '@/hooks/use-page-title'
 import { useReturnTarget } from '@/hooks/use-return-target'
@@ -78,13 +76,7 @@ export function TopBar({ triggerRef }: { triggerRef: Ref<HTMLButtonElement> }) {
             </div>
             <div className="flex shrink-0 items-center gap-1">
                 <RefreshControl />
-                {/* Not wired up yet, so it is disabled rather than a control that does nothing. */}
-                <Button variant="ghost" disabled aria-label="Search">
-                    <SearchIcon className="size-4" />
-                    <Kbd className="hidden h-auto min-w-0 rounded-sm border bg-transparent px-1.25 py-px text-micro font-normal wide:inline-flex">
-                        ⌘ K
-                    </Kbd>
-                </Button>
+                <PaletteTrigger />
             </div>
         </header>
     )

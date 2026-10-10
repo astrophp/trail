@@ -18,20 +18,14 @@ type CopyLinkButtonProps = {
 }
 
 /**
- * Copies the address of a page of the dashboard, with the dashboard's base path and the
- * application's origin put in front of `to`, and says whether it worked.
+ * A function that copies the address of a page of the dashboard (`to`, a path and query relative
+ * to the base path), with the base path and the application's origin put in front of it, and
+ * says whether it worked.
  */
-export function CopyLinkButton({
-    to,
-    label,
-    hideWordsWhenNarrow = false,
-    size = 'sm',
-    variant = 'outline',
-    className,
-}: CopyLinkButtonProps) {
+export function useCopyLink(to: string): () => Promise<void> {
     const href = useHref(to)
 
-    async function copy() {
+    return async () => {
         try {
             // `navigator.clipboard` is missing outside a secure context.
             await navigator.clipboard.writeText(
@@ -45,6 +39,21 @@ export function CopyLinkButton({
 
         notify.success('Link copied.')
     }
+}
+
+/**
+ * Copies the address of a page of the dashboard, with the dashboard's base path and the
+ * application's origin put in front of `to`, and says whether it worked.
+ */
+export function CopyLinkButton({
+    to,
+    label,
+    hideWordsWhenNarrow = false,
+    size = 'sm',
+    variant = 'outline',
+    className,
+}: CopyLinkButtonProps) {
+    const copy = useCopyLink(to)
 
     return (
         <Button

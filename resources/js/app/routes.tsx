@@ -1,16 +1,10 @@
-import {
-    BotIcon,
-    ChartColumnIcon,
-    LayoutDashboardIcon,
-    ListTreeIcon,
-    MessageSquareIcon,
-    type LucideIcon,
-} from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import type { ReactElement } from 'react'
 import { matchPath } from 'react-router'
 import { agentPagePath } from '@/lib/agent-path'
 import { comparePath } from '@/lib/compare-path'
 import { transcriptPath } from '@/lib/conversation-path'
+import { navPage, type Section } from '@/lib/nav-pages'
 import { AgentPage } from '@/pages/agent-page'
 import { AgentsPage } from '@/pages/agents-page'
 import { ComparePage } from '@/pages/compare-page'
@@ -22,8 +16,7 @@ import { TracePage } from '@/pages/trace-page'
 import { TracesPage } from '@/pages/traces-page'
 import { UsagePage } from '@/pages/usage-page'
 
-export type Section =
-    'overview' | 'traces' | 'conversations' | 'agents' | 'usage'
+export type { Section }
 
 export type RouteDef = {
     /** The route's path, relative to the dashboard's base path. */
@@ -45,18 +38,12 @@ export type RouteDef = {
  */
 export const routeTable: RouteDef[] = [
     {
-        path: '/',
-        title: 'Overview',
+        ...navPage('overview'),
         element: <OverviewPage />,
-        section: 'overview',
-        icon: LayoutDashboardIcon,
     },
     {
-        path: '/traces',
-        title: 'Traces',
+        ...navPage('traces'),
         element: <TracesPage />,
-        section: 'traces',
-        icon: ListTreeIcon,
     },
     {
         // Before the run page, so `compare` is never read as a run's id.
@@ -74,11 +61,8 @@ export const routeTable: RouteDef[] = [
         parent: '/traces',
     },
     {
-        path: '/conversations',
-        title: 'Conversations',
+        ...navPage('conversations'),
         element: <ConversationsPage />,
-        section: 'conversations',
-        icon: MessageSquareIcon,
     },
     {
         path: transcriptPath,
@@ -88,11 +72,8 @@ export const routeTable: RouteDef[] = [
         parent: '/conversations',
     },
     {
-        path: '/agents',
-        title: 'Agents',
+        ...navPage('agents'),
         element: <AgentsPage />,
-        section: 'agents',
-        icon: BotIcon,
     },
     {
         // The agent's name travels in the query, so one path serves every name.
@@ -103,11 +84,8 @@ export const routeTable: RouteDef[] = [
         parent: '/agents',
     },
     {
-        path: '/usage',
-        title: 'Usage & cost',
+        ...navPage('usage'),
         element: <UsagePage />,
-        section: 'usage',
-        icon: ChartColumnIcon,
     },
 ]
 
