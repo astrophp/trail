@@ -83,7 +83,6 @@ recording is paused.
 
 Add the commands to your schedule, for example in `routes/console.php`:
 
-<!-- sample: operations.schedule -->
 ```php
 use Illuminate\Support\Facades\Schedule;
 
@@ -175,7 +174,6 @@ timeout applies.
 **Recommendation.** For SQLite with more than one worker, set these on the connection Trail uses,
 in `config/database.php`:
 
-<!-- sample: operations.sqlite -->
 ```php
 'sqlite' => [
     // ...driver, database and the rest stay as they are
@@ -223,7 +221,6 @@ test suite checks that your own queries keep working afterwards.
 To avoid this, point Trail at a second connection to the same database. Set
 `TRAIL_DB_CONNECTION` (`trail.storage.connection`) to its name **before you migrate**:
 
-<!-- sample: operations.connection -->
 ```php
 // In a service provider's register(): a second connection with the settings of the default one.
 config(['database.connections.trail' => config('database.connections.'.config('database.default'))]);

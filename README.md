@@ -29,7 +29,6 @@ can open the dashboard.
 To try it without calling a provider, use the SDK's own fake. In `php artisan tinker`, with
 `App\Ai\Agents\SupportAgent` standing in for one of your agents:
 
-<!-- sample: readme.fake -->
 ```php
 App\Ai\Agents\SupportAgent::fake(['Hello from a fake provider.']);
 (new App\Ai\Agents\SupportAgent)->prompt('Hi');

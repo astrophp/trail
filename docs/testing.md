@@ -4,7 +4,6 @@
 was recorded without writing Trail's trace rows to a database. It returns the store, which has the
 assertions below.
 
-<!-- sample: testing.fake -->
 ```php
 use App\Ai\Agents\SupportAgent;
 use Astro\Trail\Enums\Status;
@@ -46,7 +45,6 @@ All of them return the store, so they chain. A failure names the agent class, ex
 | `assertRecordedCount(int $count, ?string $agentClass = null)` | Exactly `$count` traces were recorded, in total or for the class |
 | `assertNothingRecorded()` | No trace was recorded |
 
-<!-- sample: testing.assertions -->
 ```php
 use App\Ai\Agents\SupportAgent;
 use Astro\Trail\Facades\Trail;
@@ -64,7 +62,6 @@ $trail->assertRecordedCount(1)
     ->assertSpanNotRecorded(App\Ai\Agents\HealthCheckAgent::class);
 ```
 
-<!-- sample: testing.nothing -->
 ```php
 use Astro\Trail\Facades\Trail;
 

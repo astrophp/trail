@@ -20,7 +20,6 @@ on every request, for the page and for the JSON API behind it.
 `bootstrap/providers.php` (see [Installation](installation.md)). It defines the gate in a method
 you edit:
 
-<!-- sample: access.gate -->
 ```php
 use Illuminate\Support\Facades\Gate;
 
@@ -42,7 +41,6 @@ denies everyone, so a gate you forget to fill in fails closed.
 To decide with your own code, override `authorization()` in the same provider and call
 `Trail::auth()`:
 
-<!-- sample: access.auth -->
 ```php
 use Astro\Trail\Facades\Trail;
 

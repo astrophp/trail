@@ -83,7 +83,6 @@ Traces list. If you want to check without calling a provider, the SDK's own fake
 php artisan tinker
 ```
 
-<!-- sample: installation.fake -->
 ```php
 App\Ai\Agents\SupportAgent::fake(['Hello from a fake provider.']);
 (new App\Ai\Agents\SupportAgent)->prompt('Hi');
