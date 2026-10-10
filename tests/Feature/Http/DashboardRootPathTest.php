@@ -3,6 +3,11 @@
 use Astro\Trail\Tests\Fixtures\Http\ServesFromRoot;
 use Illuminate\Support\Facades\Route;
 
+afterEach(function () {
+    // Some tests change the environment; a failed assertion must not leave it changed.
+    $this->app['env'] = 'testing';
+});
+
 uses(ServesFromRoot::class);
 
 it('never serves the dashboard from the root of the domain, where it would take every path of the application', function () {

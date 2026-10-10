@@ -18,7 +18,11 @@ beforeEach(function () {
     Carbon::setTestNow('2026-01-02 12:00:00');
 });
 
-afterEach(fn () => Carbon::setTestNow());
+afterEach(function () {
+    Carbon::setTestNow();
+    // Some tests change the environment; a failed assertion must not leave it changed.
+    $this->app['env'] = 'testing';
+});
 
 /**
  * The export of a request, parsed: the header and the runs, each keyed by column.

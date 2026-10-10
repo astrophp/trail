@@ -2,6 +2,11 @@
 
 use Illuminate\Support\Facades\Route;
 
+afterEach(function () {
+    // Some tests change the environment; a failed assertion must not leave it changed.
+    $this->app['env'] = 'testing';
+});
+
 it('reserves the api space ahead of the catch-all', function () {
     $this->app['env'] = 'local';
 

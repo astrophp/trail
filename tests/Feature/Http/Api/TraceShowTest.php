@@ -62,7 +62,11 @@ beforeEach(function () {
     };
 });
 
-afterEach(fn () => Carbon::setTestNow());
+afterEach(function () {
+    Carbon::setTestNow();
+    // Some tests change the environment; a failed assertion must not leave it changed.
+    $this->app['env'] = 'testing';
+});
 
 /**
  * The spans of a response by type, in the order they are returned.

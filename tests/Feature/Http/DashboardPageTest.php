@@ -45,6 +45,9 @@ afterEach(function () {
     }
 
     unset($GLOBALS['trail_dist_directories']);
+
+    // Some tests change the environment; a failed assertion must not leave it changed.
+    $this->app['env'] = 'testing';
 });
 
 it('serves the page with the mount element, the theme script, the favicon and the title', function () {

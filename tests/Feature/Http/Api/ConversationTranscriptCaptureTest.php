@@ -23,6 +23,11 @@ use Laravel\Ai\Exceptions\RateLimitedException;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\UserMessage;
 
+afterEach(function () {
+    // Some tests change the environment; a failed assertion must not leave it changed.
+    $this->app['env'] = 'testing';
+});
+
 /*
 |--------------------------------------------------------------------------
 | The messages of a turn, from spans the real SDK produced
