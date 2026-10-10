@@ -1,0 +1,267 @@
+{
+    "data": {
+        "traces": [
+            {
+                "id": "turn-p1",
+                "type": "agent",
+                "name": "SupportAssistant",
+                "agent_class": null,
+                "status": "completed",
+                "issue_kind": null,
+                "streamed": false,
+                "recovered": false,
+                "child_failed": false,
+                "provider": null,
+                "model": null,
+                "duration_ms": null,
+                "usage": {
+                    "state": "reported",
+                    "input_tokens": 1200,
+                    "output_tokens": 310,
+                    "cache_read_tokens": null,
+                    "cache_write_tokens": null,
+                    "reasoning_tokens": null,
+                    "total_tokens": 1510
+                },
+                "cost": {
+                    "state": "estimated",
+                    "amount": 0.00825
+                },
+                "span_count": 0,
+                "prompt_excerpt": "Where is my order?",
+                "response_excerpt": null,
+                "conversation_id": "conversation-pending",
+                "user": {
+                    "id": "7",
+                    "type": "Astro\\Trail\\Tests\\Fixtures\\Users\\User",
+                    "name": "Ada",
+                    "email": "ada@example.test"
+                },
+                "bookmarked": false,
+                "started_at": "2026-01-02T11:00:00.000Z",
+                "ended_at": null
+            },
+            {
+                "id": "run-order",
+                "type": "agent",
+                "name": "OrderAgent",
+                "agent_class": "App\\Ai\\Agents\\OrderAgent",
+                "status": "completed",
+                "issue_kind": null,
+                "streamed": false,
+                "recovered": false,
+                "child_failed": false,
+                "provider": null,
+                "model": null,
+                "duration_ms": null,
+                "usage": {
+                    "state": "not_reported",
+                    "input_tokens": null,
+                    "output_tokens": null,
+                    "cache_read_tokens": null,
+                    "cache_write_tokens": null,
+                    "reasoning_tokens": null,
+                    "total_tokens": null
+                },
+                "cost": {
+                    "state": "not_captured",
+                    "amount": null
+                },
+                "span_count": 0,
+                "prompt_excerpt": "Track an order",
+                "response_excerpt": null,
+                "conversation_id": null,
+                "user": null,
+                "bookmarked": false,
+                "started_at": "2026-01-02T09:00:00.000Z",
+                "ended_at": null
+            }
+        ],
+        "conversations": [
+            {
+                "id": "conversation-pending",
+                "turns": {
+                    "all": 2,
+                    "completed": 1,
+                    "failed": 0,
+                    "incomplete": 0,
+                    "running": 1,
+                    "awaiting_approval": 0
+                },
+                "agents": [
+                    "SupportAssistant"
+                ],
+                "agent_count": 1,
+                "users": [
+                    {
+                        "id": "7",
+                        "type": "Astro\\Trail\\Tests\\Fixtures\\Users\\User",
+                        "name": "Ada",
+                        "email": "ada@example.test"
+                    }
+                ],
+                "user_count": 1,
+                "usage": {
+                    "state": "pending",
+                    "input_tokens": 1500,
+                    "output_tokens": 310,
+                    "cache_read_tokens": null,
+                    "cache_write_tokens": null,
+                    "reasoning_tokens": null,
+                    "total_tokens": 1810
+                },
+                "cost": {
+                    "state": "pending",
+                    "amount": 0.00945
+                },
+                "prompt_excerpt": "And the invoice?",
+                "first_activity_at": "2026-01-02T11:00:00.000Z",
+                "last_activity_at": "2026-01-02T11:55:00.000Z"
+            },
+            {
+                "id": "conversation-shared",
+                "turns": {
+                    "all": 2,
+                    "completed": 1,
+                    "failed": 0,
+                    "incomplete": 0,
+                    "running": 0,
+                    "awaiting_approval": 1
+                },
+                "agents": [
+                    "Refunds",
+                    "SupportAssistant"
+                ],
+                "agent_count": 2,
+                "users": [
+                    {
+                        "id": "7",
+                        "type": "Astro\\Trail\\Tests\\Fixtures\\Users\\User",
+                        "name": "Ada",
+                        "email": "ada@example.test"
+                    },
+                    {
+                        "id": "8",
+                        "type": "Astro\\Trail\\Tests\\Fixtures\\Users\\User",
+                        "name": "Grace",
+                        "email": "grace@example.test"
+                    }
+                ],
+                "user_count": 2,
+                "usage": {
+                    "state": "not_reported",
+                    "input_tokens": null,
+                    "output_tokens": null,
+                    "cache_read_tokens": null,
+                    "cache_write_tokens": null,
+                    "reasoning_tokens": null,
+                    "total_tokens": null
+                },
+                "cost": {
+                    "state": "not_captured",
+                    "amount": null
+                },
+                "prompt_excerpt": "Approve it",
+                "first_activity_at": "2025-12-31T09:00:00.000Z",
+                "last_activity_at": "2026-01-02T09:00:00.000Z"
+            }
+        ],
+        "agents": [
+            {
+                "name": "OrderAgent",
+                "agent_class": "App\\Ai\\Agents\\OrderAgent",
+                "type": "agent",
+                "top_level": {
+                    "runs": {
+                        "all": 1,
+                        "completed": 1,
+                        "failed": 0,
+                        "incomplete": 0,
+                        "running": 0,
+                        "awaiting_approval": 0
+                    },
+                    "error_rate": {
+                        "rate": 0,
+                        "failed": 0,
+                        "finished": 1
+                    },
+                    "duration": {
+                        "average_ms": null,
+                        "measured": 0,
+                        "not_measured": 1
+                    },
+                    "usage": {
+                        "state": "not_reported",
+                        "input_tokens": null,
+                        "output_tokens": null,
+                        "cache_read_tokens": null,
+                        "cache_write_tokens": null,
+                        "reasoning_tokens": null,
+                        "total_tokens": null
+                    },
+                    "cost": {
+                        "state": "not_captured",
+                        "amount": null
+                    },
+                    "cost_coverage": {
+                        "unpriced_runs": 0,
+                        "runs_without_amount": 1
+                    },
+                    "last_activity_at": "2026-01-02T09:00:00.000Z"
+                },
+                "delegated": null,
+                "last_activity_at": "2026-01-02T09:00:00.000Z",
+                "activity": [
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    1,
+                    0,
+                    0
+                ]
+            }
+        ]
+    },
+    "query": {
+        "q": "order",
+        "minimum": 2,
+        "searched": true
+    },
+    "limits": {
+        "traces": {
+            "limit": 5,
+            "truncated": false
+        },
+        "conversations": {
+            "limit": 5,
+            "truncated": false
+        },
+        "agents": {
+            "limit": 5,
+            "truncated": false
+        }
+    },
+    "range": {
+        "preset": "24h",
+        "from": "2026-01-01T12:00:00.000Z",
+        "to": "2026-01-02T12:00:00.000Z"
+    }
+}

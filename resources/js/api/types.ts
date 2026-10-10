@@ -312,6 +312,21 @@ export type AgentListResponse = {
     agent_limit: { limit: number; truncated: boolean }
 }
 
+/** One group of a search: `truncated` when more than `limit` items matched and the rest were not returned. */
+export type SearchLimit = { limit: number; truncated: boolean }
+
+/** The few runs, conversations and agents that match a text. `query.searched` is `false` when the text is shorter than `query.minimum` and nothing was read. */
+export type SearchResponse = {
+    data: { traces: Trace[]; conversations: Conversation[]; agents: Agent[] }
+    query: { q: string; minimum: number; searched: boolean }
+    limits: {
+        traces: SearchLimit
+        conversations: SearchLimit
+        agents: SearchLimit
+    }
+    range: Range
+}
+
 /** An agent's page: its figures as top-level runs, and what needs a look among those runs. */
 export type AgentResponse = {
     data: {

@@ -570,6 +570,13 @@ it('sends the agents response the dashboard expects', function () {
     assertContract('agents', $this->getJson('/trail/api/agents')->assertOk()->json());
 });
 
+it('sends the search response the dashboard expects', function () {
+    conversationContractDataset();
+    AgentRows::run('OrderAgent', '2026-01-02 09:00:00', ['id' => 'run-order', 'agent_class' => 'App\\Ai\\Agents\\OrderAgent', 'prompt_excerpt' => 'Track an order']);
+
+    assertContract('search', $this->getJson('/trail/api/search?q=order')->assertOk()->json());
+});
+
 it('sends the agent response the dashboard expects', function () {
     Carbon::setTestNow('2026-01-02 12:20:00');
     agentContractDataset();
