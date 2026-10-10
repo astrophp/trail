@@ -118,6 +118,29 @@ Two guarantees come with these pieces; keep them when adding a list:
   Any count, total or page number shown outside the dimmed table must also check the query's
   `isPlaceholderData`; `loading` being false does not make a count current.
 
+## The command palette
+
+⌘K / Ctrl K opens a palette from any page: go to a page, run a small action, or find a run, a
+conversation or an agent. The shell mounts it once (`PaletteProvider` and `PaletteTrigger` from
+`@/features/palette`); the dialog itself is the `CommandPalette` pattern, which knows nothing of Trail.
+What goes into it, and how:
+
+- **A page** is an entry of `lib/nav-pages`, the one list the sidebar, the route table and the palette
+  read. A page that is not in the navigation is not offered.
+- **An action** is an item of `ActionGroup` in the palette feature. Only what needs no confirmation
+  and already exists elsewhere in the dashboard (the theme, copying a link); reuse its code, do not
+  copy it.
+- **A result** comes from `GET /api/search` and is a group in `search-groups.tsx`: a real link (its
+  address built with the path helpers, never by hand), built from the `telemetry` components, so a
+  missing value reads `Not captured` or `Sub-agent only` and is never formatted or zero. A group the
+  API cut ends with the list that holds the rest, written with that list's own link helper.
+- **Never the answer to another text.** The search is keyed by its text and range, keeps no
+  placeholder data, shows loading while the text waits out its pause or its request is out, and
+  aborts the request of a text that was replaced. Do not add `placeholderData` to it.
+- The palette is not navigation: opening it changes no URL and remounts no page, so a page must not
+  rely on losing focus or state when it opens. The key is handled by one hook
+  (`usePaletteShortcut`), the one shortcut that also works while typing in a field.
+
 ## The catalogue
 
 `npm run catalogue` serves a dev-only page of every shared component in its variants and states, in

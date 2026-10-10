@@ -5,7 +5,7 @@ const typing =
     'input, textarea, select, [role="textbox"], [role="combobox"], [role="searchbox"], [contenteditable]:not([contenteditable="false" i])'
 
 /** Open layers that take the keyboard for themselves: dialogs, menus and open selects. */
-const layers =
+export const layers =
     '[role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"]'
 
 /**

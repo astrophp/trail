@@ -7,6 +7,7 @@ import { documentTitle, resolveRoute } from '@/app/routes'
 import { ErrorBoundary } from '@/components/patterns/error-boundary'
 import { ErrorState } from '@/components/patterns/error-state'
 import { SidebarProvider, useSidebar } from '@/components/ui/sidebar'
+import { PaletteProvider } from '@/features/palette'
 import { useDocumentTitle } from '@/hooks/use-document-title'
 import { PageTitleProvider, useCurrentPageTitle } from '@/hooks/use-page-title'
 import { focusPageHeading } from '@/lib/focus-page-heading'
@@ -150,7 +151,9 @@ export function AppShell() {
             }
         >
             <PageTitleProvider>
-                <Frame />
+                <PaletteProvider>
+                    <Frame />
+                </PaletteProvider>
             </PageTitleProvider>
         </SidebarProvider>
     )

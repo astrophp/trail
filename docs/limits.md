@@ -80,8 +80,8 @@ total.
 
 The dashboard's JavaScript and CSS are inlined into the page, so there is nothing to publish and
 no asset URL to configure. The cost is that every dashboard page load carries them. In this
-release the script is about 1.2 MB, about 370 KB gzipped
-(measure it with `gzip -c dist/app.js | wc -c`), and the stylesheet is about 125 KB, about 20 KB
+release the script is about 1.3 MB, about 380 KB gzipped
+(measure it with `gzip -c dist/app.js | wc -c`), and the stylesheet is about 135 KB, about 20 KB
 gzipped. Whether the page is compressed in transit depends on your web server. The size changes
 with every release that changes the dashboard.
 
