@@ -78,7 +78,7 @@ it('runs every documented trail command, with options the command defines', func
 
 it('names only artisan commands that exist', function () {
     // Commands of Laravel and of packages the documentation assumes the application has.
-    $outside = ['tinker', 'make:agent'];
+    $outside = ['tinker', 'make:agent', 'boost:install', 'boost:mcp', 'boost:update'];
     $named = [];
 
     foreach (Pages::guides() as $page) {
