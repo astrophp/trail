@@ -133,10 +133,25 @@ class DatabaseTraceStore implements TraceStore
                 ->where('status', Status::Running->value)
                 ->where('created_at', '<', $cutoff);
 
+            $sweptCalls = $db->table('trail_spans')
+                ->selectRaw('trail_trace_models.incomplete_calls + count(*)')
+                ->whereColumn('trail_spans.trace_id', 'trail_trace_models.trace_id')
+                ->whereRaw('(trail_spans.provider = trail_trace_models.provider or (trail_spans.provider is null and trail_trace_models.provider is null))')
+                ->whereRaw('(trail_spans.model = trail_trace_models.model or (trail_spans.model is null and trail_trace_models.model is null))')
+                ->whereRaw(SpanSql::bills('trail_spans'))
+                ->where('trail_spans.status', Status::Running->value)
+                ->where('trail_spans.created_at', '<', $cutoff);
+
+            $openAt = $db->table('trail_spans')->newQuery()
+                ->selectRaw('case when open_at < ? then null else open_at end', [$cutoff]);
+
             $db->table('trail_trace_models')
-                ->where('open_at', '<', $cutoff)
                 ->whereIn('trace_id', $swept)
-                ->update(['open_at' => null]);
+                ->update([
+                    // Unknown historical coverage stays unknown. A partly swept group stays open.
+                    'incomplete_calls' => $sweptCalls,
+                    'open_at' => $openAt,
+                ]);
 
             $traces = $db->table('trail_traces')
                 ->where('status', Status::Running->value)
@@ -216,6 +231,7 @@ class DatabaseTraceStore implements TraceStore
             'cost' => null,
             'span_count' => 0,
             'unpriced_span_count' => 0,
+            'search_units' => null,
             'created_at' => $now,
             'updated_at' => $now,
         ]);
@@ -308,7 +324,7 @@ class DatabaseTraceStore implements TraceStore
         $usages = [];
 
         foreach ($db->table('trail_spans')->where('trace_id', $traceId)->get([
-            'type', 'input_tokens', 'output_tokens', 'cache_read_tokens', 'cache_write_tokens', 'reasoning_tokens', 'cost',
+            'type', 'input_tokens', 'output_tokens', 'cache_read_tokens', 'cache_write_tokens', 'reasoning_tokens', 'cost', 'search_units',
         ]) as $row) {
             $type = SpanType::tryFrom($this->asString($row->type));
 
@@ -324,6 +340,7 @@ class DatabaseTraceStore implements TraceStore
                 $this->asInt($row->cache_write_tokens),
                 $this->asInt($row->reasoning_tokens),
                 $this->asFloat($row->cost),
+                SearchUnits::fromStorage($this->asInt($row->search_units)),
             );
         }
 
@@ -338,6 +355,7 @@ class DatabaseTraceStore implements TraceStore
             'cost' => $this->decimal($totals->cost),
             'span_count' => $totals->spanCount,
             'unpriced_span_count' => $totals->unpricedSpanCount,
+            'search_units' => SearchUnits::toStorage($totals->searchUnits),
             'updated_at' => $this->now(),
         ]);
     }
@@ -383,12 +401,25 @@ class DatabaseTraceStore implements TraceStore
         $bills = SpanSql::bills('trail_spans');
         $reported = SpanSql::reported('trail_spans');
         $unpriced = "{$bills} and trail_spans.cost is null and {$reported}";
+        $units = 'trail_spans.search_units';
+        $unitCalls = "{$bills} and {$units} is not null";
         $input = 'trail_spans.input_tokens';
         $cached = '(coalesce(trail_spans.cache_read_tokens, 0) + coalesce(trail_spans.cache_write_tokens, 0))';
         $stored = fn () => $db->table('trail_traces')->select('id', 'name', 'started_at')->where('id', $traceId);
 
         $models = $db->table('trail_spans')
             ->select('provider', 'model')
+            ->selectRaw("sum(case when {$unitCalls} then 1 else 0 end) as search_unit_calls")
+            ->selectRaw("sum(case when {$unitCalls} then 1 else 0 end) as reported_search_unit_calls")
+            ->selectRaw("sum(case when {$bills} and trail_spans.status = 'incomplete' then 1 else 0 end) as incomplete_calls")
+
+            // Keep digit sums exact across drivers, including floor's numeric return type.
+            ->selectRaw("sum(case when {$unitCalls} then cast(floor({$units} / 1000000000000) as decimal(38, 0)) end) as search_high")
+            ->selectRaw("sum(case when {$unitCalls} then cast(floor(({$units} % 1000000000000) / 1000000) as decimal(38, 0)) end) as search_middle")
+            ->selectRaw("sum(case when {$unitCalls} then cast(({$units} % 1000000) as decimal(38, 0)) end) as search_low")
+            ->selectRaw("sum(case when {$unitCalls} and trail_spans.cost is null then cast(floor({$units} / 1000000000000) as decimal(38, 0)) end) as unpriced_search_high")
+            ->selectRaw("sum(case when {$unitCalls} and trail_spans.cost is null then cast(floor(({$units} % 1000000000000) / 1000000) as decimal(38, 0)) end) as unpriced_search_middle")
+            ->selectRaw("sum(case when {$unitCalls} and trail_spans.cost is null then cast(({$units} % 1000000) as decimal(38, 0)) end) as unpriced_search_low")
             ->selectRaw("sum(case when {$bills} then 1 else 0 end) as steps")
             ->selectRaw("sum(case when {$bills} and {$reported} then 1 else 0 end) as reported_steps")
             ->selectRaw("sum(case when {$unpriced} then 1 else 0 end) as unpriced_steps")
@@ -420,13 +451,16 @@ class DatabaseTraceStore implements TraceStore
         $db->table('trail_trace_models')->insertUsing([
             'trace_id', 'provider', 'model', 'run_name', 'started_at', 'provider_first', 'steps', 'reported_steps', 'unpriced_steps',
             'unpriced_tokens', 'open_at', 'input_tokens', 'uncached_input_tokens', 'output_tokens', 'cache_read_tokens',
-            'cache_write_tokens', 'reasoning_tokens', 'cost',
+            'cache_write_tokens', 'reasoning_tokens', 'cost', 'search_unit_calls', 'reported_search_unit_calls',
+            'incomplete_calls', 'search_units', 'unpriced_search_units',
         ], $db->table($models, 'g')
             ->crossJoinSub($stored(), 't')
             ->leftJoinSub($firsts, 'p', 'p.provider', '=', 'g.provider')
             ->select('t.id', 'g.provider', 'g.model', 't.name', 't.started_at')
             ->selectRaw('case when g.provider is not null and (g.model = p.first_model or (p.first_model is null and g.model is null)) then true else false end as provider_first')
-            ->addSelect('g.steps', 'g.reported_steps', 'g.unpriced_steps', 'g.unpriced_tokens', 'g.open_at', 'g.input_tokens', 'g.uncached_input_tokens', 'g.output_tokens', 'g.cache_read_tokens', 'g.cache_write_tokens', 'g.reasoning_tokens', 'g.cost'));
+            ->addSelect('g.steps', 'g.reported_steps', 'g.unpriced_steps', 'g.unpriced_tokens', 'g.open_at', 'g.input_tokens', 'g.uncached_input_tokens', 'g.output_tokens', 'g.cache_read_tokens', 'g.cache_write_tokens', 'g.reasoning_tokens', 'g.cost', 'g.search_unit_calls', 'g.reported_search_unit_calls', 'g.incomplete_calls')
+            ->selectRaw($this->searchSum('search').' as search_units')
+            ->selectRaw($this->searchSum('unpriced_search').' as unpriced_search_units'));
 
         $tools = $db->table('trail_spans')
             ->select('name')
@@ -444,6 +478,21 @@ class DatabaseTraceStore implements TraceStore
                 ->crossJoinSub($stored(), 't')
                 ->select('t.id', 'g.name', 't.name', 't.started_at', 'g.calls', 'g.failed'),
         );
+    }
+
+    /**
+     * Reassemble exact base-one-million sums only when they fit the quantity range.
+     *
+     * @param  literal-string  $prefix
+     * @return literal-string
+     */
+    private function searchSum(string $prefix): string
+    {
+        $high = "g.{$prefix}_high";
+        $middle = "g.{$prefix}_middle";
+        $low = "g.{$prefix}_low";
+
+        return "case when {$high} + floor(({$middle} + floor({$low} / 1000000)) / 1000000) <= 999999 then {$high} * 1000000000000 + {$middle} * 1000000 + {$low} end";
     }
 
     /**
@@ -503,6 +552,7 @@ class DatabaseTraceStore implements TraceStore
             'cache_read_tokens' => $this->tokens($span->cacheReadTokens),
             'cache_write_tokens' => $this->tokens($span->cacheWriteTokens),
             'reasoning_tokens' => $this->tokens($span->reasoningTokens),
+            'search_units' => SearchUnits::toStorage($span->searchUnits),
             'cost' => $this->decimal($span->cost),
             'input' => $this->json($span->input),
             'output' => $this->json($span->output),

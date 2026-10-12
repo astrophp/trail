@@ -9,6 +9,8 @@ use Astro\Trail\Enums\SpanType;
  */
 final readonly class SpanUsage
 {
+    public ?string $searchUnits;
+
     public function __construct(
         public SpanType $type,
         public ?int $inputTokens = null,
@@ -17,7 +19,10 @@ final readonly class SpanUsage
         public ?int $cacheWriteTokens = null,
         public ?int $reasoningTokens = null,
         public ?float $cost = null,
-    ) {}
+        string|int|float|null $searchUnits = null,
+    ) {
+        $this->searchUnits = SearchUnits::normalize($searchUnits);
+    }
 
     public static function fromRecord(SpanRecord $span): self
     {
@@ -29,6 +34,7 @@ final readonly class SpanUsage
             $span->cacheWriteTokens,
             $span->reasoningTokens,
             $span->cost,
+            $span->searchUnits,
         );
     }
 
@@ -43,6 +49,7 @@ final readonly class SpanUsage
             || $this->outputTokens !== null
             || $this->cacheReadTokens !== null
             || $this->cacheWriteTokens !== null
-            || $this->reasoningTokens !== null;
+            || $this->reasoningTokens !== null
+            || $this->searchUnits !== null;
     }
 }

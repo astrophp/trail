@@ -59,6 +59,7 @@ beforeEach(function () {
         'steps' => 1, 'reported_steps' => 1, 'unpriced_steps' => 0, 'unpriced_tokens' => null, 'open_at' => null,
         'input_tokens' => null, 'uncached_input_tokens' => null, 'output_tokens' => null, 'cache_read_tokens' => null,
         'cache_write_tokens' => null, 'reasoning_tokens' => null, 'cost' => null,
+        'search_units' => null, 'search_unit_calls' => 0, 'reported_search_unit_calls' => 0, 'unpriced_search_units' => null, 'incomplete_calls' => 0,
     ], $attributes);
 
     $this->delegating = fn (string $name = 'ResearcherAgent', array $usage = []) => FakeAnthropic::toolUse([['id' => 'toolu_1', 'name' => $name, 'input' => ['task' => 'Dig', 'query' => 'x']]], usage: $usage);
@@ -206,7 +207,7 @@ it('closes the open step of an abandoned run when the run is swept, and keeps th
 
     expect(app(TraceStore::class)->sweep(300))->toBe(1)
         ->and(DB::table('trail_spans')->where('trace_id', $id)->where('type', 'step')->value('status'))->toBe('incomplete')
-        ->and(Summaries::models($id))->toBe([array_merge($before[0], ['open_at' => null])]);
+        ->and(Summaries::models($id))->toBe([array_merge($before[0], ['open_at' => null, 'incomplete_calls' => 1])]);
 });
 
 it('agrees with the grouped reads of spans over a varied set of runs', function () {

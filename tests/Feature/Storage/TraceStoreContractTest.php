@@ -616,6 +616,7 @@ it('reads every populated field back as stored', function (array $pair) {
         'ended_at' => '2026-03-01 12:00:00.000',
         'created_at' => '2026-03-01 12:00:00.123',
         'updated_at' => '2026-03-01 12:00:00.123',
+        'search_units' => null,
     ])->and($probe->spans('trace-1')[1])->toBe([
         'id' => 'span-1',
         'trace_id' => 'trace-1',
@@ -651,5 +652,6 @@ it('reads every populated field back as stored', function (array $pair) {
         'ended_at' => '2026-03-01 12:00:00.000',
         'created_at' => '2026-03-01 12:00:00.123',
         'updated_at' => '2026-03-01 12:00:00.123',
+        'search_units' => null,
     ]);
 })->with('stores');

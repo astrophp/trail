@@ -2,6 +2,7 @@
 
 namespace Astro\Trail\Tests\Fixtures\Storage;
 
+use Astro\Trail\Storage\SearchUnits;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\DB;
 use stdClass;
@@ -13,7 +14,7 @@ use stdClass;
  */
 final class Summaries
 {
-    private const INTEGERS = ['steps', 'reported_steps', 'unpriced_steps', 'unpriced_tokens', 'input_tokens', 'uncached_input_tokens', 'output_tokens', 'cache_read_tokens', 'cache_write_tokens', 'reasoning_tokens', 'calls', 'failed'];
+    private const INTEGERS = ['steps', 'reported_steps', 'unpriced_steps', 'unpriced_tokens', 'input_tokens', 'uncached_input_tokens', 'output_tokens', 'cache_read_tokens', 'cache_write_tokens', 'reasoning_tokens', 'calls', 'failed', 'search_unit_calls', 'reported_search_unit_calls', 'incomplete_calls'];
 
     /**
      * The model rows of a run, by provider and model (a missing one first).
@@ -77,6 +78,7 @@ final class Summaries
                 $value === null => null,
                 $column === 'provider_first' => (bool) $value,
                 in_array($column, self::INTEGERS, true) => (int) (is_numeric($value) ? $value : 0),
+                in_array($column, ['search_units', 'unpriced_search_units'], true) => SearchUnits::fromStorage(is_numeric($value) ? (int) $value : null),
                 $column === 'cost' => self::decimal($value),
                 $column === 'open_at' || $column === 'started_at' => self::moment($value),
                 default => $value,

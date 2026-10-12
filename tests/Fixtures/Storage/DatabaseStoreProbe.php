@@ -2,6 +2,7 @@
 
 namespace Astro\Trail\Tests\Fixtures\Storage;
 
+use Astro\Trail\Storage\SearchUnits;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\DB;
 use stdClass;
@@ -67,6 +68,7 @@ class DatabaseStoreProbe implements StoreProbe
         foreach (get_object_vars($row) as $column => $value) {
             $values[$column] = match (true) {
                 $value === null => null,
+                $column === 'search_units' => SearchUnits::fromStorage((int) $this->numeric($column, $value)),
                 in_array($column, self::BOOLEANS, true) => (bool) $value,
                 in_array($column, self::INTEGERS, true) => (int) $this->numeric($column, $value),
                 in_array($column, self::FLOATS, true) => (float) $this->numeric($column, $value),

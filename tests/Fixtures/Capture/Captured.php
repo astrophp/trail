@@ -255,6 +255,7 @@ final class Captured
             'prompt_excerpt' => null,
             'response_excerpt' => null,
             'metadata' => null,
+            'search_units' => null,
         ], $overrides));
     }
 
@@ -295,6 +296,7 @@ final class Captured
             'error_message' => null,
             'error_source' => null,
             'error_http_status' => null,
+            'search_units' => null,
         ], $overrides));
     }
 

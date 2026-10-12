@@ -19,7 +19,7 @@ it('creates the price and bookmark tables with exactly their columns', function 
     expect(Schema::hasTable('trail_prices'))->toBeTrue()
         ->and(Schema::hasTable('trail_bookmarks'))->toBeTrue()
         ->and(array_keys(Rows::columnsOf('trail_prices')))->toEqual([
-            'id', 'provider', 'model', 'input', 'output', 'cache_read', 'cache_write', 'created_at', 'updated_at',
+            'id', 'provider', 'model', 'input', 'output', 'cache_read', 'cache_write', 'created_at', 'updated_at', 'reranking_basis', 'reranking_input', 'reranking_search_unit',
         ])
         ->and(array_keys(Rows::columnsOf('trail_bookmarks')))->toEqual([
             'id', 'trace_id', 'user_id', 'user_type', 'created_at',
@@ -27,7 +27,7 @@ it('creates the price and bookmark tables with exactly their columns', function 
 });
 
 it('rolls back the price, bookmark and summary tables on their own', function () {
-    $this->artisan('migrate:rollback', ['--step' => 4])->assertSuccessful();
+    $this->artisan('migrate:rollback', ['--step' => 5])->assertSuccessful();
 
     expect(Schema::hasTable('trail_prices'))->toBeFalse()
         ->and(Schema::hasTable('trail_trace_models'))->toBeFalse()
@@ -58,7 +58,7 @@ it('keeps index names within the shortest identifier limit', function (string $t
 it('leaves every price rate nullable with no default', function () {
     $columns = Rows::columnsOf('trail_prices');
 
-    foreach (['input', 'output', 'cache_read', 'cache_write'] as $name) {
+    foreach (['input', 'output', 'cache_read', 'cache_write', 'reranking_basis', 'reranking_input', 'reranking_search_unit'] as $name) {
         expect($columns[$name]['nullable'])->toBeTrue($name)
             ->and($columns[$name]['default'])->toBeNull($name);
     }

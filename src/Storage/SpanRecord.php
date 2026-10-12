@@ -14,6 +14,8 @@ use DateTimeInterface;
  */
 final readonly class SpanRecord
 {
+    public ?string $searchUnits;
+
     /**
      * @param  array<array-key, mixed>|null  $input
      * @param  array<array-key, mixed>|null  $output
@@ -52,5 +54,8 @@ final readonly class SpanRecord
         public ?int $errorHttpStatus = null,
         public ?float $durationMs = null,
         public ?DateTimeInterface $endedAt = null,
-    ) {}
+        string|int|float|null $searchUnits = null,
+    ) {
+        $this->searchUnits = SearchUnits::normalize($searchUnits);
+    }
 }

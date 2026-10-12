@@ -49,6 +49,7 @@ beforeEach(function () {
         'provider_first' => false, 'steps' => 1, 'reported_steps' => 1, 'unpriced_steps' => 0, 'unpriced_tokens' => null,
         'open_at' => null, 'input_tokens' => null, 'uncached_input_tokens' => null, 'output_tokens' => null,
         'cache_read_tokens' => null, 'cache_write_tokens' => null, 'reasoning_tokens' => null, 'cost' => null,
+        'search_units' => null, 'search_unit_calls' => 0, 'reported_search_unit_calls' => 0, 'unpriced_search_units' => null, 'incomplete_calls' => 0,
     ], $attributes);
 });
 
@@ -315,7 +316,7 @@ it('leaves the rows of a swept run as they are, except that nothing is open any 
     expect($this->store->sweep(300))->toBe(1)
         ->and(DB::table('trail_spans')->where('id', 's-old')->value('status'))->toBe('incomplete')
         ->and($before[0]['open_at'])->toBe('2026-03-01 12:00:00.000')
-        ->and(Summaries::models('old'))->toBe([array_merge($before[0], ['open_at' => null])])
+        ->and(Summaries::models('old'))->toBe([array_merge($before[0], ['open_at' => null, 'incomplete_calls' => 1])])
         ->and(Summaries::only(Summaries::models('new'), ['open_at']))->toBe([['open_at' => '2026-03-01 12:18:00.000']]);
 });
 

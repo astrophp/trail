@@ -3,7 +3,7 @@
 namespace Astro\Trail\Storage;
 
 /**
- * Token, cost and span totals of a trace. Only step and embedding spans
+ * Token, search-unit, cost and span totals of a trace. Only step and embedding spans
  * contribute usage; a total nobody reported stays null instead of becoming zero.
  */
 final readonly class TraceTotals
@@ -17,6 +17,7 @@ final readonly class TraceTotals
         public ?float $cost,
         public int $spanCount,
         public int $unpricedSpanCount,
+        public ?string $searchUnits = null,
     ) {}
 
     /**
@@ -40,6 +41,8 @@ final readonly class TraceTotals
     {
         $input = $output = $cacheRead = $cacheWrite = $reasoning = null;
         $cost = null;
+        $searchUnits = null;
+        $searchOverflow = false;
         $count = 0;
         $unpriced = 0;
 
@@ -48,6 +51,12 @@ final readonly class TraceTotals
 
             if (! $span->contributes()) {
                 continue;
+            }
+
+            if (! $searchOverflow && $span->searchUnits !== null) {
+                $next = SearchUnits::add($searchUnits, $span->searchUnits);
+                $searchOverflow = $next === null;
+                $searchUnits = $next;
             }
 
             $input = self::add($input, $span->inputTokens);
@@ -72,6 +81,7 @@ final readonly class TraceTotals
             $cost === null ? null : round($cost, 10),
             $count,
             $unpriced,
+            $searchUnits,
         );
     }
 

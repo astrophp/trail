@@ -37,6 +37,7 @@ use Illuminate\Support\Carbon;
  * @property int|null $cache_read_tokens
  * @property int|null $cache_write_tokens
  * @property int|null $reasoning_tokens
+ * @property int|null $search_units Micro-units (six decimal places).
  * @property float|null $cost
  * @property int $span_count
  * @property int $unpriced_span_count
@@ -91,6 +92,7 @@ class Trace extends Model
             'cache_read_tokens' => 'integer',
             'cache_write_tokens' => 'integer',
             'reasoning_tokens' => 'integer',
+            'search_units' => 'integer',
             'cost' => 'float',
             'span_count' => 'integer',
             'unpriced_span_count' => 'integer',

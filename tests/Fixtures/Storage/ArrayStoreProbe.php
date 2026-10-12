@@ -58,6 +58,7 @@ class ArrayStoreProbe implements StoreProbe
             'ended_at' => $this->date($trace->endedAt),
             'created_at' => $this->date($stored),
             'updated_at' => $this->date($updated),
+            'search_units' => $totals->searchUnits,
         ];
     }
 
@@ -116,6 +117,7 @@ class ArrayStoreProbe implements StoreProbe
             'ended_at' => $this->date($span->endedAt),
             'created_at' => $this->date($this->store->spanStoredAt($span->id)),
             'updated_at' => $this->date($this->store->spanUpdatedAt($span->id)),
+            'search_units' => $span->searchUnits,
         ];
     }
 
