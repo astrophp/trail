@@ -19,6 +19,13 @@ trait ObservesSdk
         config([
             'ai.default' => 'anthropic',
             'ai.default_for_embeddings' => 'openai',
+            'ai.default_for_classification' => 'typesafe',
+            'ai.default_for_reranking' => 'cohere',
+            'ai.providers.typesafe.key' => 'test-key',
+            'ai.providers.openrouter.key' => 'test-key',
+            'ai.providers.cohere.key' => 'test-key',
+            'ai.providers.decisions-backup' => ['driver' => 'typesafe', 'key' => 'test-key', 'url' => 'https://decisions-backup.test/v1'],
+            'ai.providers.rerank-backup' => ['driver' => 'cohere', 'key' => 'test-key', 'url' => 'https://rerank-backup.test/v2'],
             'ai.providers.anthropic.key' => 'test-key',
             'ai.providers.openai.key' => 'test-key',
             'ai.providers.backup' => ['driver' => 'anthropic', 'key' => 'test-key', 'url' => 'https://backup.anthropic.test/v1'],

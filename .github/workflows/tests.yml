@@ -62,6 +62,40 @@ jobs:
       - name: Pest
         run: vendor/bin/pest
 
+  sdk:
+    name: SDK ${{ matrix.sdk }} / Laravel ${{ matrix.laravel }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        sdk: ['1.1.0', '1.2.0']
+        laravel: ['12.*', '13.*']
+        include:
+          - laravel: '12.*'
+            testbench: '^10.6'
+          - laravel: '13.*'
+            testbench: '^11.0'
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: pdo_sqlite
+          coverage: none
+
+      - name: Resolve exact SDK compatibility version
+        run: |
+          composer require "laravel/framework:${{ matrix.laravel }}" "orchestra/testbench:${{ matrix.testbench }}" --dev --no-update --no-interaction
+          composer update --with "laravel/ai:${{ matrix.sdk }}" --prefer-dist --no-interaction --no-progress
+          php -r "require 'vendor/autoload.php'; if (Composer\\InstalledVersions::getPrettyVersion('laravel/ai') !== 'v${{ matrix.sdk }}') { exit(1); }"
+
+      - run: composer test
+
+      - name: Require the SDK 1.2 attachment gate without skips
+        if: matrix.sdk == '1.2.0'
+        run: vendor/bin/pest tests/Feature/Sdk/ClassificationAttachmentsTest.php --fail-on-skipped
+
   database:
     name: ${{ matrix.database }}
     runs-on: ubuntu-latest
