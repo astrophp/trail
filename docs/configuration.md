@@ -21,6 +21,7 @@ set nothing. A key with an environment variable can be set in `.env` without pub
 | -- | -- | -- | -- |
 | `enabled` | `TRAIL_ENABLED` | `true` | The master switch. When `false`, Trail records nothing and registers no dashboard routes. Its artisan commands stay available. |
 | `dashboard.enabled` | `TRAIL_DASHBOARD_ENABLED` | `true` | When `false`, Trail registers no dashboard routes, so the dashboard's address answers 404, and it keeps recording. |
+| `boost.enabled` | `TRAIL_BOOST_ENABLED` | `true` | When Boost is installed, register Trail's read-only trace tools with its MCP server. Set to `false` to disable the integration. |
 | `path` | `TRAIL_PATH` | `'trail'` | Where the dashboard is served. Slashes around it are ignored, and an empty path means `trail`: the dashboard is never served from the root of your application. |
 | `domain` | `TRAIL_DOMAIN` | `null` | Serve the dashboard on one domain only. `null` (or an empty string) serves it on every domain your application answers. |
 | `middleware` | none | `['web']` | The middleware every dashboard request passes through. Trail's own access check is always added after these. |

@@ -195,6 +195,7 @@ The full list is in [Known limits](docs/limits.md).
 - [Cost](docs/cost.md): how prices are found and why a cost is an estimate
 - [Operations](docs/operations.md): the artisan commands, scheduling, queues, Octane and storage
 - [Testing your application](docs/testing.md): `Trail::fake()`
+- [Laravel Boost](docs/boost.md): inspect recorded traces through Boost's MCP server
 - [Known limits](docs/limits.md)
 - [Roadmap](ROADMAP.md) and [changelog](CHANGELOG.md)
 

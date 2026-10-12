@@ -13,6 +13,10 @@ use Astro\Trail\Console\PauseCommand;
 use Astro\Trail\Console\PruneCommand;
 use Astro\Trail\Console\ResumeCommand;
 use Astro\Trail\Console\SweepCommand;
+use Astro\Trail\Mcp\Tools\TrailListTraces;
+use Astro\Trail\Mcp\Tools\TrailShowConversation;
+use Astro\Trail\Mcp\Tools\TrailShowTrace;
+use Astro\Trail\Mcp\Tools\TrailUsageSummary;
 use Astro\Trail\Pricing\CostCalculator;
 use Astro\Trail\Pricing\PriceBook;
 use Astro\Trail\Storage\Contracts\TraceStore;
@@ -24,6 +28,7 @@ use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Database\ConnectionResolverInterface;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
+use Laravel\Boost\Mcp\Boost;
 
 class TrailServiceProvider extends ServiceProvider
 {
@@ -65,6 +70,7 @@ class TrailServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        $this->registerBoostTools();
         $this->registerRoutes();
 
         $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
@@ -90,6 +96,24 @@ class TrailServiceProvider extends ServiceProvider
             Listeners::register($events, $this->app);
             FlushPoints::register($this->app, $events);
         }
+    }
+
+    private function registerBoostTools(): void
+    {
+        if (! config('trail.boost.enabled', true) || ! class_exists(Boost::class)) {
+            return;
+        }
+
+        $configured = config('boost.mcp.tools.include', []);
+        $tools = is_array($configured) ? array_values(array_filter($configured, is_string(...))) : [];
+
+        config()->set('boost.mcp.tools.include', array_values(array_unique([
+            ...$tools,
+            TrailListTraces::class,
+            TrailShowTrace::class,
+            TrailShowConversation::class,
+            TrailUsageSummary::class,
+        ])));
     }
 
     /**

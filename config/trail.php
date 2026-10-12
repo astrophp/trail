@@ -30,6 +30,20 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Laravel Boost MCP Tools
+    |--------------------------------------------------------------------------
+    |
+    | When Boost is installed, Trail adds its read-only trace tools to Boost's
+    | MCP server. Set this to false to leave Boost's tool list untouched.
+    |
+    */
+
+    'boost' => [
+        'enabled' => (bool) env('TRAIL_BOOST_ENABLED', true),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Trail Path and Domain
     |--------------------------------------------------------------------------
     |
