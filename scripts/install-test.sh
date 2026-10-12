@@ -50,7 +50,7 @@ PACKAGE=astrophp/trail
 # that is added to the repository has to be either shipped on purpose or export-ignored.
 ARCHIVE_ALLOWED="composer.json config database dist LICENSE README.md resources routes src stubs"
 # Every one of these is needed at runtime or by Composer.
-ARCHIVE_REQUIRED="composer.json LICENSE README.md config/trail.php routes/web.php src/TrailServiceProvider.php stubs/TrailServiceProvider.stub resources/views/layout.blade.php dist/app.js dist/app.css database/migrations"
+ARCHIVE_REQUIRED="composer.json LICENSE README.md config/trail.php routes/web.php src/TrailServiceProvider.php stubs/TrailServiceProvider.stub resources/boost/guidelines/core.blade.php resources/views/layout.blade.php dist/app.js dist/app.css database/migrations"
 
 usage() {
     sed -n '2,/^set -euo/p' "$0" | sed '$d' | sed 's/^# \{0,1\}//'
@@ -149,7 +149,7 @@ done
 ls "$PKG/database/migrations" | grep -q '^20.*\.php$' || fail "the archive's database/migrations holds no migration file"
 
 # One level down, where a directory is shipped whole: only what the runtime reads.
-[ "$(cd "$PKG/resources" && ls -A)" = "views" ] || fail "the archive's resources/ must hold only views, found: $(cd "$PKG/resources" && ls -A | tr '\n' ' ')"
+[ "$(cd "$PKG/resources" && ls -A)" = "$(printf 'boost\nviews')" ] || fail "the archive's resources/ must hold only boost and views, found: $(cd "$PKG/resources" && ls -A | tr '\n' ' ')"
 [ "$(cd "$PKG/database" && ls -A)" = "migrations" ] || fail "the archive's database/ must hold only migrations, found: $(cd "$PKG/database" && ls -A | tr '\n' ' ')"
 
 # Nothing local or internal, wherever it sits.

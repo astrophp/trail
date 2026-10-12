@@ -4,6 +4,16 @@ All notable changes to Trail are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and Trail follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## v0.2.0
+
+### Added
+
+- Laravel Boost integration with four read-only MCP tools: list recent traces, inspect a trace,
+  page through conversation turns, and summarize usage and estimated cost by model, provider or
+  agent. Responses are bounded and preserve missing usage and unpriced costs.
+- A Boost package guideline and `TRAIL_BOOST_ENABLED` switch. The tools appear automatically when
+  Boost is installed; no separate MCP server is needed.
+
 ## v0.1.0
 
 The first release. Requires PHP 8.3 or newer, Laravel 12 or 13 and `laravel/ai` 1.1 or newer.
