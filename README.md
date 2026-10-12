@@ -69,6 +69,23 @@ App\Ai\Agents\SupportAgent::fake(['Hello from a fake provider.']);
 The run appears in the Traces list. A fake reports no token usage, so its tokens show as Not
 reported and its cost as Not captured.
 
+### Laravel Boost (optional)
+
+If your application uses [Laravel Boost](https://laravel.com/docs/boost), Trail adds four read-only
+tools to Boost's MCP server. Your agent can list and inspect traces, page through conversations,
+and summarize token usage and estimated cost by model, provider or agent. Install Boost separately
+in your application:
+
+```bash
+composer require laravel/boost --dev
+php artisan boost:install
+```
+
+Trail does not install Boost for you. The tools appear through Boost's existing MCP connection;
+no separate server is needed. They expose recorded data, including prompt and response excerpts,
+to connected agents independently of the dashboard's `viewTrail` gate. See the
+[Laravel Boost guide](docs/boost.md) for setup details and tool limits.
+
 ### Before production
 
 Outside `local`, nobody can open the dashboard until you say who can. Publish the service provider:
