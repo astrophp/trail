@@ -10,6 +10,7 @@ use Astro\Trail\Exceptions\RecordingFailed;
 use Astro\Trail\Pricing\CostCalculator;
 use Astro\Trail\RecordingCandidate;
 use Astro\Trail\Storage\Contracts\TraceStore;
+use Astro\Trail\Storage\SearchUnits;
 use Closure;
 use Illuminate\Contracts\Container\Container;
 use Illuminate\Support\Carbon;
@@ -20,11 +21,15 @@ use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Events\AgentFailed;
 use Laravel\Ai\Events\AgentFailedOver;
 use Laravel\Ai\Events\AgentPrompted;
+use Laravel\Ai\Events\Classified;
+use Laravel\Ai\Events\Classifying;
 use Laravel\Ai\Events\EmbeddingsGenerated;
 use Laravel\Ai\Events\GeneratingEmbeddings;
 use Laravel\Ai\Events\InvokingTool;
 use Laravel\Ai\Events\PromptingAgent;
 use Laravel\Ai\Events\ProviderFailedOver;
+use Laravel\Ai\Events\Reranked;
+use Laravel\Ai\Events\Reranking;
 use Laravel\Ai\Events\StartingStep;
 use Laravel\Ai\Events\StepCompleted;
 use Laravel\Ai\Events\StepFailed;
@@ -60,6 +65,14 @@ class Recorder
 
     /** @var array<string, EmbeddingCall> keyed by the embeddings invocation id */
     private array $embeddings = [];
+
+    /** @var array<string, CapabilityCall> */
+    private array $capabilities = [];
+
+    /** @var array<string, array{provider: string, model: string}> Includes suppressed starts, since generic failover events cannot identify their caller. */
+    private array $ambiguousCapabilities = [];
+
+    private bool $ambiguousOverflow = false;
 
     /** @var array<string, true> traces whose run has ended, oldest first, waiting for the next flush */
     private array $finished = [];
@@ -459,6 +472,8 @@ class Recorder
     private function abandon(SpanDraft $span): void
     {
         $this->dropEmbedding($span->id);
+        $this->dropCapability($span->id);
+        unset($this->ambiguousCapabilities[$span->id]);
 
         $span->status = Status::Incomplete;
         $span->issueKind = IssueKind::Abandoned;
@@ -480,7 +495,7 @@ class Recorder
 
         $parent = $span->parentId === null ? null : $run->buffer->span($span->parentId);
 
-        return $span->type === SpanType::Embedding
+        return in_array($span->type, [SpanType::Embedding, SpanType::Classification, SpanType::Reranking], true)
             && $parent !== null
             && $parent->type === SpanType::Tool
             && $parent->parentId === $run->span->id;
@@ -652,6 +667,7 @@ class Recorder
 
         // The tool returned while an embeddings call under it never ended: the tool caught its error.
         // Trail never saw the exception, so only the status is recorded.
+        $this->closeCapabilities($run->buffer, $span->id);
         $this->closeEmbeddingsOf($run, $span, $now, null);
     }
 
@@ -710,6 +726,7 @@ class Recorder
         $span->endedAt = $now;
         $span->fail($failure);
 
+        $this->closeCapabilities($run->buffer, $span->id);
         $this->closeEmbeddingsOf($run, $span, $now, $failure);
 
         $run->remember($event->exception, ErrorSource::Tool);
@@ -759,6 +776,7 @@ class Recorder
             return;
         }
 
+        $this->closeCapabilities($run->buffer, $run->isRoot() ? null : $run->span->id);
         $this->untrack($event->invocationId);
 
         $now = Carbon::now();
@@ -812,6 +830,7 @@ class Recorder
 
         // The run is finished whatever happens next, so it leaves the recorder before anything can fail.
         // Its trace stays buffered until the next flush.
+        $this->closeCapabilities($run->buffer, $run->isRoot() ? null : $run->span->id);
         $this->untrack($event->invocationId);
 
         $now = Carbon::now();
@@ -864,6 +883,130 @@ class Recorder
         $run->buffer->durationMs = $duration;
 
         $this->finishedBuffer($run->buffer);
+    }
+
+    public function capabilityStarting(Classifying|Reranking $event): void
+    {
+        if ($this->writing > 0 || isset($this->capabilities[$event->invocationId]) || isset($this->buffers[$event->invocationId])) {
+            return;
+        }
+        $this->ambiguousCapabilities[$event->invocationId] = ['provider' => $event->provider->driver(), 'model' => $event->model];
+        while (count($this->ambiguousCapabilities) > $this->maxSkippedIds) {
+            $this->ambiguousOverflow = true;
+            unset($this->ambiguousCapabilities[array_key_first($this->ambiguousCapabilities)]);
+        }
+        if (isset($this->skipped[$event->invocationId])) {
+            return;
+        }
+        [$runId, $toolId] = ParentInvocation::current();
+        $run = $runId === null ? null : ($this->runs[$runId] ?? null);
+        if ($run !== null && $run->buffer->span($event->invocationId) !== null) {
+            return;
+        }
+        $type = $event instanceof Classifying ? SpanType::Classification : SpanType::Reranking;
+        if (($runId !== null && ($run === null || $run->span->status !== Status::Running || $this->suppressed())) || ($runId === null && ! $this->shouldRecord(new RecordingCandidate($type, null, null, null, null, null, $event->provider->driver(), $event->model)))) {
+            $this->skip($event->invocationId);
+
+            return;
+        }
+        $configured = config('trail.capture.max_items', 100);
+        $maxItems = filter_var($configured, FILTER_VALIDATE_INT);
+        $payload = new CapabilityPayload($this->payload(), is_int($maxItems) && $maxItems > 0 ? min(100, $maxItems) : 100);
+        $span = new SpanDraft(
+            id: $event->invocationId, type: $type, name: ucfirst($type->value).' calls', status: Status::Running,
+            startedAt: Carbon::now(), provider: $event->provider->driver(), model: $event->model,
+            parentId: $run === null ? null : $this->parentSpanId($run->buffer, $runId, $toolId),
+            attempt: $run === null ? 1 : $run->attempt, openedAt: (float) hrtime(true),
+        );
+        if ($run !== null && ($parent = $span->parentId === null ? null : $run->buffer->span($span->parentId)) !== null && $parent->status !== Status::Running) {
+            $span->parentId = $run->span->id;
+        }
+        $span->apply('input', $payload->input($event->prompt));
+        $buffer = ($run === null ? null : $run->buffer) ?? new RunBuffer(id: $event->invocationId, type: $type, name: $span->name, startedAt: $span->startedAt, provider: $span->provider, model: $span->model);
+        $buffer->open($span);
+        $buffer->capabilityIds[$span->id] = true;
+        $this->capabilities[$span->id] = new CapabilityCall($buffer, $span, $run === null, $payload);
+        if ($run === null) {
+            $this->buffers[$buffer->id] = $buffer;
+            Guard::run(fn () => $this->shed());
+            $this->storing(fn () => $this->container->make(TraceStore::class)->start($buffer->trace()));
+        }
+    }
+
+    public function capabilityCompleted(Classified|Reranked $event): void
+    {
+        unset($this->ambiguousCapabilities[$event->invocationId]);
+        $call = $this->capabilities[$event->invocationId] ?? null;
+        if ($call === null) {
+            return;
+        }
+        $this->skip($event->invocationId);
+        $this->dropCapability($event->invocationId);
+        $span = $call->span;
+        $span->status = Status::Completed;
+        $span->endedAt = Carbon::now();
+        $span->durationMs = $span->openedAt === null ? null : (hrtime(true) - $span->openedAt) / 1e6;
+        $span->respondingModel = $event->response->meta->model;
+        $span->apply('output', $call->payload->output($event->response));
+        if ($event instanceof Classified) {
+            $usage = $event->response->usage;
+            $reported = $usage->inputTokens !== 0 || $usage->outputTokens !== 0;
+            $span->inputTokens = $reported ? $usage->inputTokens : null;
+            $span->outputTokens = $reported ? $usage->outputTokens : null;
+            $span->cacheReadTokens = $usage->cacheReadInputTokens;
+            $span->cacheWriteTokens = $usage->cacheWriteInputTokens;
+            $span->reasoningTokens = $usage->reasoningTokens;
+        } else {
+            $usage = $event->response->usage;
+            $span->inputTokens = $usage->inputTokens === 0 ? null : $usage->inputTokens;
+            $span->searchUnits = SearchUnits::normalize($usage->searchUnits);
+            // The SDK's output zero is structural, not measured token evidence.
+        }
+        if ($call->standalone) {
+            $call->buffer->status = Status::Completed;
+            $call->buffer->endedAt = $span->endedAt;
+            $call->buffer->durationMs = $span->durationMs;
+            $this->finishedBuffer($call->buffer);
+        }
+    }
+
+    private function dropCapability(string $id): void
+    {
+        $call = $this->capabilities[$id] ?? null;
+        if ($call !== null) {
+            unset($call->buffer->capabilityIds[$id], $this->capabilities[$id]);
+        }
+    }
+
+    private function closeCapabilities(RunBuffer $buffer, ?string $parent = null): void
+    {
+        foreach (array_keys($buffer->capabilityIds) as $id) {
+            $call = $this->capabilities[$id] ?? null;
+            if ($call === null || ($parent !== null && ! $this->descendsFrom($buffer, $call->span, $parent))) {
+                continue;
+            }
+            // No capability-specific failure event exists; its caller's error proves no duration or error here.
+            $call->span->status = Status::Incomplete;
+            $call->span->endedAt = Carbon::now();
+            $this->dropCapability($id);
+            unset($this->ambiguousCapabilities[$id]);
+        }
+    }
+
+    private function descendsFrom(RunBuffer $buffer, SpanDraft $span, string $parent): bool
+    {
+        for ($depth = 0; $depth < 100 && $span->parentId !== null; $depth++) {
+            if ($span->parentId === $parent) {
+                return true;
+            }
+            $ancestor = $buffer->span($span->parentId);
+            if ($ancestor === null) {
+                break;
+            }
+            $span = $ancestor;
+        }
+
+        return false;
     }
 
     public function embeddingsGenerating(GeneratingEmbeddings $event): void
@@ -968,6 +1111,15 @@ class Recorder
     public function providerFailedOver(ProviderFailedOver $event): void
     {
         $driver = $event->provider->driver();
+        if ($this->ambiguousOverflow) {
+            return;
+        }
+
+        foreach ($this->ambiguousCapabilities as $active) {
+            if ($active['provider'] === $driver && $active['model'] === $event->model) {
+                return;
+            }
+        }
 
         foreach (array_reverse($this->embeddings, true) as $id => $call) {
             if ($call->span->status !== Status::Running || $call->span->provider !== $driver || $call->span->model !== $event->model) {
@@ -1077,6 +1229,9 @@ class Recorder
         $this->embeddings = [];
         $this->embeddingsByParent = [];
         $this->skipped = [];
+        $this->capabilities = [];
+        $this->ambiguousCapabilities = [];
+        $this->ambiguousOverflow = false;
 
         Guard::run(fn () => $this->container->make(Sampler::class)->flushed());
 
@@ -1135,6 +1290,10 @@ class Recorder
 
         foreach (array_keys($buffer->embeddingIds) as $embeddingId) {
             $this->dropEmbedding($embeddingId);
+        }
+
+        foreach (array_keys($buffer->capabilityIds) as $capabilityId) {
+            $this->dropCapability($capabilityId);
         }
 
         $this->write($buffer);
@@ -1429,24 +1588,23 @@ class Recorder
     private function price(RunBuffer $buffer): void
     {
         foreach ($buffer->drafts() as $span) {
-            if (($span->type !== SpanType::Step && $span->type !== SpanType::Embedding) || $span->inputTokens === null || $span->cost !== null) {
+            if (! in_array($span->type, SpanType::billable(), true) || $span->status === Status::Running || $span->pricingAssessed) {
                 continue;
             }
-
+            // Both a priced and an unpriced final decision are frozen across later buffer writes.
+            $span->pricingAssessed = true;
             $model = $span->respondingModel ?? $span->model;
-
-            if ($span->provider === null || $model === null) {
+            if ($span->provider === null || $model === null || $span->cost !== null) {
                 continue;
             }
-
-            $span->cost = $this->costs->cost(
-                $span->provider,
-                $model,
-                $span->inputTokens,
-                $span->outputTokens,
-                $span->cacheReadTokens,
-                $span->cacheWriteTokens,
-            );
+            if ($span->type === SpanType::Reranking) {
+                $assessment = $this->costs->reranking($span->provider, $model, $span->inputTokens, SearchUnits::normalize($span->searchUnits));
+                $span->billingBasis = $assessment['basis'];
+                $span->cost = $assessment['cost'];
+            } else {
+                $span->billingBasis = 'input_tokens';
+                $span->cost = $this->costs->cost($span->provider, $model, $span->inputTokens, $span->outputTokens, $span->cacheReadTokens, $span->cacheWriteTokens);
+            }
         }
     }
 }

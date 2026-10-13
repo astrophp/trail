@@ -122,7 +122,7 @@ it('breaks down the models and tools of an agent\'s runs, the agents it delegate
             [
                 'provider' => 'openai', 'model' => 'gpt-5-mini', 'steps' => 1, 'runs' => 1,
                 'usage' => ['state' => 'not_reported', 'input_tokens' => null, 'output_tokens' => null, 'cache_read_tokens' => null, 'cache_write_tokens' => null, 'reasoning_tokens' => null, 'total_tokens' => null],
-                'cost' => ['state' => 'not_captured', 'amount' => null],
+                'cost' => ['state' => 'unpriced', 'amount' => null],
                 'filters' => ['agent' => 'Alpha', 'provider' => 'openai', 'model' => 'gpt-5-mini'],
             ],
             [

@@ -39,11 +39,18 @@ Trail does not do today, see [Known limits](docs/limits.md).
 - `Trail::fake()` and its assertions for your own tests.
 - User documentation in `docs/`.
 
-## After v0.1.0
+## v0.3.0 — classification and reranking
+
+- Event capture, bounded and redacted payloads, honest incomplete lifecycle evidence.
+- Exact search units, separate reranking billing and nullable historical coverage.
+- Root-operation filters, inspectors, comparison, usage, CSV and Boost readers.
+- SDK 1.1/1.2 compatibility, offline scenarios and a coordinated migration/restart upgrade.
+
+## After v0.3.0
 
 These are ideas, not promises.
 
-- More run types: classification, images, audio, transcription and reranking.
+- More run types: images, audio and transcription.
 - Linking runs that pause for tool approval to the run that resumes them, which are separate
   traces today.
 - Saved views shared between dashboard users.

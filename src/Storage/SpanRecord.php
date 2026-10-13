@@ -55,6 +55,7 @@ final readonly class SpanRecord
         public ?float $durationMs = null,
         public ?DateTimeInterface $endedAt = null,
         string|int|float|null $searchUnits = null,
+        public ?string $billingBasis = null,
     ) {
         $this->searchUnits = SearchUnits::normalize($searchUnits);
     }

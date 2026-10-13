@@ -95,3 +95,18 @@ fields for one span, plus its parent, tokens, cost, input and output.
   recording off in tests, set `TRAIL_ENABLED=false` in `phpunit.xml` or use
   `Trail::withoutRecording()`.
 - Each `Trail::fake()` call gives a new, empty store.
+
+
+## Capability compatibility gates
+
+The suite characterizes real SDK HTTP mapping and events with scripts below its gateways; it does
+not call live providers. CI pins SDK 1.1.0 and 1.2.0 on Laravel 12 and 13, and runs the full package
+suite plus an attachment gate on SDK 1.2. SQLite, MySQL and Postgres verify exact quantities,
+nullable migrations, sweeps, mixed operation totals, per-group prices and projection behavior.
+
+Capability tests include redaction before snippet clipping, shared size/value budgets, small item
+limits, capture disabled, unknown parent suppression, missing terminals, generic failover ambiguity,
+worker flush cleanup, all answer forms, fractional units, explicit zero and missing quantities.
+Workbench `classification` and `reranking` scenarios run through real SDK HTTP gateways offline.
+Frontend contract fixtures freeze the additive API fields; regenerate with `UPDATE_CONTRACT=1`
+only after inspecting the intended endpoint changes.

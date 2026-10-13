@@ -3,6 +3,7 @@
 namespace Astro\Trail\Queries;
 
 use Astro\Trail\Enums\IssueKind;
+use Astro\Trail\Enums\SpanType;
 use Astro\Trail\Enums\Status;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -39,6 +40,7 @@ final readonly class TraceFilters
         public string $sort = 'started_at',
         public bool $descending = true,
         public ?string $tool = null,
+        public ?SpanType $operationType = null,
     ) {}
 
     /**
@@ -52,6 +54,7 @@ final readonly class TraceFilters
         $string = [...$text, 'max:255'];
 
         $data = Validator::make(array_filter($request->query(), fn (mixed $value) => $value !== '' && $value !== null), [
+            'operation_type' => ['string', Rule::in(['agent', 'embedding', 'classification', 'reranking'])],
             'status' => ['string', Rule::enum(Status::class)],
             'agent' => $string,
             'provider' => $string,
@@ -94,6 +97,7 @@ final readonly class TraceFilters
             ltrim($sort, '-'),
             str_starts_with($sort, '-'),
             tool: $text('tool'),
+            operationType: SpanType::tryFrom($text('operation_type') ?? ''),
         );
     }
 }

@@ -57,6 +57,7 @@
                     "provider": "typesafe",
                     "model": "synthetic-model",
                     "responding_model": null,
+                    "billing_basis": null,
                     "duration_ms": null,
                     "offset_ms": 0,
                     "started_at": "2026-01-02T11:00:00.000Z",
@@ -141,10 +142,10 @@
                     "reason": "not_reported"
                 },
                 "responding_model": {
-                    "state": "not_applicable",
+                    "state": "not_captured",
                     "captured": 0,
-                    "expected": 0,
-                    "reason": null
+                    "expected": 1,
+                    "reason": "not_reported"
                 },
                 "usage": {
                     "state": "captured",
@@ -236,6 +237,7 @@
                     "provider": "cohere",
                     "model": "synthetic-model",
                     "responding_model": null,
+                    "billing_basis": null,
                     "duration_ms": null,
                     "offset_ms": 0,
                     "started_at": "2026-01-02T11:00:00.000Z",
@@ -320,10 +322,10 @@
                     "reason": "not_reported"
                 },
                 "responding_model": {
-                    "state": "not_applicable",
+                    "state": "not_captured",
                     "captured": 0,
-                    "expected": 0,
-                    "reason": null
+                    "expected": 1,
+                    "reason": "not_reported"
                 },
                 "usage": {
                     "state": "captured",

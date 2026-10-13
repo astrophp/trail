@@ -5,6 +5,8 @@ export type SpanCounts = {
     agents: number
     steps: number
     tools: number
+    classifications: number
+    rerankings: number
     embeddings: number
     /** The highest attempt of any span; `null` when there are no spans. */
     attempts: number | null
@@ -23,6 +25,8 @@ export function countSpans(spans: Span[]): SpanCounts {
         steps: ofType('step'),
         tools: ofType('tool'),
         embeddings: ofType('embedding'),
+        classifications: ofType('classification'),
+        rerankings: ofType('reranking'),
         attempts:
             spans.length === 0
                 ? null

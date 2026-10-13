@@ -55,6 +55,13 @@ export function useTraceList() {
         })
     }
 
+    if (state.operation_type !== 'all') {
+        activeFilters.push({
+            key: 'operation_type',
+            label: `Operation: ${state.operation_type}`,
+        })
+    }
+
     if (state.search !== '') {
         activeFilters.push({ key: 'search', label: `Search: ${state.search}` })
     }
@@ -126,6 +133,8 @@ export function useTraceList() {
         setSearch,
         setAgent,
         setProvider,
+        setOperationType: (operation_type: typeof state.operation_type) =>
+            change({ operation_type }),
         setBookmarked,
         clear,
         clearAll,

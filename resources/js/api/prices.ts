@@ -36,9 +36,11 @@ export function savePrice(
     })
 }
 
-/** Removes a model's saved price. Idempotent. Answers the price as it now resolves: its default. */
+/** Resets the saved token price group, preserving reranking. Answers the model's current prices. */
 export function resetPrice(id: PriceId): Promise<PriceResponse> {
-    return apiRequest<PriceResponse>(pricePath(id), { method: 'DELETE' })
+    return apiRequest<PriceResponse>(`${pricePath(id)}&group=tokens`, {
+        method: 'DELETE',
+    })
 }
 
 /** The query keys of everything about prices. */

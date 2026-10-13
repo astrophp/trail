@@ -3,7 +3,7 @@ import type { SpanTree } from '@/features/trace/build-span-tree'
 import { AgentOutput } from '@/features/trace/agent-output'
 import { EmbeddingOutput } from '@/features/trace/embedding-output'
 import { StepOutput } from '@/features/trace/step-output'
-import { WholeOutput } from '@/features/trace/whole-output'
+import { CapabilityPanel } from '@/features/trace/capability-panel'
 import { ToolOutput } from '@/features/trace/tool-output'
 
 type OutputPanelProps = {
@@ -17,7 +17,9 @@ export function OutputPanel({ span, tree, onSelect }: OutputPanelProps) {
     switch (span.type) {
         case 'classification':
         case 'reranking':
-            return span.output === null ? null : <WholeOutput span={span} />
+            return span.output === null ? null : (
+                <CapabilityPanel span={span} side="output" />
+            )
         case 'agent':
             return <AgentOutput span={span} />
         case 'step':

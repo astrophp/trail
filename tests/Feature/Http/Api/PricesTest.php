@@ -91,8 +91,10 @@ function priceOf(string $provider, string $model, array $rates, string $source, 
         'source' => $source,
         'via' => $via,
         'default' => $default ?? ['source' => $source, 'via' => $via, 'rates' => $rates],
+        'reranking' => ['rates' => ['basis' => null, 'input' => null, 'search_unit' => null], 'source' => 'none', 'via' => null, 'default' => ['rates' => ['basis' => null, 'input' => null, 'search_unit' => null], 'source' => 'none', 'via' => null], 'saved_at' => null],
         'observed' => $observed,
         'saved_at' => $savedAt,
+
     ];
 }
 

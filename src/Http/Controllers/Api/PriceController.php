@@ -29,7 +29,34 @@ class PriceController
     {
         [$provider, $model, $observed] = $this->known($request, $prices);
 
-        $rates = RateInput::from($this->body($request));
+        $body = $this->body($request);
+        if (array_diff(array_keys($body), [...RateInput::FIELDS, 'reranking']) !== []) {
+            throw ValidationException::withMessages(['body' => ['Unknown price field.']]);
+        }
+        $tokens = $body === [] || array_intersect(array_keys($body), RateInput::FIELDS) !== [];
+        $rates = $tokens ? RateInput::from($body) + ['token_rates_set' => true, 'token_saved_at' => Carbon::now()->format('Y-m-d H:i:s.v')] : [];
+        if (array_key_exists('reranking', $body)) {
+            $reranking = $body['reranking'];
+            if ($reranking !== null && ! $reranking instanceof stdClass) {
+                throw ValidationException::withMessages(['reranking' => ['Reranking must be an object or null.']]);
+            }
+            if ($reranking instanceof stdClass) {
+                $reranking = get_object_vars($reranking);
+            }
+            if (array_diff(array_keys($reranking ?? []), ['basis', 'input', 'search_unit']) !== []) {
+                throw ValidationException::withMessages(['reranking' => ['Unknown reranking price field.']]);
+            }
+            $basis = $reranking['basis'] ?? null;
+            if ($basis !== null && ! in_array($basis, ['input_tokens', 'search_units'], true)) {
+                throw ValidationException::withMessages(['reranking.basis' => ['Select input_tokens or search_units.']]);
+            }
+            try {
+                $group = RateInput::from($reranking ?? [], rerankingOnly: true);
+            } catch (ValidationException $e) {
+                throw ValidationException::withMessages(array_combine(array_map(fn (string $key): string => 'reranking.'.$key, array_keys($e->errors())), array_values($e->errors())));
+            }
+            $rates += ['reranking_basis' => $basis, 'reranking_input' => $group['input'], 'reranking_search_unit' => $group['search_unit'], 'reranking_rates_set' => true, 'reranking_saved_at' => Carbon::now()->format('Y-m-d H:i:s.v')];
+        }
 
         $this->save($provider, $model, $rates);
 
@@ -40,11 +67,20 @@ class PriceController
     {
         [$provider, $model, $observed] = $this->known($request, $prices);
 
+        $group = RawQuery::string($request, 'group');
+        if ($group !== null && ! in_array($group, ['tokens', 'reranking'], true)) {
+            throw ValidationException::withMessages(['group' => ['Select tokens or reranking.']]);
+        }
         // A database that compares text loosely (MySQL) finds the row of another spelling too, and
         // that one is another model's price.
         foreach (Price::query()->where('provider', $provider)->where('model', $model)->get() as $row) {
             if ($row->provider === $provider && $row->model === $model) {
-                $row->delete();
+                if ($group === null) {
+                    $row->delete();
+                } else {
+                    $this->preserveGroupTimestamps($row, []);
+                    $row->fill([$group === 'tokens' ? 'token_rates_set' : 'reranking_rates_set' => false])->save();
+                }
             }
         }
 
@@ -111,7 +147,7 @@ class PriceController
     }
 
     /**
-     * @param  array<string, ?string>  $rates
+     * @param  array<string, string|bool|null>  $rates
      *
      * @throws ValidationException when a row of another spelling holds the model's place
      */
@@ -136,7 +172,7 @@ class PriceController
     }
 
     /**
-     * @param  array<string, ?string>  $rates
+     * @param  array<string, string|bool|null>  $rates
      *
      * @throws ValidationException when a row of another spelling holds the model's place
      */
@@ -151,8 +187,9 @@ class PriceController
             ]);
         }
 
-        $row ??= new Price(['provider' => $provider, 'model' => $model]);
+        $row ??= new Price(['provider' => $provider, 'model' => $model, 'token_rates_set' => false]);
 
+        $this->preserveGroupTimestamps($row, $rates);
         $row->fill($rates);
 
         if ($row->exists) {
@@ -161,6 +198,19 @@ class PriceController
         }
 
         $row->save();
+    }
+
+    /** @param array<string, string|bool|null> $rates */
+    private function preserveGroupTimestamps(Price $row, array $rates): void
+    {
+        if (! $row->exists) {
+            return;
+        }
+        foreach (['token_saved_at', 'reranking_saved_at'] as $field) {
+            if ($row->getAttribute($field) === null && ! array_key_exists($field, $rates)) {
+                $row->setAttribute($field, $row->updated_at->format('Y-m-d H:i:s.v'));
+            }
+        }
     }
 
     private function price(PriceBook $prices, string $provider, string $model, bool $observed): JsonResponse

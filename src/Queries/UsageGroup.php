@@ -11,6 +11,7 @@ final readonly class UsageGroup
     /**
      * @param  array{input: ?int, output: ?int, cache_read: ?int, cache_write: ?int, reasoning: ?int}  $tokens
      * @param  int  $costUnpricedSteps  steps that reported usage and could not be priced, as the cost's state counts them
+     * @param  array<string, mixed>  $units
      * @param  ?int  $unpricedTokens  the input and output tokens of those steps, null when none of them reported either
      */
     public function __construct(
@@ -26,6 +27,7 @@ final readonly class UsageGroup
         public int $reportedSteps,
         public int $unpricedSteps,
         public ?int $unpricedTokens,
+        public array $units = [],
     ) {}
 
     /**

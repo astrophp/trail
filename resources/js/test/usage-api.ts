@@ -25,13 +25,28 @@ export {
 } from '@/test/traces-api'
 
 /** The totals the contract test froze: one run still running, one step that could not be priced. */
-export const usageFixture = contractFixture('usage') as UsageResponse
+const frozenUsage = contractFixture('usage') as UsageResponse
+// Existing interaction tests exercise the legacy token contract; unit evidence is tested independently.
+export const usageFixture: UsageResponse = {
+    ...frozenUsage,
+    data: {
+        ...frozenUsage.data,
+        coverage: { ...frozenUsage.data.coverage, units: undefined },
+    },
+}
 
 /** The breakdown by model the contract test froze: a pending partly priced model, a priced one, an embeddings one and one that reported nothing. */
-export const breakdownFixture = contractFixture('usage-breakdown') as Extract<
+const frozenBreakdown = contractFixture('usage-breakdown') as Extract<
     UsageBreakdownResponse,
     { by: 'model' }
 >
+export const breakdownFixture: Extract<
+    UsageBreakdownResponse,
+    { by: 'model' }
+> = {
+    ...frozenBreakdown,
+    data: frozenBreakdown.data.map((row) => ({ ...row, units: undefined })),
+}
 
 /**
  * The estimated cost series the contract test froze: twenty-four hourly buckets, empty until the

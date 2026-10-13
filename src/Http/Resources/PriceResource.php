@@ -33,14 +33,33 @@ final class PriceResource
                 'via' => self::via($default),
                 'rates' => self::rates($default->rate),
             ],
+            'reranking' => self::reranking($prices, $provider, $model),
             'observed' => $observed,
             'saved_at' => $saved ? Timestamp::format($resolution->rate?->savedAt) : null,
         ];
     }
 
     /**
-     * @return array{input: int|float|null, output: int|float|null, cache_read: int|float|null, cache_write: int|float|null}
+     * @return array<string, mixed>
      */
+    private static function reranking(PriceBook $prices, string $provider, string $model): array
+    {
+        $resolution = $prices->resolveReranking($provider, $model);
+        $default = $prices->resolveReranking($provider, $model, withoutOwnRow: true);
+        $shape = fn (Resolution $found): array => [
+            'basis' => $found->rate?->rerankingBasis,
+            'input' => self::number($found->rate?->rerankingInput),
+            'search_unit' => self::number($found->rate?->rerankingSearchUnit),
+        ];
+
+        return [
+            'rates' => $shape($resolution), 'source' => $resolution->source->value, 'via' => self::via($resolution),
+            'default' => ['rates' => $shape($default), 'source' => $default->source->value, 'via' => self::via($default)],
+            'saved_at' => $resolution->source === PriceSource::Saved ? Timestamp::format($resolution->rate?->rerankingSavedAt) : null,
+        ];
+    }
+
+    /** @return array{input: int|float|null, output: int|float|null, cache_read: int|float|null, cache_write: int|float|null} */
     private static function rates(?Rate $rate): array
     {
         return [

@@ -129,6 +129,9 @@ final class Payload
     /** The most characters of string content one captured field keeps, or null for no limit. */
     private readonly ?int $budget;
 
+    /** @var list<string> */
+    private readonly array $configuredKeys;
+
     /**
      * @param  list<string>  $keys
      * @param  list<string>  $patterns
@@ -141,6 +144,7 @@ final class Payload
         array $keys = self::DEFAULT_KEYS,
         array $patterns = self::DEFAULT_PATTERNS,
     ) {
+        $this->configuredKeys = $keys;
         $this->budget = $maxLength === null ? null : $maxLength * self::FIELD_BUDGET;
 
         $this->addKeys($keys);
@@ -254,6 +258,12 @@ final class Payload
     public function capturing(): bool
     {
         return $this->capture;
+    }
+
+    /** An operation-specific ceiling that still redacts before truncating. */
+    public function bounded(int $characters): self
+    {
+        return new self($this->capture, $this->systemPrompt, min($this->maxLength ?? $characters, $characters), $this->redaction, $this->configuredKeys, $this->patterns);
     }
 
     /**

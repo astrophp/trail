@@ -203,6 +203,14 @@ function expectations(): array
                 ->and($embedding->input_tokens)->toBeGreaterThan(0)
                 ->and($embedding->cost)->not->toBeNull();
         }],
+        'classification' => [Outcome::Ok, 1, function (Collection $traces) {
+            expect($traces->sole()->type)->toBe(SpanType::Classification)
+                ->and(Span::query()->sole()->output['answers'])->toHaveCount(3);
+        }],
+        'reranking' => [Outcome::Ok, 1, function (Collection $traces) {
+            expect($traces->sole()->type)->toBe(SpanType::Reranking)
+                ->and(Span::query()->sole()->search_units)->toBe(100001);
+        }],
         'partly-priced-run' => [Outcome::Ok, 1, function (Collection $traces) {
             $trace = $traces->sole();
             $steps = $trace->spans()->where('type', SpanType::Step)->orderBy('sequence')->get();
@@ -275,9 +283,9 @@ it('records the run of the scenario', function (string $key) {
 it('runs every scenario one after the other in one process', function () {
     $results = app(ScenarioRunner::class)->runAll();
 
-    expect($results)->toHaveCount(21)
+    expect($results)->toHaveCount(23)
         ->and(array_filter($results, fn ($result) => $result->outcome === Outcome::Error))->toBe([])
-        ->and(Trace::query()->count())->toBe(29);
+        ->and(Trace::query()->count())->toBe(31);
 });
 
 it('leaves the HTTP client and its script as it found them', function () {
@@ -337,7 +345,7 @@ describe('the landing page', function () {
     it('runs every scenario with Run all', function () {
         $this->post('/run')->assertRedirect('/');
 
-        expect(Trace::query()->count())->toBe(29);
+        expect(Trace::query()->count())->toBe(31);
     });
 
     it('answers 404 for a scenario that does not exist', function () {

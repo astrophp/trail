@@ -16,6 +16,7 @@ use Astro\Trail\Storage\Models\Trace;
 use Astro\Trail\Tests\Fixtures\Storage\Records;
 use Astro\Trail\Tests\Fixtures\Storage\Summaries;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Laravel\Mcp\Request;
 
 beforeEach(function () {
@@ -139,4 +140,42 @@ it('preserves a quantity-bearing conversation turn through HTTP and the bounded 
     expect($conversation['turns'][0]['usage']['search_units'])->toBe('0.100001')
         ->and($conversation['conversation']['usage'])->not->toHaveKey('search_units')
         ->and($conversation['turns'][0])->not->toHaveKeys(['input', 'output', 'metadata']);
+});
+
+it('preserves independent unit coverage and distinguishes unassessed historical rows', function () {
+    $store = app(TraceStore::class);
+    $trace = Records::trace(['id' => 'unit-coverage', 'status' => Status::Completed]);
+    $store->store($trace, [
+        Records::span($trace->id, ['type' => SpanType::Reranking, 'provider' => 'cohere', 'model' => 'rank', 'searchUnits' => '1.500001', 'billingBasis' => 'search_units']),
+        Records::span($trace->id, ['type' => SpanType::Reranking, 'provider' => 'cohere', 'model' => 'rank', 'inputTokens' => 4, 'billingBasis' => 'search_units']),
+        Records::span($trace->id, ['type' => SpanType::Classification, 'provider' => 'cohere', 'model' => 'rank', 'status' => Status::Incomplete]),
+    ]);
+    $response = $this->getJson('/trail/api/usage')->assertOk()->json('data.coverage');
+    expect($response['calls'])->toBe(3)->and($response['reported_calls'])->toBe(2)
+        ->and($response['units'])->toBe([
+            'assessment' => 'assessed', 'search_units' => '1.500001', 'search_unit_calls' => 2, 'reported_search_unit_calls' => 1,
+            'unpriced_search_unit_calls' => 2, 'unpriced_search_units' => null, 'unknown_cost_calls' => 1, 'incomplete_calls' => 1, 'ambiguous_reranking_calls' => 0,
+        ]);
+    $historical = Records::trace(['id' => 'historical', 'status' => Status::Completed]);
+    $store->store($historical, [Records::span($historical->id, ['provider' => 'cohere', 'model' => 'rank', 'inputTokens' => 3, 'cost' => 0.7])]);
+    DB::table('trail_traces')->where('id', $historical->id)->update(['unknown_cost_calls' => null, 'cost_gap_calls' => null]);
+    DB::table('trail_trace_models')->where('trace_id', $historical->id)->update(array_fill_keys(['unknown_cost_calls', 'cost_gap_calls', 'search_units', 'search_unit_calls', 'reported_search_unit_calls', 'unpriced_search_unit_calls', 'unpriced_search_units', 'incomplete_calls', 'ambiguous_reranking_calls'], null));
+    $mixed = $this->getJson('/trail/api/usage')->assertOk()->json('data');
+    expect($mixed['coverage']['units']['assessment'])->toBe('partial')->and($mixed['coverage']['units']['search_units'])->toBe('1.500001')
+        ->and($mixed['summary']['cost'])->toBe(['state' => 'partial', 'amount' => 0.7]);
+});
+
+it('filters root operation types without matching a child operation and exports exact units', function () {
+    $store = app(TraceStore::class);
+    foreach ([SpanType::Agent, SpanType::Reranking] as $type) {
+        $trace = Records::trace(['id' => 'root-'.$type->value, 'type' => $type, 'status' => Status::Completed]);
+        $store->store($trace, [Records::span($trace->id, ['type' => SpanType::Reranking, 'searchUnits' => '0.100001'])]);
+    }
+    $this->getJson('/trail/api/traces?operation_type=reranking')->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.id', 'root-reranking');
+    $this->getJson('/trail/api/traces?operation_type=tool')->assertUnprocessable();
+    $list = app(TrailListTraces::class)->handle(new Request(['operation_type' => 'reranking']));
+    $body = json_decode((string) $list->content(), true, flags: JSON_THROW_ON_ERROR);
+    expect(array_column($body['traces'], 'id'))->toBe(['root-reranking']);
+    $csv = $this->get('/trail/api/traces/export?operation_type=reranking')->assertOk()->streamedContent();
+    expect($csv)->toContain('search_units')->toContain('0.100001')->not->toContain('root-agent');
 });

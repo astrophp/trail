@@ -55,6 +55,32 @@ export function TraceFilters({
                 allLabel="All providers"
                 aria-label="Filter by provider"
             />
+            <SelectFilter
+                value={
+                    list.operation_type === 'all' ? null : list.operation_type
+                }
+                onValueChange={(value) =>
+                    list.setOperationType(
+                        value === 'agent' ||
+                            value === 'embedding' ||
+                            value === 'classification' ||
+                            value === 'reranking'
+                            ? value
+                            : 'all',
+                    )
+                }
+                options={[
+                    'agent',
+                    'embedding',
+                    'classification',
+                    'reranking',
+                ].map((value) => ({
+                    value,
+                    label: value[0].toUpperCase() + value.slice(1),
+                }))}
+                allLabel="All operations"
+                aria-label="Filter by root operation"
+            />
             <ToggleFilter
                 pressed={list.bookmarked}
                 onPressedChange={list.setBookmarked}

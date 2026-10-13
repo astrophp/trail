@@ -55,6 +55,8 @@ final class SpanDraft
         public ?DateTimeInterface $endedAt = null,
         public ?float $openedAt = null,
         public string|int|float|null $searchUnits = null,
+        public ?string $billingBasis = null,
+        public bool $pricingAssessed = false,
     ) {}
 
     /**
@@ -172,6 +174,7 @@ final class SpanDraft
             durationMs: $this->durationMs,
             endedAt: $this->endedAt,
             searchUnits: $this->searchUnits,
+            billingBasis: $this->billingBasis,
         );
     }
 }

@@ -38,7 +38,7 @@ final class Coverage
                 }
             }
 
-            if ($span->type === SpanType::Step && $status === Status::Completed) {
+            if (in_array($span->type, [SpanType::Step, SpanType::Classification, SpanType::Reranking], true) && $status === Status::Completed) {
                 self::count($respondingModel, $span->responding_model !== null);
             }
 
@@ -47,7 +47,7 @@ final class Coverage
             }
 
             // A running span's cost is pending, not missing.
-            if ($billable && $reported && $status !== Status::Running) {
+            if ($billable && $status !== Status::Running) {
                 self::count($cost, $span->cost !== null);
             }
 

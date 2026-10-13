@@ -26,6 +26,8 @@ describe('countSpans', () => {
             steps: 2,
             tools: 1,
             embeddings: 1,
+            classifications: 0,
+            rerankings: 0,
             attempts: 2,
             failed: 1,
             incomplete: 1,

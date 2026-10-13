@@ -44,6 +44,20 @@
             }
         },
         "coverage": {
+            "units": {
+                "assessment": "assessed",
+                "search_units": null,
+                "search_unit_calls": 0,
+                "reported_search_unit_calls": 0,
+                "unpriced_search_unit_calls": 0,
+                "unpriced_search_units": "0.000000",
+                "unknown_cost_calls": 1,
+                "incomplete_calls": 0,
+                "ambiguous_reranking_calls": 0
+            },
+            "calls": 7,
+            "reported_calls": 6,
+            "unpriced_calls": 1,
             "steps": 7,
             "reported_steps": 6,
             "unpriced_steps": 1,

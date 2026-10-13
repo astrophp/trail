@@ -19,5 +19,11 @@ final readonly class Rate
         public bool $custom,
         /** When a saved rate was last written; null for a config rate. */
         public ?DateTimeInterface $savedAt = null,
+        public ?string $rerankingBasis = null,
+        public ?float $rerankingInput = null,
+        public ?float $rerankingSearchUnit = null,
+        public bool $tokenRatesSet = true,
+        public bool $rerankingRatesSet = false,
+        public ?DateTimeInterface $rerankingSavedAt = null,
     ) {}
 }

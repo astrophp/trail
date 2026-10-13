@@ -1873,3 +1873,34 @@ Removes a model's saved price, and answers `200` with the price as it now resolv
 - Recorded costs and the other processes' copies of the prices are as for `PUT`: a long-lived
   process that prices runs reads the table again when its copy is more than 60 seconds old.
 - Access and the request-forgery protection are as for `PUT`.
+
+
+## v0.3 capability additions
+
+`operation_type=agent|embedding|classification|reranking` filters the root operation on trace list,
+status counts, neighbours and CSV exports. It does not match a child operation. Meta publishes the
+four supported root values. Boost trace listing accepts the same filter.
+
+Span detail adds nullable `billing_basis` (`input_tokens` or `search_units`). Direct usage exposes
+exact six-place `search_units` strings, including `0.000000`; missing is null. Token aggregate
+contracts remain unchanged. Usage coverage adds `calls`, `reported_calls` and `unpriced_calls` aliases
+while retaining the legacy `steps` keys. Usage breakdown rows add `calls` and independent `units`:
+
+- `assessment`: `assessed`, `partial` (some historical rows), or `not_assessed`.
+- `search_units`, `unpriced_search_units`: exact strings or null; overflow stays unavailable.
+- `search_unit_calls`, `reported_search_unit_calls`, `unpriced_search_unit_calls`: known expected,
+  measured and unpriced unit call counts. Ambiguous reranking calls are counted separately.
+- `unknown_cost_calls`: calls without a cost or reported usage; disjoint from reported unpriced calls.
+- `incomplete_calls`: effective incomplete billable calls, including stale calls before sweep.
+- `ambiguous_reranking_calls`: calls with neither a selected billing basis nor measured search units.
+
+Null assessment counts denote historical evidence that was never assessed. Mixed history preserves
+known counts and quantities and labels the assessment Partial. Trace CSV appends `search_units`.
+Usage CSV appends calls, unit evidence and coverage; existing column order, formula protection,
+headers and limits remain intact. Missing quantities are empty cells.
+
+Price responses add a `reranking` group with `rates: {basis, input, search_unit}`, source, inherited
+`via`, default and its own saved timestamp. `PUT /prices` accepts `{reranking: {...}}` independently
+from token fields. `reranking: null` explicitly clears that group. Decimal rules are unchanged:
+nonnegative plain decimal text, at most six places and `999999.999999`. No implicit rounding.
+`DELETE /prices?group=tokens|reranking` resets only that group. DELETE with no group resets both.

@@ -3,9 +3,12 @@
 namespace Astro\Trail\Queries;
 
 use Astro\Trail\Enums\Status;
+use Astro\Trail\Pricing\CostCalculator;
 use Astro\Trail\Pricing\PriceBook;
 use Astro\Trail\Pricing\Rate;
 use Astro\Trail\Storage\Models\Trace;
+use Astro\Trail\Storage\SearchUnits;
+use Astro\Trail\Storage\SpanSql;
 use Astro\Trail\Storage\StaleRuns;
 use Carbon\CarbonImmutable;
 use Illuminate\Validation\ValidationException;
@@ -137,8 +140,37 @@ final class SpendQuery
 
         foreach ($this->groups($window) as $row) {
             $steps = Row::int($row, 'reported_steps');
+            $unpricedSteps += Row::int($row, 'unknown_calls');
 
-            // Nothing was reported: there is nothing to price or to leave out.
+            if (Row::string($row, 'type') === 'reranking') {
+                $provider = Row::nullableString($row, 'provider');
+                $model = Row::nullableString($row, 'model');
+                $basis = $provider === null || $model === null ? null : $this->prices->resolveReranking($provider, $model)->rate?->rerankingBasis;
+                $present = match ($basis) {
+                    'input_tokens' => Row::int($row, 'input_calls'),
+                    'search_units' => Row::int($row, 'search_calls'),
+                    default => 0,
+                };
+                $micro = $this->searchMicro($row);
+                $assessment = $provider === null || $model === null ? null : (new CostCalculator($this->prices))->reranking($provider, $model, Row::nullableInt($row, 'input_tokens'), SearchUnits::fromStorage($micro));
+                $cost = $present === 0 ? null : ($assessment['cost'] ?? null);
+                if ($steps > 0) {
+                    $usage[Row::int($row, 'slot')] = true;
+                }
+                // All-usage gaps were counted above; selected-basis gaps include calls with other measured evidence.
+                $unpricedSteps += ($cost === null ? Row::int($row, 'calls') : Row::int($row, 'calls') - $present) - Row::int($row, 'unknown_calls');
+                if ($cost !== null) {
+                    $priced = true;
+                    $amount += $cost;
+                }
+                $tokens = Row::nullableInt($row, $cost === null ? 'token_sum' : ($basis === 'search_units' ? 'missing_search_tokens' : 'missing_input_tokens'));
+                if ($tokens !== null) {
+                    $unpricedTokens = ($unpricedTokens ?? 0) + $tokens;
+                }
+
+                continue;
+            }
+            // An unreported call remains an explicit gap.
             if ($steps === 0) {
                 continue;
             }
@@ -181,6 +213,18 @@ final class SpendQuery
     /**
      * The cost calculator's formula applied to the sums of a group. Null when the group cannot be priced.
      */
+    private function searchMicro(object $row): ?int
+    {
+        $high = Row::nullableInt($row, 'search_high');
+        $middle = Row::nullableInt($row, 'search_middle');
+        $low = Row::nullableInt($row, 'search_low');
+        if ($high === null || $middle === null || $low === null || $high + intdiv($middle + intdiv($low, 1_000_000), 1_000_000) > 999_999) {
+            return null;
+        }
+
+        return $high * 1_000_000_000_000 + $middle * 1_000_000 + $low;
+    }
+
     private static function cost(Rate $rate, object $row): ?float
     {
         $uncached = Row::nullableInt($row, 'uncached_input_tokens');
@@ -225,11 +269,11 @@ final class SpendQuery
         $bindings = [];
 
         foreach (array_slice($window, 0, -1) as $slot => $bucket) {
-            $whens[] = 'when m.started_at < ? then ?';
+            $whens[] = 'when t.started_at < ? then ?';
             array_push($bindings, StaleRuns::format($bucket->to), $slot);
         }
 
-        $query = Trace::query()->toBase()->newQuery()->from('trail_trace_models as m')
+        $query = Trace::query()->toBase()->newQuery()->from('trail_spans as m')
             ->join('trail_traces as t', 't.id', '=', 'm.trace_id');
 
         if ($whens === []) {
@@ -238,17 +282,30 @@ final class SpendQuery
             $query->selectRaw('case '.implode(' ', $whens).' else ? end as slot', [...$bindings, count($window) - 1]);
         }
 
-        $query->addSelect('m.provider', 'm.model')
-            ->selectRaw('sum(m.uncached_input_tokens) as uncached_input_tokens')
+        $reported = SpanSql::reported('m');
+        $query->addSelect('m.provider', 'm.model', 'm.type')
+            ->selectRaw('sum(case when m.input_tokens is not null then case when m.input_tokens > coalesce(m.cache_read_tokens, 0) + coalesce(m.cache_write_tokens, 0) then m.input_tokens - coalesce(m.cache_read_tokens, 0) - coalesce(m.cache_write_tokens, 0) else 0 end end) as uncached_input_tokens')
             ->selectRaw('sum(m.input_tokens) as input_tokens')
             ->selectRaw('sum(m.output_tokens) as output_tokens')
             ->selectRaw('sum(m.cache_read_tokens) as cache_read_tokens')
             ->selectRaw('sum(m.cache_write_tokens) as cache_write_tokens')
-            ->selectRaw('sum(m.reported_steps) as reported_steps')
-            ->where('m.started_at', '>=', StaleRuns::format($window[0]->from))
-            ->where('m.started_at', '<', StaleRuns::format($window[count($window) - 1]->to))
+            // Projection computes dollars at current rates; quantity display uses exact storage elsewhere.
+            ->selectRaw('sum(cast(floor(m.search_units / 1000000000000) as decimal(38, 0))) as search_high')
+            ->selectRaw('sum(cast(floor((m.search_units % 1000000000000) / 1000000) as decimal(38, 0))) as search_middle')
+            ->selectRaw('sum(cast(m.search_units % 1000000 as decimal(38, 0))) as search_low')
+            ->selectRaw('sum(case when m.input_tokens is not null or m.output_tokens is not null then coalesce(m.input_tokens, 0) + coalesce(m.output_tokens, 0) end) as token_sum')
+            ->selectRaw('sum(case when m.search_units is null and (m.input_tokens is not null or m.output_tokens is not null) then coalesce(m.input_tokens, 0) + coalesce(m.output_tokens, 0) end) as missing_search_tokens')
+            ->selectRaw('sum(case when m.input_tokens is null then m.output_tokens end) as missing_input_tokens')
+            ->selectRaw('count(*) as calls')
+            ->selectRaw('count(m.input_tokens) as input_calls')
+            ->selectRaw('count(m.search_units) as search_calls')
+            ->selectRaw("sum(case when {$reported} then 1 else 0 end) as reported_steps")
+            ->selectRaw("sum(case when not {$reported} then 1 else 0 end) as unknown_calls")
+            ->whereRaw(SpanSql::bills('m'))
+            ->where('t.started_at', '>=', StaleRuns::format($window[0]->from))
+            ->where('t.started_at', '<', StaleRuns::format($window[count($window) - 1]->to))
             ->whereRaw('not (t.status = ? and t.created_at >= ?)', [Status::Running->value, StaleRuns::cutoffColumn()])
-            ->groupBy('slot', 'm.provider', 'm.model');
+            ->groupBy('slot', 'm.provider', 'm.model', 'm.type');
 
         return array_values(array_filter($query->get()->all(), is_object(...)));
     }

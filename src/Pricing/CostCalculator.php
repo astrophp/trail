@@ -79,7 +79,26 @@ class CostCalculator
             $total += $tokens * $perMillion / 1_000_000;
         }
 
-        return round($total, 10);
+        return ! is_finite($total) || $total >= 100_000_000 ? null : round($total, 10);
+    }
+
+    /** @return array{basis: ?string, cost: ?float} */
+    public function reranking(string $provider, string $model, ?int $inputTokens, ?string $searchUnits): array
+    {
+        $rate = $this->prices->resolveReranking($provider, $model)->rate;
+        if ($rate === null) {
+            return ['basis' => null, 'cost' => null];
+        }
+        $basis = $rate->rerankingBasis;
+        $quantity = match ($basis) {
+            'input_tokens' => $this->reported($inputTokens),
+            'search_units' => $searchUnits === null ? null : (float) $searchUnits,
+            default => null,
+        };
+        $unitRate = $basis === 'input_tokens' ? $rate->rerankingInput : $rate->rerankingSearchUnit;
+        $cost = $quantity === null || $unitRate === null ? null : $quantity * $unitRate / ($basis === 'input_tokens' ? 1_000_000 : 1);
+
+        return ['basis' => $basis, 'cost' => $cost === null || ! is_finite($cost) || $cost >= 100_000_000 ? null : round($cost, 10)];
     }
 
     private function reported(?int $tokens): ?int

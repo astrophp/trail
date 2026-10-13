@@ -4,7 +4,7 @@ import {
     type TraceListParams,
     type TraceSort,
 } from '@/api/traces'
-import type { Status } from '@/api/types'
+import type { OperationType, Status } from '@/api/types'
 import { searchParam } from '@/lib/search'
 import { timeRangeParam, type TimeRangePreset } from '@/lib/time-range'
 import {
@@ -43,6 +43,10 @@ export const defaultTraceSort: TraceSort = '-started_at'
  * `agent`, `provider`, `model`, `tool` or `conversation` means all, and so does `issue_kind` left out.
  */
 export const traceListParams = {
+    operation_type: enumParam(
+        ['all', 'agent', 'embedding', 'classification', 'reranking'] as const,
+        'all',
+    ),
     sort: enumParam(traceSorts, defaultTraceSort),
     page: intParam(1, { min: 1 }),
     status: enumParam(statusFilters, 'all'),
@@ -62,6 +66,7 @@ export const traceListParams = {
 
 /** The params that are filters: changing any of them starts a new result list on page 1. */
 export const traceFilterKeys = [
+    'operation_type',
     'status',
     'search',
     'agent',
@@ -84,6 +89,7 @@ export type TraceListView = {
     range: TimeRangePreset
     sort: TraceSort
     page: number
+    operation_type?: OperationType | 'all'
     status: StatusFilter
     search: string
     agent: string
@@ -113,6 +119,8 @@ export function traceListApiParams(view: TraceListView): TraceListParams {
         range: view.range,
         sort: view.sort,
         page: view.page,
+        operation_type:
+            view.operation_type === 'all' ? undefined : view.operation_type,
         status: view.status === 'all' ? undefined : view.status,
         search: view.search,
         agent: view.agent,

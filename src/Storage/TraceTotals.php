@@ -2,6 +2,8 @@
 
 namespace Astro\Trail\Storage;
 
+use Astro\Trail\Enums\Status;
+
 /**
  * Token, search-unit, cost and span totals of a trace. Only billable operation spans
  * contribute usage; a total nobody reported stays null instead of becoming zero.
@@ -18,6 +20,8 @@ final readonly class TraceTotals
         public int $spanCount,
         public int $unpricedSpanCount,
         public ?string $searchUnits = null,
+        public int $unknownCostCalls = 0,
+        public int $costGapCalls = 0,
     ) {}
 
     /**
@@ -44,7 +48,7 @@ final readonly class TraceTotals
         $searchUnits = null;
         $searchOverflow = false;
         $count = 0;
-        $unpriced = 0;
+        $unpriced = $unknown = $gaps = 0;
 
         foreach ($spans as $span) {
             $count++;
@@ -65,6 +69,13 @@ final readonly class TraceTotals
             $cacheWrite = self::add($cacheWrite, $span->cacheWriteTokens);
             $reasoning = self::add($reasoning, $span->reasoningTokens);
 
+            $unfinished = in_array($span->status, [Status::Running, Status::Incomplete], true);
+            if ($span->cost === null && ! $span->reportedUsage()) {
+                $unknown++;
+            }
+            if ($span->cost === null || $unfinished) {
+                $gaps++;
+            }
             if ($span->cost !== null) {
                 $cost = ($cost ?? 0.0) + $span->cost;
             } elseif ($span->reportedUsage()) {
@@ -82,6 +93,8 @@ final readonly class TraceTotals
             $count,
             $unpriced,
             $searchUnits,
+            $unknown,
+            $gaps,
         );
     }
 

@@ -59,6 +59,8 @@ class ArrayStoreProbe implements StoreProbe
             'created_at' => $this->date($stored),
             'updated_at' => $this->date($updated),
             'search_units' => $totals->searchUnits,
+            'unknown_cost_calls' => $totals->unknownCostCalls,
+            'cost_gap_calls' => $totals->costGapCalls,
         ];
     }
 
@@ -118,6 +120,7 @@ class ArrayStoreProbe implements StoreProbe
             'created_at' => $this->date($this->store->spanStoredAt($span->id)),
             'updated_at' => $this->date($this->store->spanUpdatedAt($span->id)),
             'search_units' => $span->searchUnits,
+            'billing_basis' => $span->billingBasis,
         ];
     }
 

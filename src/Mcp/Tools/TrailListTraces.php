@@ -27,6 +27,7 @@ class TrailListTraces extends Tool
         return [
             'range' => $schema->string()->description('Time range: 1h, 24h, or 7d. Defaults to 24h.'),
             'status' => $schema->string()->description('Optional status: completed, failed, incomplete, running, or awaiting_approval.'),
+            'operation_type' => $schema->string()->description('Optional root operation: agent, embedding, classification, or reranking.'),
             'agent' => $schema->string()->description('Optional agent name or class filter.'),
             'search' => $schema->string()->description('Optional text search across trace IDs, names, prompts, provider, model, conversation, and user IDs.'),
             'limit' => $schema->integer()->description('Number of traces to return, from 1 to 50. Defaults to 10.'),
@@ -39,12 +40,13 @@ class TrailListTraces extends Tool
             $arguments = $request->validate([
                 'range' => ['sometimes', 'string', 'in:1h,24h,7d'],
                 'status' => ['sometimes', 'string', 'in:completed,failed,incomplete,running,awaiting_approval'],
+                'operation_type' => ['sometimes', 'string', 'in:agent,embedding,classification,reranking'],
                 'agent' => ['sometimes', 'string', 'max:255'],
                 'search' => ['sometimes', 'string', 'max:200'],
                 'limit' => ['sometimes', 'integer', 'between:1,50'],
             ]);
 
-            $httpRequest = HttpRequest::create('/', 'GET', array_intersect_key($arguments, array_flip(['range', 'status', 'agent', 'search'])));
+            $httpRequest = HttpRequest::create('/', 'GET', array_intersect_key($arguments, array_flip(['range', 'status', 'agent', 'search', 'operation_type'])));
             $range = TimeRange::fromRequest($httpRequest);
             $filters = TraceFilters::fromRequest($httpRequest);
         } catch (ValidationException $exception) {

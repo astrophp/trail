@@ -141,7 +141,6 @@ class DatabaseTraceStore implements TraceStore
                 ->whereRaw(SpanSql::bills('trail_spans'))
                 ->where('trail_spans.status', Status::Running->value)
                 ->where('trail_spans.created_at', '<', $cutoff);
-
             $openAt = $db->table('trail_spans')->newQuery()
                 ->selectRaw('case when open_at < ? then null else open_at end', [$cutoff]);
 
@@ -324,7 +323,7 @@ class DatabaseTraceStore implements TraceStore
         $usages = [];
 
         foreach ($db->table('trail_spans')->where('trace_id', $traceId)->get([
-            'type', 'input_tokens', 'output_tokens', 'cache_read_tokens', 'cache_write_tokens', 'reasoning_tokens', 'cost', 'search_units',
+            'type', 'input_tokens', 'output_tokens', 'cache_read_tokens', 'cache_write_tokens', 'reasoning_tokens', 'cost', 'search_units', 'status',
         ]) as $row) {
             $type = SpanType::tryFrom($this->asString($row->type));
 
@@ -341,6 +340,7 @@ class DatabaseTraceStore implements TraceStore
                 $this->asInt($row->reasoning_tokens),
                 $this->asFloat($row->cost),
                 SearchUnits::fromStorage($this->asInt($row->search_units)),
+                Status::tryFrom($this->asString($row->status)) ?? Status::Incomplete,
             );
         }
 
@@ -355,6 +355,8 @@ class DatabaseTraceStore implements TraceStore
             'cost' => $this->decimal($totals->cost),
             'span_count' => $totals->spanCount,
             'unpriced_span_count' => $totals->unpricedSpanCount,
+            'unknown_cost_calls' => $totals->unknownCostCalls,
+            'cost_gap_calls' => $totals->costGapCalls,
             'search_units' => SearchUnits::toStorage($totals->searchUnits),
             'updated_at' => $this->now(),
         ]);
@@ -403,14 +405,20 @@ class DatabaseTraceStore implements TraceStore
         $unpriced = "{$bills} and trail_spans.cost is null and {$reported}";
         $units = 'trail_spans.search_units';
         $unitCalls = "{$bills} and {$units} is not null";
+        $expectedUnits = "{$bills} and (trail_spans.billing_basis = 'search_units' or {$units} is not null)";
         $input = 'trail_spans.input_tokens';
         $cached = '(coalesce(trail_spans.cache_read_tokens, 0) + coalesce(trail_spans.cache_write_tokens, 0))';
         $stored = fn () => $db->table('trail_traces')->select('id', 'name', 'started_at')->where('id', $traceId);
 
         $models = $db->table('trail_spans')
             ->select('provider', 'model')
-            ->selectRaw("sum(case when {$unitCalls} then 1 else 0 end) as search_unit_calls")
+            ->selectRaw("sum(case when {$bills} and (trail_spans.billing_basis = 'search_units' or {$units} is not null) then 1 else 0 end) as search_unit_calls")
+            ->selectRaw("sum(case when {$bills} and trail_spans.cost is null and not {$reported} then 1 else 0 end) as unknown_cost_calls")
+            ->selectRaw("sum(case when {$bills} and (trail_spans.cost is null or trail_spans.status in ('running', 'incomplete')) then 1 else 0 end) as cost_gap_calls")
             ->selectRaw("sum(case when {$unitCalls} then 1 else 0 end) as reported_search_unit_calls")
+            ->selectRaw("sum(case when {$expectedUnits} and trail_spans.cost is null then 1 else 0 end) as unpriced_search_unit_calls")
+            ->selectRaw("sum(case when trail_spans.type = 'reranking' and trail_spans.billing_basis is null and {$units} is null then 1 else 0 end) as ambiguous_reranking_calls")
+            ->selectRaw("sum(case when {$expectedUnits} and trail_spans.cost is null and {$units} is null then 1 else 0 end) as unknown_unpriced_search_calls")
             ->selectRaw("sum(case when {$bills} and trail_spans.status = 'incomplete' then 1 else 0 end) as incomplete_calls")
 
             // Keep digit sums exact across drivers, including floor's numeric return type.
@@ -452,7 +460,7 @@ class DatabaseTraceStore implements TraceStore
             'trace_id', 'provider', 'model', 'run_name', 'started_at', 'provider_first', 'steps', 'reported_steps', 'unpriced_steps',
             'unpriced_tokens', 'open_at', 'input_tokens', 'uncached_input_tokens', 'output_tokens', 'cache_read_tokens',
             'cache_write_tokens', 'reasoning_tokens', 'cost', 'search_unit_calls', 'reported_search_unit_calls',
-            'incomplete_calls', 'search_units', 'unpriced_search_units',
+            'incomplete_calls', 'search_units', 'unpriced_search_units', 'unknown_cost_calls', 'cost_gap_calls', 'unpriced_search_unit_calls', 'ambiguous_reranking_calls',
         ], $db->table($models, 'g')
             ->crossJoinSub($stored(), 't')
             ->leftJoinSub($firsts, 'p', 'p.provider', '=', 'g.provider')
@@ -460,7 +468,8 @@ class DatabaseTraceStore implements TraceStore
             ->selectRaw('case when g.provider is not null and (g.model = p.first_model or (p.first_model is null and g.model is null)) then true else false end as provider_first')
             ->addSelect('g.steps', 'g.reported_steps', 'g.unpriced_steps', 'g.unpriced_tokens', 'g.open_at', 'g.input_tokens', 'g.uncached_input_tokens', 'g.output_tokens', 'g.cache_read_tokens', 'g.cache_write_tokens', 'g.reasoning_tokens', 'g.cost', 'g.search_unit_calls', 'g.reported_search_unit_calls', 'g.incomplete_calls')
             ->selectRaw($this->searchSum('search').' as search_units')
-            ->selectRaw($this->searchSum('unpriced_search').' as unpriced_search_units'));
+            ->selectRaw('case when g.unknown_unpriced_search_calls = 0 then '.$this->searchSum('unpriced_search').' end as unpriced_search_units')
+            ->addSelect('g.unknown_cost_calls', 'g.cost_gap_calls', 'g.unpriced_search_unit_calls', 'g.ambiguous_reranking_calls'));
 
         $tools = $db->table('trail_spans')
             ->select('name')
@@ -553,6 +562,7 @@ class DatabaseTraceStore implements TraceStore
             'cache_write_tokens' => $this->tokens($span->cacheWriteTokens),
             'reasoning_tokens' => $this->tokens($span->reasoningTokens),
             'search_units' => SearchUnits::toStorage($span->searchUnits),
+            'billing_basis' => $span->billingBasis,
             'cost' => $this->decimal($span->cost),
             'input' => $this->json($span->input),
             'output' => $this->json($span->output),

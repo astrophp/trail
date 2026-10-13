@@ -67,7 +67,7 @@ final class UsageBreakdown
                 'span_id' => $span->id,
                 'name' => $span->name,
                 'usage' => Usage::direct($running, $totals->inputTokens, $totals->outputTokens, $totals->cacheReadTokens, $totals->cacheWriteTokens, $totals->reasoningTokens, $totals->searchUnits),
-                'cost' => Cost::of($totals->cost, $totals->unpricedSpanCount, $running),
+                'cost' => Cost::of($totals->cost, $totals->costGapCalls, $running),
             ];
         }
 

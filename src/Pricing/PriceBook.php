@@ -43,9 +43,9 @@ class PriceBook
      * saved row is left out, which shows what a reset would return it to; other models' saved rows
      * still count, since a prefix can resolve through one.
      */
-    public function resolve(string $provider, string $model, bool $withoutOwnRow = false): Resolution
+    public function resolve(string $provider, string $model, bool $withoutOwnRow = false, bool $reranking = false): Resolution
     {
-        $table = $this->table($provider, $withoutOwnRow ? $model : null);
+        $table = $this->table($provider, $withoutOwnRow ? $model : null, $reranking);
 
         if (isset($table[$model])) {
             return new Resolution($table[$model], $table[$model]->custom ? PriceSource::Saved : PriceSource::Config);
@@ -76,6 +76,11 @@ class PriceBook
      * A price book that finds prices in `trail.pricing` alone: it never reads saved prices, so it
      * makes no query. This book is left as it is.
      */
+    public function resolveReranking(string $provider, string $model, bool $withoutOwnRow = false): Resolution
+    {
+        return $this->resolve($provider, $model, $withoutOwnRow, reranking: true);
+    }
+
     public function configOnly(): self
     {
         return new self($this->config, $this->resolver, $this->connection, true);
@@ -160,7 +165,7 @@ class PriceBook
      * @param  ?string  $withoutSaved  a model whose saved row is left out
      * @return array<string, Rate>
      */
-    private function table(string $provider, ?string $withoutSaved = null): array
+    private function table(string $provider, ?string $withoutSaved = null, bool $reranking = false): array
     {
         $pricing = $this->config->get('trail.pricing');
         $entries = is_array($pricing) ? ($pricing[$provider] ?? null) : null;
@@ -168,7 +173,10 @@ class PriceBook
 
         foreach (is_array($entries) ? $entries : [] as $model => $entry) {
             if (is_array($entry)) {
-                $table[(string) $model] = $this->rate($provider, (string) $model, $entry, false);
+                $rate = $this->rate($provider, (string) $model, $entry, false);
+                if (! $reranking || $rate->rerankingRatesSet) {
+                    $table[(string) $model] = $rate;
+                }
             }
         }
 
@@ -177,6 +185,8 @@ class PriceBook
         if ($withoutSaved !== null) {
             unset($saved[$withoutSaved]);
         }
+
+        $saved = array_filter($saved, fn (Rate $rate): bool => $reranking ? $rate->rerankingRatesSet : $rate->tokenRatesSet);
 
         return array_replace($table, $saved);
     }
@@ -228,6 +238,9 @@ class PriceBook
      */
     private function rate(string $provider, string $model, array $entry, bool $custom): Rate
     {
+        $reranking = is_array($entry['reranking'] ?? null) ? $entry['reranking'] : [];
+        $basis = $custom ? ($entry['reranking_basis'] ?? null) : ($reranking['basis'] ?? null);
+
         return new Rate(
             $provider,
             $model,
@@ -236,7 +249,13 @@ class PriceBook
             $this->number($entry['cache_read'] ?? null),
             $this->number($entry['cache_write'] ?? null),
             $custom,
-            $custom ? $this->moment($entry['updated_at'] ?? null) : null,
+            $custom ? $this->moment($entry['token_saved_at'] ?? $entry['updated_at'] ?? null) : null,
+            in_array($basis, ['input_tokens', 'search_units'], true) ? $basis : null,
+            $this->number($custom ? ($entry['reranking_input'] ?? null) : ($reranking['input'] ?? null)),
+            $this->number($custom ? ($entry['reranking_search_unit'] ?? null) : ($reranking['search_unit'] ?? null)),
+            ! $custom || ! array_key_exists('token_rates_set', $entry) || $entry['token_rates_set'] === null || (bool) $entry['token_rates_set'],
+            $custom ? (bool) ($entry['reranking_rates_set'] ?? false) : array_key_exists('reranking', $entry),
+            $custom ? $this->moment($entry['reranking_saved_at'] ?? $entry['updated_at'] ?? null) : null,
         );
     }
 

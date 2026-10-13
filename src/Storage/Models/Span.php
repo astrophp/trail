@@ -21,6 +21,7 @@ use Illuminate\Support\Carbon;
  * @property string $name
  * @property string|null $agent_class
  * @property Status $status
+ * @property string|null $billing_basis
  * @property int $attempt
  * @property int $sequence
  * @property int|null $step_number

@@ -26,6 +26,7 @@ afterEach(function () {
 const USAGE_EXPORT_FIGURES = [
     'runs', 'steps', 'usage_state', 'input_tokens', 'output_tokens', 'cache_read_tokens', 'cache_write_tokens', 'reasoning_tokens', 'total_tokens',
     'cost_state', 'estimated_cost_usd', 'reported_steps', 'unpriced_steps', 'unpriced_tokens',
+    'calls', 'search_units', 'unit_assessment', 'search_unit_calls', 'reported_search_unit_calls', 'unpriced_search_unit_calls', 'unpriced_search_units', 'unknown_cost_calls', 'incomplete_calls', 'ambiguous_reranking_calls',
 ];
 
 /**
@@ -90,6 +91,10 @@ function usageExportFlatten(array $row): array
         'cost_state' => $row['cost']['state'], 'estimated_cost_usd' => $row['cost']['amount'],
         'reported_steps' => $row['coverage']['reported_steps'], 'unpriced_steps' => $row['coverage']['unpriced_steps'],
         'unpriced_tokens' => $row['coverage']['unpriced_tokens'],
+        'calls' => $row['calls'], 'search_units' => $row['units']['search_units'], 'unit_assessment' => $row['units']['assessment'],
+        'search_unit_calls' => $row['units']['search_unit_calls'], 'reported_search_unit_calls' => $row['units']['reported_search_unit_calls'],
+        'unpriced_search_unit_calls' => $row['units']['unpriced_search_unit_calls'], 'unpriced_search_units' => $row['units']['unpriced_search_units'],
+        'unknown_cost_calls' => $row['units']['unknown_cost_calls'], 'incomplete_calls' => $row['units']['incomplete_calls'], 'ambiguous_reranking_calls' => $row['units']['ambiguous_reranking_calls'],
     ];
 }
 
@@ -153,7 +158,7 @@ describe('against the breakdown', function () {
     ]);
 
     it('writes the models, row by row, as written by hand', function () {
-        $lines = usageExportAt($this)['lines'];
+        $lines = array_map(fn (string $line) => implode(',', array_slice(str_getcsv($line, ',', '"', ''), 0, 16)), usageExportAt($this)['lines']);
 
         expect($lines)->toBe([
             'provider,model,runs,steps,usage_state,input_tokens,output_tokens,cache_read_tokens,cache_write_tokens,reasoning_tokens,total_tokens,cost_state,estimated_cost_usd,reported_steps,unpriced_steps,unpriced_tokens',
@@ -172,8 +177,8 @@ describe('against the breakdown', function () {
     });
 
     it('writes the providers and the agents as written by hand', function () {
-        $providers = usageExportAt($this, 'by=provider')['lines'];
-        $agents = usageExportAt($this, 'by=agent')['lines'];
+        $providers = array_map(fn (string $line) => implode(',', array_slice(str_getcsv($line, ',', '"', ''), 0, 15)), usageExportAt($this, 'by=provider')['lines']);
+        $agents = array_map(fn (string $line) => implode(',', array_slice(str_getcsv($line, ',', '"', ''), 0, 15)), usageExportAt($this, 'by=agent')['lines']);
 
         expect($providers)->toHaveCount(4)
             ->and($providers[1])->toBe('openai,7,11,pending,1320,201,25,7,35,1521,pending,0.0314,9,2,40')
@@ -220,7 +225,7 @@ describe('what was not captured', function () {
             UsageRows::step('acme', 'unpriced', ['inputTokens' => 10]),
         ]);
 
-        $rows = array_column(usageExportAt($this)['rows'], null, 'model');
+        $rows = array_column(array_map(fn (array $row) => array_slice($row, 0, 16, true), usageExportAt($this)['rows']), null, 'model');
 
         expect($rows['full'])->toBe([
             'provider' => 'acme', 'model' => 'full', 'runs' => '1', 'steps' => '1', 'usage_state' => 'reported',
@@ -230,7 +235,7 @@ describe('what was not captured', function () {
             ->and($rows['bare'])->toBe([
                 'provider' => 'acme', 'model' => 'bare', 'runs' => '1', 'steps' => '1', 'usage_state' => 'not_reported',
                 'input_tokens' => '', 'output_tokens' => '', 'cache_read_tokens' => '', 'cache_write_tokens' => '', 'reasoning_tokens' => '', 'total_tokens' => '',
-                'cost_state' => 'not_captured', 'estimated_cost_usd' => '', 'reported_steps' => '0', 'unpriced_steps' => '0', 'unpriced_tokens' => '0',
+                'cost_state' => 'unpriced', 'estimated_cost_usd' => '', 'reported_steps' => '0', 'unpriced_steps' => '0', 'unpriced_tokens' => '0',
             ])
             ->and($rows['unpriced']['cost_state'])->toBe('unpriced')
             ->and($rows['unpriced']['estimated_cost_usd'])->toBe('')

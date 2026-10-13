@@ -1,6 +1,7 @@
 import { apiRequest, apiUrl } from '@/api/client'
 import type {
     BookmarkResponse,
+    OperationType,
     IssueKind,
     Status,
     TraceDetailResponse,
@@ -45,6 +46,7 @@ export type TraceListParams = {
     page?: number
     /** How many runs a page holds, 1 to 100; the API's own default when left out. */
     per_page?: number
+    operation_type?: OperationType
     status?: Status
     search?: string
     agent?: string

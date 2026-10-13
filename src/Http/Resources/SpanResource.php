@@ -55,6 +55,7 @@ final readonly class SpanResource
             'provider' => $span->provider,
             'model' => $span->model,
             'responding_model' => $span->responding_model,
+            'billing_basis' => $span->billing_basis,
             'duration_ms' => $span->duration_ms,
             'offset_ms' => $this->offset($span),
             'started_at' => Timestamp::format($span->started_at),
@@ -104,7 +105,7 @@ final readonly class SpanResource
 
     public static function usageOf(Span $span): SpanUsage
     {
-        return new SpanUsage($span->type, $span->input_tokens, $span->output_tokens, $span->cache_read_tokens, $span->cache_write_tokens, $span->reasoning_tokens, $span->cost, SearchUnits::fromStorage($span->search_units));
+        return new SpanUsage($span->type, $span->input_tokens, $span->output_tokens, $span->cache_read_tokens, $span->cache_write_tokens, $span->reasoning_tokens, $span->cost, SearchUnits::fromStorage($span->search_units), $span->effectiveStatus());
     }
 
     private static function running(Span $span): bool

@@ -10,7 +10,7 @@ Trail records what the SDK reports through its events, so a few things cannot be
 - When an agent remembers conversations and generates a title for a new one, the SDK makes an
   extra model call that no event reports. It is neither recorded nor priced.
 - Embeddings served from the SDK's embeddings cache fire no events, so they do not appear.
-- Classification, images, audio, transcription and reranking are not recorded at all.
+- Images, audio and transcription are not recorded. Classification and reranking are recorded.
 
 ## A paused run and the run that resumed it are separate traces
 
@@ -230,3 +230,20 @@ or more for MySQL when the data directory is held in memory, which this machine 
 about 377 MiB on MySQL and 409 MiB on Postgres at 100,000 runs, and about 3.7 GiB on MySQL and
 4.1 GiB on Postgres at a million. Real runs carry prompts and outputs, so yours will be larger.
 `trail:prune` is how you bound it.
+
+
+## Classification and reranking limits
+
+The SDK exposes start and successful completion events, but no invocation-specific failure event.
+A nested call still open when its recorded caller ends becomes Incomplete with no inferred error or
+duration. A standalone call without a completion stays Running until the stale rule or sweep applies.
+Each SDK failover attempt has its own ID and may appear as a separate standalone trace. A generic
+ProviderFailedOver event cannot prove which classification, reranking or embedding call failed;
+ambiguous events leave evidence incomplete. The recorder bounds remembered IDs and conservatively
+suppresses embedding failover attribution after ambiguity overflow until its next flush.
+
+All-zero SDK token totals do not prove measured zero usage. Explicit cache subsets are retained
+independently. Reranking output zero is structural and is not recorded as measured tokens. Search
+units can be absent or explicitly zero, and support at most six fractional and twelve whole digits.
+Invalid or overflowing quantities become unavailable with a value-free diagnostic. SQL and PHP sums
+preserve this limit and do not turn unavailable totals into zero.

@@ -70,14 +70,19 @@ export function UsageTable({
     const cacheRead = reported((row) => row.usage.cache_read_tokens)
     const cacheWrite = reported((row) => row.usage.cache_write_tokens)
     const reasoning = reported((row) => row.usage.reasoning_tokens)
+    const searchUnits = rows.some(
+        (row) =>
+            row.units?.search_units !== null &&
+            row.units?.search_units !== undefined,
+    )
     const columns = useMemo(
         () =>
             usageColumns({
                 by,
                 linkOf: (row) => links.get(row) ?? null,
-                tokens: { cacheRead, cacheWrite, reasoning },
+                tokens: { cacheRead, cacheWrite, reasoning, searchUnits },
             }),
-        [by, links, cacheRead, cacheWrite, reasoning],
+        [by, links, cacheRead, cacheWrite, reasoning, searchUnits],
     )
 
     return (

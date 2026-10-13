@@ -6,6 +6,7 @@ import {
     type DataTableColumn,
 } from '@/components/patterns/data-table'
 import { CostValue } from '@/components/telemetry/cost-value'
+import { SearchUnitValue } from '@/components/telemetry/search-unit-value'
 import { TokenCount } from '@/components/telemetry/token-count'
 import { TokenValue } from '@/components/telemetry/token-value'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -18,6 +19,7 @@ import { cn } from '@/lib/utils'
 export type OptionalTokens = {
     cacheRead: boolean
     cacheWrite: boolean
+    searchUnits?: boolean
     reasoning: boolean
 }
 
@@ -113,9 +115,10 @@ export function usageColumns({
         },
         {
             id: 'steps',
-            header: 'Steps',
+            header: 'Calls',
             meta: { align: 'end', hideBelow: 'roomy' },
-            cell: ({ row }) => formatCount(row.original.steps),
+            cell: ({ row }) =>
+                formatCount(row.original.calls ?? row.original.steps),
         },
         {
             ...numeric('tokens', 'Tokens', 'xs'),
@@ -125,6 +128,25 @@ export function usageColumns({
                 <TokenValue usage={row.original.usage} pendingAmount="show" />
             ),
         },
+        ...(tokens.searchUnits
+            ? [
+                  {
+                      id: 'search_units',
+                      header: 'Search units',
+                      meta: { align: 'end' as const, hideBelow: 'xs' as const },
+                      cell: ({
+                          row,
+                      }: {
+                          row: { original: UsageBreakdownRow }
+                      }) => (
+                          <SearchUnitValue
+                              count={row.original.units?.search_units ?? null}
+                              pending={row.original.usage.state === 'pending'}
+                          />
+                      ),
+                  },
+              ]
+            : []),
         // Input and output are always drawn: a count that was not reported says so, in the cell.
         count('input', 'Input tokens', (row) => row.usage.input_tokens, 'xs'),
         count(
@@ -182,6 +204,7 @@ export function usageColumns({
             cell: ({ row }) => (
                 <CoverageCell
                     coverage={row.original.coverage}
+                    units={row.original.units}
                     pending={row.original.cost.state === 'pending'}
                 />
             ),

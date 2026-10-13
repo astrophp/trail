@@ -22,7 +22,11 @@ afterEach(function () {
  */
 function usageAt(mixed $test, string $query = ''): array
 {
-    return $test->getJson('/trail/api/usage'.($query === '' ? '' : '?'.$query))->assertOk()->json();
+    $body = $test->getJson('/trail/api/usage'.($query === '' ? '' : '?'.$query))->assertOk()->json();
+    // Retain assertions on the legacy token contract; CapabilityReadersTest covers the independent unit contract.
+    $body['data']['coverage'] = array_intersect_key($body['data']['coverage'], array_flip(['steps', 'reported_steps', 'unpriced_steps', 'unpriced_tokens']));
+
+    return $body;
 }
 
 /**
