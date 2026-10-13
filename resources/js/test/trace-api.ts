@@ -24,6 +24,7 @@ const notReported = {
     cache_read_tokens: null,
     cache_write_tokens: null,
     reasoning_tokens: null,
+    search_units: null,
     total_tokens: null,
 } as const
 

@@ -29,7 +29,12 @@ describe('spanTitle', () => {
 
 describe('spanSubtitle', () => {
     it('is the model of a step or an embedding, in monospace', () => {
-        for (const type of ['step', 'embedding'] as const) {
+        for (const type of [
+            'step',
+            'embedding',
+            'classification',
+            'reranking',
+        ] as const) {
             expect(spanSubtitle({ type, model: 'gpt-x' }, true)).toEqual({
                 text: 'gpt-x',
                 mono: true,

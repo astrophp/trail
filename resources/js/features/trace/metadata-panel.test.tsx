@@ -1,6 +1,6 @@
 import { render, screen, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
-import type { AgentSubtotal, Span, Usage } from '@/api/types'
+import type { AgentSubtotal, Span, DirectUsage } from '@/api/types'
 import { MetadataPanel } from '@/features/trace/metadata-panel'
 import { formatCount, formatDateTime } from '@/lib/format'
 import {
@@ -13,13 +13,14 @@ import {
 
 const coverage = detailFixture.data.coverage
 
-const reported: Usage = {
+const reported: DirectUsage = {
     state: 'reported',
     input_tokens: 1200,
     output_tokens: 310,
     cache_read_tokens: 800,
     cache_write_tokens: null,
     reasoning_tokens: 90,
+    search_units: null,
     total_tokens: 1510,
 }
 
@@ -355,13 +356,14 @@ describe('the token rows of the metadata table', () => {
     })
 
     it('say Not reported in every row when the provider reported nothing', () => {
-        const none: Usage = {
+        const none: DirectUsage = {
             state: 'not_reported',
             input_tokens: null,
             output_tokens: null,
             cache_read_tokens: null,
             cache_write_tokens: null,
             reasoning_tokens: null,
+            search_units: null,
             total_tokens: null,
         }
 

@@ -6,7 +6,7 @@ import { formatCount } from '@/lib/format'
 export const costExplanations: Record<CostState, string> = {
     estimated:
         'Calculated from the recorded usage and the configured model prices.',
-    partial: 'Covers only the steps and embeddings that could be priced.',
+    partial: 'Covers only the calls that could be priced.',
     unpriced: 'None of the models in this run has a configured price.',
     pending: 'The run has not finished. Usage and cost are not final.',
     not_captured: 'No usage was reported, so there was nothing to price.',

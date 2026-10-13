@@ -32,6 +32,7 @@ set nothing. A key with an environment variable can be set in `.env` without pub
 | `capture.enabled` | none | `true` | When `false`, no prompt, message, tool argument, result or model output is stored. Runs, steps, timings, usage, cost and error classes still are. |
 | `capture.system_prompt` | none | `true` | Whether the agent's instructions are read and stored. Trail calls `instructions()` once per run for this, in addition to the SDK's own calls. |
 | `capture.max_length` | none | `10000` | The longest any single string is kept, in characters. `null` means no limit. Zero and negative values are not limits and use the default. |
+| `capture.max_items` | none | `100` | Maximum entries in capability collections. Positive integers or numeric integer strings are accepted and capped at 100; invalid values use 100. Fixed answer descriptor fields are preserved. |
 | `redaction.enabled` | none | `true` | Whether secrets are removed from what is stored. |
 | `redaction.keys` | none | 15 entries, listed [below](#redaction-keys) | Keys whose value is replaced as a whole. A list you set replaces the defaults. |
 | `redaction.patterns` | none | 22 patterns | Regular expressions whose matches are replaced inside any string. A list you set replaces the defaults. |
@@ -91,3 +92,23 @@ TRAIL_SAMPLING=1.0
 
 `TRAIL_DOMAIN`, `TRAIL_GUARD` and `TRAIL_DB_CONNECTION` take a name, for example
 `TRAIL_DOMAIN=ai.example.com`; leave them out to keep the defaults.
+
+
+### Capability pricing
+
+Keep ordinary token rates in their existing fields. Reranking has no built-in fallback rate:
+
+```php
+'pricing' => [
+    'cohere' => [
+        'your-model' => [
+            'reranking' => ['basis' => 'search_units', 'search_unit' => 0.001],
+        ],
+    ],
+],
+```
+
+Select exactly one basis: `search_units` (USD per unit) or `input_tokens` (`input`, USD per million).
+The selected quantity and its rate must both exist, even for an explicitly reported zero quantity.
+Ordinary and reranking groups resolve exact IDs and version suffixes independently. Saving one group
+preserves the other. Rates are estimates you configure, not provider billing records.

@@ -4,6 +4,7 @@ import { DurationValue } from '@/components/telemetry/duration-value'
 import { ModelLabel } from '@/components/telemetry/model-label'
 import { StatusBadge } from '@/components/telemetry/status-badge'
 import { Timestamp } from '@/components/telemetry/timestamp'
+import { SearchUnitValue } from '@/components/telemetry/search-unit-value'
 import { TokenCount } from '@/components/telemetry/token-count'
 import { TokenValue } from '@/components/telemetry/token-value'
 import { TraceFlags } from '@/components/telemetry/trace-flags'
@@ -101,6 +102,16 @@ export const compareRows: CompareRowDef[] = [
         ),
     },
     {
+        label: 'Search units',
+        cell: ({ trace }) => (
+            <SearchUnitValue
+                count={trace.usage.search_units}
+                pending={trace.status === 'running'}
+            />
+        ),
+        key: ({ trace }) => trace.usage.search_units,
+    },
+    {
         label: 'Est. cost',
         cell: ({ trace }) => <CostValue cost={trace.cost} />,
     },
@@ -148,6 +159,8 @@ export const compareRows: CompareRowDef[] = [
     countRow('Agents', ({ counts }) => counts.agents),
     countRow('Model steps', ({ counts }) => counts.steps),
     countRow('Tools', ({ counts }) => counts.tools),
+    countRow('Classifications', ({ counts }) => counts.classifications),
+    countRow('Rerankings', ({ counts }) => counts.rerankings),
     countRow('Embeddings', ({ counts }) => counts.embeddings),
     countRow('Attempts', ({ counts }) => counts.attempts),
     countRow('Failed spans', ({ counts }) => counts.failed),

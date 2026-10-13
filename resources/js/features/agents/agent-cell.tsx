@@ -14,7 +14,13 @@ import { cn } from '@/lib/utils'
  * it still leads to the agent by the name exactly as the API gave it.
  */
 export function AgentCell({ agent, to }: { agent: Agent; to: string }) {
-    const embedding = agent.type === 'embedding'
+    const operation = agent.type !== 'agent'
+    const operationLabel = {
+        embedding: 'Embeddings',
+        classification: 'Classification calls',
+        reranking: 'Reranking calls',
+        agent: '',
+    }[agent.type]
     const unnamed = agent.name.trim() === ''
     const [nameRef, nameCut] = useTruncated(agent.name)
     const [classRef, classCut] = useTruncated(agent.agent_class ?? '')
@@ -35,11 +41,11 @@ export function AgentCell({ agent, to }: { agent: Agent; to: string }) {
                     {unnamed ? 'Unnamed agent' : agent.name}
                 </RowLink>
             </div>
-            {embedding || agent.agent_class !== null ? (
+            {operation || agent.agent_class !== null ? (
                 // Aligned under the name: the icon is 15 pixels and the gap 8.
                 <p className="flex min-w-0 gap-1.5 pl-5.75 text-caption text-muted-foreground">
-                    {embedding ? (
-                        <span className="shrink-0">Embeddings</span>
+                    {operation ? (
+                        <span className="shrink-0">{operationLabel}</span>
                     ) : null}
                     {agent.agent_class === null ? null : (
                         <span

@@ -3,6 +3,18 @@
         {
             "provider": "anthropic",
             "model": "claude-sonnet-4-5",
+            "calls": 3,
+            "units": {
+                "assessment": "assessed",
+                "search_units": null,
+                "search_unit_calls": 0,
+                "reported_search_unit_calls": 0,
+                "unpriced_search_unit_calls": 0,
+                "unpriced_search_units": "0.000000",
+                "unknown_cost_calls": 1,
+                "incomplete_calls": 0,
+                "ambiguous_reranking_calls": 0
+            },
             "steps": 3,
             "runs": 2,
             "usage": {
@@ -31,6 +43,18 @@
         {
             "provider": "anthropic",
             "model": "claude-haiku-4-5",
+            "calls": 2,
+            "units": {
+                "assessment": "assessed",
+                "search_units": null,
+                "search_unit_calls": 0,
+                "reported_search_unit_calls": 0,
+                "unpriced_search_unit_calls": 0,
+                "unpriced_search_units": "0.000000",
+                "unknown_cost_calls": 0,
+                "incomplete_calls": 0,
+                "ambiguous_reranking_calls": 0
+            },
             "steps": 2,
             "runs": 2,
             "usage": {
@@ -59,6 +83,18 @@
         {
             "provider": "openai",
             "model": "text-embedding-3-small",
+            "calls": 2,
+            "units": {
+                "assessment": "assessed",
+                "search_units": null,
+                "search_unit_calls": 0,
+                "reported_search_unit_calls": 0,
+                "unpriced_search_unit_calls": 0,
+                "unpriced_search_units": "0.000000",
+                "unknown_cost_calls": 0,
+                "incomplete_calls": 0,
+                "ambiguous_reranking_calls": 0
+            },
             "steps": 2,
             "runs": 2,
             "usage": {
@@ -87,6 +123,18 @@
         {
             "provider": "openai",
             "model": "gpt-5",
+            "calls": 0,
+            "units": {
+                "assessment": "assessed",
+                "search_units": null,
+                "search_unit_calls": 0,
+                "reported_search_unit_calls": 0,
+                "unpriced_search_unit_calls": 0,
+                "unpriced_search_units": "0.000000",
+                "unknown_cost_calls": 0,
+                "incomplete_calls": 0,
+                "ambiguous_reranking_calls": 0
+            },
             "steps": 0,
             "runs": 1,
             "usage": {

@@ -28,6 +28,8 @@ it('stores a run without tools as one trace with an agent span and one step', fu
         'agent_class' => AssistantAgent::class,
         'model' => FakeAnthropic::MODEL,
         'span_count' => 2,
+        'unknown_cost_calls' => 1,
+        'cost_gap_calls' => 1,
     ]))->and($run->spans())->toBe([
         Captured::expectedSpan([
             'parent_id' => null,
@@ -77,6 +79,8 @@ it('stores a tool as a child of the agent span, with its arguments and result', 
         'agent_class' => AssistantAgent::class,
         'model' => FakeAnthropic::MODEL,
         'span_count' => 4,
+        'unknown_cost_calls' => 2,
+        'cost_gap_calls' => 2,
     ]))->and($run->spans())->toBe([
         Captured::expectedSpan([
             'parent_id' => null,
@@ -201,6 +205,7 @@ describe('structured output', function () {
             'input_tokens' => 10,
             'output_tokens' => 5,
             'unpriced_span_count' => 1,
+            'cost_gap_calls' => 1,
         ]))->and($run->spans()[0]['output'])->toBe(['text' => '{"answer":"42"}', 'structured' => ['answer' => '42']])
             ->and($run->spans()[1]['output'])->toBe([
                 'text' => '{"answer":"42"}',

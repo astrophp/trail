@@ -30,7 +30,7 @@ export function UsageBySpan({
             ) : null}
             {usage.rows.length === 0 ? (
                 <p className="text-ui text-muted-foreground">
-                    No model steps or embeddings were recorded for this run.
+                    No billable calls were recorded for this run.
                 </p>
             ) : (
                 <UsageTable

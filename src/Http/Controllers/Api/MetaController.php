@@ -23,6 +23,7 @@ class MetaController
                 'stale_after' => StaleRuns::timeout(),
                 'traces' => ['any' => $meta->anyTraces(), 'running' => $meta->runningCount()],
                 'filters' => [
+                    'operation_types' => ['agent', 'embedding', 'classification', 'reranking'],
                     'agents' => $meta->agents($range),
                     'providers' => $meta->providers($range),
                     'models' => $meta->models($range),

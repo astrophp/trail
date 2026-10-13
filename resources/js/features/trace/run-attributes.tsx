@@ -2,9 +2,11 @@ import { Link } from 'react-router'
 import type { CostState, Trace, UsageState } from '@/api/types'
 import { KeyValue } from '@/components/patterns/key-value'
 import { KeyValueList } from '@/components/patterns/key-value-list'
+import { operationTypeLabel } from '@/components/telemetry/agent-icon'
 import { DurationValue } from '@/components/telemetry/duration-value'
 import { IssueLabel } from '@/components/telemetry/issue-label'
 import { StatusBadge } from '@/components/telemetry/status-badge'
+import { SearchUnitValue } from '@/components/telemetry/search-unit-value'
 import { Timestamp } from '@/components/telemetry/timestamp'
 import { UserLabel } from '@/components/telemetry/user-label'
 import { LastAttempt } from '@/features/trace/last-attempt'
@@ -51,7 +53,7 @@ export function RunAttributes({
                     <span className="font-mono text-xs">{trace.id}</span>
                 </KeyValue>
                 <KeyValue label="Type">
-                    {trace.type === 'agent' ? 'Agent run' : 'Embedding run'}
+                    {operationTypeLabel(trace.type)}
                 </KeyValue>
                 <KeyValue label={trace.type === 'agent' ? 'Agent' : 'Name'}>
                     {trace.name}
@@ -147,6 +149,14 @@ export function RunAttributes({
                 <KeyValue label="Usage state">
                     {usageWords[trace.usage.state]}
                 </KeyValue>
+                {trace.usage.search_units !== null ? (
+                    <KeyValue label="Search units">
+                        <SearchUnitValue
+                            count={trace.usage.search_units}
+                            pending={trace.usage.state === 'pending'}
+                        />
+                    </KeyValue>
+                ) : null}
                 {resolvedToolCallIds.length === 0 ? null : (
                     <KeyValue label="Resolved tool calls">
                         <ul className="flex flex-col gap-1">

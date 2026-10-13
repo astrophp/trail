@@ -41,6 +41,13 @@ shows the reason without working it out:
   one count. `pending`: the run is still running. `not_reported`: it finished without any count.
   Each count is `null` on its own when it was not reported.
 
+Direct run/span usage and agent subtotals in a trace detail also include `search_units`:
+a normalized six-place decimal string such as `"0.100001"`, or `null` when unavailable. A measured
+`"0.000000"` is distinct from `null`. Search-unit evidence makes direct usage `reported` even
+when every token field is `null`; it never creates a token total. Overview, conversation summaries,
+and range usage groups retain their token-only usage shape. They do not include a placeholder
+search-unit total.
+
 - **Messages** of a turn come with `messages_state`. `stored`: every message the turn exchanged was
   read. `partial`: some were, and `messages_reason` says what is missing. `not_stored`: none could
   be read, because payload capture was off or nothing was recorded, and `messages` is `[]`. A turn
@@ -49,8 +56,8 @@ shows the reason without working it out:
   never `0`, when it could not be told; `0` means the turn began with nothing before it.
 
 A span's cost has the same states except `partial`: a span is priced whole, so it is `estimated`,
-`unpriced`, `pending` or `not_captured`. Only step and embedding spans bill. An agent span and a
-tool span never carry usage, so their `usage` and `cost` are `null`, not a state.
+`unpriced`, `pending` or `not_captured`. Step, embedding, classification and reranking spans bill.
+An agent span and a tool span never carry usage, so their `usage` and `cost` are `null`, not a state.
 
 A running run's usage and cost are `pending`. They carry what has been recorded so far, which is
 not a final figure and can still grow. A span that finished inside a running run reports its own
@@ -166,8 +173,9 @@ One run, as every endpoint returns it:
 }
 ```
 
-- `type` is `agent`, or `embedding` for embeddings generated outside an agent run.
-- `agent_class` is `null` for an anonymous agent and for an embedding run.
+- `type` is `agent`, `embedding`, `classification`, or `reranking`. Standalone operations use their
+  own type; nested operations remain spans inside the enclosing run.
+- `agent_class` is `null` for an anonymous agent and for a standalone operation.
 - `provider` and `model` are those the run asked for on its last attempt. A run can use more.
 - `input_tokens` counts everything sent, cached tokens included, and `output_tokens` includes
   reasoning tokens. `total_tokens` is the sum of whichever of the two was reported, and `null`
@@ -270,8 +278,8 @@ in the range the span started; a run before the range does not count its spans.
 - `last_activity_at` is the later of the two, and `null` when the agent has neither in the range.
 - `name` is the name as the agent's latest run in the range is spelled (the greatest `started_at`,
   and the greatest id among runs that started together), or as its latest delegated span is spelled
-  when it has no run of its own. `agent_class` and `type` (`agent`, or `embedding` for a run of
-  embeddings) are that latest run's. For an agent that has only delegated spans, `agent_class` is the
+  when it has no run of its own. `agent_class` and `type` (the latest root operation type) are that
+  latest run's. For an agent that has only delegated spans, `agent_class` is the
   latest span's and `type` is `agent`.
 - Names are grouped as the database compares text, so what is counted for a name is what
   [`GET /api/traces`](#get-apitraces) returns for `agent=<name>`: `top_level.runs` is exactly its
@@ -502,8 +510,8 @@ stored, and `span_id` the span linked to the call with the same id, else `null`.
 
 ## The span
 
-One span of a run: an agent's prompt, a model call, a tool call or an embeddings call. Every type
-has this one shape.
+One span of a run: an agent's prompt, a model step, a tool call, embeddings, classification or
+reranking. Every type has this one shape.
 
 ```json
 {
@@ -549,8 +557,8 @@ has this one shape.
 }
 ```
 
-- `type` is `agent`, `step`, `tool` or `embedding`. Steps and tools are children of their agent's
-  span. An agent that another agent delegated to is the child of the tool span that started it. An
+- `type` is `agent`, `step`, `tool`, `embedding`, `classification` or `reranking`. Steps and tools
+  are children of their agent's span. An agent that another agent delegated to is the child of the tool span that started it. An
   embeddings call made inside a tool is the child of that tool span. An embeddings call made on its
   own is the whole run, and its span has no parent.
 - `sequence` is the order the spans were recorded in. `attempt` is the attempt of the run the span
@@ -566,8 +574,8 @@ has this one shape.
   is never worked out from the dates. `offset_ms` is the span's own start minus the run's start,
   in milliseconds, signed and not clamped. It is `0` for the run's own agent span, and a span whose
   start was worked out after the fact could in principle come out before the run's.
-- `usage` and `cost` are `null` on agent and tool spans (see above). On a step or an embedding they
-  are the same objects a run has, in the span's own state.
+- `usage` and `cost` are `null` on agent and tool spans (see above). On a billable operation they
+  are the same direct usage and cost objects a run has, in the span's own state.
 - `error` is `{ "class", "message", "source", "http_status" }`, each part `null` when not recorded,
   and `null` itself when the span did not fail. `source` is `step`, `tool` or `run`. A failed
   attempt of a failover keeps its error on the step that failed. A sub-agent that failed has its
@@ -1047,12 +1055,12 @@ the same time range.
   any span with that provider and model, an agent span (the run's own or a delegated agent's, which
   record the model they asked for) included, as the runs list's `provider` and `model` filters keep
   them. A span missing either its provider or its model is in no row. `steps` counts the spans that
-  called the model: model steps and embeddings calls, the only spans that carry usage. A model that
+  called the model: model steps, embeddings, classification and reranking calls. A model that
   only agent spans asked for is still a row, with `steps` `0`, a `usage` that is `not_reported` and a
   `cost` that is `not_captured`. A tool's `calls` counts tool spans, `failed` those that failed, and
   `runs` the distinct runs that called it.
 - `GET /api/traces` with a row's `filters` and the same range returns exactly the row's `runs`.
-- A model's `usage` and `cost` are sums over its step and embeddings spans, shaped as a run's are:
+- A model's `usage` and `cost` are sums over its billable operation spans. Grouped `usage` remains token-only:
   `cost` is `partial` when some of those spans reported usage and could not be priced, and `pending`
   while one of them is running (a span still running after `stale_after` seconds is not).
 - `delegated.models` and `delegated.tools` are read over the steps, embeddings calls and tools that
@@ -1089,7 +1097,8 @@ be counted and priced. It takes a time range and nothing else: any other paramet
   [`GET /api/overview`](#get-apioverview) reads it: for any range it is exactly the overview's
   `data.summary`, and a range over 92 days is the same 422.
 - `coverage` counts the steps of those runs, in the models of the per-run summary. `steps` is the
-  steps and embeddings calls recorded, `reported_steps` those that reported any token count, and
+  billable calls recorded (steps, embeddings, classification and reranking), `reported_steps` those
+  that reported any token count or search-unit quantity, and
   `unpriced_steps` those that reported usage and could not be priced. `unpriced_tokens` is the input
   and output tokens of the unpriced steps added up. Every step counts, one recorded without its
   provider or its model included. Coverage is counted in steps and tokens and never as a share of money.
@@ -1128,8 +1137,8 @@ What the runs of a time range used, by model, by provider or by agent. Takes a t
   `model` has `provider` and `model`, a row of `provider` has `provider` and no `model`, and a row of
   `agent` has `agent` and neither. Every row has `steps`, `runs`, `usage`, `cost`, `coverage` and
   `filters`.
-- `steps` counts the steps and embeddings calls, the only spans that carry usage. `usage` and `cost`
-  are their sums, shaped as a run's are: a count nobody reported is `null`, `cost` is `partial` when
+- `steps` counts billable calls: steps, embeddings, classification and reranking. Grouped `usage`
+  remains token-only; `cost` sums the recorded amounts: a count nobody reported is `null`, `cost` is `partial` when
   some steps that reported usage could not be priced (the amount covers the others), `unpriced` with
   an amount of `null`, never `0`, when none could be, and `not_captured` when no usage was reported.
   A rate of `0` is a price: the amount is `0` and the state `estimated`.
@@ -1864,3 +1873,34 @@ Removes a model's saved price, and answers `200` with the price as it now resolv
 - Recorded costs and the other processes' copies of the prices are as for `PUT`: a long-lived
   process that prices runs reads the table again when its copy is more than 60 seconds old.
 - Access and the request-forgery protection are as for `PUT`.
+
+
+## v0.3 capability additions
+
+`operation_type=agent|embedding|classification|reranking` filters the root operation on trace list,
+status counts, neighbours and CSV exports. It does not match a child operation. Meta publishes the
+four supported root values. Boost trace listing accepts the same filter.
+
+Span detail adds nullable `billing_basis` (`input_tokens` or `search_units`). Direct usage exposes
+exact six-place `search_units` strings, including `0.000000`; missing is null. Token aggregate
+contracts remain unchanged. Usage coverage adds `calls`, `reported_calls` and `unpriced_calls` aliases
+while retaining the legacy `steps` keys. Usage breakdown rows add `calls` and independent `units`:
+
+- `assessment`: `assessed`, `partial` (some historical rows), or `not_assessed`.
+- `search_units`, `unpriced_search_units`: exact strings or null; overflow stays unavailable.
+- `search_unit_calls`, `reported_search_unit_calls`, `unpriced_search_unit_calls`: known expected,
+  measured and unpriced unit call counts. Ambiguous reranking calls are counted separately.
+- `unknown_cost_calls`: calls without a cost or reported usage; disjoint from reported unpriced calls.
+- `incomplete_calls`: effective incomplete billable calls, including stale calls before sweep.
+- `ambiguous_reranking_calls`: calls with neither a selected billing basis nor measured search units.
+
+Null assessment counts denote historical evidence that was never assessed. Mixed history preserves
+known counts and quantities and labels the assessment Partial. Trace CSV appends `search_units`.
+Usage CSV appends calls, unit evidence and coverage; existing column order, formula protection,
+headers and limits remain intact. Missing quantities are empty cells.
+
+Price responses add a `reranking` group with `rates: {basis, input, search_unit}`, source, inherited
+`via`, default and its own saved timestamp. `PUT /prices` accepts `{reranking: {...}}` independently
+from token fields. `reranking: null` explicitly clears that group. Decimal rules are unchanged:
+nonnegative plain decimal text, at most six places and `999999.999999`. No implicit rounding.
+`DELETE /prices?group=tokens|reranking` resets only that group. DELETE with no group resets both.

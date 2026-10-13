@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
     agentInput,
+    inputShape,
+    outputShape,
     agentOutput,
     embeddingInput,
     embeddingOutput,
@@ -12,6 +14,28 @@ import {
 } from '@/components/telemetry/payload-shape'
 
 const kind = (shape: Shape<unknown>) => shape.kind
+
+describe('capability payload fallback', () => {
+    it.each(['classification', 'reranking'] as const)(
+        'keeps %s evidence whole without assuming a schema',
+        (type) => {
+            for (const value of [
+                'example',
+                { result: 'example' },
+                [0, 1],
+                false,
+                0,
+            ]) {
+                expect(inputShape({ type, input: value }).kind).toBe('whole')
+                expect(outputShape({ type, output: value }).kind).toBe('whole')
+            }
+            for (const value of [null, {}]) {
+                expect(inputShape({ type, input: value }).kind).toBe('none')
+                expect(outputShape({ type, output: value }).kind).toBe('none')
+            }
+        },
+    )
+})
 
 describe('agent input', () => {
     it('is typed with a prompt, a system prompt or attachments', () => {

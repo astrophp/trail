@@ -80,7 +80,7 @@ final class AgentBreakdown
         $reported = SpanSql::reported($alias);
 
         if (! $anySpan) {
-            $spans->whereIn("{$alias}.type", [SpanType::Step->value, SpanType::Embedding->value]);
+            $spans->whereRaw($bills);
         }
 
         return array_values($spans
@@ -95,7 +95,7 @@ final class AgentBreakdown
             ->selectRaw("sum(case when {$bills} then {$alias}.reasoning_tokens end) as reasoning_tokens")
             ->selectRaw("sum(case when {$bills} then {$alias}.cost end) as cost_sum")
             // A step that reported usage and could not be priced, as a run's unpriced count has it.
-            ->selectRaw("sum(case when {$bills} and {$alias}.cost is null and {$reported} then 1 else 0 end) as unpriced")
+            ->selectRaw("sum(case when {$bills} and ({$alias}.cost is null or {$alias}.status in ('running', 'incomplete')) then 1 else 0 end) as unpriced")
             ->selectRaw("sum(case when {$bills} and {$alias}.status = ? and {$alias}.created_at >= ? then 1 else 0 end) as running", [$running, $cutoff])
             ->groupBy("{$alias}.provider", "{$alias}.model")
             ->orderByRaw("count(distinct {$alias}.trace_id) desc")

@@ -11,6 +11,8 @@ const cases: [SpanType, string][] = [
     ['step', 'Model step'],
     ['tool', 'Tool'],
     ['embedding', 'Embedding'],
+    ['classification', 'Classification'],
+    ['reranking', 'Reranking'],
 ]
 
 describe('SpanTypeIcon', () => {

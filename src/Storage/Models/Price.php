@@ -13,6 +13,9 @@ use Illuminate\Support\Carbon;
  * @property float|null $output
  * @property float|null $cache_read
  * @property float|null $cache_write
+ * @property string|null $reranking_basis
+ * @property float|null $reranking_input
+ * @property float|null $reranking_search_unit
  * @property Carbon $created_at
  * @property Carbon $updated_at
  */
@@ -37,6 +40,9 @@ class Price extends Model
     protected function casts(): array
     {
         return [
+            'reranking_basis' => 'string',
+            'reranking_input' => 'float',
+            'reranking_search_unit' => 'float',
             'input' => 'float',
             'output' => 'float',
             'cache_read' => 'float',

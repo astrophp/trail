@@ -16,6 +16,9 @@ export function agentRole(agent: Agent): string | null {
         return 'Embeddings'
     }
 
+    if (agent.type === 'classification') return 'Classification calls'
+    if (agent.type === 'reranking') return 'Reranking calls'
+
     const own = agent.top_level !== null
     const delegated = agent.delegated !== null
 

@@ -251,3 +251,12 @@ and caveats:
 - The process has not reached a flush point yet ([What is recorded](recording.md#when-it-is-written)).
 - The operation is one Trail does not record ([What is recorded](recording.md#what-is-not-recorded)).
 - The dashboard shows the last 24 hours by default. Widen its range.
+
+
+### Capability release rollout
+
+For v0.3.0 use the coordinated [upgrade procedure](installation.md#upgrading-v020-to-v030): pause the
+fleet, drain calls, deploy and migrate, rebuild caches, restart workers/Octane, verify, then resume.
+Sweeping changes stale Running calls to Incomplete and preserves unknown timing, payload and usage.
+Repeated and partial sweeps are idempotent; provisional cost gaps are recorded before sweep so the
+cost state agrees with the effective stale reader.

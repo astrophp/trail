@@ -4,7 +4,13 @@ import { TableCell, TableHead, TableRow } from '@/components/ui/table'
 import { UsageCounts } from '@/features/trace/usage-counts'
 
 /** An agent's own usage, without the agents it delegated to, as the server counted it. */
-export function UsageSubtotalRow({ agent }: { agent: AgentSubtotal }) {
+export function UsageSubtotalRow({
+    agent,
+    showSearchUnits,
+}: {
+    agent: AgentSubtotal
+    showSearchUnits?: boolean
+}) {
     return (
         <TableRow className="bg-muted/50 font-medium">
             <TableHead
@@ -17,7 +23,10 @@ export function UsageSubtotalRow({ agent }: { agent: AgentSubtotal }) {
                     own, without delegated agents
                 </span>
             </TableHead>
-            <UsageCounts usage={agent.usage} />
+            <UsageCounts
+                usage={agent.usage}
+                showSearchUnits={showSearchUnits}
+            />
             <TableCell className="text-end">
                 <CostValue cost={agent.cost} className="items-end" />
             </TableCell>

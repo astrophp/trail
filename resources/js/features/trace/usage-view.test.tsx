@@ -1,7 +1,13 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentSubtotal, Cost, Span, Usage, UsageRow } from '@/api/types'
+import type {
+    AgentSubtotal,
+    Cost,
+    Span,
+    DirectUsage,
+    UsageRow,
+} from '@/api/types'
 import { formatCost } from '@/lib/format'
 import { appReady, renderApp } from '@/test/render-app'
 import {
@@ -13,6 +19,69 @@ import {
 } from '@/test/trace-api'
 
 const id = '0199c2f4-6a1e-7c3b-9a55-0e8a4c1d2f30'
+
+it('shows search-unit totals and rows independently of unreported tokens', async () => {
+    const quantity: DirectUsage = {
+        state: 'reported',
+        search_units: '0.100001',
+        input_tokens: null,
+        output_tokens: null,
+        cache_read_tokens: null,
+        cache_write_tokens: null,
+        reasoning_tokens: null,
+        total_tokens: null,
+    }
+    const cost = { state: 'unpriced', amount: null } as const
+    await openUsage(
+        makeDetail({
+            trace: { id },
+            spans: [
+                makeAgentSpan('root', { sequence: 1 }),
+                makeStepSpan('rank', {
+                    sequence: 2,
+                    type: 'reranking',
+                    name: 'rank',
+                    step_number: null,
+                    parent_id: 'root',
+                    usage: quantity,
+                    cost,
+                }),
+            ],
+            agents: [
+                {
+                    span_id: 'root',
+                    name: 'Support agent',
+                    usage: quantity,
+                    cost,
+                },
+            ],
+            usage: {
+                totals: { usage: quantity, cost },
+                rows: [
+                    row('rank', {
+                        type: 'reranking',
+                        name: 'rank',
+                        step_number: null,
+                        usage: quantity,
+                        cost,
+                    }),
+                ],
+            },
+        }),
+    )
+    expect(tokens().getByText('Search units')).toBeInTheDocument()
+    expect(tokens().getByText('0.100001')).toBeInTheDocument()
+    expect(
+        table().getByRole('columnheader', { name: 'Search units' }),
+    ).toBeInTheDocument()
+    expect(table().getAllByText('0.100001')).toHaveLength(1)
+    expect(
+        table().getByRole('button', {
+            name: /rank.*Open in the execution tree/,
+        }),
+    ).toBeInTheDocument()
+    expect(table().queryByText('0 tokens')).not.toBeInTheDocument()
+})
 
 beforeEach(() => {
     window.Trail = {
@@ -26,13 +95,17 @@ afterEach(() => {
     delete window.Trail
 })
 
-const reported = (input: number | null, output: number | null): Usage => ({
+const reported = (
+    input: number | null,
+    output: number | null,
+): DirectUsage => ({
     state: 'reported',
     input_tokens: input,
     output_tokens: output,
     cache_read_tokens: null,
     cache_write_tokens: null,
     reasoning_tokens: null,
+    search_units: null,
     total_tokens: null,
 })
 
@@ -72,7 +145,7 @@ const cost = tokens
 const costRow = () =>
     cost().getByText('Estimated cost', { selector: 'dt' }).parentElement!
 const table = () =>
-    within(screen.getByRole('table', { name: 'Steps and embeddings' }))
+    within(screen.getByRole('table', { name: 'Billable calls' }))
 const bodyRows = () =>
     table()
         .getAllByRole('row')
@@ -94,6 +167,7 @@ describe('the usage tab: totals', () => {
                             cache_read_tokens: 300,
                             cache_write_tokens: 50,
                             reasoning_tokens: 120,
+                            search_units: null,
                             total_tokens: 1400,
                         },
                         cost: estimated(0.0466),
@@ -123,6 +197,7 @@ describe('the usage tab: totals', () => {
                     totals: {
                         usage: {
                             ...reported(7777, 3333),
+                            search_units: null,
                             total_tokens: 99_999,
                         },
                         cost: estimated(0.5),
@@ -162,6 +237,7 @@ describe('the usage tab: totals', () => {
                         usage: {
                             ...reported(555, 66),
                             state: 'pending',
+                            search_units: null,
                             total_tokens: 621,
                         },
                         cost: { state: 'pending', amount: 0.77 },
@@ -196,6 +272,7 @@ describe('the usage tab: totals', () => {
                             cache_read_tokens: null,
                             cache_write_tokens: null,
                             reasoning_tokens: null,
+                            search_units: null,
                             total_tokens: 10,
                         },
                         cost: estimated(0.01),
@@ -223,7 +300,7 @@ describe('the usage tab: estimated cost', () => {
         ],
         [
             { state: 'partial', amount: 0.02 },
-            'Covers only the steps and embeddings that could be priced.',
+            'Covers only the calls that could be priced.',
             formatCost(0.02),
         ],
         [
@@ -662,9 +739,7 @@ describe('the usage tab: usage by span', () => {
         )
 
         expect(
-            screen.getByText(
-                'No model steps or embeddings were recorded for this run.',
-            ),
+            screen.getByText('No billable calls were recorded for this run.'),
         ).toBeInTheDocument()
         expect(screen.queryByRole('table')).not.toBeInTheDocument()
         expect(
@@ -704,7 +779,7 @@ describe('the usage tab: reading the table', () => {
         ])
         expect(table().getAllByRole('rowheader')).toHaveLength(2)
         expect(
-            screen.queryByRole('region', { name: 'Steps and embeddings' }),
+            screen.queryByRole('region', { name: 'Billable calls' }),
         ).not.toBeInTheDocument()
         expect(
             screen.getByRole('region', { name: 'Usage by span' }),
@@ -931,7 +1006,7 @@ describe('the usage tab: cost across a cut and unnamed models', () => {
 
 describe('the usage tab: a run still running', () => {
     it('reads Pending for the run, the running step and the agent subtotals, and shows the finished step as it is', async () => {
-        const pending = (input: number): Usage => ({
+        const pending = (input: number): DirectUsage => ({
             ...reported(input, null),
             state: 'pending',
         })

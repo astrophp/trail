@@ -19,7 +19,9 @@
         "agent",
         "step",
         "tool",
-        "embedding"
+        "embedding",
+        "classification",
+        "reranking"
     ],
     "error_source": [
         "step",

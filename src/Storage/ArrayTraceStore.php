@@ -420,6 +420,7 @@ class ArrayTraceStore implements TraceStore
             errorHttpStatus: $r->errorHttpStatus,
             durationMs: $r->durationMs,
             endedAt: $r->endedAt,
+            searchUnits: $r->searchUnits,
         );
     }
 }

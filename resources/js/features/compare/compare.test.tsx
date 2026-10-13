@@ -1,7 +1,7 @@
 import { screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Span, SpanLimit, Trace, Usage } from '@/api/types'
+import type { Span, SpanLimit, Trace, DirectUsage } from '@/api/types'
 import { forgetRefreshFailures } from '@/features/trace/use-trace'
 import { formatCost, formatDuration } from '@/lib/format'
 import { appReady, renderApp } from '@/test/render-app'
@@ -30,13 +30,14 @@ afterEach(() => {
     vi.restoreAllMocks()
 })
 
-const reported = (input: number, output: number): Usage => ({
+const reported = (input: number, output: number): DirectUsage => ({
     state: 'reported',
     input_tokens: input,
     output_tokens: output,
     cache_read_tokens: null,
     cache_write_tokens: null,
     reasoning_tokens: null,
+    search_units: null,
     total_tokens: input + output,
 })
 
@@ -161,6 +162,7 @@ describe('comparing two runs', () => {
                     state: 'not_reported',
                     input_tokens: null,
                     output_tokens: null,
+                    search_units: null,
                     total_tokens: null,
                 },
                 cost: { state: 'unpriced', amount: null },
@@ -173,6 +175,7 @@ describe('comparing two runs', () => {
                     state: 'pending',
                     input_tokens: null,
                     output_tokens: null,
+                    search_units: null,
                     total_tokens: null,
                 },
                 cost: { state: 'pending', amount: null },

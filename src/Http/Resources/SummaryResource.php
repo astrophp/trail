@@ -75,6 +75,6 @@ final class SummaryResource
      */
     public static function cost(RunFigures $figures, bool $running): array
     {
-        return Cost::of($figures->costAmount(), $figures->unpricedSpans, $running);
+        return Cost::of($figures->costAmount(), max($figures->unpricedSpans, $figures->costGapCalls), $running);
     }
 }

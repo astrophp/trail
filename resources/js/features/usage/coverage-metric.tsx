@@ -32,13 +32,57 @@ export function CoverageMetric({
     const pending =
         summary.cost.state === 'pending' || summary.usage.state === 'pending'
 
+    const unknown = coverage.units?.unknown_cost_calls ?? 0
+    const incomplete = coverage.units?.incomplete_calls ?? 0
+    if (unknown > 0 || incomplete > 0) {
+        return (
+            <Metric
+                label="Pricing coverage"
+                detail={
+                    [
+                        unpriced_steps > 0
+                            ? plural(
+                                  unpriced_steps,
+                                  'reported unpriced call',
+                                  'reported unpriced calls',
+                              )
+                            : null,
+                        incomplete > 0 && unknown > 0
+                            ? plural(
+                                  incomplete,
+                                  'incomplete call',
+                                  'incomplete calls',
+                              )
+                            : null,
+                    ]
+                        .filter(Boolean)
+                        .join(' · ') || undefined
+                }
+            >
+                <span className="text-ui font-normal">
+                    {unknown > 0
+                        ? plural(
+                              unknown,
+                              'call without reported usage',
+                              'calls without reported usage',
+                          )
+                        : plural(
+                              incomplete,
+                              'incomplete call',
+                              'incomplete calls',
+                          )}
+                    {pending ? ' so far' : ''}
+                </span>
+            </Metric>
+        )
+    }
     if (unpriced_runs === 0 && unpriced_steps === 0) {
         return (
             <Metric label="Pricing coverage">
                 <span className="text-ui font-normal">
                     {reported_steps === 0
-                        ? 'No step reported usage'
-                        : `Every step that reported usage was priced${pending ? ' so far' : ''}`}
+                        ? 'No call reported usage'
+                        : `Every call that reported usage was priced${pending ? ' so far' : ''}`}
                 </span>
             </Metric>
         )
@@ -46,7 +90,7 @@ export function CoverageMetric({
 
     const known = [
         unpriced_runs > 0 && unpriced_steps > 0
-            ? plural(unpriced_steps, 'step', 'steps')
+            ? plural(unpriced_steps, 'call', 'calls')
             : null,
         unpriced_tokens !== null && unpriced_tokens > 0
             ? `${formatTokens(unpriced_tokens)} ${unpriced_tokens === 1 ? 'token' : 'tokens'}`
@@ -78,7 +122,7 @@ export function CoverageMetric({
         >
             {unpriced_runs > 0
                 ? plural(unpriced_runs, 'unpriced run', 'unpriced runs')
-                : plural(unpriced_steps, 'unpriced step', 'unpriced steps')}
+                : plural(unpriced_steps, 'unpriced call', 'unpriced calls')}
         </Metric>
     )
 }

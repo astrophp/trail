@@ -54,6 +54,9 @@ final class SpanDraft
         public ?float $durationMs = null,
         public ?DateTimeInterface $endedAt = null,
         public ?float $openedAt = null,
+        public string|int|float|null $searchUnits = null,
+        public ?string $billingBasis = null,
+        public bool $pricingAssessed = false,
     ) {}
 
     /**
@@ -170,6 +173,8 @@ final class SpanDraft
             errorHttpStatus: $this->errorHttpStatus,
             durationMs: $this->durationMs,
             endedAt: $this->endedAt,
+            searchUnits: $this->searchUnits,
+            billingBasis: $this->billingBasis,
         );
     }
 }

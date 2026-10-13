@@ -507,7 +507,7 @@ describe('resetting', () => {
         expect(priceWrites(fetchMock)).toEqual([
             {
                 method: 'DELETE',
-                url: '/trail/api/prices?provider=openai&model=gpt-5',
+                url: '/trail/api/prices?provider=openai&model=gpt-5&group=tokens',
                 body: undefined,
                 csrf: 'token',
             },

@@ -5,6 +5,7 @@ import { AttemptLabel } from '@/components/telemetry/attempt-label'
 import { CostValue } from '@/components/telemetry/cost-value'
 import { DurationValue } from '@/components/telemetry/duration-value'
 import { RespondingModel } from '@/components/telemetry/responding-model'
+import { SearchUnitValue } from '@/components/telemetry/search-unit-value'
 import { SpanTypeIcon } from '@/components/telemetry/span-type-icon'
 import { StatusBadge } from '@/components/telemetry/status-badge'
 import { TokenValue } from '@/components/telemetry/token-value'
@@ -23,6 +24,8 @@ const kinds: Record<SpanType, string> = {
     step: 'Model step',
     tool: 'Tool call',
     embedding: 'Embedding',
+    classification: 'Classification',
+    reranking: 'Reranking',
 }
 
 type SpanHeaderProps = {
@@ -116,6 +119,15 @@ export function SpanHeader({
                             <CostValue cost={billing.cost} />
                             {own ? 'own cost' : 'cost'}
                         </span>
+                        {billing.usage.search_units !== null ? (
+                            <span className="inline-flex items-baseline gap-1">
+                                <SearchUnitValue
+                                    count={billing.usage.search_units}
+                                    pending={billing.usage.state === 'pending'}
+                                />
+                                {own ? 'own search units' : 'search units'}
+                            </span>
+                        ) : null}
                     </>
                 ) : null}
                 <RespondingModel

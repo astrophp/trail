@@ -14,8 +14,8 @@ final class UsageResource
 {
     /**
      * @param  array<string, mixed>  $summary  the summary of the range, as the overview sends it
-     * @param  array{steps: int, reported_steps: int, unpriced_steps: int, unpriced_tokens: ?int}  $coverage
-     * @return array{summary: array<string, mixed>, coverage: array{steps: int, reported_steps: int, unpriced_steps: int, unpriced_tokens: ?int}}
+     * @param  array<string, mixed>  $coverage
+     * @return array{summary: array<string, mixed>, coverage: array<string, mixed>}
      */
     public static function totals(array $summary, array $coverage): array
     {
@@ -53,6 +53,8 @@ final class UsageResource
         $tokens = $group->tokens;
 
         $figures = [
+            'calls' => $group->steps,
+            'units' => $group->units,
             'steps' => $group->steps,
             'runs' => $group->runs,
             'usage' => Usage::of($group->running, $tokens['input'], $tokens['output'], $tokens['cache_read'], $tokens['cache_write'], $tokens['reasoning']),

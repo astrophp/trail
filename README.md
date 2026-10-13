@@ -161,7 +161,7 @@ repository that runs scripted agents.
 ### Capture
 
 - Records agent runs, including streamed and queued ones, with their model steps, tool calls,
-  sub-agents, embeddings, provider failover and tool-approval pauses, in one trace per run.
+  sub-agents, embeddings, classification, reranking, provider failover and tool-approval pauses, in one trace per run.
 - Records real timing, token usage (cache and reasoning tokens included) and failure details, and
   shows anything it could not capture as missing (`Not captured`, `Pending`, `Unpriced`,
   `Incomplete`), never as zero.
@@ -189,8 +189,8 @@ repository that runs scripted agents.
 
 - It is not billing, and its costs are estimates from list prices. The default prices use base
   rates and do not model long-context surcharges.
-- It records agent runs and embeddings. It does not record classification, images, audio,
-  transcription or reranking.
+- It records agent runs, embeddings, classification and reranking. Images, audio and
+  transcription are not recorded.
 - It records only what the SDK reports through events. The extra model call that titles a new
   conversation, and embeddings served from the SDK's cache, are not recorded.
 - A run that resumes a tool-approval pause is a separate trace from the run that paused. They are

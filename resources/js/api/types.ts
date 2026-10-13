@@ -44,6 +44,23 @@ export type Usage = {
     total_tokens: number | null
 }
 
+/** Direct run/span evidence; aggregate usage retains its token-only shape. */
+export type DirectUsage = {
+    state: UsageState
+    input_tokens: number | null
+    output_tokens: number | null
+    cache_read_tokens: number | null
+    cache_write_tokens: number | null
+    reasoning_tokens: number | null
+    total_tokens: number | null
+    search_units: string | null
+}
+
+export type OperationType =
+    'agent' | 'embedding' | 'classification' | 'reranking'
+export type BillableSpanType =
+    'step' | 'embedding' | 'classification' | 'reranking'
+
 /** `name` and `email` are `null` when the user can no longer be resolved. */
 export type User = {
     id: string
@@ -55,7 +72,7 @@ export type User = {
 /** One run, as every endpoint returns it. Dates are ISO 8601 in UTC. */
 export type Trace = {
     id: string
-    type: 'agent' | 'embedding'
+    type: OperationType
     name: string
     agent_class: string | null
     status: Status
@@ -66,7 +83,7 @@ export type Trace = {
     provider: string | null
     model: string | null
     duration_ms: number | null
-    usage: Usage
+    usage: DirectUsage
     cost: Cost
     span_count: number
     prompt_excerpt: string | null
@@ -103,6 +120,7 @@ export type Meta = {
     stale_after: number
     traces: { any: boolean; running: number }
     filters: {
+        operation_types?: OperationType[]
         agents: string[]
         providers: string[]
         models: { provider: string; model: string }[]
@@ -288,7 +306,7 @@ export type AgentDelegated = {
 export type Agent = {
     name: string
     agent_class: string | null
-    type: 'agent' | 'embedding'
+    type: OperationType
     top_level: AgentTopLevel | null
     delegated: AgentDelegated | null
     /** The later of the two; `null` when the agent has neither in the range. */
@@ -396,7 +414,26 @@ export type UsageRowCoverage = {
 }
 
 /** What the steps of a range add up to, beyond the summary of its runs. */
-export type UsageCoverage = Flat<UsageRowCoverage & { steps: number }>
+export type UnitUsage = {
+    assessment: 'assessed' | 'partial' | 'not_assessed'
+    search_units: string | null
+    search_unit_calls: number | null
+    reported_search_unit_calls: number | null
+    unpriced_search_unit_calls: number | null
+    unpriced_search_units: string | null
+    unknown_cost_calls: number | null
+    incomplete_calls: number | null
+    ambiguous_reranking_calls: number | null
+}
+export type UsageCoverage = Flat<
+    UsageRowCoverage & {
+        steps: number
+        calls?: number
+        reported_calls?: number
+        unpriced_calls?: number
+        units?: UnitUsage
+    }
+>
 
 /** The usage page's totals: the summary of the range's runs, and how much of its usage was priced. */
 export type UsageResponse = {
@@ -406,6 +443,8 @@ export type UsageResponse = {
 
 /** What every row of the usage breakdown shares, whatever it groups by. */
 type UsageRowFigures = {
+    calls?: number
+    units?: UnitUsage
     steps: number
     runs: number
     usage: Usage
@@ -533,6 +572,23 @@ export type PriceDefault = {
 }
 
 /** A model, what it is priced at now and where that comes from. */
+export type RerankingRates = {
+    basis: 'input_tokens' | 'search_units' | null
+    input: number | null
+    search_unit: number | null
+}
+export type RerankingPrice = {
+    rates: RerankingRates
+    source: PriceSource
+    via: PriceVia | null
+    default: {
+        source: Exclude<PriceSource, 'saved'>
+        via: PriceVia | null
+        rates: RerankingRates
+    }
+    saved_at: string | null
+}
+
 export type Price = {
     provider: string
     model: string
@@ -540,6 +596,7 @@ export type Price = {
     source: PriceSource
     via: PriceVia | null
     default: PriceDefault
+    reranking?: RerankingPrice
     /** A step or an embedding was recorded with exactly this provider and model. */
     observed: boolean
     /** When the saved price was last written; `null` when the model has none. */
@@ -565,7 +622,7 @@ export type TraceNeighboursResponse = {
     data: TraceNeighbours
 }
 
-export type SpanType = 'agent' | 'step' | 'tool' | 'embedding'
+export type SpanType = 'agent' | 'tool' | BillableSpanType
 
 export type ErrorSource = 'step' | 'tool' | 'run'
 
@@ -605,12 +662,13 @@ export type Span = {
     step_number: number | null
     provider: string | null
     model: string | null
+    billing_basis?: 'input_tokens' | 'search_units' | null
     responding_model: string | null
     duration_ms: number | null
     offset_ms: number
     started_at: string
     ended_at: string | null
-    usage: Usage | null
+    usage: DirectUsage | null
     cost: SpanCost | null
     error: TraceError | null
     input: JsonValue
@@ -640,13 +698,13 @@ export type TraceDetail = {
 export type UsageRow = {
     span_id: string
     agent_span_id: string | null
-    type: 'step' | 'embedding'
+    type: BillableSpanType
     name: string
     attempt: number
     step_number: number | null
     provider: string | null
     model: string | null
-    usage: Usage
+    usage: DirectUsage
     cost: SpanCost
 }
 
@@ -654,13 +712,13 @@ export type UsageRow = {
 export type AgentSubtotal = {
     span_id: string
     name: string
-    usage: Usage
+    usage: DirectUsage
     cost: Cost
 }
 
 /** The totals are the run's; the rows and the subtotals describe the spans returned. */
 export type TraceUsageBreakdown = {
-    totals: { usage: Usage; cost: Cost }
+    totals: { usage: DirectUsage; cost: Cost }
     rows: UsageRow[]
     agents: AgentSubtotal[]
 }

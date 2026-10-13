@@ -29,7 +29,7 @@ final class TraceIndex
     private const COLUMNS = [
         'id', 'type', 'name', 'agent_class', 'status', 'streamed', 'recovered', 'child_failed', 'issue_kind',
         'provider', 'model', 'conversation_id', 'user_id', 'user_type',
-        'input_tokens', 'output_tokens', 'cache_read_tokens', 'cache_write_tokens', 'reasoning_tokens',
+        'input_tokens', 'output_tokens', 'cache_read_tokens', 'cache_write_tokens', 'reasoning_tokens', 'search_units', 'unknown_cost_calls', 'cost_gap_calls',
         'cost', 'span_count', 'unpriced_span_count', 'duration_ms', 'prompt_excerpt', 'response_excerpt',
         'started_at', 'ended_at', 'created_at',
     ];
@@ -322,6 +322,7 @@ final class TraceIndex
             ->when($filters->streamed, fn (Builder $query) => $query->where('streamed', true))
             ->when($filters->recovered, fn (Builder $query) => $query->where('recovered', true))
             ->when($filters->childFailed, fn (Builder $query) => $query->where('child_failed', true))
+            ->when($filters->operationType, fn (Builder $query) => $query->where('type', $filters->operationType?->value))
             ->when($filters->unpriced, fn (Builder $query) => $query->where('unpriced_span_count', '>', 0))
             ->when($filters->bookmarked, fn (Builder $query) => $query->whereIn('id', Bookmark::query()->select('trace_id')));
 

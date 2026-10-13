@@ -209,6 +209,7 @@ it('ignores a late running write to a final trace and span', function (array $pa
         'input_tokens' => 15,
         'span_count' => 2,
         'unpriced_span_count' => 2,
+        'cost_gap_calls' => 2,
         'updated_at' => '2026-03-01 10:10:00.000',
     ]))
         ->and($probe->trace('trace-1')['status'] ?? null)->toBe('completed')
@@ -616,6 +617,9 @@ it('reads every populated field back as stored', function (array $pair) {
         'ended_at' => '2026-03-01 12:00:00.000',
         'created_at' => '2026-03-01 12:00:00.123',
         'updated_at' => '2026-03-01 12:00:00.123',
+        'search_units' => null,
+        'unknown_cost_calls' => 0,
+        'cost_gap_calls' => 0,
     ])->and($probe->spans('trace-1')[1])->toBe([
         'id' => 'span-1',
         'trace_id' => 'trace-1',
@@ -651,5 +655,7 @@ it('reads every populated field back as stored', function (array $pair) {
         'ended_at' => '2026-03-01 12:00:00.000',
         'created_at' => '2026-03-01 12:00:00.123',
         'updated_at' => '2026-03-01 12:00:00.123',
+        'search_units' => null,
+        'billing_basis' => null,
     ]);
 })->with('stores');

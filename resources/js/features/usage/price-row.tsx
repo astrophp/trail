@@ -1,3 +1,4 @@
+import { RerankingPriceEditor } from '@/features/usage/reranking-price-editor'
 import type { Price } from '@/api/types'
 import { Button } from '@/components/ui/button'
 import { TableCell, TableHead, TableRow } from '@/components/ui/table'
@@ -97,6 +98,7 @@ export function PriceRow({
                     <PriceSource price={price} />
                 </TableCell>
                 <TableCell className="px-4 py-3 text-right">
+                    <RerankingPriceEditor price={price} />
                     {draft ? null : (
                         <Button
                             ref={targetRef('edit')}

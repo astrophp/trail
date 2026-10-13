@@ -27,10 +27,13 @@ it('writes on the configured storage connection', function () {
         'trail.storage.connection' => 'trail_secondary',
     ]);
 
-    foreach (['traces', 'spans', 'trace_models', 'trace_tools'] as $table) {
+    foreach (['traces', 'spans', 'prices', 'trace_models', 'trace_tools'] as $table) {
         $migration = glob(dirname(__DIR__, 3)."/database/migrations/*_create_trail_{$table}_table.php")[0];
         (require $migration)->up();
     }
+
+    (require dirname(__DIR__, 3).'/database/migrations/2026_10_12_000007_add_capability_usage_and_prices.php')->up();
+    (require dirname(__DIR__, 3).'/database/migrations/2026_10_13_000008_add_capability_assessments.php')->up();
 
     app(TraceStore::class)->store(Records::trace(['id' => 'trace-1']), [Records::span('trace-1', ['id' => 'span-1'])]);
 

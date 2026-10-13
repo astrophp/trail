@@ -1,6 +1,12 @@
-import type { AgentSubtotal, Cost, Span, SpanCost, Usage } from '@/api/types'
+import type {
+    AgentSubtotal,
+    Cost,
+    Span,
+    SpanCost,
+    DirectUsage,
+} from '@/api/types'
 
-export type SpanBilling = { usage: Usage; cost: Cost | SpanCost }
+export type SpanBilling = { usage: DirectUsage; cost: Cost | SpanCost }
 
 /**
  * What a span used, as the server counted it. A step or an embedding carries its own. An agent's

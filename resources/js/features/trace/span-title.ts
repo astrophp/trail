@@ -32,6 +32,8 @@ export function spanSubtitle(
     switch (span.type) {
         case 'step':
         case 'embedding':
+        case 'classification':
+        case 'reranking':
             return span.model === null
                 ? { text: 'Not captured', mono: false }
                 : { text: span.model, mono: true }

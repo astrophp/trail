@@ -15,7 +15,7 @@ uses(RefreshDatabase::class);
 const TRAIL_NULLABLE_COLUMNS = [
     'input_tokens', 'output_tokens', 'cache_read_tokens', 'cache_write_tokens', 'reasoning_tokens',
     'cost', 'duration_ms', 'error_class', 'error_message', 'error_source', 'error_http_status',
-    'issue_kind', 'provider', 'model', 'metadata', 'ended_at', 'agent_class',
+    'issue_kind', 'provider', 'model', 'metadata', 'ended_at', 'agent_class', 'search_units',
 ];
 
 it('reads missing trace values back as null, never zero', function () {
@@ -82,7 +82,7 @@ it('stores the documented enum values', function () {
     expect(array_column(Status::cases(), 'value'))
         ->toBe(['running', 'completed', 'failed', 'incomplete', 'awaiting_approval'])
         ->and(array_column(SpanType::cases(), 'value'))
-        ->toBe(['agent', 'step', 'tool', 'embedding'])
+        ->toBe(['agent', 'step', 'tool', 'embedding', 'classification', 'reranking'])
         ->and(array_column(IssueKind::cases(), 'value'))
         ->toBe(['rate_limited', 'provider_overloaded', 'provider_connection', 'insufficient_credits', 'tool_error', 'exception', 'abandoned'])
         ->and(array_column(ErrorSource::cases(), 'value'))
@@ -158,4 +158,23 @@ it('follows the configured storage connection', function () {
 
     expect((new Trace)->getConnectionName())->toBe('trail_secondary')
         ->and((new Span)->getConnectionName())->toBe('trail_secondary');
+});
+
+it('casts optional reranking prices while preserving null and explicit zero', function () {
+    $price = Rows::price()->fresh();
+    expect($price->reranking_basis)->toBeNull()
+        ->and($price->reranking_input)->toBeNull()
+        ->and($price->reranking_search_unit)->toBeNull();
+
+    $price->update(['reranking_basis' => 'search_units', 'reranking_input' => null, 'reranking_search_unit' => 0]);
+    $price->refresh();
+    expect($price->reranking_basis)->toBe('search_units')
+        ->and($price->reranking_input)->toBeNull()
+        ->and($price->reranking_search_unit)->toBe(0.0);
+
+    $price->update(['reranking_basis' => 'tokens', 'reranking_input' => 1.123456, 'reranking_search_unit' => null]);
+    $price->refresh();
+    expect($price->reranking_basis)->toBe('tokens')
+        ->and($price->reranking_input)->toBe(1.123456)
+        ->and($price->reranking_search_unit)->toBeNull();
 });

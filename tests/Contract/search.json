@@ -21,7 +21,8 @@
                     "cache_read_tokens": null,
                     "cache_write_tokens": null,
                     "reasoning_tokens": null,
-                    "total_tokens": 1510
+                    "total_tokens": 1510,
+                    "search_units": null
                 },
                 "cost": {
                     "state": "estimated",
@@ -61,7 +62,8 @@
                     "cache_read_tokens": null,
                     "cache_write_tokens": null,
                     "reasoning_tokens": null,
-                    "total_tokens": null
+                    "total_tokens": null,
+                    "search_units": null
                 },
                 "cost": {
                     "state": "not_captured",

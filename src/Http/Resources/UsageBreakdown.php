@@ -66,8 +66,8 @@ final class UsageBreakdown
             $agents[] = [
                 'span_id' => $span->id,
                 'name' => $span->name,
-                'usage' => Usage::of($running, $totals->inputTokens, $totals->outputTokens, $totals->cacheReadTokens, $totals->cacheWriteTokens, $totals->reasoningTokens),
-                'cost' => Cost::of($totals->cost, $totals->unpricedSpanCount, $running),
+                'usage' => Usage::direct($running, $totals->inputTokens, $totals->outputTokens, $totals->cacheReadTokens, $totals->cacheWriteTokens, $totals->reasoningTokens, $totals->searchUnits),
+                'cost' => Cost::of($totals->cost, $totals->costGapCalls, $running),
             ];
         }
 

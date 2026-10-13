@@ -1,6 +1,8 @@
 import { tracesLink } from '@/api/traces-link'
 import { BusyRegion } from '@/components/patterns/busy-region'
 import { ErrorState } from '@/components/patterns/error-state'
+import { Metric } from '@/components/patterns/metric'
+import { SearchUnitValue } from '@/components/telemetry/search-unit-value'
 import { MetricStrip } from '@/components/patterns/metric-strip'
 import { MetricStripSkeleton } from '@/components/patterns/metric-strip-skeleton'
 import { RefreshNote } from '@/components/patterns/refresh-note'
@@ -73,6 +75,23 @@ export function UsageTotals({ usage, range, className }: UsageTotalsProps) {
                         unpricedRuns="hide"
                     />
                     <TokensMetric usage={summary.usage} />
+                    {coverage.units ? (
+                        <Metric
+                            label="Search units"
+                            detail={
+                                coverage.units.assessment === 'assessed'
+                                    ? `${coverage.units.reported_search_unit_calls ?? 0} of ${coverage.units.search_unit_calls ?? 0} unit calls reported`
+                                    : coverage.units.assessment === 'partial'
+                                      ? 'Some history was not assessed'
+                                      : 'Not assessed'
+                            }
+                        >
+                            <SearchUnitValue
+                                count={coverage.units.search_units}
+                                pending={summary.usage.state === 'pending'}
+                            />
+                        </Metric>
+                    ) : null}
                     <CoverageMetric
                         summary={summary}
                         coverage={coverage}

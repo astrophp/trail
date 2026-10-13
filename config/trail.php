@@ -186,6 +186,8 @@ return [
         'enabled' => true,
         'system_prompt' => true,
         'max_length' => 10000,
+        // Capability arrays are also bounded to 1000 values and 64 KiB across input and output.
+        'max_items' => 100,
     ],
 
     /*

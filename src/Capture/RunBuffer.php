@@ -27,6 +27,9 @@ final class RunBuffer
     /** @var array<string, true> the open embeddings calls of this trace */
     public array $embeddingIds = [];
 
+    /** @var array<string, true> */
+    public array $capabilityIds = [];
+
     /**
      * @param  array<string, mixed>|null  $metadata
      */

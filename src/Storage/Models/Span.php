@@ -21,6 +21,7 @@ use Illuminate\Support\Carbon;
  * @property string $name
  * @property string|null $agent_class
  * @property Status $status
+ * @property string|null $billing_basis
  * @property int $attempt
  * @property int $sequence
  * @property int|null $step_number
@@ -32,6 +33,7 @@ use Illuminate\Support\Carbon;
  * @property int|null $cache_read_tokens
  * @property int|null $cache_write_tokens
  * @property int|null $reasoning_tokens
+ * @property int|null $search_units Micro-units (six decimal places).
  * @property float|null $cost
  * @property array<array-key, mixed>|null $input
  * @property array<array-key, mixed>|null $output
@@ -91,6 +93,7 @@ class Span extends Model
             'cache_read_tokens' => 'integer',
             'cache_write_tokens' => 'integer',
             'reasoning_tokens' => 'integer',
+            'search_units' => 'integer',
             'cost' => 'float',
             'input' => 'array',
             'output' => 'array',

@@ -34,3 +34,20 @@ missing.
 To turn off the integration, set `TRAIL_BOOST_ENABLED=false` in the application's environment.
 Trail's dashboard and recording continue to work. Rebuild cached configuration after changing the
 setting.
+
+## Direct usage quantities
+
+The trace usage returned by `trail-list-traces`, `trail-show-trace`, and the turns of
+`trail-show-conversation` includes `search_units`: a six-place decimal string or `null`.
+Billable spans in `trail-show-trace` expose the same quantity. Tokens and search units stay
+separate. The range figures in `trail-usage-summary` expose token counts only. Span input, output and metadata remain omitted.
+
+
+### Classification and reranking
+
+All four tools use the same billable operation definitions and missing-evidence rules as the HTTP
+API. `trail-list-traces` accepts `operation_type` for the root operation. `trail-show-trace` includes
+classification/reranking spans and independent search-unit usage, while continuing to omit raw
+input, output and metadata. Usage summary retains legacy token fields and includes independent
+unit coverage and call aliases. Provider probabilities, scores and snippets are never treated as
+model quality metrics or reconstructed by the tools.
