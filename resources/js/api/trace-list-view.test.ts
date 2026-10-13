@@ -12,6 +12,7 @@ const read = (query: string) => readTraceListView(new URLSearchParams(query))
 
 const defaults: TraceListView = {
     range: '24h',
+    operation_type: 'all',
     sort: '-started_at',
     page: 1,
     status: 'all',
@@ -41,6 +42,7 @@ describe('readTraceListView', () => {
             ),
         ).toEqual({
             range: '7d',
+            operation_type: 'all',
             sort: '-cost',
             page: 3,
             status: 'failed',

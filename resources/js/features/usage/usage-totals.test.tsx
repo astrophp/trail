@@ -264,7 +264,7 @@ describe('the pricing coverage', () => {
 
         expect(wordsOf('Pricing coverage')).toEqual([
             '1 unpriced run',
-            '1 step · 30 tokens without a rate',
+            '1 call · 30 tokens without a rate',
             'Review prices',
         ])
         expect(
@@ -293,19 +293,19 @@ describe('the pricing coverage', () => {
 
         expect(wordsOf('Pricing coverage')).toEqual([
             '8 unpriced runs',
-            '11 steps · 24.8k tokens without a rate',
+            '11 calls · 24.8k tokens without a rate',
             'Review prices',
         ])
     })
 
-    it('leaves the tokens out when the unpriced steps reported none', async () => {
+    it('leaves the tokens out when the unpriced calls reported none', async () => {
         mockApi(() => json(usageWith({}, { unpriced_tokens: null })))
         renderApp('/usage')
         await totals()
 
         expect(wordsOf('Pricing coverage')).toEqual([
             '1 unpriced run',
-            '1 step without a rate',
+            '1 call without a rate',
             'Review prices',
         ])
         expect(metric('Pricing coverage')).not.toHaveTextContent(
@@ -332,7 +332,7 @@ describe('the pricing coverage', () => {
 
         expect(wordsOf('Pricing coverage')).toEqual([
             '1 unpriced run',
-            '1 step · 1 token without a rate',
+            '1 call · 1 token without a rate',
             'Review prices',
         ])
     })
@@ -356,7 +356,7 @@ describe('the pricing coverage', () => {
         await totals()
 
         expect(wordsOf('Pricing coverage')).toEqual([
-            'Every step that reported usage was priced',
+            'Every call that reported usage was priced',
         ])
         expect(metric('Pricing coverage')).not.toHaveTextContent(
             'without a rate',
@@ -384,7 +384,7 @@ describe('the pricing coverage', () => {
         await totals()
 
         expect(wordsOf('Pricing coverage')).toEqual([
-            'Every step that reported usage was priced so far',
+            'Every call that reported usage was priced so far',
         ])
     })
 
@@ -416,7 +416,7 @@ describe('the pricing coverage', () => {
         ).toBe('/trail/traces?unpriced=1')
     })
 
-    it('leads with the unpriced steps when no run is counted unpriced, and never prints zero runs', async () => {
+    it('leads with the unpriced calls when no run is counted unpriced, and never prints zero runs', async () => {
         mockApi(() =>
             json(
                 usageWith(
@@ -434,7 +434,7 @@ describe('the pricing coverage', () => {
         await totals()
 
         expect(wordsOf('Pricing coverage')).toEqual([
-            '3 unpriced steps',
+            '3 unpriced calls',
             '30 tokens without a rate',
             'Review prices',
         ])
@@ -464,7 +464,7 @@ describe('the pricing coverage', () => {
         await totals()
 
         expect(wordsOf('Pricing coverage')).toEqual([
-            '1 unpriced step',
+            '1 unpriced call',
             'Review prices',
         ])
     })
@@ -490,7 +490,7 @@ describe('the pricing coverage', () => {
         renderApp('/usage')
         await totals()
 
-        expect(wordsOf('Pricing coverage')).toEqual(['No step reported usage'])
+        expect(wordsOf('Pricing coverage')).toEqual(['No call reported usage'])
     })
 })
 

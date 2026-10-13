@@ -24,7 +24,7 @@ final class UsageQuery
      * How much of the usage of the range is known, over every row of the summary: a step recorded
      * without its provider or its model included.
      *
-     * @return array{steps: int, reported_steps: int, unpriced_steps: int, unpriced_tokens: ?int}
+     * @return array<string, mixed>
      */
     public function coverage(TimeRange $range): array
     {
@@ -33,12 +33,17 @@ final class UsageQuery
             ->selectRaw('sum(reported_steps) as reported_steps')
             ->selectRaw('sum(unpriced_steps) as unpriced_steps')
             ->selectRaw('sum(unpriced_tokens) as unpriced_tokens');
+        UnitUsage::select($query);
         $range->apply($query, 'started_at');
 
         $row = $query->first();
         $unpriced = $row === null ? 0 : Row::int($row, 'unpriced_steps');
 
         return [
+            'units' => UnitUsage::of($row),
+            'calls' => $row === null ? 0 : Row::int($row, 'steps'),
+            'reported_calls' => $row === null ? 0 : Row::int($row, 'reported_steps'),
+            'unpriced_calls' => $unpriced,
             'steps' => $row === null ? 0 : Row::int($row, 'steps'),
             'reported_steps' => $row === null ? 0 : Row::int($row, 'reported_steps'),
             'unpriced_steps' => $unpriced,
@@ -83,12 +88,14 @@ final class UsageQuery
             ->selectRaw('sum(cache_write_tokens) as cache_write_tokens')
             ->selectRaw('sum(reasoning_tokens) as reasoning_tokens')
             ->selectRaw('sum(cost) as cost_sum')
+            ->selectRaw('sum(cost_gap_calls) as cost_gap_calls')
             ->selectRaw('sum(reported_steps) as reported_steps')
             ->selectRaw('sum(unpriced_steps) as unpriced_steps')
             ->selectRaw('sum(unpriced_tokens) as unpriced_tokens')
             // A step of the group is still running when the newest one is newer than the cutoff; an older one was abandoned.
             ->selectRaw('case when max(open_at) >= ? then 1 else 0 end as running', [StaleRuns::cutoffColumn()])
             ->whereNotNull('provider');
+        UnitUsage::select($query);
         $range->apply($query, 'started_at');
 
         if ($byModel) {
@@ -108,6 +115,7 @@ final class UsageQuery
             $unpriced = Row::int($row, 'unpriced_steps');
 
             $groups[] = new UsageGroup(
+                units: UnitUsage::of($row),
                 provider: Row::string($row, 'provider'),
                 model: $byModel ? Row::string($row, 'model') : null,
                 agent: null,
@@ -121,7 +129,7 @@ final class UsageQuery
                     'reasoning' => Row::nullableInt($row, 'reasoning_tokens'),
                 ],
                 cost: ($cost = Row::nullableFloat($row, 'cost_sum')) === null ? null : round($cost, RunFigures::PLACES),
-                costUnpricedSteps: $unpriced,
+                costUnpricedSteps: max($unpriced, Row::int($row, 'cost_gap_calls')),
                 running: Row::int($row, 'running') > 0,
                 reportedSteps: Row::int($row, 'reported_steps'),
                 unpricedSteps: $unpriced,
@@ -152,13 +160,14 @@ final class UsageQuery
             ->selectRaw('sum(reported_steps) as reported_steps')
             ->selectRaw('sum(unpriced_steps) as unpriced_steps')
             ->selectRaw('sum(unpriced_tokens) as unpriced_tokens');
+        UnitUsage::select($steps);
         $range->apply($steps, 'started_at');
         $steps->groupBy('run_name');
 
         $query = $runs->newQuery()->fromSub($runs, 't')
             ->leftJoinSub($steps, 'm', 'm.run_name', '=', 't.name')
             ->select('t.*')
-            ->addSelect('m.steps', 'm.reported_steps', 'm.unpriced_steps', 'm.unpriced_tokens')
+            ->addSelect('m.steps', 'm.reported_steps', 'm.unpriced_steps', 'm.unpriced_tokens', 'm.search_units', 'm.unpriced_search_units', 'm.search_unit_calls', 'm.reported_search_unit_calls', 'm.unpriced_search_unit_calls', 'm.unknown_cost_calls', 'm.incomplete_calls', 'm.ambiguous_reranking_calls', 'm.unassessed_rows', 'm.unit_rows')
             ->orderBy('t.run_count', 'desc')->orderBy('t.name');
 
         $groups = [];
@@ -168,6 +177,7 @@ final class UsageQuery
             $unpriced = Row::int($row, 'unpriced_steps');
 
             $groups[] = new UsageGroup(
+                units: UnitUsage::of($row),
                 provider: null,
                 model: null,
                 agent: Row::string($row, 'name'),
@@ -175,7 +185,7 @@ final class UsageQuery
                 steps: Row::int($row, 'steps'),
                 tokens: $figures->tokens,
                 cost: $figures->costAmount(),
-                costUnpricedSteps: $figures->unpricedSpans,
+                costUnpricedSteps: max($figures->unpricedSpans, $figures->costGapCalls),
                 running: $figures->runs['running'] > 0,
                 reportedSteps: Row::int($row, 'reported_steps'),
                 unpricedSteps: $unpriced,

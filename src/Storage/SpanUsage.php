@@ -3,6 +3,7 @@
 namespace Astro\Trail\Storage;
 
 use Astro\Trail\Enums\SpanType;
+use Astro\Trail\Enums\Status;
 
 /**
  * The part of a span that feeds trace totals, whatever the span was read from.
@@ -20,6 +21,7 @@ final readonly class SpanUsage
         public ?int $reasoningTokens = null,
         public ?float $cost = null,
         string|int|float|null $searchUnits = null,
+        public Status $status = Status::Completed,
     ) {
         $this->searchUnits = SearchUnits::normalize($searchUnits);
     }
@@ -35,6 +37,7 @@ final readonly class SpanUsage
             $span->reasoningTokens,
             $span->cost,
             $span->searchUnits,
+            $span->status,
         );
     }
 

@@ -59,7 +59,7 @@ beforeEach(function () {
         'steps' => 1, 'reported_steps' => 1, 'unpriced_steps' => 0, 'unpriced_tokens' => null, 'open_at' => null,
         'input_tokens' => null, 'uncached_input_tokens' => null, 'output_tokens' => null, 'cache_read_tokens' => null,
         'cache_write_tokens' => null, 'reasoning_tokens' => null, 'cost' => null,
-        'search_units' => null, 'search_unit_calls' => 0, 'reported_search_unit_calls' => 0, 'unpriced_search_units' => null, 'incomplete_calls' => 0,
+        'search_units' => null, 'search_unit_calls' => 0, 'reported_search_unit_calls' => 0, 'unpriced_search_units' => null, 'incomplete_calls' => 0, 'unknown_cost_calls' => max(0, ($attributes['steps'] ?? 1) - ($attributes['reported_steps'] ?? 1)), 'cost_gap_calls' => ($attributes['unpriced_steps'] ?? 0) + max(0, ($attributes['steps'] ?? 1) - ($attributes['reported_steps'] ?? 1)), 'unpriced_search_unit_calls' => 0, 'ambiguous_reranking_calls' => 0,
     ], $attributes);
 
     $this->delegating = fn (string $name = 'ResearcherAgent', array $usage = []) => FakeAnthropic::toolUse([['id' => 'toolu_1', 'name' => $name, 'input' => ['task' => 'Dig', 'query' => 'x']]], usage: $usage);
@@ -266,7 +266,7 @@ it('agrees with the grouped reads of spans over a varied set of runs', function 
         ])->sortBy(fn (array $row) => $row['provider'].'|'.$row['model'])->values()->all();
 
         $summary = DB::table('trail_trace_models')->where('run_name', $name)->whereNotNull('provider')->whereNotNull('model')
-            ->groupBy('provider', 'model')->selectRaw('provider, model, sum(steps) as calls, count(*) as runs, sum(input_tokens) as input_tokens, sum(output_tokens) as output_tokens, sum(cache_read_tokens) as cache_read_tokens, sum(cache_write_tokens) as cache_write_tokens, sum(reasoning_tokens) as reasoning_tokens, sum(cost) as cost_sum, sum(unpriced_steps) as unpriced')
+            ->groupBy('provider', 'model')->selectRaw('provider, model, sum(steps) as calls, count(*) as runs, sum(input_tokens) as input_tokens, sum(output_tokens) as output_tokens, sum(cache_read_tokens) as cache_read_tokens, sum(cache_write_tokens) as cache_write_tokens, sum(reasoning_tokens) as reasoning_tokens, sum(cost) as cost_sum, sum(cost_gap_calls) as unpriced')
             ->get()->map(fn (object $row) => [
                 'provider' => $row->provider, 'model' => $row->model, 'calls' => $number($row->calls), 'runs' => $number($row->runs),
                 'input_tokens' => $number($row->input_tokens), 'output_tokens' => $number($row->output_tokens), 'cache_read_tokens' => $number($row->cache_read_tokens),

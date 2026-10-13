@@ -24,7 +24,13 @@ afterEach(function () {
  */
 function usageBreakdownAt(mixed $test, string $query = ''): array
 {
-    return $test->getJson('/trail/api/usage/breakdown'.($query === '' ? '' : '?'.$query))->assertOk()->json();
+    $body = $test->getJson('/trail/api/usage/breakdown'.($query === '' ? '' : '?'.$query))->assertOk()->json();
+    // Legacy fields remain unchanged; additive units and calls have dedicated contract tests.
+    foreach ($body['data'] as &$row) {
+        unset($row['calls'], $row['units']);
+    }
+
+    return $body;
 }
 
 /**
@@ -229,7 +235,7 @@ describe('by agent', function () {
                 usageAgentRow('Alpha', 6, 2, usageTokens('pending', 360, 66, 426, 20, 3, 2), ['state' => 'pending', 'amount' => 0.031], 4, 1, 55),
                 usageAgentRow('Host', 1, 1, usageTokens('reported', 4, null, 4), ['state' => 'estimated', 'amount' => 0.004], 1, 0, 0),
                 // A run left running past the cutoff is not running.
-                usageAgentRow('Delta', 1, 1, usageTokens('reported', 3, null, 3), ['state' => 'estimated', 'amount' => 0.003], 1, 0, 0),
+                usageAgentRow('Delta', 1, 1, usageTokens('reported', 3, null, 3), ['state' => 'partial', 'amount' => 0.003], 1, 0, 0),
                 usageAgentRow('Orphan', 2, 1, usageTokens('reported', 14, null, 14), ['state' => 'partial', 'amount' => 0.0008], 2, 1, 6),
                 usageAgentRow('Edge', 1, 1, usageTokens('reported', 2, null, 2), ['state' => 'estimated', 'amount' => 0.0002], 1, 0, 0),
                 usageAgentRow('Embedder', 1, 1, usageTokens('reported', 7, null, 7), ['state' => 'estimated', 'amount' => 0.0001], 1, 0, 0),

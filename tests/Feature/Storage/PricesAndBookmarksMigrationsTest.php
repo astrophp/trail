@@ -19,7 +19,7 @@ it('creates the price and bookmark tables with exactly their columns', function 
     expect(Schema::hasTable('trail_prices'))->toBeTrue()
         ->and(Schema::hasTable('trail_bookmarks'))->toBeTrue()
         ->and(array_keys(Rows::columnsOf('trail_prices')))->toEqual([
-            'id', 'provider', 'model', 'input', 'output', 'cache_read', 'cache_write', 'created_at', 'updated_at', 'reranking_basis', 'reranking_input', 'reranking_search_unit',
+            'id', 'provider', 'model', 'input', 'output', 'cache_read', 'cache_write', 'created_at', 'updated_at', 'reranking_basis', 'reranking_input', 'reranking_search_unit', 'token_rates_set', 'reranking_rates_set', 'token_saved_at', 'reranking_saved_at',
         ])
         ->and(array_keys(Rows::columnsOf('trail_bookmarks')))->toEqual([
             'id', 'trace_id', 'user_id', 'user_type', 'created_at',
@@ -27,7 +27,7 @@ it('creates the price and bookmark tables with exactly their columns', function 
 });
 
 it('rolls back the price, bookmark and summary tables on their own', function () {
-    $this->artisan('migrate:rollback', ['--step' => 5])->assertSuccessful();
+    $this->artisan('migrate:rollback', ['--step' => 6])->assertSuccessful();
 
     expect(Schema::hasTable('trail_prices'))->toBeFalse()
         ->and(Schema::hasTable('trail_trace_models'))->toBeFalse()

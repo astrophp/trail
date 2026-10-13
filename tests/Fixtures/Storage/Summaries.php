@@ -14,7 +14,7 @@ use stdClass;
  */
 final class Summaries
 {
-    private const INTEGERS = ['steps', 'reported_steps', 'unpriced_steps', 'unpriced_tokens', 'input_tokens', 'uncached_input_tokens', 'output_tokens', 'cache_read_tokens', 'cache_write_tokens', 'reasoning_tokens', 'calls', 'failed', 'search_unit_calls', 'reported_search_unit_calls', 'incomplete_calls'];
+    private const INTEGERS = ['steps', 'reported_steps', 'unpriced_steps', 'unpriced_tokens', 'input_tokens', 'uncached_input_tokens', 'output_tokens', 'cache_read_tokens', 'cache_write_tokens', 'reasoning_tokens', 'calls', 'failed', 'search_unit_calls', 'reported_search_unit_calls', 'incomplete_calls', 'unknown_cost_calls', 'cost_gap_calls', 'unpriced_search_unit_calls', 'ambiguous_reranking_calls'];
 
     /**
      * The model rows of a run, by provider and model (a missing one first).

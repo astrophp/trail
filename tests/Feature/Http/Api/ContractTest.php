@@ -653,15 +653,15 @@ it('sends the rows of the other views of the usage breakdown with the keys the d
 
     expect($providers['by'])->toBe('provider')
         ->and(array_column($providers['data'], 'provider'))->toBe(['anthropic', 'openai'])
-        ->and(array_map('array_keys', $providers['data']))->toBe(array_fill(0, 2, ['provider', 'steps', 'runs', 'usage', 'cost', 'coverage', 'filters']))
+        ->and(array_map('array_keys', $providers['data']))->toBe(array_fill(0, 2, ['provider', 'calls', 'units', 'steps', 'runs', 'usage', 'cost', 'coverage', 'filters']))
         ->and(array_column($providers['data'], 'filters'))->toBe([['provider' => 'anthropic'], ['provider' => 'openai']])
         ->and($providers['data'][0]['coverage'])->toBe(['reported_steps' => 4, 'unpriced_steps' => 1, 'unpriced_tokens' => 30])
         ->and($agents['by'])->toBe('agent')
         ->and(array_column($agents['data'], 'agent'))->toBe(['Embeddings', 'Planner', 'ResearchAgent', 'SupportAssistant'])
-        ->and(array_map('array_keys', $agents['data']))->toBe(array_fill(0, 4, ['agent', 'steps', 'runs', 'usage', 'cost', 'coverage', 'filters']))
+        ->and(array_map('array_keys', $agents['data']))->toBe(array_fill(0, 4, ['agent', 'calls', 'units', 'steps', 'runs', 'usage', 'cost', 'coverage', 'filters']))
         ->and(array_column($agents['data'], 'filters'))->toBe([['agent' => 'Embeddings'], ['agent' => 'Planner'], ['agent' => 'ResearchAgent'], ['agent' => 'SupportAssistant']])
         ->and($agents['data'][1])->toBe([
-            'agent' => 'Planner', 'steps' => 0, 'runs' => 1,
+            'agent' => 'Planner', 'calls' => 0, 'units' => ['assessment' => 'assessed', 'search_units' => null, 'search_unit_calls' => 0, 'reported_search_unit_calls' => 0, 'unpriced_search_unit_calls' => 0, 'unpriced_search_units' => '0.000000', 'unknown_cost_calls' => 0, 'incomplete_calls' => 0, 'ambiguous_reranking_calls' => 0], 'steps' => 0, 'runs' => 1,
             'usage' => ['state' => 'not_reported', 'input_tokens' => null, 'output_tokens' => null, 'cache_read_tokens' => null, 'cache_write_tokens' => null, 'reasoning_tokens' => null, 'total_tokens' => null],
             'cost' => ['state' => 'not_captured', 'amount' => null],
             'coverage' => ['reported_steps' => 0, 'unpriced_steps' => 0, 'unpriced_tokens' => 0],

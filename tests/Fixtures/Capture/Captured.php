@@ -256,6 +256,8 @@ final class Captured
             'response_excerpt' => null,
             'metadata' => null,
             'search_units' => null,
+            'unknown_cost_calls' => 0,
+            'cost_gap_calls' => 0,
         ], $overrides));
     }
 
@@ -297,6 +299,7 @@ final class Captured
             'error_source' => null,
             'error_http_status' => null,
             'search_units' => null,
+            'billing_basis' => in_array($overrides['type'] ?? 'step', ['step', 'embedding', 'classification'], true) && ($overrides['status'] ?? 'completed') !== 'running' ? 'input_tokens' : null,
         ], $overrides));
     }
 

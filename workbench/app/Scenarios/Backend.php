@@ -3,6 +3,8 @@
 namespace Workbench\App\Scenarios;
 
 use Astro\Trail\Tests\Fixtures\Sdk\FakeAnthropic;
+use Astro\Trail\Tests\Fixtures\Sdk\FakeCohere;
+use Astro\Trail\Tests\Fixtures\Sdk\FakeDecisions;
 use Closure;
 use Illuminate\Http\Client\Factory as HttpFactory;
 use Illuminate\Http\Client\Request;
@@ -22,7 +24,7 @@ final class Backend
     /** The key offline runs hand the SDK so its gateways accept a request; nothing is ever sent with it. */
     public const PLACEHOLDER_KEY = 'workbench-offline';
 
-    /** @var list<FakeAnthropic> */
+    /** @var list<FakeAnthropic|FakeDecisions|FakeCohere> */
     private array $scripts = [];
 
     /** @var list<string> The providers tried, in order, when looking for a real key. */
@@ -76,9 +78,21 @@ final class Backend
     /**
      * How many scripted responses no request asked for.
      */
+    /** @param list<array<string, mixed>> $turns */
+    public function decisions(array $turns): void
+    {
+        $this->scripts[] = FakeDecisions::script($turns);
+    }
+
+    /** @param list<array<string, mixed>> $turns */
+    public function reranking(array $turns): void
+    {
+        $this->scripts[] = FakeCohere::script($turns);
+    }
+
     public function unusedTurns(): int
     {
-        return array_sum(array_map(fn (FakeAnthropic $script): int => $script->remaining(), $this->scripts));
+        return array_sum(array_map(fn (FakeAnthropic|FakeDecisions|FakeCohere $script): int => $script->remaining(), $this->scripts));
     }
 
     /**
@@ -144,6 +158,8 @@ final class Backend
         config([
             'ai.default' => 'anthropic',
             'ai.default_for_embeddings' => 'openai',
+            'ai.providers.typesafe.key' => self::PLACEHOLDER_KEY,
+            'ai.providers.cohere.key' => self::PLACEHOLDER_KEY,
             'ai.providers.backup' => ['driver' => 'anthropic', 'key' => self::PLACEHOLDER_KEY, 'url' => 'https://backup.anthropic.test/v1'],
         ]);
 

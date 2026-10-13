@@ -245,6 +245,9 @@ const span = z.strictObject({
     step_number: nullable(count),
     provider: nullable(z.string()),
     model: nullable(z.string()),
+    billing_basis: nullable(
+        z.enum(['input_tokens', 'search_units']),
+    ).optional(),
     responding_model: nullable(z.string()),
     duration_ms: nullable(z.number()),
     offset_ms: z.number(),
@@ -407,6 +410,11 @@ const meta = z.strictObject({
     stale_after: count,
     traces: z.strictObject({ any: z.boolean(), running: count }),
     filters: z.strictObject({
+        operation_types: z
+            .array(
+                z.enum(['agent', 'embedding', 'classification', 'reranking']),
+            )
+            .optional(),
         agents: z.array(z.string()),
         providers: z.array(z.string()),
         models: z.array(
@@ -675,7 +683,22 @@ const usageRowCoverage = z.strictObject({
     unpriced_tokens: nullable(count),
 })
 
+const unitUsage = z.strictObject({
+    assessment: z.enum(['assessed', 'partial', 'not_assessed']),
+    search_units: nullable(z.string()),
+    search_unit_calls: nullable(count),
+    reported_search_unit_calls: nullable(count),
+    unpriced_search_unit_calls: nullable(count),
+    unpriced_search_units: nullable(z.string()),
+    unknown_cost_calls: nullable(count),
+    incomplete_calls: nullable(count),
+    ambiguous_reranking_calls: nullable(count),
+})
 const usageCoverage = z.strictObject({
+    calls: count.optional(),
+    reported_calls: count.optional(),
+    unpriced_calls: count.optional(),
+    units: unitUsage.optional(),
     steps: count,
     reported_steps: count,
     unpriced_steps: count,
@@ -751,6 +774,8 @@ const usageSpendResponse = z.strictObject({
 })
 
 const usageRowFigures = {
+    calls: count.optional(),
+    units: unitUsage.optional(),
     steps: count,
     runs: count,
     usage,
@@ -934,7 +959,24 @@ const priceRates = z.strictObject({
 
 const priceVia = z.strictObject({ model: z.string(), saved: z.boolean() })
 
+const rerankingRates = z.strictObject({
+    basis: nullable(z.enum(['input_tokens', 'search_units'])),
+    input: nullable(z.number()),
+    search_unit: nullable(z.number()),
+})
+const rerankingPrice = z.strictObject({
+    rates: rerankingRates,
+    source: z.enum(['saved', 'config', 'prefix', 'none']),
+    via: nullable(priceVia),
+    default: z.strictObject({
+        source: z.enum(['config', 'prefix', 'none']),
+        via: nullable(priceVia),
+        rates: rerankingRates,
+    }),
+    saved_at: nullable(timestamp),
+})
 const price = z.strictObject({
+    reranking: rerankingPrice.optional(),
     provider: z.string(),
     model: z.string(),
     rates: priceRates,

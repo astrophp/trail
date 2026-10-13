@@ -4,6 +4,35 @@ All notable changes to Trail are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and Trail follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## v0.3.0
+
+### Added
+
+- Capture standalone and nested classification and reranking calls through Laravel AI SDK events.
+  Classification preserves Boolean, choice and ordinal answers, probabilities and confidence.
+  Reranking preserves original document indexes, provider order, relevance scores and measured usage.
+- Exact six-place search-unit storage and independent usage coverage, including missing quantities,
+  unknown costs, incomplete calls and historical Not assessed evidence. Tokens and units are never added.
+- Explicit reranking billing by input tokens or search units, independent price editing and resets,
+  root-operation filters, specialized inspectors, comparison figures, CSV columns and Boost support.
+- Bounded capability payloads: 100 items, 1,000 values and 64 KiB shared across input and output,
+  redaction before truncation, 1,000-character document snippets and SDK 1.2 attachment descriptors.
+- Offline workbench scenarios and CI coverage for exact SDK 1.1.0 and 1.2.0 on Laravel 12 and 13.
+
+### Changed
+
+- Aggregate costs with confirmed missing usage or incomplete capture show Partial when a priced
+  subtotal exists. Completed priced and unpriced decisions stay frozen across later writes.
+- Spend projections price reranking independently from ordinary token calls, including mixed calls
+  on the same model. Generic failover events cannot attribute capability failures to embeddings.
+
+### Upgrade
+
+- Pause recording across the fleet, drain calls, deploy, migrate, rebuild caches and restart workers
+  and Octane before resuming. Both new migrations are required. Existing quantities and dollars are
+  preserved; old assessment columns stay null. After new operation rows exist, downgrading to
+  v0.2.0 is unsupported. Use a forward fix or restore a backup taken before the upgrade.
+
 ## v0.2.0
 
 ### Added

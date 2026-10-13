@@ -24,7 +24,7 @@ directory, and `php artisan migrate` runs them with your own. They create six ta
 | Table | Holds |
 | -- | -- |
 | `trail_traces` | One row per recorded run |
-| `trail_spans` | The agent, step, tool and embedding spans of each run |
+| `trail_spans` | The agent, step, tool, embedding, classification and reranking spans of each run |
 | `trail_trace_models` | A per-run summary of the models its steps used |
 | `trail_trace_tools` | A per-run summary of the tools it called |
 | `trail_prices` | The model prices saved from the dashboard |
@@ -93,3 +93,17 @@ reports no token usage, so its run shows usage as Not reported and its cost as N
 [What is recorded](recording.md#reading-the-dashboard).
 
 If nothing appears, see [Operations](operations.md#when-nothing-is-recorded).
+
+
+## Upgrading v0.2.0 to v0.3.0
+
+1. Back up Trail tables and pause recording on every application instance with `trail:pause`.
+2. Drain active calls and workers before replacing any reader or writer.
+3. Deploy the same package version across the fleet and run `php artisan migrate` on the configured
+   Trail connection. Both capability migrations are required; existing usage and cost values remain.
+4. Rebuild config and route caches, restart queue workers and Octane, and verify dashboard, API,
+   Boost and one representative captured call on each instance.
+5. Resume recording only after every reader and writer uses v0.3.0.
+
+Do not run v0.2 readers alongside new enum rows. Once classification or reranking rows exist,
+downgrade to v0.2.0 is unsupported. Use a forward fix or restore the backup made before the upgrade.

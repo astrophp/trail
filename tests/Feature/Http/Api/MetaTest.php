@@ -24,7 +24,7 @@ it('answers for an empty database', function () {
             'recording' => 'enabled',
             'stale_after' => 3600,
             'traces' => ['any' => false, 'running' => 0],
-            'filters' => ['agents' => [], 'providers' => [], 'models' => []],
+            'filters' => ['operation_types' => ['agent', 'embedding', 'classification', 'reranking'], 'agents' => [], 'providers' => [], 'models' => []],
         ],
         'range' => ['preset' => '24h', 'from' => '2026-01-01T12:00:00.000Z', 'to' => '2026-01-02T12:00:00.000Z'],
     ]);

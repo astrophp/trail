@@ -18,10 +18,10 @@ afterEach(function () {
 function capabilityColumns(): array
 {
     return [
-        'trail_spans' => ['search_units'],
-        'trail_traces' => ['search_units'],
-        'trail_trace_models' => ['search_units', 'search_unit_calls', 'reported_search_unit_calls', 'unpriced_search_units', 'incomplete_calls'],
-        'trail_prices' => ['reranking_basis', 'reranking_input', 'reranking_search_unit'],
+        'trail_spans' => ['search_units', 'billing_basis'],
+        'trail_traces' => ['search_units', 'unknown_cost_calls', 'cost_gap_calls'],
+        'trail_trace_models' => ['search_units', 'search_unit_calls', 'reported_search_unit_calls', 'unpriced_search_units', 'incomplete_calls', 'unknown_cost_calls', 'cost_gap_calls', 'unpriced_search_unit_calls', 'ambiguous_reranking_calls'],
+        'trail_prices' => ['reranking_basis', 'reranking_input', 'reranking_search_unit', 'token_rates_set', 'reranking_rates_set', 'token_saved_at', 'reranking_saved_at'],
     ];
 }
 
@@ -34,7 +34,7 @@ it('adds only nullable columns without defaults or new tables', function () {
                 ->and($columns[$name]['default'])->toBeNull("{$table}.{$name}");
         }
     }
-    $this->artisan('migrate:rollback', ['--step' => 1])->assertSuccessful();
+    $this->artisan('migrate:rollback', ['--step' => 2])->assertSuccessful();
     expect(collect(Schema::getTables())->pluck('name')->sort()->values()->all())->toBe($tables);
     foreach (capabilityColumns() as $table => $names) {
         foreach ($names as $name) {
@@ -44,7 +44,7 @@ it('adds only nullable columns without defaults or new tables', function () {
 });
 
 it('upgrades the six migration baseline and rolls back without changing historical evidence', function () {
-    $this->artisan('migrate:rollback', ['--step' => 1])->assertSuccessful();
+    $this->artisan('migrate:rollback', ['--step' => 2])->assertSuccessful();
     $trace = Rows::trace(['input_tokens' => 123, 'cost' => 0.25]);
     Rows::span($trace, ['input_tokens' => 123, 'cost' => 0.25]);
     Rows::price(['input' => 1.25]);
@@ -66,7 +66,7 @@ it('upgrades the six migration baseline and rolls back without changing historic
         }
         expect($after)->toBe($before[$table]);
     }
-    $this->artisan('migrate:rollback', ['--step' => 1])->assertSuccessful();
+    $this->artisan('migrate:rollback', ['--step' => 2])->assertSuccessful();
     foreach ($before as $table => $row) {
         expect((array) DB::table($table)->first())->toBe($row);
     }
@@ -83,9 +83,12 @@ it('alters and rolls back only the configured connection', function () {
     }
     $migration = require dirname(__DIR__, 3).'/database/migrations/2026_10_12_000007_add_capability_usage_and_prices.php';
     $migration->up();
+    $assessments = require dirname(__DIR__, 3).'/database/migrations/2026_10_13_000008_add_capability_assessments.php';
+    $assessments->up();
     foreach (capabilityColumns() as $table => $names) {
         expect(Schema::connection('trail_secondary')->hasColumns($table, $names))->toBeTrue();
     }
+    $assessments->down();
     $migration->down();
     foreach (capabilityColumns() as $table => $names) {
         foreach ($names as $name) {

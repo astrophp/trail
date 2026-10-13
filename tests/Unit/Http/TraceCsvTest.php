@@ -44,7 +44,7 @@ it('writes the documented columns in order', function () {
         'id', 'name', 'type', 'agent_class', 'status', 'issue_kind', 'streamed', 'recovered', 'child_failed', 'provider', 'model',
         'duration_ms', 'usage_state', 'input_tokens', 'output_tokens', 'cache_read_tokens', 'cache_write_tokens', 'reasoning_tokens',
         'total_tokens', 'cost_state', 'cost_usd', 'span_count', 'conversation_id', 'user_id', 'user_type', 'user_name', 'user_email',
-        'bookmarked', 'started_at', 'ended_at', 'prompt_excerpt', 'response_excerpt',
+        'bookmarked', 'started_at', 'ended_at', 'prompt_excerpt', 'response_excerpt', 'search_units',
     ]]);
 });
 

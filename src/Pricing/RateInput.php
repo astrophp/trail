@@ -26,12 +26,12 @@ final class RateInput
      *
      * @throws ValidationException with every invalid field
      */
-    public static function from(array $body): array
+    public static function from(array $body, bool $rerankingOnly = false): array
     {
         $rates = [];
         $errors = [];
 
-        foreach (self::FIELDS as $field) {
+        foreach ($rerankingOnly ? ['input', 'search_unit'] : self::FIELDS as $field) {
             $label = str_replace('_', ' ', $field);
             $value = $body[$field] ?? null;
 

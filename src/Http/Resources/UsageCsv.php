@@ -19,6 +19,7 @@ final class UsageCsv extends Csv
         'runs', 'steps', 'usage_state',
         'input_tokens', 'output_tokens', 'cache_read_tokens', 'cache_write_tokens', 'reasoning_tokens', 'total_tokens',
         'cost_state', 'estimated_cost_usd', 'reported_steps', 'unpriced_steps', 'unpriced_tokens',
+        'calls', 'search_units', 'unit_assessment', 'search_unit_calls', 'reported_search_unit_calls', 'unpriced_search_unit_calls', 'unpriced_search_units', 'unknown_cost_calls', 'incomplete_calls', 'ambiguous_reranking_calls',
     ];
 
     /**
@@ -44,9 +45,20 @@ final class UsageCsv extends Csv
     {
         $usage = self::object($row['usage'] ?? null);
         $cost = self::object($row['cost'] ?? null);
+        $units = self::object($row['units'] ?? null);
         $coverage = self::object($row['coverage'] ?? null);
 
         $values = [
+            'calls' => $row['calls'] ?? null,
+            'search_units' => $units['search_units'] ?? null,
+            'unit_assessment' => $units['assessment'] ?? null,
+            'search_unit_calls' => $units['search_unit_calls'] ?? null,
+            'reported_search_unit_calls' => $units['reported_search_unit_calls'] ?? null,
+            'unpriced_search_unit_calls' => $units['unpriced_search_unit_calls'] ?? null,
+            'unpriced_search_units' => $units['unpriced_search_units'] ?? null,
+            'unknown_cost_calls' => $units['unknown_cost_calls'] ?? null,
+            'incomplete_calls' => $units['incomplete_calls'] ?? null,
+            'ambiguous_reranking_calls' => $units['ambiguous_reranking_calls'] ?? null,
             'provider' => $row['provider'] ?? null,
             'model' => $row['model'] ?? null,
             'agent' => $row['agent'] ?? null,

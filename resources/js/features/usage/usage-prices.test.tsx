@@ -122,7 +122,7 @@ describe('the way from the coverage figure to the prices', () => {
         await totals()
 
         expect(review()).toBeVisible()
-        expect(metric('Pricing coverage')).toHaveTextContent('3 unpriced steps')
+        expect(metric('Pricing coverage')).toHaveTextContent('3 unpriced calls')
     })
 
     it('is not there when every step was priced', async () => {
@@ -144,7 +144,7 @@ describe('the way from the coverage figure to the prices', () => {
         await totals()
 
         expect(metric('Pricing coverage')).toHaveTextContent(
-            'Every step that reported usage was priced',
+            'Every call that reported usage was priced',
         )
         expect(review()).not.toBeInTheDocument()
     })

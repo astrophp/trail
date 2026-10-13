@@ -14,7 +14,7 @@ final class TraceCsv extends Csv
         'input_tokens', 'output_tokens', 'cache_read_tokens', 'cache_write_tokens', 'reasoning_tokens', 'total_tokens',
         'cost_state', 'cost_usd', 'span_count', 'conversation_id',
         'user_id', 'user_type', 'user_name', 'user_email', 'bookmarked',
-        'started_at', 'ended_at', 'prompt_excerpt', 'response_excerpt',
+        'started_at', 'ended_at', 'prompt_excerpt', 'response_excerpt', 'search_units',
     ];
 
     /** The header line. */
@@ -35,6 +35,7 @@ final class TraceCsv extends Csv
         $user = self::object($trace['user'] ?? null);
 
         $values = [
+            'search_units' => $usage['search_units'] ?? null,
             'id' => $trace['id'] ?? null,
             'name' => $trace['name'] ?? null,
             'type' => $trace['type'] ?? null,

@@ -21,6 +21,25 @@
                     "cache_write": null
                 }
             },
+            "reranking": {
+                "rates": {
+                    "basis": null,
+                    "input": null,
+                    "search_unit": null
+                },
+                "source": "none",
+                "via": null,
+                "default": {
+                    "rates": {
+                        "basis": null,
+                        "input": null,
+                        "search_unit": null
+                    },
+                    "source": "none",
+                    "via": null
+                },
+                "saved_at": null
+            },
             "observed": true,
             "saved_at": null
         },
@@ -44,6 +63,25 @@
                     "cache_read": 0.3,
                     "cache_write": 3.75
                 }
+            },
+            "reranking": {
+                "rates": {
+                    "basis": null,
+                    "input": null,
+                    "search_unit": null
+                },
+                "source": "none",
+                "via": null,
+                "default": {
+                    "rates": {
+                        "basis": null,
+                        "input": null,
+                        "search_unit": null
+                    },
+                    "source": "none",
+                    "via": null
+                },
+                "saved_at": null
             },
             "observed": true,
             "saved_at": null
@@ -75,6 +113,25 @@
                     "cache_write": 3.75
                 }
             },
+            "reranking": {
+                "rates": {
+                    "basis": null,
+                    "input": null,
+                    "search_unit": null
+                },
+                "source": "none",
+                "via": null,
+                "default": {
+                    "rates": {
+                        "basis": null,
+                        "input": null,
+                        "search_unit": null
+                    },
+                    "source": "none",
+                    "via": null
+                },
+                "saved_at": null
+            },
             "observed": true,
             "saved_at": null
         },
@@ -105,6 +162,25 @@
                     "cache_write": null
                 }
             },
+            "reranking": {
+                "rates": {
+                    "basis": null,
+                    "input": null,
+                    "search_unit": null
+                },
+                "source": "none",
+                "via": null,
+                "default": {
+                    "rates": {
+                        "basis": null,
+                        "input": null,
+                        "search_unit": null
+                    },
+                    "source": "none",
+                    "via": null
+                },
+                "saved_at": null
+            },
             "observed": true,
             "saved_at": null
         },
@@ -128,6 +204,25 @@
                     "cache_read": 1.25,
                     "cache_write": null
                 }
+            },
+            "reranking": {
+                "rates": {
+                    "basis": null,
+                    "input": null,
+                    "search_unit": null
+                },
+                "source": "none",
+                "via": null,
+                "default": {
+                    "rates": {
+                        "basis": null,
+                        "input": null,
+                        "search_unit": null
+                    },
+                    "source": "none",
+                    "via": null
+                },
+                "saved_at": null
             },
             "observed": false,
             "saved_at": null
@@ -153,6 +248,25 @@
                     "cache_write": null
                 }
             },
+            "reranking": {
+                "rates": {
+                    "basis": null,
+                    "input": null,
+                    "search_unit": null
+                },
+                "source": "none",
+                "via": null,
+                "default": {
+                    "rates": {
+                        "basis": null,
+                        "input": null,
+                        "search_unit": null
+                    },
+                    "source": "none",
+                    "via": null
+                },
+                "saved_at": null
+            },
             "observed": false,
             "saved_at": "2026-01-02T12:00:00.000Z"
         },
@@ -176,6 +290,25 @@
                     "cache_read": null,
                     "cache_write": null
                 }
+            },
+            "reranking": {
+                "rates": {
+                    "basis": null,
+                    "input": null,
+                    "search_unit": null
+                },
+                "source": "none",
+                "via": null,
+                "default": {
+                    "rates": {
+                        "basis": null,
+                        "input": null,
+                        "search_unit": null
+                    },
+                    "source": "none",
+                    "via": null
+                },
+                "saved_at": null
             },
             "observed": false,
             "saved_at": "2026-01-02T12:00:00.000Z"

@@ -5,6 +5,7 @@ namespace Workbench\App\Scenarios;
 use InvalidArgumentException;
 use Workbench\App\Scenarios\Catalog\AbandonedStream;
 use Workbench\App\Scenarios\Catalog\ApprovalGatedTool;
+use Workbench\App\Scenarios\Catalog\Classification;
 use Workbench\App\Scenarios\Catalog\Conversation;
 use Workbench\App\Scenarios\Catalog\ConversationApproval;
 use Workbench\App\Scenarios\Catalog\ConversationDelegation;
@@ -18,6 +19,7 @@ use Workbench\App\Scenarios\Catalog\LongConversation;
 use Workbench\App\Scenarios\Catalog\PartlyPricedRun;
 use Workbench\App\Scenarios\Catalog\PlainAnswer;
 use Workbench\App\Scenarios\Catalog\ProviderFailure;
+use Workbench\App\Scenarios\Catalog\Reranking;
 use Workbench\App\Scenarios\Catalog\SeveralSteps;
 use Workbench\App\Scenarios\Catalog\StreamedRun;
 use Workbench\App\Scenarios\Catalog\StructuredOutput;
@@ -50,6 +52,8 @@ final class Registry
         ConversationDelegation::class,
         ConversationFailure::class,
         EmbeddingsInTool::class,
+        Classification::class,
+        Reranking::class,
         PartlyPricedRun::class,
         UnpricedRun::class,
         AbandonedStream::class,

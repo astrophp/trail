@@ -49,7 +49,7 @@ beforeEach(function () {
         'provider_first' => false, 'steps' => 1, 'reported_steps' => 1, 'unpriced_steps' => 0, 'unpriced_tokens' => null,
         'open_at' => null, 'input_tokens' => null, 'uncached_input_tokens' => null, 'output_tokens' => null,
         'cache_read_tokens' => null, 'cache_write_tokens' => null, 'reasoning_tokens' => null, 'cost' => null,
-        'search_units' => null, 'search_unit_calls' => 0, 'reported_search_unit_calls' => 0, 'unpriced_search_units' => null, 'incomplete_calls' => 0,
+        'search_units' => null, 'search_unit_calls' => 0, 'reported_search_unit_calls' => 0, 'unpriced_search_units' => null, 'incomplete_calls' => 0, 'unknown_cost_calls' => 0, 'cost_gap_calls' => 0, 'unpriced_search_unit_calls' => 0, 'ambiguous_reranking_calls' => 0,
     ], $attributes);
 });
 
@@ -67,7 +67,7 @@ it('writes a row for each provider and model with exact sums, and counts what it
         ($this->row)(['provider' => 'anthropic', 'model' => 'claude-x', 'provider_first' => true, 'input_tokens' => 10, 'uncached_input_tokens' => 10, 'output_tokens' => 1, 'cost' => '0.2500000000']),
         ($this->row)(['model' => 'gpt-a', 'provider_first' => true, 'steps' => 2, 'reported_steps' => 2, 'input_tokens' => 150, 'uncached_input_tokens' => 110, 'output_tokens' => 30,
             'cache_read_tokens' => 30, 'cache_write_tokens' => 10, 'reasoning_tokens' => 5, 'cost' => '0.5123456789']),
-        ($this->row)(['model' => 'gpt-b', 'unpriced_steps' => 1, 'unpriced_tokens' => 240, 'input_tokens' => 200, 'uncached_input_tokens' => 200, 'output_tokens' => 40]),
+        ($this->row)(['model' => 'gpt-b', 'cost_gap_calls' => 1, 'unpriced_steps' => 1, 'unpriced_tokens' => 240, 'input_tokens' => 200, 'uncached_input_tokens' => 200, 'output_tokens' => 40]),
     ]);
 });
 
@@ -131,9 +131,9 @@ it('counts steps, steps that reported usage and steps that could not be priced a
     ]);
 
     expect(Summaries::models('run-1'))->toBe([
-        ($this->row)(['provider_first' => true, 'steps' => 3, 'reported_steps' => 2, 'unpriced_steps' => 1, 'unpriced_tokens' => 10,
+        ($this->row)(['provider_first' => true, 'unknown_cost_calls' => 1, 'cost_gap_calls' => 2, 'steps' => 3, 'reported_steps' => 2, 'unpriced_steps' => 1, 'unpriced_tokens' => 10,
             'input_tokens' => 17, 'uncached_input_tokens' => 15, 'output_tokens' => 8, 'cache_read_tokens' => 2, 'cost' => '0.0000000000']),
-        ($this->row)(['model' => 'gpt-u', 'unpriced_steps' => 1, 'unpriced_tokens' => 4, 'input_tokens' => 4, 'uncached_input_tokens' => 4]),
+        ($this->row)(['model' => 'gpt-u', 'cost_gap_calls' => 1, 'unpriced_steps' => 1, 'unpriced_tokens' => 4, 'input_tokens' => 4, 'uncached_input_tokens' => 4]),
     ]);
 });
 

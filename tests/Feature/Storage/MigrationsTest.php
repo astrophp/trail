@@ -23,7 +23,7 @@ function trailTraceColumns(): array
         'provider', 'model', 'conversation_id', 'user_id', 'user_type',
         'input_tokens', 'output_tokens', 'cache_read_tokens', 'cache_write_tokens', 'reasoning_tokens',
         'cost', 'span_count', 'unpriced_span_count', 'duration_ms', 'prompt_excerpt', 'response_excerpt',
-        'metadata', 'started_at', 'ended_at', 'created_at', 'updated_at', 'search_units',
+        'metadata', 'started_at', 'ended_at', 'created_at', 'updated_at', 'search_units', 'unknown_cost_calls', 'cost_gap_calls',
     ];
 }
 
@@ -35,7 +35,7 @@ function trailSpanColumns(): array
         'input_tokens', 'output_tokens', 'cache_read_tokens', 'cache_write_tokens', 'reasoning_tokens',
         'cost', 'input', 'output', 'metadata', 'redacted', 'truncated',
         'issue_kind', 'error_class', 'error_message', 'error_source', 'error_http_status',
-        'duration_ms', 'started_at', 'ended_at', 'created_at', 'updated_at', 'search_units',
+        'duration_ms', 'started_at', 'ended_at', 'created_at', 'updated_at', 'search_units', 'billing_basis',
     ];
 }
 
@@ -82,14 +82,14 @@ it('marks optional columns nullable and required columns not nullable', function
             'agent_class', 'issue_kind', 'error_class', 'error_message', 'error_source', 'error_http_status',
             'provider', 'model', 'conversation_id', 'user_id', 'user_type',
             'input_tokens', 'output_tokens', 'cache_read_tokens', 'cache_write_tokens', 'reasoning_tokens',
-            'search_units', 'cost', 'duration_ms', 'prompt_excerpt', 'response_excerpt', 'metadata', 'ended_at',
+            'search_units', 'unknown_cost_calls', 'cost_gap_calls', 'cost', 'duration_ms', 'prompt_excerpt', 'response_excerpt', 'metadata', 'ended_at',
         ],
         'trail_spans' => [
             'parent_id', 'agent_class', 'step_number', 'provider', 'model', 'responding_model',
             'input_tokens', 'output_tokens', 'cache_read_tokens', 'cache_write_tokens', 'reasoning_tokens',
             'cost', 'input', 'output', 'metadata',
             'issue_kind', 'error_class', 'error_message', 'error_source', 'error_http_status',
-            'duration_ms', 'ended_at', 'search_units',
+            'duration_ms', 'ended_at', 'search_units', 'billing_basis',
         ],
     ];
 

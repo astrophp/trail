@@ -183,7 +183,7 @@ describe('a recorded run', function () {
             ->and(array_column($body['data']['spans'], 'error'))->toBe([$error, $error])
             ->and($body['data']['spans'][1]['usage']['state'])->toBe('not_reported')
             ->and($body['data']['spans'][1]['cost'])->toBe(['state' => 'not_captured', 'amount' => null])
-            ->and($body['data']['usage']['totals']['cost'])->toBe(['state' => 'not_captured', 'amount' => null]);
+            ->and($body['data']['usage']['totals']['cost'])->toBe(['state' => 'unpriced', 'amount' => null]);
     });
 
     it('keeps the error of the failed attempt of a failover on its step, and numbers the steps again', function () {
@@ -504,7 +504,7 @@ describe('a run written as rows', function () {
 
         expect(array_keys($span))->toBe([
             'id', 'parent_id', 'type', 'name', 'agent_class', 'status', 'issue_kind', 'attempt', 'sequence', 'step_number',
-            'provider', 'model', 'responding_model', 'duration_ms', 'offset_ms', 'started_at', 'ended_at', 'usage', 'cost',
+            'provider', 'model', 'responding_model', 'billing_basis', 'duration_ms', 'offset_ms', 'started_at', 'ended_at', 'usage', 'cost',
             'error', 'input', 'output', 'metadata', 'redacted', 'truncated', 'truncated_paths',
         ])->and($span)->toBe([
             'id' => 'span-2',
@@ -520,6 +520,7 @@ describe('a run written as rows', function () {
             'provider' => 'anthropic',
             'model' => 'claude-a',
             'responding_model' => 'claude-b',
+            'billing_basis' => null,
             'duration_ms' => 1250.5,
             'offset_ms' => 250,
             'started_at' => '2026-01-02T11:00:00.250Z',
@@ -583,7 +584,7 @@ describe('a run written as rows', function () {
             ->and($body['data']['usage']['totals']['cost'])->toBe(['state' => 'partial', 'amount' => 0.001])
             ->and($body['data']['usage']['agents'][0]['cost'])->toBe(['state' => 'partial', 'amount' => 0.001])
             ->and($body['data']['coverage']['usage'])->toBe(['state' => 'partial', 'captured' => 2, 'expected' => 3, 'reason' => 'not_reported'])
-            ->and($body['data']['coverage']['cost'])->toBe(['state' => 'partial', 'captured' => 1, 'expected' => 2, 'reason' => 'no_price']);
+            ->and($body['data']['coverage']['cost'])->toBe(['state' => 'partial', 'captured' => 1, 'expected' => 3, 'reason' => 'no_price']);
     });
 
     it('adds the rows up to the totals of the run', function () {

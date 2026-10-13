@@ -72,7 +72,7 @@ final class Conversations
                 cacheWriteTokens: $sum('cache_write_tokens'),
                 reasoningTokens: $sum('reasoning_tokens'),
                 cost: is_numeric($row->cost ?? null) ? $row->cost : null,
-                unpricedSpanCount: $count('unpriced_span_count'),
+                unpricedSpanCount: max($count('unpriced_span_count'), $count('cost_gap_calls')),
                 promptExcerpt: $last['prompt_excerpt'],
                 firstActivityAt: self::moment($row->first_activity_at ?? null),
                 lastActivityAt: self::moment($row->last_activity_at ?? null),
@@ -105,7 +105,7 @@ final class Conversations
             ->select([
                 'id', 'conversation_id', 'name', 'status', 'created_at', 'started_at', 'user_type', 'user_id',
                 'input_tokens', 'output_tokens', 'cache_read_tokens', 'cache_write_tokens', 'reasoning_tokens',
-                'cost', 'unpriced_span_count', 'prompt_excerpt',
+                'cost', 'unpriced_span_count', 'cost_gap_calls', 'prompt_excerpt',
             ])
             ->whereIn('conversation_id', $ids);
 
@@ -138,7 +138,7 @@ final class Conversations
             ->selectRaw(self::count('status = ? and created_at >= ?').' as running', [$running, $cutoff])
             ->selectRaw(self::count('status = ?').' as awaiting_approval', [Status::AwaitingApproval->value]);
 
-        foreach (['input_tokens', 'output_tokens', 'cache_read_tokens', 'cache_write_tokens', 'reasoning_tokens', 'cost', 'unpriced_span_count'] as $column) {
+        foreach (['input_tokens', 'output_tokens', 'cache_read_tokens', 'cache_write_tokens', 'reasoning_tokens', 'cost', 'unpriced_span_count', 'cost_gap_calls'] as $column) {
             $query->selectRaw('sum('.$column.') as '.$column);
         }
 

@@ -6,7 +6,7 @@ your provider charges you. For the real figure, use your provider's invoice or u
 
 ## How an estimate is made
 
-Each step and embeddings call is priced by its own usage when it is recorded. A run's cost is the
+Each model step, embeddings call and classification call is priced by its own usage when it is recorded. A run's cost is the
 sum of its priced steps.
 
 - Prices are in US dollars per **one million tokens**, with up to four rates per model: `input`,
@@ -109,3 +109,27 @@ that a model you price later leaves its earlier runs Unpriced.
 The Usage & cost page also shows a spend projection. It carries the recent rate forward, priced at today's
 prices, and is a projection, not a prediction and not a recorded cost. It is kept apart from the
 recorded amounts and is not added to them.
+
+
+## Reranking and coverage
+
+Reranking uses an explicit selected billing basis: input tokens at USD per million, or search units
+at USD per unit. It never falls back to ordinary model rates, and it never charges both quantities.
+A missing selected quantity or rate is unknown; an explicit rate of zero is free. The responding
+model is used when the SDK reports it, with the requested model as the fallback.
+
+New data assesses missing-usage calls and capture completeness separately. Reported unpriced calls,
+unreported-cost calls and incomplete capture form a union of cost gaps, so one call is never counted
+twice in the aggregate cost state. Pending takes precedence for active calls. A priced subtotal plus
+a known gap is Partial. Historical rows retain their recorded dollars and expose Not assessed
+coverage; known gaps alongside those rows still make a priced aggregate Partial.
+
+Both priced and unpriced completed decisions stay frozen across later writes and price changes.
+Spend projections use current rates on measured quantities, separately for ordinary and reranking
+calls on the same model. Calls missing the currently selected billing quantity stay visible as
+excluded calls. Projection dollar calculations are estimates; exact search quantities are shown
+separately and are never combined with tokens.
+
+The dashboard edits the two price groups independently. Reset token or reranking prices returns that
+group to its configured or inherited defaults. Legacy `PUT {}` explicitly clears ordinary token
+rates and preserves reranking. Legacy DELETE without a group still removes the whole saved row.

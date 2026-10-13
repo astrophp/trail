@@ -116,7 +116,7 @@ A `RecordingCandidate` has these public properties:
 
 | Property | Holds |
 | -- | -- |
-| `type` | `Astro\Trail\Enums\SpanType::Agent` for an agent run, `SpanType::Embedding` for an embeddings call made on its own |
+| `type` | `Astro\Trail\Enums\SpanType::Agent` for an agent run, `SpanType::Embedding` for an embeddings call made on its own; `Classification` and `Reranking` identify those standalone calls |
 | `agentClass` | The agent's class, or `null` for an anonymous agent and for embeddings |
 | `agent` | The agent instance, or `null` for embeddings |
 | `prompt` | The prompt text, or `null` for embeddings |
@@ -159,3 +159,20 @@ $answer = Trail::withoutRecording(function () {
 `php artisan trail:pause` stops recording in every process that shares your default cache store
 (only the issuing one with the `array` or `null` driver), without a deploy, until
 `php artisan trail:resume`. See [Operations](operations.md#pausing-and-resuming).
+
+
+## Capability payload bounds
+
+Classification captures native question descriptors, state, all Boolean/choice/ordinal answer
+fields and safe attachment descriptors. Attachments are supported only when the SDK exposes them
+(1.2); bytes, file paths, remote URLs and provider options are never stored. Reranking captures query,
+indexed document snippets and ordered index/score results without duplicating document content.
+
+`capture.max_items` bounds collections to 100 by default. A shared context bounds each invocation's
+input and output to 1,000 values and 64 KiB of serialized JSON, including counts and omission notices.
+Document snippets are at most 1,000 characters, respecting a lower `capture.max_length`. Redaction
+runs before truncation. `omitted_entries`, truncation paths and per-document flags explain missing
+content. Fixed native answer fields remain intact at small collection limits. Unknown object values
+are not dumped. Capture disabled retains structural counts, provider/model, timing and measured
+usage; query, state, questions, answers, probabilities, scores, snippets, attachment names and excerpts
+are absent. These limits are upper bounds, not guarantees that each field will fit.

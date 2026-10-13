@@ -80,7 +80,7 @@ final readonly class TraceResource
             'model' => $trace->model,
             'duration_ms' => $trace->duration_ms,
             'usage' => Usage::direct($running, $trace->input_tokens, $trace->output_tokens, $trace->cache_read_tokens, $trace->cache_write_tokens, $trace->reasoning_tokens, SearchUnits::fromStorage($trace->search_units)),
-            'cost' => Cost::of($trace->cost, $trace->unpriced_span_count, $running),
+            'cost' => Cost::of($trace->cost, max($trace->unpriced_span_count, $trace->cost_gap_calls ?? 0), $running),
             'span_count' => $trace->span_count,
             'prompt_excerpt' => $trace->prompt_excerpt,
             'response_excerpt' => $trace->response_excerpt,

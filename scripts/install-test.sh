@@ -226,7 +226,7 @@ fi
 
 mkdir -p "$APP/app/Ai/Agents" "$APP/app/Console/Commands"
 cp "$STUBS/ProbeAgent.php" "$APP/app/Ai/Agents/ProbeAgent.php"
-for command in ProbeRun ProbeRequest ProbeTraces ProbeTables ProbeRoutes; do
+for command in ProbeRun ProbeRequest ProbeTraces ProbeTables ProbeRoutes ProbeCapabilities; do
     cp "$STUBS/$command.php" "$APP/app/Console/Commands/$command.php"
 done
 
@@ -506,5 +506,10 @@ cp "$WORK/TrailServiceProvider.original" "$PROVIDER"
 CASE="outside local, provider restored"
 assert_refused /trail 403 APP_ENV=production
 assert_refused /trail/api/meta 403 APP_ENV=production
+
+CASE="capability capture"
+step "Classification and reranking against SDK fakes"
+artisan probe:capabilities || fail "$CASE: shipped capture failed"
+assert_api_reads_tables
 
 printf '\nPASS: Laravel %s%s, %s, laravel/ai %s, %s %s\n' "$MAJOR" "$([ "$LOWEST" = 1 ] && printf ' (lowest)')" "$FRAMEWORK_VERSION" "$AI_VERSION" "$PACKAGE" "$TRAIL_VERSION"

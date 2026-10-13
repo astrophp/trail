@@ -17,6 +17,8 @@ A **trace** is one top-level run. Its **spans** are the parts of it, in a tree:
 | Agent | The run of an agent. A sub-agent is an agent span under the tool call that delegated to it. |
 | Step | One model call, with the provider and model it used and the usage it reported: input, output, cache read, cache write and reasoning tokens. |
 | Tool | One tool call, with its arguments and result. |
+| Classification | One classification call, its questions and state, all stored answer forms and measured token usage. |
+| Reranking | One reranking call, original input document indexes, bounded snippets, provider result order and scores, and measured tokens or search units. |
 | Embedding | One embeddings call, with the model, the token count the provider reported, and the dimensions asked for. |
 
 A trace also carries the agent class, the final status, the provider and model, the conversation
@@ -55,8 +57,8 @@ Prompts, messages, arguments and results are redacted and cut to a length before
 
 ## What is not recorded
 
-- **Runs the SDK reports no event for.** Trail records agent runs and embeddings. Classification,
-  images, audio, transcription and reranking are not recorded.
+- **Runs the SDK reports no event for.** Trail records agent runs, embeddings, classification and reranking.
+  Images, audio and transcription are not recorded.
 - **The title call.** When an agent remembers conversations and generates a title for a new one,
   the SDK makes an extra model call that no event reports. It is neither recorded nor priced.
 - **Embeddings served from the SDK's embeddings cache,** which fire no events.
@@ -110,3 +112,13 @@ no event for. The dashboard shows a stale run as Incomplete before any command h
 `trail:sweep` writes that status to the database ([Operations](operations.md)).
 
 A cost is an estimate from list prices, frozen when the run was recorded ([Cost](cost.md)).
+
+
+### Direct capability calls
+
+A standalone classification or reranking call is its own root trace. Inside a recorded invocation,
+it is a child of the observed open tool or agent span and follows the parent's recording decision.
+An unknown or suppressed parent never creates an orphan trace. The SDK invocation ID is used for
+both start and completion, and each recorded call contributes usage exactly once. Agent and tool
+envelopes never contribute it again. A missing successful terminal event produces no guessed result,
+provider error or duration. See [limits](limits.md#classification-and-reranking-limits).

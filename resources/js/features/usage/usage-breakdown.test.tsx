@@ -79,7 +79,7 @@ describe('the breakdown by model', () => {
 
         expect(row).toHaveTextContent('anthropic')
         expect(cellOf(row, 'Runs')).toHaveTextContent('2')
-        expect(cellOf(row, 'Steps')).toHaveTextContent('3')
+        expect(cellOf(row, 'Calls')).toHaveTextContent('3')
         expect(cellOf(row, 'Input tokens')).toHaveTextContent('1,230')
         expect(cellOf(row, 'Output tokens')).toHaveTextContent('310')
     })
@@ -314,7 +314,7 @@ describe('what a row says about its cost and coverage', () => {
         expect(cost).toHaveTextContent(formatCost(0.00825))
         expect(cost).toHaveTextContent('Partial')
         expect(cellOf(row, 'Coverage')).toHaveTextContent(
-            '1 of 2 steps unpriced',
+            '1 of 2 calls unpriced',
         )
         expect(cellOf(row, 'Coverage')).toHaveTextContent('30 tokens')
     })
@@ -328,7 +328,7 @@ describe('what a row says about its cost and coverage', () => {
         expect(cellOf(row, 'Est. cost')).toHaveTextContent(/^Unpriced$/)
         expect(row).not.toHaveTextContent('$0')
         expect(cellOf(row, 'Coverage')).toHaveTextContent(
-            /^2 of 2 steps unpriced$/,
+            /^2 of 2 calls unpriced$/,
         )
     })
 

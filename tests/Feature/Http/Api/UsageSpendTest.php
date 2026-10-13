@@ -1,5 +1,6 @@
 <?php
 
+use Astro\Trail\Enums\SpanType;
 use Astro\Trail\Enums\Status;
 use Astro\Trail\Facades\Trail;
 use Astro\Trail\Pricing\PriceBook;
@@ -436,7 +437,7 @@ describe('what the rate leaves out', function () {
         'a rate of zero' => [[spendStep(['inputTokens' => 5000, 'outputTokens' => 500], 'free')], 4, 1.5, 0, 0],
         'cache tokens without a rate for them' => [[spendStep(['inputTokens' => 1000, 'outputTokens' => 50, 'cacheReadTokens' => 100], 'plain')], 4, 1.5, 1, 1050],
         'cache tokens at their own rates' => [[spendStep(['inputTokens' => 1_000_000, 'cacheReadTokens' => 400_000, 'cacheWriteTokens' => 100_000])], 4, 1.9333333333, 0, 0],
-        'a step that reported nothing' => [[UsageRows::step('acme', 'alpha')], 3, 1.5, 0, 0],
+        'a call that reported nothing remains a gap' => [[UsageRows::step('acme', 'alpha')], 3, 1.5, 1, null],
         'tokens reported as zero' => [[spendStep(['inputTokens' => 0, 'outputTokens' => 0])], 4, 1.5, 0, 0],
     ]);
 
@@ -630,7 +631,7 @@ describe('the number of reads', function () {
         expect($overview)->toHaveCount(1)
             ->and($spend)->toHaveCount(3)
             ->and(array_slice($spend, 0, 1))->toBe($overview)
-            ->and(array_filter($spend, fn (string $sql) => str_contains($sql, 'trail_trace_models')))->toHaveCount(1)
+            ->and(array_filter($spend, fn (string $sql) => str_contains($sql, 'trail_spans')))->toHaveCount(1)
             ->and(array_filter($spend, fn (string $sql) => str_contains($sql, 'trail_prices')))->toHaveCount(1);
     });
 
@@ -834,4 +835,20 @@ describe('access', function () {
     it('answers a JSON 422 for a bad range even when HTML is asked for', function () {
         $this->get('/trail/api/usage/spend?range=bad', ['Accept' => 'text/html'])->assertUnprocessable()->assertJsonValidationErrors(['range']);
     });
+});
+
+it('projects fractional reranking units separately from ordinary tokens on the same model and shows missing selected quantities', function () {
+    config(['trail.pricing.acme.alpha.reranking' => ['basis' => 'search_units', 'search_unit' => 10]]);
+    foreach (['2026-01-02 06:10:00', '2026-01-02 08:10:00', '2026-01-02 11:10:00'] as $started) {
+        spendRun($started, [
+            spendStep(),
+            ['type' => SpanType::Reranking, 'provider' => 'acme', 'model' => 'alpha', 'inputTokens' => 100_000_000, 'searchUnits' => '0.100001'],
+            ['type' => SpanType::Reranking, 'provider' => 'acme', 'model' => 'alpha', 'inputTokens' => 2],
+        ]);
+    }
+    $projection = spendAt($this)['data']['projection'];
+    // Six hourly buckets: three ordinary calls at $3 and three unit calls at $1.00001.
+    expect($projection['per_bucket'])->toBe(2.000005)
+        ->and($projection['left_out']['unpriced_steps'])->toBe(3)
+        ->and($projection['left_out']['unpriced_tokens'])->toBe(6);
 });

@@ -32,6 +32,8 @@ final readonly class RunFigures
         public int $unpricedSpans,
         public int $unpricedRuns,
         public int $withoutAmount,
+        public int $costGapCalls = 0,
+        public int $unassessedRuns = 0,
     ) {}
 
     /**
@@ -59,6 +61,8 @@ final readonly class RunFigures
             ->selectRaw('sum(reasoning_tokens) as reasoning_tokens')
             ->selectRaw(self::count('input_tokens is not null or output_tokens is not null or cache_read_tokens is not null or cache_write_tokens is not null or reasoning_tokens is not null').' as reported')
             ->selectRaw('sum(cost) as cost_sum')
+            ->selectRaw('sum(cost_gap_calls) as cost_gap_calls')
+            ->selectRaw(self::count('cost_gap_calls is null').' as unassessed_runs')
             ->selectRaw('sum(unpriced_span_count) as unpriced_spans')
             ->selectRaw(self::count('unpriced_span_count > 0').' as unpriced_runs')
             ->selectRaw(self::count('cost is null').' as without_amount');
@@ -151,6 +155,8 @@ final readonly class RunFigures
             unpricedSpans: $int('unpriced_spans'),
             unpricedRuns: $int('unpriced_runs'),
             withoutAmount: $int('without_amount'),
+            costGapCalls: $int('cost_gap_calls'),
+            unassessedRuns: $int('unassessed_runs'),
         );
     }
 
@@ -163,6 +169,7 @@ final readonly class RunFigures
         $tokens = ['input' => null, 'output' => null, 'cache_read' => null, 'cache_write' => null, 'reasoning' => null];
         $measured = $reported = $unpricedSpans = $unpricedRuns = $withoutAmount = 0;
         $durationSum = $costSum = null;
+        $gaps = $unassessed = 0;
 
         foreach ($parts as $part) {
             foreach ($runs as $status => $count) {
@@ -173,6 +180,8 @@ final readonly class RunFigures
                 $tokens[$kind] = $part->tokens[$kind] === null ? $total : ($total ?? 0) + $part->tokens[$kind];
             }
 
+            $gaps += $part->costGapCalls;
+            $unassessed += $part->unassessedRuns;
             $measured += $part->measured;
             $reported += $part->reported;
             $unpricedSpans += $part->unpricedSpans;
@@ -182,6 +191,6 @@ final readonly class RunFigures
             $costSum = $part->costSum === null ? $costSum : ($costSum ?? 0.0) + $part->costSum;
         }
 
-        return new self($runs, $measured, $durationSum, $tokens, $reported, $costSum, $unpricedSpans, $unpricedRuns, $withoutAmount);
+        return new self($runs, $measured, $durationSum, $tokens, $reported, $costSum, $unpricedSpans, $unpricedRuns, $withoutAmount, $gaps, $unassessed);
     }
 }
