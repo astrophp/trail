@@ -186,7 +186,10 @@ class UserResolver
             return $query->whereKey($ids)->get();
         }
 
-        return $connection->transaction(fn () => $query->whereKey($ids)->get());
+        /** @var iterable<Model> $users Laravel 12's transaction return is mixed. */
+        $users = $connection->transaction(fn () => $query->whereKey($ids)->get());
+
+        return $users;
     }
 
     /**

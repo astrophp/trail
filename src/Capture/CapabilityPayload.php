@@ -34,7 +34,10 @@ final class CapabilityPayload
     public function input(ClassificationPrompt|RerankingPrompt $prompt): Captured
     {
         if ($prompt instanceof ClassificationPrompt) {
-            $attachments = property_exists($prompt, 'attachments') && is_array($prompt->attachments) ? $prompt->attachments : null;
+            // SDK 1.1 has no attachments field; inspect the public field map across both versions.
+            $properties = get_object_vars($prompt);
+            $attachments = $properties['attachments'] ?? null;
+            $attachments = is_array($attachments) ? $attachments : null;
             $counts = ['question_count' => count($prompt->questions), 'attachment_count' => $attachments === null ? null : count($attachments)];
             if (! $this->payload->capturing()) {
                 return new Captured($counts);

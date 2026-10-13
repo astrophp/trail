@@ -5,6 +5,7 @@ namespace Astro\Trail\Pricing;
 use Illuminate\Contracts\Config\Repository;
 use Illuminate\Database\ConnectionResolverInterface;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Throwable;
 
 class PriceBook
@@ -137,6 +138,7 @@ class PriceBook
         try {
             $connection = $this->resolver->connection($this->connection);
 
+            /** @var Collection<int, \stdClass> $observed Laravel 12's transaction return is mixed. */
             $observed = $connection->transaction(fn () => $connection
                 ->table('trail_trace_models')
                 ->where('steps', '>', 0)
@@ -212,6 +214,7 @@ class PriceBook
         try {
             // A savepoint when nested, so a failed read cannot abort the caller's transaction.
             $connection = $this->resolver->connection($this->connection);
+            /** @var Collection<int, \stdClass> $rows */
             $rows = $connection->transaction(fn () => $connection->table('trail_prices')->get());
             $loaded = [];
 

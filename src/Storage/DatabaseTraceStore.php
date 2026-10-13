@@ -119,7 +119,8 @@ class DatabaseTraceStore implements TraceStore
         $now = $this->now();
         $db = $this->db();
 
-        return $db->transaction(function () use ($db, $cutoff, $now) {
+        /** @var int $count Laravel 12's transaction return is mixed. */
+        $count = $db->transaction(function () use ($db, $cutoff, $now): int {
             $changes = [
                 'status' => Status::Incomplete->value,
                 'issue_kind' => IssueKind::Abandoned->value,
@@ -164,6 +165,8 @@ class DatabaseTraceStore implements TraceStore
 
             return $traces;
         }, 3);
+
+        return $count;
     }
 
     public function prune(DateTimeInterface $before): int
@@ -183,7 +186,8 @@ class DatabaseTraceStore implements TraceStore
                 return $deleted;
             }
 
-            $deleted += $db->transaction(function () use ($db, $ids) {
+            /** @var int $count */
+            $count = $db->transaction(function () use ($db, $ids): int {
                 $db->table('trail_spans')->whereIn('trace_id', $ids)->delete();
                 $db->table('trail_trace_models')->whereIn('trace_id', $ids)->delete();
                 $db->table('trail_trace_tools')->whereIn('trace_id', $ids)->delete();
@@ -191,6 +195,7 @@ class DatabaseTraceStore implements TraceStore
 
                 return $db->table('trail_traces')->whereIn('id', $ids)->delete();
             });
+            $deleted += $count;
         }
     }
 
