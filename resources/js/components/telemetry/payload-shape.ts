@@ -247,6 +247,9 @@ export function embeddingOutput(
 /** The shape of a span's input, whatever its type. */
 export function inputShape(span: Pick<Span, 'type' | 'input'>): Shape<unknown> {
     switch (span.type) {
+        case 'classification':
+        case 'reranking':
+            return holdsSomething(span.input) ? whole : none
         case 'agent':
             return agentInput(span.input)
         case 'step':
@@ -263,6 +266,9 @@ export function outputShape(
     span: Pick<Span, 'type' | 'output'>,
 ): Shape<unknown> {
     switch (span.type) {
+        case 'classification':
+        case 'reranking':
+            return holdsSomething(span.output) ? whole : none
         case 'agent':
             return agentOutput(span.output)
         case 'step':

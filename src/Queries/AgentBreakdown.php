@@ -80,7 +80,7 @@ final class AgentBreakdown
         $reported = SpanSql::reported($alias);
 
         if (! $anySpan) {
-            $spans->whereIn("{$alias}.type", [SpanType::Step->value, SpanType::Embedding->value]);
+            $spans->whereRaw($bills);
         }
 
         return array_values($spans

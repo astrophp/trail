@@ -40,7 +40,7 @@ final readonly class SpanUsage
 
     public function contributes(): bool
     {
-        return $this->type === SpanType::Step || $this->type === SpanType::Embedding;
+        return in_array($this->type, SpanType::billable(), true);
     }
 
     public function reportedUsage(): bool

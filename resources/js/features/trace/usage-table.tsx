@@ -31,9 +31,12 @@ export function UsageTable({
 }: UsageTableProps) {
     const groups = groupUsageRows(rows, agents)
     const names = new Map(agents.map((agent) => [agent.span_id, agent.name]))
+    const showSearchUnits =
+        rows.some((row) => row.usage.search_units !== null) ||
+        agents.some((agent) => agent.usage.search_units !== null)
 
     return (
-        <Table className="text-ui" aria-label="Steps and embeddings">
+        <Table className="text-ui" aria-label="Billable calls">
             <TableHeader>
                 <TableRow>
                     <TableHead scope="col">Span</TableHead>
@@ -54,8 +57,13 @@ export function UsageTable({
                         Reasoning
                     </TableHead>
                     <TableHead scope="col" className={numeric}>
-                        Cost
+                        {showSearchUnits ? 'Search units' : 'Cost'}
                     </TableHead>
+                    {showSearchUnits ? (
+                        <TableHead scope="col" className={numeric}>
+                            Cost
+                        </TableHead>
+                    ) : null}
                 </TableRow>
             </TableHeader>
             <TableBody>
@@ -65,7 +73,7 @@ export function UsageTable({
                             <TableRow className="bg-muted/50">
                                 <TableHead
                                     scope="rowgroup"
-                                    colSpan={8}
+                                    colSpan={showSearchUnits ? 9 : 8}
                                     className="h-auto p-2"
                                 >
                                     Not under an agent
@@ -76,6 +84,7 @@ export function UsageTable({
                             <UsageTableRow
                                 key={`${row.span_id}:${index}`}
                                 row={row}
+                                showSearchUnits={showSearchUnits}
                                 agentName={
                                     row.agent_span_id === null
                                         ? undefined
@@ -87,7 +96,10 @@ export function UsageTable({
                             />
                         ))}
                         {group.agent ? (
-                            <UsageSubtotalRow agent={group.agent} />
+                            <UsageSubtotalRow
+                                agent={group.agent}
+                                showSearchUnits={showSearchUnits}
+                            />
                         ) : null}
                     </Fragment>
                 ))}

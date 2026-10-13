@@ -4,6 +4,7 @@ namespace Astro\Trail\Http\Resources;
 
 use Astro\Trail\Enums\Status;
 use Astro\Trail\Storage\Models\Span;
+use Astro\Trail\Storage\SearchUnits;
 use Astro\Trail\Storage\SpanUsage;
 use Illuminate\Support\Carbon;
 
@@ -81,7 +82,7 @@ final readonly class SpanResource
             return null;
         }
 
-        return Usage::of(self::running($span), $span->input_tokens, $span->output_tokens, $span->cache_read_tokens, $span->cache_write_tokens, $span->reasoning_tokens);
+        return Usage::direct(self::running($span), $span->input_tokens, $span->output_tokens, $span->cache_read_tokens, $span->cache_write_tokens, $span->reasoning_tokens, SearchUnits::fromStorage($span->search_units));
     }
 
     /**
@@ -103,7 +104,7 @@ final readonly class SpanResource
 
     public static function usageOf(Span $span): SpanUsage
     {
-        return new SpanUsage($span->type, $span->input_tokens, $span->output_tokens, $span->cache_read_tokens, $span->cache_write_tokens, $span->reasoning_tokens, $span->cost);
+        return new SpanUsage($span->type, $span->input_tokens, $span->output_tokens, $span->cache_read_tokens, $span->cache_write_tokens, $span->reasoning_tokens, $span->cost, SearchUnits::fromStorage($span->search_units));
     }
 
     private static function running(Span $span): bool

@@ -4,9 +4,11 @@ use Astro\Trail\Enums\ErrorSource;
 use Astro\Trail\Enums\IssueKind;
 use Astro\Trail\Enums\SpanType;
 use Astro\Trail\Enums\Status;
+use Astro\Trail\Storage\Contracts\TraceStore;
 use Astro\Trail\Storage\Models\Trace;
 use Astro\Trail\Tests\Fixtures\Http\AgentRows;
 use Astro\Trail\Tests\Fixtures\Http\UsageRows;
+use Astro\Trail\Tests\Fixtures\Storage\Records;
 use Astro\Trail\Tests\Fixtures\Storage\Rows;
 use Astro\Trail\Tests\Fixtures\Storage\Stored;
 use Astro\Trail\Tests\Fixtures\Users\User;
@@ -501,6 +503,28 @@ function assertContract(string $name, array|object $body): void
     expect(file_exists($path))->toBeTrue("tests/Contract/{$name}.json is missing. Regenerate it with UPDATE_CONTRACT=1 vendor/bin/pest tests/Feature/Http/Api/ContractTest.php");
     expect($json)->toBe(file_get_contents($path), "The {$name} response no longer matches tests/Contract/{$name}.json. If the change is intended, regenerate the file with UPDATE_CONTRACT=1 vendor/bin/pest tests/Feature/Http/Api/ContractTest.php and review the diff.");
 }
+
+it('sends direct classification and reranking contracts without enabling capture', function () {
+    $responses = [];
+    foreach ([SpanType::Classification, SpanType::Reranking] as $type) {
+        $trace = Records::trace([
+            'id' => 'contract-'.$type->value, 'type' => $type, 'status' => Status::Completed,
+            'name' => $type === SpanType::Classification ? 'Classification calls' : 'Reranking calls',
+            'startedAt' => Carbon::parse('2026-01-02 11:00:00'),
+        ]);
+        app(TraceStore::class)->store($trace, [Records::span($trace->id, [
+            'id' => $type->value.'-span', 'type' => $type, 'name' => $type->value, 'sequence' => 1,
+            'provider' => $type === SpanType::Classification ? 'typesafe' : 'cohere', 'model' => 'synthetic-model',
+            'inputTokens' => $type === SpanType::Classification ? 10 : null,
+            'searchUnits' => $type === SpanType::Reranking ? '0.100001' : null,
+            'input' => ['example' => 'Synthetic input'], 'output' => ['example' => 'Synthetic output'],
+            'startedAt' => Carbon::parse('2026-01-02 11:00:00'),
+        ])]);
+        $response = $this->getJson('/trail/api/traces/'.$trace->id)->assertOk();
+        $responses[$type->value] = json_decode($response->getContent(), flags: JSON_THROW_ON_ERROR);
+    }
+    assertContract('capabilities', $responses);
+});
 
 it('sends the meta response the dashboard expects', function () {
     contractDataset();

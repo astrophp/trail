@@ -9,6 +9,7 @@ const usage = {
     cache_read_tokens: null,
     cache_write_tokens: null,
     reasoning_tokens: null,
+    search_units: null,
     total_tokens: 2,
 } as const
 

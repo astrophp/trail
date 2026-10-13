@@ -117,7 +117,14 @@ const issueKinds = [
     'abandoned',
 ] as const
 
-const spanTypes = ['agent', 'step', 'tool', 'embedding'] as const
+const spanTypes = [
+    'agent',
+    'step',
+    'tool',
+    'embedding',
+    'classification',
+    'reranking',
+] as const
 const errorSources = ['step', 'tool', 'run'] as const
 
 // The values of the unions in types.ts, in the order PHP declares them. The type
@@ -158,6 +165,10 @@ const usage = z.strictObject({
     total_tokens: nullable(count),
 })
 
+const directUsage = usage.extend({
+    search_units: nullable(z.string().regex(/^\d{1,12}\.\d{6}$/)),
+})
+
 const user = z.strictObject({
     id: z.string(),
     type: z.string(),
@@ -167,7 +178,7 @@ const user = z.strictObject({
 
 const trace = z.strictObject({
     id: z.string(),
-    type: z.enum(['agent', 'embedding']),
+    type: z.enum(['agent', 'embedding', 'classification', 'reranking']),
     name: z.string(),
     agent_class: nullable(z.string()),
     status,
@@ -178,7 +189,7 @@ const trace = z.strictObject({
     provider: nullable(z.string()),
     model: nullable(z.string()),
     duration_ms: nullable(z.number()),
-    usage,
+    usage: directUsage,
     cost,
     span_count: count,
     prompt_excerpt: nullable(z.string()),
@@ -239,7 +250,7 @@ const span = z.strictObject({
     offset_ms: z.number(),
     started_at: timestamp,
     ended_at: nullable(timestamp),
-    usage: nullable(usage),
+    usage: nullable(directUsage),
     cost: nullable(spanCost),
     error: nullable(traceError),
     input: jsonValue,
@@ -266,25 +277,25 @@ const traceDetail = z.strictObject({
 const usageRow = z.strictObject({
     span_id: z.string(),
     agent_span_id: nullable(z.string()),
-    type: z.enum(['step', 'embedding']),
+    type: z.enum(['step', 'embedding', 'classification', 'reranking']),
     name: z.string(),
     attempt: count,
     step_number: nullable(count),
     provider: nullable(z.string()),
     model: nullable(z.string()),
-    usage,
+    usage: directUsage,
     cost: spanCost,
 })
 
 const agentSubtotal = z.strictObject({
     span_id: z.string(),
     name: z.string(),
-    usage,
+    usage: directUsage,
     cost,
 })
 
 const traceUsageBreakdown = z.strictObject({
-    totals: z.strictObject({ usage, cost }),
+    totals: z.strictObject({ usage: directUsage, cost }),
     rows: z.array(usageRow),
     agents: z.array(agentSubtotal),
 })
@@ -334,6 +345,33 @@ const traceDetailResponse = z.strictObject({
         coverage,
     }),
     span_limit: spanLimit,
+})
+
+it('validates stored capability types and direct quantities against PHP responses', () => {
+    const fixtures = contractFixture('capabilities') as Record<string, unknown>
+    for (const type of ['classification', 'reranking'] as const) {
+        const response = traceDetailResponse.parse(fixtures[type])
+        expect(response.data.trace.type).toBe(type)
+        expect(response.data.spans[0].type).toBe(type)
+        expect(response.data.usage.rows[0].type).toBe(type)
+        expect(response.data.trace.usage.search_units).toBe(
+            type === 'reranking' ? '0.100001' : null,
+        )
+    }
+    expect(
+        directUsage.safeParse({
+            ...usage.parse({
+                state: 'not_reported',
+                input_tokens: null,
+                output_tokens: null,
+                cache_read_tokens: null,
+                cache_write_tokens: null,
+                reasoning_tokens: null,
+                total_tokens: null,
+            }),
+            search_units: 100001,
+        }).success,
+    ).toBe(false)
 })
 
 const range = z.strictObject({
@@ -524,7 +562,7 @@ const agentDelegated = z.strictObject({
 const agent = z.strictObject({
     name: z.string(),
     agent_class: nullable(z.string()),
-    type: z.enum(['agent', 'embedding']),
+    type: z.enum(['agent', 'embedding', 'classification', 'reranking']),
     top_level: nullable(agentTopLevel),
     delegated: nullable(agentDelegated),
     last_activity_at: nullable(timestamp),
@@ -1630,10 +1668,17 @@ describe('tests/Contract/trace.json', () => {
         not_captured: true,
     }
 
-    it('has a span of every type', () => {
-        expect([...new Set(spans.map((s) => s.type))].sort()).toEqual(
-            [...spanTypes].sort(),
+    it('covers every span type across legacy and capability fixtures', () => {
+        const capabilities = contractFixture('capabilities') as Record<
+            string,
+            unknown
+        >
+        const additional = Object.values(capabilities).flatMap(
+            (fixture) => traceDetailResponse.parse(fixture).data.spans,
         )
+        expect(
+            [...new Set([...spans, ...additional].map((s) => s.type))].sort(),
+        ).toEqual([...spanTypes].sort())
     })
 
     it('has a span in every cost state a span can have, and none partial', () => {

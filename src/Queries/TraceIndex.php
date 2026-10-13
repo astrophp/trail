@@ -29,7 +29,7 @@ final class TraceIndex
     private const COLUMNS = [
         'id', 'type', 'name', 'agent_class', 'status', 'streamed', 'recovered', 'child_failed', 'issue_kind',
         'provider', 'model', 'conversation_id', 'user_id', 'user_type',
-        'input_tokens', 'output_tokens', 'cache_read_tokens', 'cache_write_tokens', 'reasoning_tokens',
+        'input_tokens', 'output_tokens', 'cache_read_tokens', 'cache_write_tokens', 'reasoning_tokens', 'search_units',
         'cost', 'span_count', 'unpriced_span_count', 'duration_ms', 'prompt_excerpt', 'response_excerpt',
         'started_at', 'ended_at', 'created_at',
     ];

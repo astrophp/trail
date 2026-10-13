@@ -119,7 +119,7 @@ describe('a recorded run', function () {
                 'responding_model' => FakeAnthropic::MODEL, 'error' => null,
             ])->and($step['usage'])->toBe([
                 'state' => 'reported', 'input_tokens' => 100, 'output_tokens' => 20, 'cache_read_tokens' => null,
-                'cache_write_tokens' => null, 'reasoning_tokens' => null, 'total_tokens' => 120,
+                'cache_write_tokens' => null, 'reasoning_tokens' => null, 'total_tokens' => 120, 'search_units' => null,
             ])->and($step['cost'])->toBe(['state' => 'estimated', 'amount' => 0.0006])
             ->and($step['duration_ms'])->toBeFloat()
             ->and($step['offset_ms'])->toBeInt()
@@ -526,7 +526,7 @@ describe('a run written as rows', function () {
             'ended_at' => '2026-01-02T11:00:01.500Z',
             'usage' => [
                 'state' => 'reported', 'input_tokens' => 120, 'output_tokens' => 30, 'cache_read_tokens' => 4,
-                'cache_write_tokens' => 5, 'reasoning_tokens' => 6, 'total_tokens' => 150,
+                'cache_write_tokens' => 5, 'reasoning_tokens' => 6, 'total_tokens' => 150, 'search_units' => null,
             ],
             'cost' => ['state' => 'estimated', 'amount' => 0.0006],
             'error' => ['class' => 'RateLimitedException', 'message' => 'Slow down', 'source' => 'step', 'http_status' => 429],
@@ -560,7 +560,7 @@ describe('a run written as rows', function () {
             'model' => null, 'responding_model' => null, 'input' => null, 'output' => null, 'metadata' => null, 'error' => null,
         ])->and($body['data']['spans'][1]['usage'])->toBe([
             'state' => 'not_reported', 'input_tokens' => null, 'output_tokens' => null, 'cache_read_tokens' => null,
-            'cache_write_tokens' => null, 'reasoning_tokens' => null, 'total_tokens' => null,
+            'cache_write_tokens' => null, 'reasoning_tokens' => null, 'total_tokens' => null, 'search_units' => null,
         ])->and($body['data']['spans'][1]['cost'])->toBe(['state' => 'not_captured', 'amount' => null])
             ->and($body['data']['coverage']['timing'])->toBe(['state' => 'not_captured', 'captured' => 0, 'expected' => 2, 'reason' => 'not_reported']);
     });

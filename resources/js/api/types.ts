@@ -44,6 +44,23 @@ export type Usage = {
     total_tokens: number | null
 }
 
+/** Direct run/span evidence; aggregate usage retains its token-only shape. */
+export type DirectUsage = {
+    state: UsageState
+    input_tokens: number | null
+    output_tokens: number | null
+    cache_read_tokens: number | null
+    cache_write_tokens: number | null
+    reasoning_tokens: number | null
+    total_tokens: number | null
+    search_units: string | null
+}
+
+export type OperationType =
+    'agent' | 'embedding' | 'classification' | 'reranking'
+export type BillableSpanType =
+    'step' | 'embedding' | 'classification' | 'reranking'
+
 /** `name` and `email` are `null` when the user can no longer be resolved. */
 export type User = {
     id: string
@@ -55,7 +72,7 @@ export type User = {
 /** One run, as every endpoint returns it. Dates are ISO 8601 in UTC. */
 export type Trace = {
     id: string
-    type: 'agent' | 'embedding'
+    type: OperationType
     name: string
     agent_class: string | null
     status: Status
@@ -66,7 +83,7 @@ export type Trace = {
     provider: string | null
     model: string | null
     duration_ms: number | null
-    usage: Usage
+    usage: DirectUsage
     cost: Cost
     span_count: number
     prompt_excerpt: string | null
@@ -288,7 +305,7 @@ export type AgentDelegated = {
 export type Agent = {
     name: string
     agent_class: string | null
-    type: 'agent' | 'embedding'
+    type: OperationType
     top_level: AgentTopLevel | null
     delegated: AgentDelegated | null
     /** The later of the two; `null` when the agent has neither in the range. */
@@ -565,7 +582,7 @@ export type TraceNeighboursResponse = {
     data: TraceNeighbours
 }
 
-export type SpanType = 'agent' | 'step' | 'tool' | 'embedding'
+export type SpanType = 'agent' | 'tool' | BillableSpanType
 
 export type ErrorSource = 'step' | 'tool' | 'run'
 
@@ -610,7 +627,7 @@ export type Span = {
     offset_ms: number
     started_at: string
     ended_at: string | null
-    usage: Usage | null
+    usage: DirectUsage | null
     cost: SpanCost | null
     error: TraceError | null
     input: JsonValue
@@ -640,13 +657,13 @@ export type TraceDetail = {
 export type UsageRow = {
     span_id: string
     agent_span_id: string | null
-    type: 'step' | 'embedding'
+    type: BillableSpanType
     name: string
     attempt: number
     step_number: number | null
     provider: string | null
     model: string | null
-    usage: Usage
+    usage: DirectUsage
     cost: SpanCost
 }
 
@@ -654,13 +671,13 @@ export type UsageRow = {
 export type AgentSubtotal = {
     span_id: string
     name: string
-    usage: Usage
+    usage: DirectUsage
     cost: Cost
 }
 
 /** The totals are the run's; the rows and the subtotals describe the spans returned. */
 export type TraceUsageBreakdown = {
-    totals: { usage: Usage; cost: Cost }
+    totals: { usage: DirectUsage; cost: Cost }
     rows: UsageRow[]
     agents: AgentSubtotal[]
 }

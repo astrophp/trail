@@ -20,7 +20,8 @@
                 "cache_read_tokens": 5,
                 "cache_write_tokens": 6,
                 "reasoning_tokens": 7,
-                "total_tokens": 2174
+                "total_tokens": 2174,
+                "search_units": null
             },
             "cost": {
                 "state": "partial",
@@ -128,7 +129,8 @@
                     "cache_read_tokens": 5,
                     "cache_write_tokens": 6,
                     "reasoning_tokens": 7,
-                    "total_tokens": 1510
+                    "total_tokens": 1510,
+                    "search_units": null
                 },
                 "cost": {
                     "state": "estimated",
@@ -259,7 +261,8 @@
                     "cache_read_tokens": null,
                     "cache_write_tokens": null,
                     "reasoning_tokens": null,
-                    "total_tokens": 490
+                    "total_tokens": 490,
+                    "search_units": null
                 },
                 "cost": {
                     "state": "unpriced",
@@ -311,7 +314,8 @@
                     "cache_read_tokens": null,
                     "cache_write_tokens": null,
                     "reasoning_tokens": null,
-                    "total_tokens": 110
+                    "total_tokens": 110,
+                    "search_units": null
                 },
                 "cost": {
                     "state": "estimated",
@@ -358,7 +362,8 @@
                     "cache_read_tokens": null,
                     "cache_write_tokens": null,
                     "reasoning_tokens": null,
-                    "total_tokens": 64
+                    "total_tokens": 64,
+                    "search_units": null
                 },
                 "cost": {
                     "state": "estimated",
@@ -402,7 +407,8 @@
                     "cache_read_tokens": null,
                     "cache_write_tokens": null,
                     "reasoning_tokens": null,
-                    "total_tokens": null
+                    "total_tokens": null,
+                    "search_units": null
                 },
                 "cost": {
                     "state": "not_captured",
@@ -445,7 +451,8 @@
                     "cache_read_tokens": null,
                     "cache_write_tokens": null,
                     "reasoning_tokens": null,
-                    "total_tokens": null
+                    "total_tokens": null,
+                    "search_units": null
                 },
                 "cost": {
                     "state": "pending",
@@ -488,7 +495,8 @@
                     "cache_read_tokens": null,
                     "cache_write_tokens": null,
                     "reasoning_tokens": null,
-                    "total_tokens": null
+                    "total_tokens": null,
+                    "search_units": null
                 },
                 "cost": {
                     "state": "not_captured",
@@ -558,7 +566,8 @@
                     "cache_read_tokens": 5,
                     "cache_write_tokens": 6,
                     "reasoning_tokens": 7,
-                    "total_tokens": 2174
+                    "total_tokens": 2174,
+                    "search_units": null
                 },
                 "cost": {
                     "state": "partial",
@@ -582,7 +591,8 @@
                         "cache_read_tokens": 5,
                         "cache_write_tokens": 6,
                         "reasoning_tokens": 7,
-                        "total_tokens": 1510
+                        "total_tokens": 1510,
+                        "search_units": null
                     },
                     "cost": {
                         "state": "estimated",
@@ -605,7 +615,8 @@
                         "cache_read_tokens": null,
                         "cache_write_tokens": null,
                         "reasoning_tokens": null,
-                        "total_tokens": 490
+                        "total_tokens": 490,
+                        "search_units": null
                     },
                     "cost": {
                         "state": "unpriced",
@@ -628,7 +639,8 @@
                         "cache_read_tokens": null,
                         "cache_write_tokens": null,
                         "reasoning_tokens": null,
-                        "total_tokens": 110
+                        "total_tokens": 110,
+                        "search_units": null
                     },
                     "cost": {
                         "state": "estimated",
@@ -651,7 +663,8 @@
                         "cache_read_tokens": null,
                         "cache_write_tokens": null,
                         "reasoning_tokens": null,
-                        "total_tokens": 64
+                        "total_tokens": 64,
+                        "search_units": null
                     },
                     "cost": {
                         "state": "estimated",
@@ -674,7 +687,8 @@
                         "cache_read_tokens": null,
                         "cache_write_tokens": null,
                         "reasoning_tokens": null,
-                        "total_tokens": null
+                        "total_tokens": null,
+                        "search_units": null
                     },
                     "cost": {
                         "state": "not_captured",
@@ -697,7 +711,8 @@
                         "cache_read_tokens": null,
                         "cache_write_tokens": null,
                         "reasoning_tokens": null,
-                        "total_tokens": null
+                        "total_tokens": null,
+                        "search_units": null
                     },
                     "cost": {
                         "state": "pending",
@@ -720,7 +735,8 @@
                         "cache_read_tokens": null,
                         "cache_write_tokens": null,
                         "reasoning_tokens": null,
-                        "total_tokens": null
+                        "total_tokens": null,
+                        "search_units": null
                     },
                     "cost": {
                         "state": "not_captured",
@@ -739,7 +755,8 @@
                         "cache_read_tokens": 5,
                         "cache_write_tokens": 6,
                         "reasoning_tokens": 7,
-                        "total_tokens": 1574
+                        "total_tokens": 1574,
+                        "search_units": null
                     },
                     "cost": {
                         "state": "estimated",
@@ -756,7 +773,8 @@
                         "cache_read_tokens": null,
                         "cache_write_tokens": null,
                         "reasoning_tokens": null,
-                        "total_tokens": 600
+                        "total_tokens": 600,
+                        "search_units": null
                     },
                     "cost": {
                         "state": "partial",

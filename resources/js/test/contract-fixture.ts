@@ -5,6 +5,7 @@ import { resolve } from 'node:path'
 /** A response the PHP contract test froze in tests/Contract (`meta`, `traces`, `trace`, `enums`, `bookmark`, `neighbours`, `conversations`, `conversation`, `overview`, `attention`, `agents`, `agent`, `agent-breakdown`, `usage`, `usage-breakdown`, `prices`, `price`, `usage-spend`, `search`). */
 export function contractFixture(
     name:
+        | 'capabilities'
         | 'meta'
         | 'traces'
         | 'trace'

@@ -34,3 +34,10 @@ missing.
 To turn off the integration, set `TRAIL_BOOST_ENABLED=false` in the application's environment.
 Trail's dashboard and recording continue to work. Rebuild cached configuration after changing the
 setting.
+
+## Direct usage quantities
+
+The trace usage returned by `trail-list-traces`, `trail-show-trace`, and the turns of
+`trail-show-conversation` includes `search_units`: a six-place decimal string or `null`.
+Billable spans in `trail-show-trace` expose the same quantity. Tokens and search units stay
+separate. The range figures in `trail-usage-summary` expose token counts only. Span input, output and metadata remain omitted.

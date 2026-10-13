@@ -22,6 +22,47 @@ import {
 
 const id = '0199c2f4-6a1e-7c3b-9a55-0e8a4c1d2f30'
 
+it.each(['classification', 'reranking'] as const)(
+    'renders %s payload evidence and exact standalone usage',
+    async (type) => {
+        const span = makeStepSpan('capability', {
+            sequence: 1,
+            type,
+            name: type,
+            step_number: null,
+            input: { query: 'Synthetic question' },
+            output: { result: 'Synthetic answer' },
+            usage: {
+                state: 'reported',
+                input_tokens: null,
+                output_tokens: null,
+                cache_read_tokens: null,
+                cache_write_tokens: null,
+                reasoning_tokens: null,
+                total_tokens: null,
+                search_units: '0.100001',
+            },
+            cost: { state: 'unpriced', amount: null },
+        })
+        await open([span], {
+            trace: { type, name: type },
+            search: '?span=capability&tab=input',
+        })
+        expect(
+            spanHeader().getByText(
+                type === 'classification'
+                    ? /^Classification ·/
+                    : /^Reranking ·/,
+            ),
+        ).toBeInTheDocument()
+        expect(spanHeader().getByText('0.100001')).toBeInTheDocument()
+        expect(panel().getByText(/Synthetic question/)).toBeInTheDocument()
+        await openTab('Output')
+        expect(panel().getByText(/Synthetic answer/)).toBeInTheDocument()
+        expect(spanHeader().queryByText('0 tokens')).not.toBeInTheDocument()
+    },
+)
+
 beforeEach(() => {
     window.Trail = {
         path: '/trail',
@@ -1188,6 +1229,7 @@ describe('the head of a span', () => {
         cache_read_tokens: null,
         cache_write_tokens: null,
         reasoning_tokens: null,
+        search_units: null,
         total_tokens: null,
     } as const
     const header = () => document.querySelector('[data-slot="span-header"]')!
@@ -1204,6 +1246,7 @@ describe('the head of a span', () => {
                         usage: {
                             ...pendingUsage,
                             state: 'reported',
+                            search_units: null,
                             total_tokens: 1500,
                         },
                         cost: { state: 'estimated', amount: 0.0123 },
@@ -1416,6 +1459,7 @@ describe('the metadata and raw tabs', () => {
                 cache_read_tokens: 800,
                 cache_write_tokens: null,
                 reasoning_tokens: 90,
+                search_units: null,
                 total_tokens: 1510,
             },
             cost: { state: 'estimated', amount: 0.00825 },

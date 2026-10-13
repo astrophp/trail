@@ -3,6 +3,20 @@ import { describe, expect, it } from 'vitest'
 import { AgentIcon } from '@/components/telemetry/agent-icon'
 
 describe('AgentIcon', () => {
+    it.each(['classification', 'reranking'] as const)(
+        'names a standalone %s operation',
+        (type) => {
+            render(<AgentIcon type={type} />)
+            expect(
+                screen.getByRole('img', {
+                    name:
+                        type === 'classification'
+                            ? 'Classification run'
+                            : 'Reranking run',
+                }),
+            ).toBeInTheDocument()
+        },
+    )
     it('shows an icon for an agent run', () => {
         render(<AgentIcon type="agent" />)
 

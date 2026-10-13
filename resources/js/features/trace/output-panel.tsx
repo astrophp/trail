@@ -3,6 +3,7 @@ import type { SpanTree } from '@/features/trace/build-span-tree'
 import { AgentOutput } from '@/features/trace/agent-output'
 import { EmbeddingOutput } from '@/features/trace/embedding-output'
 import { StepOutput } from '@/features/trace/step-output'
+import { WholeOutput } from '@/features/trace/whole-output'
 import { ToolOutput } from '@/features/trace/tool-output'
 
 type OutputPanelProps = {
@@ -14,6 +15,9 @@ type OutputPanelProps = {
 /** What the span produced, laid out for its type. */
 export function OutputPanel({ span, tree, onSelect }: OutputPanelProps) {
     switch (span.type) {
+        case 'classification':
+        case 'reranking':
+            return span.output === null ? null : <WholeOutput span={span} />
         case 'agent':
             return <AgentOutput span={span} />
         case 'step':

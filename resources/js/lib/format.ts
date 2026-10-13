@@ -30,6 +30,14 @@ const whole = new Intl.NumberFormat(locale, { maximumFractionDigits: 0 })
 
 const twoDigits = (value: number) => String(value).padStart(2, '0')
 
+/** Format normalized six-place evidence without losing its fractional digits. */
+export function formatSearchUnits(value: string): string {
+    const [integer, fraction] = value.split('.')
+    const digits = fraction.replace(/0+$/, '')
+    const grouped = integer.replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+    return digits === '' ? grouped : `${grouped}.${digits}`
+}
+
 /** `$0.0466` under $1, `$1,234.50` from $1. A real zero is `$0.00`; a sliver is `<$0.0001`, never zero. */
 export function formatCost(amount: number): string {
     if (amount === 0) {

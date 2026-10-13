@@ -2,6 +2,8 @@ import { cva } from 'class-variance-authority'
 import {
     BotIcon,
     BoxIcon,
+    TagsIcon,
+    ListOrderedIcon,
     SparklesIcon,
     WrenchIcon,
     type LucideIcon,
@@ -15,6 +17,8 @@ const types: Record<SpanType, { label: string; Icon: LucideIcon }> = {
     step: { label: 'Model step', Icon: SparklesIcon },
     tool: { label: 'Tool', Icon: WrenchIcon },
     embedding: { label: 'Embedding', Icon: BoxIcon },
+    classification: { label: 'Classification', Icon: TagsIcon },
+    reranking: { label: 'Reranking', Icon: ListOrderedIcon },
 }
 
 /** The words for a span type, for anything that names one outside an icon. */
@@ -29,6 +33,8 @@ const icon = cva('size-3.75 shrink-0', {
             step: 'text-info',
             tool: 'text-warning',
             embedding: 'text-success',
+            classification: 'text-info',
+            reranking: 'text-success',
         },
     },
 })

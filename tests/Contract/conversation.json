@@ -62,7 +62,8 @@
                         "cache_read_tokens": null,
                         "cache_write_tokens": null,
                         "reasoning_tokens": null,
-                        "total_tokens": 1720
+                        "total_tokens": 1720,
+                        "search_units": null
                     },
                     "cost": {
                         "state": "estimated",
@@ -251,7 +252,8 @@
                         "cache_read_tokens": null,
                         "cache_write_tokens": null,
                         "reasoning_tokens": null,
-                        "total_tokens": 2280
+                        "total_tokens": 2280,
+                        "search_units": null
                     },
                     "cost": {
                         "state": "estimated",
@@ -363,7 +365,8 @@
                         "cache_read_tokens": null,
                         "cache_write_tokens": null,
                         "reasoning_tokens": null,
-                        "total_tokens": 2660
+                        "total_tokens": 2660,
+                        "search_units": null
                     },
                     "cost": {
                         "state": "estimated",

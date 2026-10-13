@@ -13,6 +13,7 @@ const usage = {
     cache_read_tokens: null,
     cache_write_tokens: null,
     reasoning_tokens: null,
+    search_units: null,
     total_tokens: 2,
 } as const
 
@@ -86,7 +87,7 @@ describe('cost explanations', () => {
             'unpriced',
         ])
         expect(costExplanations.partial).toBe(
-            'Covers only the steps and embeddings that could be priced.',
+            'Covers only the calls that could be priced.',
         )
     })
 

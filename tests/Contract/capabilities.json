@@ -1,0 +1,360 @@
+{
+    "classification": {
+        "data": {
+            "trace": {
+                "id": "contract-classification",
+                "type": "classification",
+                "name": "Classification calls",
+                "agent_class": null,
+                "status": "completed",
+                "issue_kind": null,
+                "streamed": false,
+                "recovered": false,
+                "child_failed": false,
+                "provider": null,
+                "model": null,
+                "duration_ms": null,
+                "usage": {
+                    "state": "reported",
+                    "input_tokens": 10,
+                    "output_tokens": null,
+                    "cache_read_tokens": null,
+                    "cache_write_tokens": null,
+                    "reasoning_tokens": null,
+                    "total_tokens": 10,
+                    "search_units": null
+                },
+                "cost": {
+                    "state": "unpriced",
+                    "amount": null
+                },
+                "span_count": 1,
+                "prompt_excerpt": null,
+                "response_excerpt": null,
+                "conversation_id": null,
+                "user": null,
+                "bookmarked": false,
+                "started_at": "2026-01-02T11:00:00.000Z",
+                "ended_at": null
+            },
+            "detail": {
+                "error": null,
+                "pending_approvals": [],
+                "resolved_tool_call_ids": []
+            },
+            "spans": [
+                {
+                    "id": "classification-span",
+                    "parent_id": null,
+                    "type": "classification",
+                    "name": "classification",
+                    "agent_class": null,
+                    "status": "completed",
+                    "issue_kind": null,
+                    "attempt": 1,
+                    "sequence": 1,
+                    "step_number": null,
+                    "provider": "typesafe",
+                    "model": "synthetic-model",
+                    "responding_model": null,
+                    "duration_ms": null,
+                    "offset_ms": 0,
+                    "started_at": "2026-01-02T11:00:00.000Z",
+                    "ended_at": null,
+                    "usage": {
+                        "state": "reported",
+                        "input_tokens": 10,
+                        "output_tokens": null,
+                        "cache_read_tokens": null,
+                        "cache_write_tokens": null,
+                        "reasoning_tokens": null,
+                        "total_tokens": 10,
+                        "search_units": null
+                    },
+                    "cost": {
+                        "state": "unpriced",
+                        "amount": null
+                    },
+                    "error": null,
+                    "input": {
+                        "example": "Synthetic input"
+                    },
+                    "output": {
+                        "example": "Synthetic output"
+                    },
+                    "metadata": null,
+                    "redacted": false,
+                    "truncated": false,
+                    "truncated_paths": {}
+                }
+            ],
+            "usage": {
+                "totals": {
+                    "usage": {
+                        "state": "reported",
+                        "input_tokens": 10,
+                        "output_tokens": null,
+                        "cache_read_tokens": null,
+                        "cache_write_tokens": null,
+                        "reasoning_tokens": null,
+                        "total_tokens": 10,
+                        "search_units": null
+                    },
+                    "cost": {
+                        "state": "unpriced",
+                        "amount": null
+                    }
+                },
+                "rows": [
+                    {
+                        "span_id": "classification-span",
+                        "agent_span_id": null,
+                        "type": "classification",
+                        "name": "classification",
+                        "attempt": 1,
+                        "step_number": null,
+                        "provider": "typesafe",
+                        "model": "synthetic-model",
+                        "usage": {
+                            "state": "reported",
+                            "input_tokens": 10,
+                            "output_tokens": null,
+                            "cache_read_tokens": null,
+                            "cache_write_tokens": null,
+                            "reasoning_tokens": null,
+                            "total_tokens": 10,
+                            "search_units": null
+                        },
+                        "cost": {
+                            "state": "unpriced",
+                            "amount": null
+                        }
+                    }
+                ],
+                "agents": []
+            },
+            "coverage": {
+                "timing": {
+                    "state": "not_captured",
+                    "captured": 0,
+                    "expected": 1,
+                    "reason": "not_reported"
+                },
+                "responding_model": {
+                    "state": "not_applicable",
+                    "captured": 0,
+                    "expected": 0,
+                    "reason": null
+                },
+                "usage": {
+                    "state": "captured",
+                    "captured": 1,
+                    "expected": 1,
+                    "reason": null
+                },
+                "cost": {
+                    "state": "not_captured",
+                    "captured": 0,
+                    "expected": 1,
+                    "reason": "no_price"
+                },
+                "system_prompt": {
+                    "state": "not_applicable",
+                    "captured": 0,
+                    "expected": 0,
+                    "reason": null
+                },
+                "payloads": {
+                    "state": "captured",
+                    "captured": 1,
+                    "expected": 1,
+                    "reason": null
+                }
+            }
+        },
+        "span_limit": {
+            "limit": 2000,
+            "total": 1,
+            "truncated": false
+        }
+    },
+    "reranking": {
+        "data": {
+            "trace": {
+                "id": "contract-reranking",
+                "type": "reranking",
+                "name": "Reranking calls",
+                "agent_class": null,
+                "status": "completed",
+                "issue_kind": null,
+                "streamed": false,
+                "recovered": false,
+                "child_failed": false,
+                "provider": null,
+                "model": null,
+                "duration_ms": null,
+                "usage": {
+                    "state": "reported",
+                    "input_tokens": null,
+                    "output_tokens": null,
+                    "cache_read_tokens": null,
+                    "cache_write_tokens": null,
+                    "reasoning_tokens": null,
+                    "total_tokens": null,
+                    "search_units": "0.100001"
+                },
+                "cost": {
+                    "state": "unpriced",
+                    "amount": null
+                },
+                "span_count": 1,
+                "prompt_excerpt": null,
+                "response_excerpt": null,
+                "conversation_id": null,
+                "user": null,
+                "bookmarked": false,
+                "started_at": "2026-01-02T11:00:00.000Z",
+                "ended_at": null
+            },
+            "detail": {
+                "error": null,
+                "pending_approvals": [],
+                "resolved_tool_call_ids": []
+            },
+            "spans": [
+                {
+                    "id": "reranking-span",
+                    "parent_id": null,
+                    "type": "reranking",
+                    "name": "reranking",
+                    "agent_class": null,
+                    "status": "completed",
+                    "issue_kind": null,
+                    "attempt": 1,
+                    "sequence": 1,
+                    "step_number": null,
+                    "provider": "cohere",
+                    "model": "synthetic-model",
+                    "responding_model": null,
+                    "duration_ms": null,
+                    "offset_ms": 0,
+                    "started_at": "2026-01-02T11:00:00.000Z",
+                    "ended_at": null,
+                    "usage": {
+                        "state": "reported",
+                        "input_tokens": null,
+                        "output_tokens": null,
+                        "cache_read_tokens": null,
+                        "cache_write_tokens": null,
+                        "reasoning_tokens": null,
+                        "total_tokens": null,
+                        "search_units": "0.100001"
+                    },
+                    "cost": {
+                        "state": "unpriced",
+                        "amount": null
+                    },
+                    "error": null,
+                    "input": {
+                        "example": "Synthetic input"
+                    },
+                    "output": {
+                        "example": "Synthetic output"
+                    },
+                    "metadata": null,
+                    "redacted": false,
+                    "truncated": false,
+                    "truncated_paths": {}
+                }
+            ],
+            "usage": {
+                "totals": {
+                    "usage": {
+                        "state": "reported",
+                        "input_tokens": null,
+                        "output_tokens": null,
+                        "cache_read_tokens": null,
+                        "cache_write_tokens": null,
+                        "reasoning_tokens": null,
+                        "total_tokens": null,
+                        "search_units": "0.100001"
+                    },
+                    "cost": {
+                        "state": "unpriced",
+                        "amount": null
+                    }
+                },
+                "rows": [
+                    {
+                        "span_id": "reranking-span",
+                        "agent_span_id": null,
+                        "type": "reranking",
+                        "name": "reranking",
+                        "attempt": 1,
+                        "step_number": null,
+                        "provider": "cohere",
+                        "model": "synthetic-model",
+                        "usage": {
+                            "state": "reported",
+                            "input_tokens": null,
+                            "output_tokens": null,
+                            "cache_read_tokens": null,
+                            "cache_write_tokens": null,
+                            "reasoning_tokens": null,
+                            "total_tokens": null,
+                            "search_units": "0.100001"
+                        },
+                        "cost": {
+                            "state": "unpriced",
+                            "amount": null
+                        }
+                    }
+                ],
+                "agents": []
+            },
+            "coverage": {
+                "timing": {
+                    "state": "not_captured",
+                    "captured": 0,
+                    "expected": 1,
+                    "reason": "not_reported"
+                },
+                "responding_model": {
+                    "state": "not_applicable",
+                    "captured": 0,
+                    "expected": 0,
+                    "reason": null
+                },
+                "usage": {
+                    "state": "captured",
+                    "captured": 1,
+                    "expected": 1,
+                    "reason": null
+                },
+                "cost": {
+                    "state": "not_captured",
+                    "captured": 0,
+                    "expected": 1,
+                    "reason": "no_price"
+                },
+                "system_prompt": {
+                    "state": "not_applicable",
+                    "captured": 0,
+                    "expected": 0,
+                    "reason": null
+                },
+                "payloads": {
+                    "state": "captured",
+                    "captured": 1,
+                    "expected": 1,
+                    "reason": null
+                }
+            }
+        },
+        "span_limit": {
+            "limit": 2000,
+            "total": 1,
+            "truncated": false
+        }
+    }
+}

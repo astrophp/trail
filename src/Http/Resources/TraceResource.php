@@ -5,6 +5,7 @@ namespace Astro\Trail\Http\Resources;
 use Astro\Trail\Enums\Status;
 use Astro\Trail\Storage\Models\Bookmark;
 use Astro\Trail\Storage\Models\Trace;
+use Astro\Trail\Storage\SearchUnits;
 
 /**
  * A run as every endpoint returns it. Built for a set of runs, so the users and the bookmarks of
@@ -78,7 +79,7 @@ final readonly class TraceResource
             'provider' => $trace->provider,
             'model' => $trace->model,
             'duration_ms' => $trace->duration_ms,
-            'usage' => Usage::of($running, $trace->input_tokens, $trace->output_tokens, $trace->cache_read_tokens, $trace->cache_write_tokens, $trace->reasoning_tokens),
+            'usage' => Usage::direct($running, $trace->input_tokens, $trace->output_tokens, $trace->cache_read_tokens, $trace->cache_write_tokens, $trace->reasoning_tokens, SearchUnits::fromStorage($trace->search_units)),
             'cost' => Cost::of($trace->cost, $trace->unpriced_span_count, $running),
             'span_count' => $trace->span_count,
             'prompt_excerpt' => $trace->prompt_excerpt,

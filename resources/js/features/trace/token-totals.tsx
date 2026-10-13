@@ -1,4 +1,5 @@
-import type { Cost, SpanLimit, Usage, UsageRow } from '@/api/types'
+import type { Cost, SpanLimit, DirectUsage, UsageRow } from '@/api/types'
+import { SearchUnitValue } from '@/components/telemetry/search-unit-value'
 import { KeyValue } from '@/components/patterns/key-value'
 import { KeyValueList } from '@/components/patterns/key-value-list'
 import { CostValue } from '@/components/telemetry/cost-value'
@@ -11,7 +12,7 @@ import { RunPanel } from '@/features/trace/run-panel'
 import { unpricedModels } from '@/features/trace/unpriced-models'
 
 type TokenTotalsProps = {
-    usage: Usage
+    usage: DirectUsage
     cost: Cost
     rows: UsageRow[]
     spanLimit: SpanLimit
@@ -36,6 +37,14 @@ export function TokenTotals({
         <RunPanel title="Tokens and cost" className={className}>
             <KeyValueList layout="rows">
                 <TokenBreakdown usage={usage} layout="rows" />
+                {usage.search_units !== null ? (
+                    <KeyValue label="Search units">
+                        <SearchUnitValue
+                            count={usage.search_units}
+                            pending={usage.state === 'pending'}
+                        />
+                    </KeyValue>
+                ) : null}
                 <KeyValue label="Estimated cost">
                     <CostValue cost={cost} />
                 </KeyValue>

@@ -9,6 +9,7 @@ import { UsageCounts } from '@/features/trace/usage-counts'
 
 type UsageTableRowProps = {
     row: UsageRow
+    showSearchUnits?: boolean
     /** The name of the agent the row belongs to, when the response names it. */
     agentName: string | undefined
     /** The highest attempt among the rows; the row names its own only when that is more than one. */
@@ -21,6 +22,7 @@ type UsageTableRowProps = {
 /** One step or embedding: the button in its first cell opens the span in the execution view. */
 export function UsageTableRow({
     row,
+    showSearchUnits,
     agentName,
     attempts,
     truncated,
@@ -73,7 +75,7 @@ export function UsageTableRow({
                     {row.provider ?? 'Not captured'}
                 </span>
             </TableCell>
-            <UsageCounts usage={row.usage} />
+            <UsageCounts usage={row.usage} showSearchUnits={showSearchUnits} />
             <TableCell className="text-end">
                 <CostValue cost={row.cost} className="items-end" />
             </TableCell>

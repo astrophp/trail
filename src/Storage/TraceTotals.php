@@ -3,7 +3,7 @@
 namespace Astro\Trail\Storage;
 
 /**
- * Token, search-unit, cost and span totals of a trace. Only step and embedding spans
+ * Token, search-unit, cost and span totals of a trace. Only billable operation spans
  * contribute usage; a total nobody reported stays null instead of becoming zero.
  */
 final readonly class TraceTotals
