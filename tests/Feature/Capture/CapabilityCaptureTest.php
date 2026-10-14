@@ -63,7 +63,8 @@ it('records reranking quantities separately from structural output zero and pres
         ->and($span->output['results'][0])->toBe(['index' => 2, 'score' => 0.9])
         ->and($span->search_units)->toBe(1500000)
         ->and($span->input_tokens)->toBeNull()->and($span->output_tokens)->toBeNull()
-        ->and($span->cost)->toBeNull();
+        ->and($span->billing_basis)->toBe('search_units')
+        ->and((float) $span->cost)->toEqualWithDelta(0.00375, 1e-12);
 });
 
 it('keeps only structural counts when payload capture is disabled', function () {

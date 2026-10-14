@@ -115,8 +115,10 @@ export function ModelPrices({ className }: { className?: string }) {
                                 </Notice>
                             ) : null}
                             <p className="px-5 pb-3 text-caption text-muted-foreground">
-                                US dollars per million tokens. Models come from
-                                your Trail configuration and recorded usage.
+                                Token rates are US dollars per million tokens;
+                                reranking rates show their billing unit. Models
+                                come from your Trail configuration and recorded
+                                usage.
                             </p>
                             <CountTabs
                                 aria-label="Which models to list"

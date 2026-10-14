@@ -12,6 +12,7 @@ import {
     type RateKey,
 } from '@/features/usage/price-draft'
 import { PriceSource } from '@/features/usage/price-source'
+import { RerankingPriceSummary } from '@/features/usage/reranking-price-summary'
 
 /** How many columns the table has, which the form's row spans. */
 export const priceColumns = 7
@@ -62,6 +63,7 @@ export function PriceRow({
                     <ModelLabel
                         of={{ provider: price.provider, model: price.model }}
                     />
+                    <RerankingPriceSummary price={price} />
                     <div
                         data-slot="price-summary"
                         className="mt-2 flex flex-col gap-1 text-caption font-normal text-muted-foreground roomy:hidden"

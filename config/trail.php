@@ -295,7 +295,9 @@ return [
     |--------------------------------------------------------------------------
     |
     | List prices in USD per one million tokens, keyed by AI provider driver
-    | and model id, used to estimate what each step and embedding cost. Rates
+    | and model id, used to estimate token-based calls. Reranking entries use
+    | an explicit "input_tokens" (USD per million) or "search_units" (USD
+    | per unit) basis in their own "reranking" group. Rates
     | saved from the dashboard override the ones here.
     |
     | "input" is the rate for uncached input tokens. "cache_read" and
@@ -304,21 +306,23 @@ return [
     | shown as unpriced. Use 0 for something that really costs nothing.
     |
     | A dated or "-latest" variant of a model listed here (for example
-    | "gpt-5-2025-08-07" for "gpt-5") uses the same rates. Any other model
-    | is unpriced until it is added.
+    | "gpt-5-2025-08-07" for "gpt-5") uses the same rates unless an exact
+    | entry overrides it. Any other model is unpriced until it is added.
     |
-    | These defaults were read from each provider's own pricing page on
-    | 2026-10-07 and are the standard, non-batch rates. They do not model
-    | long-context surcharges (some OpenAI, Gemini and xAI models bill more
-    | above a prompt-size threshold), Anthropic's one-hour cache writes
-    | (the five-minute rate is used) or cache storage fees. The Gemini 3.6,
-    | 3.7 and 3.8 Flash rates are the provider's introductory prices, which
-    | it has announced will double on 2027-01-01.
+    | Verified against official sources on 2026-10-14. See docs/price-sources.md
+    | for all entries, sources, aliases and exceptions. Defaults use standard,
+    | non-batch base rates; DeepSeek uses peak rates and Jina the USD 50 / 1B
+    | token package. They exclude long-context, regional and service-tier
+    | surcharges, cache storage fees and Anthropic's one-hour cache writes
+    | (the five-minute rate is used). Gemini rates use non-audio input prices.
+    | Some introductory prices have an announced end date; this static table
+    | never switches prices automatically. Saved prices override defaults.
     |
     */
 
     'pricing' => [
 
+        // https://platform.claude.com/docs/en/about-claude/pricing
         'anthropic' => [
             'claude-fable-5-1' => ['input' => 10.00, 'output' => 50.00, 'cache_read' => 0.25, 'cache_write' => 12.50],
             'claude-fable-5' => ['input' => 10.00, 'output' => 50.00, 'cache_read' => 1.00, 'cache_write' => 12.50],
@@ -328,13 +332,21 @@ return [
             'claude-opus-4-7' => ['input' => 5.00, 'output' => 25.00, 'cache_read' => 0.50, 'cache_write' => 6.25],
             'claude-opus-4-6' => ['input' => 5.00, 'output' => 25.00, 'cache_read' => 0.50, 'cache_write' => 6.25],
             'claude-opus-4-5' => ['input' => 5.00, 'output' => 25.00, 'cache_read' => 0.50, 'cache_write' => 6.25],
-            'claude-sonnet-5-5' => ['input' => 2.00, 'output' => 10.00, 'cache_read' => 0.20, 'cache_write' => 2.50],
+            'claude-sonnet-5-5' => ['input' => 2.00, 'output' => 10.00, 'cache_read' => 0.10, 'cache_write' => 2.50],
             'claude-sonnet-5' => ['input' => 2.00, 'output' => 10.00, 'cache_read' => 0.20, 'cache_write' => 2.50],
             'claude-sonnet-4-6' => ['input' => 3.00, 'output' => 15.00, 'cache_read' => 0.30, 'cache_write' => 3.75],
             'claude-sonnet-4-5' => ['input' => 3.00, 'output' => 15.00, 'cache_read' => 0.30, 'cache_write' => 3.75],
             'claude-haiku-4-5' => ['input' => 1.00, 'output' => 5.00, 'cache_read' => 0.10, 'cache_write' => 1.25],
+            'claude-haiku-5-5' => ['input' => 0.10, 'output' => 0.50, 'cache_read' => 0.01, 'cache_write' => 0.125],
+            'claude-mythos-5-1' => ['input' => 10.00, 'output' => 50.00, 'cache_read' => 0.25, 'cache_write' => 12.50],
+            'claude-mythos-5' => ['input' => 10.00, 'output' => 50.00, 'cache_read' => 1.00, 'cache_write' => 12.50],
+            'claude-opus-4-1' => ['input' => 15.00, 'output' => 75.00, 'cache_read' => 1.50, 'cache_write' => 18.75],
+            'claude-opus-4' => ['input' => 15.00, 'output' => 75.00, 'cache_read' => 1.50, 'cache_write' => 18.75],
+            'claude-sonnet-4' => ['input' => 3.00, 'output' => 15.00, 'cache_read' => 0.30, 'cache_write' => 3.75],
+            'claude-3-5-haiku' => ['input' => 0.80, 'output' => 4.00, 'cache_read' => 0.08, 'cache_write' => 1.00],
         ],
 
+        // https://developers.openai.com/api/docs/pricing
         'openai' => [
             'gpt-6-astra' => ['input' => 10.00, 'output' => 50.00, 'cache_read' => 1.00, 'cache_write' => 12.50],
             'gpt-6.1-sol' => ['input' => 2.00, 'output' => 10.00, 'cache_read' => 0.10, 'cache_write' => 2.50],
@@ -368,13 +380,26 @@ return [
             'text-embedding-3-small' => ['input' => 0.02],
             'text-embedding-3-large' => ['input' => 0.13],
             'text-embedding-ada-002' => ['input' => 0.10],
+            'gpt-5.6-sol' => ['input' => 4.00, 'output' => 20.00, 'cache_read' => 0.40, 'cache_write' => 5.00],
+            'gpt-4o-2024-05-13' => ['input' => 5.00, 'output' => 15.00],
+            'o1-pro' => ['input' => 150.00, 'output' => 600.00],
+            'gpt-4-turbo-2024-04-09' => ['input' => 10.00, 'output' => 30.00],
+            'gpt-4-0613' => ['input' => 30.00, 'output' => 60.00],
+            'gpt-3.5-turbo' => ['input' => 0.50, 'output' => 1.50],
+            'gpt-3.5-turbo-1106' => ['input' => 1.00, 'output' => 2.00],
+            'gpt-5.6' => ['input' => 4.00, 'output' => 20.00, 'cache_read' => 0.40, 'cache_write' => 5.00],
+            'gpt-5.6-cyber' => ['input' => 12.50, 'output' => 75.00, 'cache_read' => 1.25, 'cache_write' => 15.625],
+            'gpt-5.5-cyber' => ['input' => 12.50, 'output' => 75.00, 'cache_read' => 1.25],
+            'gpt-rosalind-research' => ['input' => 5.00, 'output' => 25.00, 'cache_read' => 0.50],
+            'gpt-rosalind-discovery' => ['input' => 5.00, 'output' => 25.00, 'cache_read' => 0.50],
         ],
 
+        // https://ai.google.dev/gemini-api/docs/pricing
         'gemini' => [
             'gemini-3.8-flash' => ['input' => 0.75, 'output' => 3.75, 'cache_read' => 0.075],
             'gemini-3.7-flash' => ['input' => 0.75, 'output' => 3.75, 'cache_read' => 0.075],
             'gemini-3.6-flash' => ['input' => 0.75, 'output' => 3.75, 'cache_read' => 0.075],
-            'gemini-3.5-flash' => ['input' => 1.50, 'output' => 9.00, 'cache_read' => 0.15],
+            'gemini-3.5-flash' => ['input' => 0.75, 'output' => 3.75, 'cache_read' => 0.075],
             'gemini-3.5-flash-lite' => ['input' => 0.30, 'output' => 2.50, 'cache_read' => 0.03],
             'gemini-3.1-flash-lite' => ['input' => 0.25, 'output' => 1.50, 'cache_read' => 0.025],
             'gemini-3.1-pro-preview' => ['input' => 2.00, 'output' => 12.00, 'cache_read' => 0.20],
@@ -383,8 +408,12 @@ return [
             'gemini-2.5-flash' => ['input' => 0.30, 'output' => 2.50, 'cache_read' => 0.03],
             'gemini-2.5-flash-lite' => ['input' => 0.10, 'output' => 0.40, 'cache_read' => 0.01],
             'gemini-embedding-2' => ['input' => 0.20],
+            'gemini-4-argon' => ['input' => 2.00, 'output' => 10.00, 'cache_read' => 0.10],
+            'gemini-3.1-pro-preview-customtools' => ['input' => 2.00, 'output' => 12.00, 'cache_read' => 0.20],
+            'gemini-robotics-er-2-preview' => ['input' => 1.00, 'output' => 5.00, 'cache_read' => 0.10],
         ],
 
+        // https://docs.mistral.ai/inference/pricing
         'mistral' => [
             'mistral-large-2512' => ['input' => 0.50, 'output' => 1.50, 'cache_read' => 0.05],
             'mistral-medium-3-5' => ['input' => 1.50, 'output' => 7.50, 'cache_read' => 0.15],
@@ -395,8 +424,10 @@ return [
             'codestral-2508' => ['input' => 0.30, 'output' => 0.90, 'cache_read' => 0.03],
             'codestral-embed-2505' => ['input' => 0.15, 'cache_read' => 0.015],
             'mistral-embed-2312' => ['input' => 0.10],
+            'mistral-large-4' => ['input' => 0.68, 'output' => 2.09, 'cache_read' => 0.07],
         ],
 
+        // https://docs.x.ai/developers/models
         'xai' => [
             'grok-4.7' => ['input' => 2.00, 'output' => 6.00, 'cache_read' => 0.50],
             'grok-4.6' => ['input' => 2.00, 'output' => 6.00, 'cache_read' => 0.50],
@@ -406,13 +437,26 @@ return [
             'grok-4.20-0309-non-reasoning' => ['input' => 1.25, 'output' => 2.50, 'cache_read' => 0.20],
             'grok-4.20-multi-agent-0309' => ['input' => 1.25, 'output' => 2.50, 'cache_read' => 0.20],
             'grok-build-0.1' => ['input' => 1.00, 'output' => 2.00, 'cache_read' => 0.20],
+            'grok-4.20-non-reasoning' => ['input' => 1.25, 'output' => 2.50, 'cache_read' => 0.20],
+            'grok-4.20-multi-agent' => ['input' => 1.25, 'output' => 2.50, 'cache_read' => 0.20],
+            'grok-4.20' => ['input' => 1.25, 'output' => 2.50, 'cache_read' => 0.20],
+            'grok-4.20-reasoning' => ['input' => 1.25, 'output' => 2.50, 'cache_read' => 0.20],
+            'grok-build-latest' => ['input' => 2.00, 'output' => 6.00, 'cache_read' => 0.30],
+            'grok-code-fast-1' => ['input' => 1.00, 'output' => 2.00, 'cache_read' => 0.20],
+            'grok-code-fast' => ['input' => 1.00, 'output' => 2.00, 'cache_read' => 0.20],
         ],
 
+        // https://console.groq.com/docs/models
         'groq' => [
             'openai/gpt-oss-120b' => ['input' => 0.15, 'output' => 0.60, 'cache_read' => 0.075],
-            'openai/gpt-oss-20b' => ['input' => 0.075, 'output' => 0.30, 'cache_read' => 0.037],
+            'openai/gpt-oss-20b' => ['input' => 0.075, 'output' => 0.30, 'cache_read' => 0.0375],
+            'openai/gpt-oss-safeguard-20b' => ['input' => 0.075, 'output' => 0.30],
+            'qwen/qwen3.8-27b' => ['input' => 0.80, 'output' => 4.00],
+            'meta-llama/llama-prompt-guard-2-22m' => ['input' => 0.03, 'output' => 0.03],
+            'meta-llama/llama-prompt-guard-2-86m' => ['input' => 0.04, 'output' => 0.04],
         ],
 
+        // https://docs.voyageai.com/docs/pricing
         'voyageai' => [
             'voyage-4-large' => ['input' => 0.12],
             'voyage-4' => ['input' => 0.06],
@@ -423,6 +467,72 @@ return [
             'voyage-law-2' => ['input' => 0.12],
             'voyage-code-2' => ['input' => 0.12],
             'voyage-multilingual-2' => ['input' => 0.12],
+            'voyage-context-3' => ['input' => 0.18],
+            'voyage-code-3' => ['input' => 0.18],
+            'voyage-3-large' => ['input' => 0.18],
+            'voyage-3.5' => ['input' => 0.06],
+            'voyage-3' => ['input' => 0.06],
+            'voyage-3.5-lite' => ['input' => 0.02],
+            'voyage-3-lite' => ['input' => 0.02],
+            'voyage-large-2-instruct' => ['input' => 0.12],
+            'voyage-large-2' => ['input' => 0.12],
+            'voyage-01' => ['input' => 0.10],
+            'voyage-lite-01' => ['input' => 0.10],
+            'voyage-lite-01-instruct' => ['input' => 0.10],
+            'voyage-02' => ['input' => 0.10],
+            'voyage-lite-02-instruct' => ['input' => 0.10],
+            'voyage-2' => ['input' => 0.10],
+            'rerank-3' => ['reranking' => ['basis' => 'input_tokens', 'input' => 0.05]],
+            'rerank-2.5' => ['reranking' => ['basis' => 'input_tokens', 'input' => 0.05]],
+            'rerank-2' => ['reranking' => ['basis' => 'input_tokens', 'input' => 0.05]],
+            'rerank-1' => ['reranking' => ['basis' => 'input_tokens', 'input' => 0.05]],
+            'rerank-3-lite' => ['reranking' => ['basis' => 'input_tokens', 'input' => 0.02]],
+            'rerank-2.5-lite' => ['reranking' => ['basis' => 'input_tokens', 'input' => 0.02]],
+            'rerank-2-lite' => ['reranking' => ['basis' => 'input_tokens', 'input' => 0.02]],
+            'rerank-lite-1' => ['reranking' => ['basis' => 'input_tokens', 'input' => 0.02]],
+        ],
+
+        // https://cohere.com/pricing
+        'cohere' => [
+            'command-a-03-2025' => ['input' => 2.50, 'output' => 10.00],
+            'command-r7b-12-2024' => ['input' => 0.0375, 'output' => 0.15],
+            'command-r-08-2024' => ['input' => 0.15, 'output' => 0.60],
+            'command-r-plus-08-2024' => ['input' => 2.50, 'output' => 10.00],
+            'command-r' => ['input' => 0.50, 'output' => 1.50],
+            'command-r-plus' => ['input' => 3.00, 'output' => 15.00],
+            'command' => ['input' => 1.00, 'output' => 2.00],
+            'command-light' => ['input' => 0.30, 'output' => 0.60],
+            'c4ai-aya-expanse-8b' => ['input' => 0.50, 'output' => 1.50],
+            'c4ai-aya-expanse-32b' => ['input' => 0.50, 'output' => 1.50],
+            'embed-v5.0-pro' => ['input' => 0.12],
+            'embed-v5.0-fast' => ['input' => 0.08],
+            'rerank-v4.0-pro' => ['reranking' => ['basis' => 'search_units', 'search_unit' => 0.0025]],
+            'rerank-v4.0-fast' => ['reranking' => ['basis' => 'search_units', 'search_unit' => 0.002]],
+        ],
+
+        // https://jina.ai/embeddings/
+        'jina' => [
+            'jina-embeddings-v5-text-small' => ['input' => 0.05],
+            'jina-embeddings-v5-text-nano' => ['input' => 0.05],
+            'jina-embeddings-v5-omni-small' => ['input' => 0.05],
+            'jina-embeddings-v5-omni-nano' => ['input' => 0.05],
+            'jina-embeddings-v4' => ['input' => 0.05],
+            'jina-embeddings-v3' => ['input' => 0.05],
+            'jina-code-embeddings-0.5b' => ['input' => 0.05],
+            'jina-code-embeddings-1.5b' => ['input' => 0.05],
+            'jina-clip-v2' => ['input' => 0.05],
+            'jina-reranker-v3.5' => ['reranking' => ['basis' => 'input_tokens', 'input' => 0.05]],
+            'jina-reranker-v3' => ['reranking' => ['basis' => 'input_tokens', 'input' => 0.05]],
+            'jina-reranker-m0' => ['reranking' => ['basis' => 'input_tokens', 'input' => 0.05]],
+            'jina-reranker-v2-base-multilingual' => ['reranking' => ['basis' => 'input_tokens', 'input' => 0.05]],
+        ],
+
+        // https://api-docs.deepseek.com/quick_start/pricing
+        'deepseek' => [
+            'deepseek-flash' => ['input' => 0.30, 'output' => 1.20, 'cache_read' => 0.006],
+            'deepseek-v4-flash' => ['input' => 0.30, 'output' => 1.20, 'cache_read' => 0.006],
+            'deepseek-v4-flash-vision-exp' => ['input' => 0.30, 'output' => 1.20, 'cache_read' => 0.006],
+            'deepseek-v4-pro' => ['input' => 1.32, 'output' => 3.96, 'cache_read' => 0.044],
         ],
 
     ],

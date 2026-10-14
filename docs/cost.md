@@ -42,7 +42,7 @@ For the provider driver and model id of a step, Trail looks, in this order:
 1. **A saved price** for exactly that provider and model: one you saved in the dashboard.
 2. **The config entry** for exactly that id in `trail.pricing`.
 3. **A prefix.** If the model id is a listed id followed by a version suffix, the listed id's
-   rates apply. The suffix is `-latest`, a date (`-20251001`, `-2025-08-07`, `-08-2024`) or a short
+   rates apply unless an exact entry has different rates. The suffix is `-latest`, a date (`-20251001`, `-2025-08-07`, `-08-2024`) or a short
    build number (`-001`, `-2512`). For example `gpt-5-2025-08-07` uses the rates of `gpt-5`. When
    several listed ids match, the longest wins. Both config entries and saved prices can be the id
    it goes through.
@@ -70,21 +70,38 @@ in the dashboard's price list, where you can set its price.
 
 ### The default prices
 
-`config/trail.php` ships prices for 85 models across seven provider drivers (`anthropic`, `openai`,
-`gemini`, `mistral`, `xai`, `groq`, `voyageai`). The file's own comment says what they are:
+`config/trail.php` ships prices for 173 model IDs across ten provider drivers (`anthropic`, `openai`,
+`gemini`, `mistral`, `xai`, `groq`, `voyageai`, `cohere`, `jina`, `deepseek`), including 14 rerankers.
+The [source audit](price-sources.md) lists every entry, its rates, official sources and assumptions.
 
-- They were read from each provider's pricing page on 2026-10-07 and are the standard, non-batch
-  rates.
+- Official sources were checked on 2026-10-14. Defaults use standard, non-batch base rates.
+- DeepSeek uses peak rates; off-peak calls can cost half as much. Jina uses the USD $50 / one
+  billion-token package, equivalent to $0.05 per million reported tokens. Other packages,
+  grandfathered purchases, currencies and taxes can change that estimate.
 - They **do not model long-context surcharges.** Some OpenAI, Gemini and xAI models bill more above
   a prompt-size threshold, and Trail prices every token at the base rate.
 - They do not model Anthropic's one-hour cache writes (the five-minute rate is used) or cache
   storage fees.
-- The Gemini 3.6, 3.7 and 3.8 Flash rates are the provider's introductory prices, which the file
-  notes the provider has announced will double on 2027-01-01.
+- Gemini uses non-audio input rates. Audio input and multimodal embedding rates can differ.
+- Regional inference and premium service tiers can cost more. Tool charges and cache storage
+  are excluded. Account-specific free allowances and negotiated discounts are excluded too.
+- Introductory rates have announced end dates, recorded in the source audit. The table is static:
+  it does not change automatically when a promotion ends or a floating alias changes.
 - Many entries have no `cache_write` rate. A step that reports cache-write tokens on such a model
   is Unpriced.
 
 Check them against your own agreements before you rely on a total.
+
+### Updating defaults after an upgrade
+
+When upgrading from v0.3.0, an application without a published `pricing` array receives the new
+package defaults. If you published `config/trail.php`, merge the refreshed `pricing` entries into
+your copy while preserving your own rates; the published array replaces the entire package table.
+Rebuild the configuration cache if you use one, and restart long-lived workers and Octane so they
+read the new configuration. Dashboard overrides remain in force until you reset their group.
+
+These changes affect estimates for newly recorded calls and current spend projections. Existing
+recorded costs, including Unpriced decisions, remain frozen. v0.3.1 adds no migrations.
 
 ## Editing prices in the dashboard
 

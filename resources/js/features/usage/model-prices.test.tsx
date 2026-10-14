@@ -114,7 +114,7 @@ describe('the list', () => {
 
         expect(
             screen.getByText(
-                'US dollars per million tokens. Models come from your Trail configuration and recorded usage.',
+                'Token rates are US dollars per million tokens; reranking rates show their billing unit. Models come from your Trail configuration and recorded usage.',
             ),
         ).toBeVisible()
     })
@@ -153,7 +153,7 @@ describe('the list', () => {
         ).toHaveLength(7)
     })
 
-    it('has the columns Model, Input, Output, Cache read, Cache write and Source', async () => {
+    it('has the columns Model, Input, Output, Cache read, Cache write and Token source', async () => {
         mockPrices()
         renderPrices()
         await tableLoaded()
@@ -168,7 +168,7 @@ describe('the list', () => {
             'Output',
             'Cache read',
             'Cache write',
-            'Source',
+            'Token source',
             'Actions',
         ])
     })
@@ -307,7 +307,7 @@ describe('where the rates come from', () => {
         await tableLoaded()
 
         expect(cellOf(rowOf(mystery), 'source')).toHaveTextContent(
-            'No rateSeen in usage; without an input rate it shows as Unpriced',
+            'No rateToken calls without an input rate show as Unpriced',
         )
     })
 
@@ -328,7 +328,7 @@ describe('where the rates come from', () => {
         expect(source).toHaveTextContent('Saved')
 
         expect(source).toHaveTextContent(
-            'Seen in usage; without an input rate it shows as Unpriced',
+            'Token calls without an input rate show as Unpriced',
         )
         expect(source).not.toHaveTextContent(/config/i)
     })
@@ -431,7 +431,7 @@ describe('the compact summary a narrow screen shows', () => {
         )
 
         expect(summary).toHaveTextContent(
-            'No rateSeen in usage; without an input rate it shows as Unpriced',
+            'No rateToken calls without an input rate show as Unpriced',
         )
     })
 

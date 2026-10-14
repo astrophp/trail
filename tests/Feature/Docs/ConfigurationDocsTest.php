@@ -10,9 +10,8 @@
 | file does not have, when an environment variable is missing or wrong, and when a default differs.
 |
 | The long lists are not copied into the page. The redaction keys are listed there and compared in
-| full; the redaction patterns and the price table are compared by their size (22 patterns, 85
-| models across 7 providers), which is what a change to them almost always changes. Their
-| contents are only in the file.
+| full; the redaction patterns and the price table are compared by their size, which is what a
+| change to them almost always changes. Price entries also have a source audit in docs/price-sources.md.
 |
 */
 
@@ -92,7 +91,7 @@ function trailRenderDefault(string $key, mixed $value): string
     }
 
     if ($key === 'pricing') {
-        return array_sum(array_map('count', $value)).' models across '.count($value).' providers, see [Cost](cost.md)';
+        return array_sum(array_map('count', $value)).' model IDs across '.count($value).' providers, see [Cost](cost.md)';
     }
 
     return match (true) {

@@ -4,6 +4,36 @@ All notable changes to Trail are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and Trail follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## v0.3.1
+
+### Added
+
+- Expand the default pricing catalogue from 85 to 173 model IDs across ten providers, including
+  Cohere, Jina and DeepSeek, with 14 explicitly priced rerankers. Add current and legacy text and
+  embedding models, verified aliases and exact snapshot prices.
+- Publish a complete source audit with official links, billing units, verification date,
+  introductory-price deadlines and exclusions. Exercise Cohere, Voyage and Jina estimates in
+  the offline workbench through the real SDK gateways.
+
+### Fixed
+
+- Correct Claude Sonnet 5.5 cache reads and Groq GPT-OSS 20B cached input rates. Update Gemini
+  3.5 Flash estimates for Google's documented routing to Gemini 3.6 Flash.
+- Give GPT-4o's May 2024 snapshot and Command R's August 2024 models their distinct exact rates,
+  ahead of family-prefix pricing.
+- Show reranking unit rates and their independent sources in the price list. Scope missing-input
+  warnings and the source column to token prices, so configured rerankers are not called Unpriced.
+
+### Upgrade
+
+- No new migrations. Merge the refreshed `pricing` table into a published `config/trail.php`
+  while preserving your own rates, rebuild configuration caches and restart long-lived processes.
+  Applications without a published pricing array receive the new defaults automatically.
+- Saved dashboard overrides remain in force. New calls and current spend projections use the
+  refreshed rates; already recorded costs and Unpriced decisions remain frozen.
+- Defaults remain estimates: DeepSeek uses peak pricing, Jina the USD $50 / one billion-token
+  package, and Gemini non-audio input rates. Promotions do not expire automatically.
+
 ## v0.3.0
 
 ### Added
