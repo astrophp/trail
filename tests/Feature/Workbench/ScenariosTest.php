@@ -207,9 +207,17 @@ function expectations(): array
             expect($traces->sole()->type)->toBe(SpanType::Classification)
                 ->and(Span::query()->sole()->output['answers'])->toHaveCount(3);
         }],
-        'reranking' => [Outcome::Ok, 1, function (Collection $traces) {
-            expect($traces->sole()->type)->toBe(SpanType::Reranking)
-                ->and(Span::query()->sole()->search_units)->toBe(100001);
+        'reranking' => [Outcome::Ok, 3, function (Collection $traces) {
+            $spans = Span::query()->get()->keyBy('provider');
+            expect($traces->every(fn (Trace $trace) => $trace->type === SpanType::Reranking && $trace->unpriced_span_count === 0))->toBeTrue()
+                ->and($spans['cohere']->search_units)->toBe(100001)
+                ->and($spans['cohere']->billing_basis)->toBe('search_units')
+                ->and((float) $spans['cohere']->cost)->toEqualWithDelta(0.0002500025, 1e-12)
+                ->and($spans['voyageai']->input_tokens)->toBe(240)
+                ->and($spans['voyageai']->billing_basis)->toBe('input_tokens')
+                ->and((float) $spans['voyageai']->cost)->toEqualWithDelta(0.000012, 1e-12)
+                ->and($spans['jina']->input_tokens)->toBe(320)
+                ->and((float) $spans['jina']->cost)->toEqualWithDelta(0.000016, 1e-12);
         }],
         'partly-priced-run' => [Outcome::Ok, 1, function (Collection $traces) {
             $trace = $traces->sole();
@@ -285,7 +293,7 @@ it('runs every scenario one after the other in one process', function () {
 
     expect($results)->toHaveCount(23)
         ->and(array_filter($results, fn ($result) => $result->outcome === Outcome::Error))->toBe([])
-        ->and(Trace::query()->count())->toBe(31);
+        ->and(Trace::query()->count())->toBe(33);
 });
 
 it('leaves the HTTP client and its script as it found them', function () {
@@ -345,7 +353,7 @@ describe('the landing page', function () {
     it('runs every scenario with Run all', function () {
         $this->post('/run')->assertRedirect('/');
 
-        expect(Trace::query()->count())->toBe(31);
+        expect(Trace::query()->count())->toBe(33);
     });
 
     it('answers 404 for a scenario that does not exist', function () {

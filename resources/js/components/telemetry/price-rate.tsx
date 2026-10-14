@@ -2,7 +2,7 @@ import { formatPerMillion } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
 type PriceRateProps = {
-    /** US dollars per million tokens, or `null` when the model has no rate for this kind of token. */
+    /** US dollars per billing unit, labelled by the caller; null when that rate is unknown. */
     rate: number | null
     className?: string
 }

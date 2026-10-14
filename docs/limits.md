@@ -70,11 +70,14 @@ values, so a stale run can also show as Incomplete up to an hour late in that wi
 
 ## Default prices use base rates
 
-The prices in `config/trail.php` are standard, non-batch list prices read on 2026-10-07. They do
+The prices in `config/trail.php` were verified against official sources on 2026-10-14. They use
+standard, non-batch base rates, with explicit DeepSeek peak and Jina token-package assumptions. They do
 not model long-context surcharges, which some OpenAI, Gemini and xAI models apply above a
 prompt-size threshold, nor Anthropic's one-hour cache writes or cache storage fees. A run that
-uses them can be charged more than Trail estimates. Check [Cost](cost.md) before you rely on a
-total.
+uses them can be charged more than Trail estimates. Gemini audio input, regional inference,
+premium service tiers and tool fees are not modeled. Introductory prices stay in the static table
+until explicitly updated; they do not expire automatically. Check [Cost](cost.md) and the
+[source audit](price-sources.md) before you rely on a total.
 
 ## The dashboard is one large script
 

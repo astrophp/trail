@@ -37,7 +37,7 @@ set nothing. A key with an environment variable can be set in `.env` without pub
 | `redaction.keys` | none | 15 entries, listed [below](#redaction-keys) | Keys whose value is replaced as a whole. A list you set replaces the defaults. |
 | `redaction.patterns` | none | 22 patterns | Regular expressions whose matches are replaced inside any string. A list you set replaces the defaults. |
 | `stale_after` | none | `3600` | Seconds after which a run still marked running is treated as abandoned and shown as Incomplete. Values below 60 behave as 60. |
-| `pricing` | none | 85 models across 7 providers, see [Cost](cost.md) | List prices in USD per million tokens, by provider driver and model id. |
+| `pricing` | none | 173 model IDs across 10 providers, see [Cost](cost.md) | Token prices in USD per million and separate reranking prices by explicit billing basis, keyed by provider driver and model id. |
 
 ### Notes on single keys
 
@@ -96,13 +96,14 @@ TRAIL_SAMPLING=1.0
 
 ### Capability pricing
 
-Keep ordinary token rates in their existing fields. Reranking has no built-in fallback rate:
+Keep ordinary token rates in their existing fields. The shipped catalogue includes verified
+Cohere, Voyage and Jina reranking groups. Reranking never falls back to ordinary token rates:
 
 ```php
 'pricing' => [
     'cohere' => [
-        'your-model' => [
-            'reranking' => ['basis' => 'search_units', 'search_unit' => 0.001],
+        'rerank-v4.0-pro' => [
+            'reranking' => ['basis' => 'search_units', 'search_unit' => 0.0025],
         ],
     ],
 ],

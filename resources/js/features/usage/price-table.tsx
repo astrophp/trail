@@ -31,7 +31,8 @@ export function PriceTable({
     return (
         <Table className={cn('border-separate border-spacing-0', className)}>
             <TableCaption className="sr-only">
-                Model prices, in US dollars per million tokens
+                Model prices: token rates in US dollars per million tokens;
+                reranking rates show their billing unit
             </TableCaption>
             <TableHeader>
                 <TableRow className="border-b-0 hover:bg-transparent">
@@ -54,7 +55,7 @@ export function PriceTable({
                         scope="col"
                         className={cn(head, 'hidden xs:table-cell')}
                     >
-                        Source
+                        Token source
                     </TableHead>
                     <TableHead scope="col" className={head}>
                         <span className="sr-only">Actions</span>

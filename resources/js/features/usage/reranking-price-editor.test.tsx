@@ -6,6 +6,7 @@ import {
     listOf,
     mystery,
     mockPrices,
+    rowOf,
     priceWrites,
     renderPrices,
     tableLoaded,
@@ -42,6 +43,16 @@ describe('reranking price group', () => {
         const user = userEvent.setup()
         renderPrices()
         await tableLoaded()
+        expect(rowOf(model)).toHaveTextContent(
+            'Reranking: USD 0.1 per search unit',
+        )
+        expect(rowOf(model)).toHaveTextContent('Config reranking price')
+        expect(rowOf(model)).toHaveTextContent(
+            'Token calls without an input rate show as Unpriced',
+        )
+        expect(rowOf(model)).not.toHaveTextContent(
+            'Seen in usage; without an input rate it shows as Unpriced',
+        )
         const open = () =>
             user.click(
                 screen.getByRole('button', {
