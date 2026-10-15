@@ -40,6 +40,34 @@ It serves a dashboard for those runs from your application, in the way Horizon a
 is a package, not a hosted service: Trail stores recorded runs in your database and sends them to no
 service. Errors inside Trail go to your application's exception handler.
 
+## When to use Trail
+
+If you're building AI agents with the [Laravel AI SDK](https://github.com/laravel/ai), Trail helps you understand what happens when those agents execute.
+
+Use Trail when you need to:
+
+- **Debug AI agent executions.** Inspect model steps, tool calls, sub-agents, execution timing, and failures in a single trace.
+- **Monitor token usage and costs.** Track reported token consumption, including cache and reasoning tokens where available, and estimate spending across agents, models, and providers.
+- **Investigate failed tool calls.** See which steps failed and examine their recorded execution details.
+- **Inspect AI conversations.** Follow multi-turn interactions and examine the traces associated with agent execution.
+- **Monitor agent reliability.** Explore execution history, error rates, and latency to identify problems.
+- **Keep observability self-hosted.** Store recorded data in your application's own database without sending it to an external observability service.
+
+Trail is designed specifically for applications using the Laravel AI SDK. It automatically listens to SDK events, so you don't need to instrument individual agents or tool calls.
+
+If you're familiar with Laravel Horizon for queues or Laravel Telescope for application debugging, think of Trail as a dedicated observability dashboard for Laravel AI SDK workloads.
+
+**Get started:**
+
+```bash
+composer require astrophp/trail
+php artisan migrate
+```
+
+Run an AI agent and visit `/trail` in your Laravel application.
+
+Trail is not a general-purpose OpenTelemetry backend or a hosted monitoring platform. It captures the operations exposed through Laravel AI SDK events. See [Known limits](docs/limits.md) for coverage and limitations.
+
 ## Requirements
 
 - PHP 8.3 or newer
