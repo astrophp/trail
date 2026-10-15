@@ -124,6 +124,9 @@ const spanTypes = [
     'embedding',
     'classification',
     'reranking',
+    'image',
+    'audio',
+    'transcription',
 ] as const
 const errorSources = ['step', 'tool', 'run'] as const
 
@@ -178,7 +181,15 @@ const user = z.strictObject({
 
 const trace = z.strictObject({
     id: z.string(),
-    type: z.enum(['agent', 'embedding', 'classification', 'reranking']),
+    type: z.enum([
+        'agent',
+        'embedding',
+        'classification',
+        'reranking',
+        'image',
+        'audio',
+        'transcription',
+    ]),
     name: z.string(),
     agent_class: nullable(z.string()),
     status,
@@ -280,7 +291,15 @@ const traceDetail = z.strictObject({
 const usageRow = z.strictObject({
     span_id: z.string(),
     agent_span_id: nullable(z.string()),
-    type: z.enum(['step', 'embedding', 'classification', 'reranking']),
+    type: z.enum([
+        'step',
+        'embedding',
+        'classification',
+        'reranking',
+        'image',
+        'audio',
+        'transcription',
+    ]),
     name: z.string(),
     attempt: count,
     step_number: nullable(count),
@@ -377,6 +396,18 @@ it('validates stored capability types and direct quantities against PHP response
     ).toBe(false)
 })
 
+it('validates stored image, audio and transcription calls against PHP responses', () => {
+    const fixtures = contractFixture('media') as Record<string, unknown>
+    for (const type of ['image', 'audio', 'transcription'] as const) {
+        const response = traceDetailResponse.parse(fixtures[type])
+        expect(response.data.trace.type).toBe(type)
+        expect(response.data.spans[0].type).toBe(type)
+        expect(response.data.usage.rows[0].type).toBe(type)
+        // No price ships for these models, and audio reports no usage: never a zero cost.
+        expect(response.data.trace.cost.amount).toBeNull()
+    }
+})
+
 const range = z.strictObject({
     preset: nullable(z.enum(['1h', '24h', '7d'])),
     from: timestamp,
@@ -412,7 +443,15 @@ const meta = z.strictObject({
     filters: z.strictObject({
         operation_types: z
             .array(
-                z.enum(['agent', 'embedding', 'classification', 'reranking']),
+                z.enum([
+                    'agent',
+                    'embedding',
+                    'classification',
+                    'reranking',
+                    'image',
+                    'audio',
+                    'transcription',
+                ]),
             )
             .optional(),
         agents: z.array(z.string()),
@@ -570,7 +609,15 @@ const agentDelegated = z.strictObject({
 const agent = z.strictObject({
     name: z.string(),
     agent_class: nullable(z.string()),
-    type: z.enum(['agent', 'embedding', 'classification', 'reranking']),
+    type: z.enum([
+        'agent',
+        'embedding',
+        'classification',
+        'reranking',
+        'image',
+        'audio',
+        'transcription',
+    ]),
     top_level: nullable(agentTopLevel),
     delegated: nullable(agentDelegated),
     last_activity_at: nullable(timestamp),
@@ -1715,9 +1762,11 @@ describe('tests/Contract/trace.json', () => {
             string,
             unknown
         >
-        const additional = Object.values(capabilities).flatMap(
-            (fixture) => traceDetailResponse.parse(fixture).data.spans,
-        )
+        const media = contractFixture('media') as Record<string, unknown>
+        const additional = [
+            ...Object.values(capabilities),
+            ...Object.values(media),
+        ].flatMap((fixture) => traceDetailResponse.parse(fixture).data.spans)
         expect(
             [...new Set([...spans, ...additional].map((s) => s.type))].sort(),
         ).toEqual([...spanTypes].sort())

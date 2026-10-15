@@ -17,7 +17,10 @@
                 "agent",
                 "embedding",
                 "classification",
-                "reranking"
+                "reranking",
+                "image",
+                "audio",
+                "transcription"
             ],
             "agents": [
                 "Bare",

@@ -56,7 +56,8 @@ search-unit total.
   never `0`, when it could not be told; `0` means the turn began with nothing before it.
 
 A span's cost has the same states except `partial`: a span is priced whole, so it is `estimated`,
-`unpriced`, `pending` or `not_captured`. Step, embedding, classification and reranking spans bill.
+`unpriced`, `pending` or `not_captured`. Step, embedding, classification, reranking, image, audio and
+transcription spans bill.
 An agent span and a tool span never carry usage, so their `usage` and `cost` are `null`, not a state.
 
 A running run's usage and cost are `pending`. They carry what has been recorded so far, which is
@@ -173,7 +174,8 @@ One run, as every endpoint returns it:
 }
 ```
 
-- `type` is `agent`, `embedding`, `classification`, or `reranking`. Standalone operations use their
+- `type` is `agent`, `embedding`, `classification`, `reranking`, `image`, `audio` or
+  `transcription`. Standalone operations use their
   own type; nested operations remain spans inside the enclosing run.
 - `agent_class` is `null` for an anonymous agent and for a standalone operation.
 - `provider` and `model` are those the run asked for on its last attempt. A run can use more.
@@ -557,10 +559,12 @@ reranking. Every type has this one shape.
 }
 ```
 
-- `type` is `agent`, `step`, `tool`, `embedding`, `classification` or `reranking`. Steps and tools
+- `type` is `agent`, `step`, `tool`, `embedding`, `classification`, `reranking`, `image`, `audio` or
+  `transcription`. Steps and tools
   are children of their agent's span. An agent that another agent delegated to is the child of the tool span that started it. An
-  embeddings call made inside a tool is the child of that tool span. An embeddings call made on its
-  own is the whole run, and its span has no parent.
+  embeddings, classification, reranking, image, audio or transcription call made inside a tool is
+  the child of that tool span. Such a call made on its own is the whole run, and its span has no
+  parent.
 - `sequence` is the order the spans were recorded in. `attempt` is the attempt of the run the span
   belongs to (a provider failover starts the next one), and `step_number` counts a model's steps
   from 0 within an attempt, so it starts again on every attempt. It is `null` on the other types.
@@ -592,14 +596,20 @@ reranking. Every type has this one shape.
   | step | `messages`, `messages_offset`, `options` | `text`, `tool_calls`, `finish_reason`, and `structured` for structured output |
   | tool | `arguments` | `result` |
   | embedding | `count`, `dimensions` | `count` |
+  | image | `size`, `quality`, `attachment_count`, and when captured `prompt`, `attachments` | `count`, `mime_types` |
+  | audio | `voice`, `characters`, and when captured `text`, `instructions` | `mime_type`, `size` (bytes) |
+  | transcription | `language`, `diarize`, and when captured `audio` (`type`, `name`, `size`) | `segment_count`, and when captured `text` |
 
   A step sends the whole history again, so it stores only the messages the previous step of its
   attempt did not send. `messages_offset` is how many messages come before the stored ones, which
   the earlier steps of the attempt already hold; `0` means `messages` is the whole history. A step
   recorded without its start event has `messages` and `options` as `null` and no
   `messages_offset`. An embeddings call stores how many inputs it had, never the texts, and
-  `dimensions` is `null` for the model's own size.
-- `metadata` is the rest of what capture kept about the span, or `null` when nothing is left. The
+  `dimensions` is `null` for the model's own size. Image and audio calls never store image or
+  audio bytes; a `mime_type` or `mime_types` entry is only what the provider reported.
+- `metadata` is the rest of what capture kept about the span, or `null` when nothing is left. An
+  image call keeps `image_input_tokens` and `image_output_tokens` there when the provider reported
+  them, and a transcription `audio_seconds`. The
   list of cut paths is not in it: it is `truncated_paths`.
 - `truncated_paths` maps the path of each cut part of a payload (`input.messages.0.content`) to its
   length in characters before it was cut. It is an object, `{}` when empty, and only the first
@@ -1055,7 +1065,8 @@ the same time range.
   any span with that provider and model, an agent span (the run's own or a delegated agent's, which
   record the model they asked for) included, as the runs list's `provider` and `model` filters keep
   them. A span missing either its provider or its model is in no row. `steps` counts the spans that
-  called the model: model steps, embeddings, classification and reranking calls. A model that
+  called the model: model steps, embeddings, classification, reranking, image, audio and
+  transcription calls. A model that
   only agent spans asked for is still a row, with `steps` `0`, a `usage` that is `not_reported` and a
   `cost` that is `not_captured`. A tool's `calls` counts tool spans, `failed` those that failed, and
   `runs` the distinct runs that called it.
@@ -1097,7 +1108,8 @@ be counted and priced. It takes a time range and nothing else: any other paramet
   [`GET /api/overview`](#get-apioverview) reads it: for any range it is exactly the overview's
   `data.summary`, and a range over 92 days is the same 422.
 - `coverage` counts the steps of those runs, in the models of the per-run summary. `steps` is the
-  billable calls recorded (steps, embeddings, classification and reranking), `reported_steps` those
+  billable calls recorded (steps, embeddings, classification, reranking, image, audio and
+  transcription), `reported_steps` those
   that reported any token count or search-unit quantity, and
   `unpriced_steps` those that reported usage and could not be priced. `unpriced_tokens` is the input
   and output tokens of the unpriced steps added up. Every step counts, one recorded without its
@@ -1137,7 +1149,8 @@ What the runs of a time range used, by model, by provider or by agent. Takes a t
   `model` has `provider` and `model`, a row of `provider` has `provider` and no `model`, and a row of
   `agent` has `agent` and neither. Every row has `steps`, `runs`, `usage`, `cost`, `coverage` and
   `filters`.
-- `steps` counts billable calls: steps, embeddings, classification and reranking. Grouped `usage`
+- `steps` counts billable calls: steps, embeddings, classification, reranking, image, audio and
+  transcription. Grouped `usage`
   remains token-only; `cost` sums the recorded amounts: a count nobody reported is `null`, `cost` is `partial` when
   some steps that reported usage could not be priced (the amount covers the others), `unpriced` with
   an amount of `null`, never `0`, when none could be, and `not_captured` when no usage was reported.
@@ -1694,9 +1707,9 @@ Everything the run's page needs in one response.
   | Item | Expected of | Captured when | `reason` for a gap |
   | -- | -- | -- | -- |
   | `timing` | every span that is not running | `duration_ms` is not `null` | `unfinished` when every span without one stopped short (`incomplete`), else `not_reported` |
-  | `responding_model` | every completed step | `responding_model` is not `null` | `streamed` for a streamed run, else `not_reported` |
-  | `usage` | every completed step and embedding | the provider reported a count | `not_reported` |
-  | `cost` | every step and embedding that is not running and reported usage (a running one is `pending`) | it was priced | `no_price` |
+  | `responding_model` | every completed step and single call (classification, reranking, image, audio, transcription) | `responding_model` is not `null` | `streamed` for a streamed run, else `not_reported` |
+  | `usage` | every completed billable span | the provider reported a count | `not_reported` |
+  | `cost` | every billable span that is not running and reported usage (a running one is `pending`) | it was priced | `no_price` |
   | `system_prompt` | every agent span | a system prompt was stored | `not_stored` |
   | `payloads` | every span | an input or an output was stored | `not_stored` |
 
@@ -1877,9 +1890,9 @@ Removes a model's saved price, and answers `200` with the price as it now resolv
 
 ## v0.3 capability additions
 
-`operation_type=agent|embedding|classification|reranking` filters the root operation on trace list,
-status counts, neighbours and CSV exports. It does not match a child operation. Meta publishes the
-four supported root values. Boost trace listing accepts the same filter.
+`operation_type=agent|embedding|classification|reranking|image|audio|transcription` filters the
+root operation on trace list, status counts, neighbours and CSV exports. It does not match a child
+operation. Meta publishes the supported root values. Boost trace listing accepts the same filter.
 
 Span detail adds nullable `billing_basis` (`input_tokens` or `search_units`). Direct usage exposes
 exact six-place `search_units` strings, including `0.000000`; missing is null. Token aggregate

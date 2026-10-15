@@ -18,6 +18,9 @@ export function agentRole(agent: Agent): string | null {
 
     if (agent.type === 'classification') return 'Classification calls'
     if (agent.type === 'reranking') return 'Reranking calls'
+    if (agent.type === 'image') return 'Image calls'
+    if (agent.type === 'audio') return 'Audio calls'
+    if (agent.type === 'transcription') return 'Transcription calls'
 
     const own = agent.top_level !== null
     const delegated = agent.delegated !== null

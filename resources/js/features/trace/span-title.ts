@@ -34,6 +34,9 @@ export function spanSubtitle(
         case 'embedding':
         case 'classification':
         case 'reranking':
+        case 'image':
+        case 'audio':
+        case 'transcription':
             return span.model === null
                 ? { text: 'Not captured', mono: false }
                 : { text: span.model, mono: true }

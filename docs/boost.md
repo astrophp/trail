@@ -43,11 +43,11 @@ Billable spans in `trail-show-trace` expose the same quantity. Tokens and search
 separate. The range figures in `trail-usage-summary` expose token counts only. Span input, output and metadata remain omitted.
 
 
-### Classification and reranking
+### Classification, reranking, images, audio and transcription
 
 All four tools use the same billable operation definitions and missing-evidence rules as the HTTP
 API. `trail-list-traces` accepts `operation_type` for the root operation. `trail-show-trace` includes
-classification/reranking spans and independent search-unit usage, while continuing to omit raw
-input, output and metadata. Usage summary retains legacy token fields and includes independent
+classification, reranking, image, audio and transcription spans and independent search-unit usage,
+while continuing to omit raw input, output and metadata. Usage summary retains legacy token fields and includes independent
 unit coverage and call aliases. Provider probabilities, scores and snippets are never treated as
 model quality metrics or reconstructed by the tools.

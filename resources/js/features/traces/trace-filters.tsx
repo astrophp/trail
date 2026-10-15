@@ -1,4 +1,5 @@
 import { BookmarkIcon } from 'lucide-react'
+import { operationTypes } from '@/api/trace-list-view'
 import type { RefObject } from 'react'
 import { HistorySearchField } from '@/components/patterns/history-search-field'
 import { SelectFilter } from '@/components/patterns/select-filter'
@@ -61,20 +62,10 @@ export function TraceFilters({
                 }
                 onValueChange={(value) =>
                     list.setOperationType(
-                        value === 'agent' ||
-                            value === 'embedding' ||
-                            value === 'classification' ||
-                            value === 'reranking'
-                            ? value
-                            : 'all',
+                        operationTypes.find((type) => type === value) ?? 'all',
                     )
                 }
-                options={[
-                    'agent',
-                    'embedding',
-                    'classification',
-                    'reranking',
-                ].map((value) => ({
+                options={operationTypes.map((value) => ({
                     value,
                     label: value[0].toUpperCase() + value.slice(1),
                 }))}

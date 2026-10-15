@@ -6,5 +6,11 @@ export const catalogue: CatalogueEntry = {
     specimens: [
         { name: 'Agent', Component: () => <AgentIcon type="agent" /> },
         { name: 'Embedding', Component: () => <AgentIcon type="embedding" /> },
+        { name: 'Image', Component: () => <AgentIcon type="image" /> },
+        { name: 'Audio', Component: () => <AgentIcon type="audio" /> },
+        {
+            name: 'Transcription',
+            Component: () => <AgentIcon type="transcription" />,
+        },
     ],
 }

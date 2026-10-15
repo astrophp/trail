@@ -9,10 +9,15 @@ use Laravel\Ai\Events\AgentFailed;
 use Laravel\Ai\Events\AgentFailedOver;
 use Laravel\Ai\Events\AgentPrompted;
 use Laravel\Ai\Events\AgentStreamed;
+use Laravel\Ai\Events\AudioGenerated;
 use Laravel\Ai\Events\Classified;
 use Laravel\Ai\Events\Classifying;
 use Laravel\Ai\Events\EmbeddingsGenerated;
+use Laravel\Ai\Events\GeneratingAudio;
 use Laravel\Ai\Events\GeneratingEmbeddings;
+use Laravel\Ai\Events\GeneratingImage;
+use Laravel\Ai\Events\GeneratingTranscription;
+use Laravel\Ai\Events\ImageGenerated;
 use Laravel\Ai\Events\InvokingTool;
 use Laravel\Ai\Events\PromptingAgent;
 use Laravel\Ai\Events\ProviderFailedOver;
@@ -25,6 +30,7 @@ use Laravel\Ai\Events\StreamingAgent;
 use Laravel\Ai\Events\ToolApprovalResolved;
 use Laravel\Ai\Events\ToolFailed;
 use Laravel\Ai\Events\ToolInvoked;
+use Laravel\Ai\Events\TranscriptionGenerated;
 use Throwable;
 
 /**
@@ -54,6 +60,12 @@ final class Listeners
         $events->listen(Reranked::class, static fn (Reranked $event) => self::handle($container, static fn (Recorder $recorder) => $recorder->capabilityCompleted($event)));
         $events->listen(GeneratingEmbeddings::class, static fn (GeneratingEmbeddings $event) => self::handle($container, static fn (Recorder $recorder) => $recorder->embeddingsGenerating($event)));
         $events->listen(EmbeddingsGenerated::class, static fn (EmbeddingsGenerated $event) => self::handle($container, static fn (Recorder $recorder) => $recorder->embeddingsGenerated($event)));
+        $events->listen(GeneratingImage::class, static fn (GeneratingImage $event) => self::handle($container, static fn (Recorder $recorder) => $recorder->mediaStarting($event)));
+        $events->listen(GeneratingAudio::class, static fn (GeneratingAudio $event) => self::handle($container, static fn (Recorder $recorder) => $recorder->mediaStarting($event)));
+        $events->listen(GeneratingTranscription::class, static fn (GeneratingTranscription $event) => self::handle($container, static fn (Recorder $recorder) => $recorder->mediaStarting($event)));
+        $events->listen(ImageGenerated::class, static fn (ImageGenerated $event) => self::handle($container, static fn (Recorder $recorder) => $recorder->mediaCompleted($event)));
+        $events->listen(AudioGenerated::class, static fn (AudioGenerated $event) => self::handle($container, static fn (Recorder $recorder) => $recorder->mediaCompleted($event)));
+        $events->listen(TranscriptionGenerated::class, static fn (TranscriptionGenerated $event) => self::handle($container, static fn (Recorder $recorder) => $recorder->mediaCompleted($event)));
         // AgentFailedOver extends this class and never reaches it: the dispatcher delivers an event to its own class's listeners only.
         $events->listen(ProviderFailedOver::class, static fn (ProviderFailedOver $event) => self::handle($container, static fn (Recorder $recorder) => $recorder->providerFailedOver($event)));
         $events->listen(ToolApprovalResolved::class, static fn (ToolApprovalResolved $event) => self::handle($container, static fn (Recorder $recorder) => $recorder->approvalsResolved($event)));
@@ -63,6 +75,9 @@ final class Listeners
         $events->listen(Recorder::EMBEDDINGS_FAILED, static fn (object $event) => self::failed($container, $event, static fn (Recorder $recorder, string $id, Throwable $exception) => $recorder->embeddingsFailed($id, $exception)));
         $events->listen(Recorder::CLASSIFICATION_FAILED, static fn (object $event) => self::failed($container, $event, static fn (Recorder $recorder, string $id, Throwable $exception) => $recorder->capabilityFailed($id, $exception)));
         $events->listen(Recorder::RERANKING_FAILED, static fn (object $event) => self::failed($container, $event, static fn (Recorder $recorder, string $id, Throwable $exception) => $recorder->capabilityFailed($id, $exception)));
+        $events->listen(Recorder::IMAGE_FAILED, static fn (object $event) => self::failed($container, $event, static fn (Recorder $recorder, string $id, Throwable $exception) => $recorder->capabilityFailed($id, $exception)));
+        $events->listen(Recorder::AUDIO_FAILED, static fn (object $event) => self::failed($container, $event, static fn (Recorder $recorder, string $id, Throwable $exception) => $recorder->capabilityFailed($id, $exception)));
+        $events->listen(Recorder::TRANSCRIPTION_FAILED, static fn (object $event) => self::failed($container, $event, static fn (Recorder $recorder, string $id, Throwable $exception) => $recorder->capabilityFailed($id, $exception)));
     }
 
     /**
