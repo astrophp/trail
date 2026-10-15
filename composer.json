@@ -1,12 +1,25 @@
 {
     "name": "astrophp/trail",
-    "description": "Tracing, cost tracking, and an observability dashboard for the Laravel AI SDK.",
-    "keywords": ["laravel", "ai", "llm", "tracing", "observability", "agents"],
+    "description": "Self-hosted observability for Laravel AI SDK agents. Track execution traces, tool calls, token usage, estimated costs, and failures.",
+    "keywords": [
+        "laravel",
+        "laravel-ai",
+        "laravel-ai-sdk",
+        "ai-agents",
+        "llm",
+        "observability",
+        "llm-observability",
+        "tracing",
+        "token-usage",
+        "cost-tracking",
+        "ai-monitoring"
+    ],
     "license": "MIT",
     "homepage": "https://github.com/astrophp/trail",
     "support": {
         "issues": "https://github.com/astrophp/trail/issues",
-        "source": "https://github.com/astrophp/trail"
+        "source": "https://github.com/astrophp/trail",
+        "docs": "https://github.com/astrophp/trail#documentation"
     },
     "authors": [
         {
