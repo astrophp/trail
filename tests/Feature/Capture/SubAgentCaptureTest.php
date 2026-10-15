@@ -582,7 +582,7 @@ describe('embeddings inside a sub-agent', function () {
         $embed = new CallbackTool('embed', fn () => (string) count(Embeddings::for(['a'])->generate()));
 
         (new AssistantAgent([new ResearcherAgent([$embed])]))->prompt('Hi');
-        $run = ($this->stored)()->assertVolatileColumns(untimed: [6]);
+        $run = ($this->stored)()->assertVolatileColumns(untimed: sdkReportsFailures() ? [] : [6]);
 
         expect(Captured::pick($run->spans(), ['type', 'status', 'error_source']))->toBe([
             ['type' => 'agent', 'status' => 'completed', 'error_source' => null],
@@ -591,7 +591,7 @@ describe('embeddings inside a sub-agent', function () {
             ['type' => 'agent', 'status' => 'failed', 'error_source' => 'tool'],
             ['type' => 'step', 'status' => 'completed', 'error_source' => null],
             ['type' => 'tool', 'status' => 'failed', 'error_source' => 'tool'],
-            ['type' => 'embedding', 'status' => 'failed', 'error_source' => 'tool'],
+            ['type' => 'embedding', 'status' => 'failed', 'error_source' => sdkReportsFailures() ? 'run' : 'tool'],
             ['type' => 'step', 'status' => 'completed', 'error_source' => null],
         ])->and($run->rawSpans()[6]['parent_id'])->toBe($run->spanId(5))
             ->and(Captured::pick([$run->trace()], ['status', 'child_failed'])[0])->toBe(['status' => 'completed', 'child_failed' => true]);

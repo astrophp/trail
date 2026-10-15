@@ -18,6 +18,7 @@ use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Route;
+use Laravel\Ai\Ai;
 use Laravel\Ai\Embeddings;
 use Laravel\Ai\Events\EmbeddingsGenerated;
 use Laravel\Ai\Events\GeneratingEmbeddings;
@@ -35,8 +36,9 @@ use Laravel\Ai\Responses\EmbeddingsResponse;
 |--------------------------------------------------------------------------
 |
 | An embeddings call made inside a tool is a span under that tool call. One made
-| anywhere else is a trace of its own. A failed call fires no event, so it is
-| found out from the tool that made it, or not at all.
+| anywhere else is a trace of its own. From SDK 1.2.2 a failed call fires an
+| event of its own. Before it, a failed call is found out from the tool that made
+| it, or not at all.
 |
 */
 
@@ -208,21 +210,23 @@ describe('when the call fails', function () {
         Http::fake(['api.openai.com/*' => Http::response(['error' => ['message' => 'bad']], 500)]);
     });
 
-    it('is failed with the tool\'s error when the tool fails', function () {
+    it('is failed with its own error, or the tool\'s before SDK 1.2.2, when the tool fails', function () {
         ($this->parentScript)();
 
         Failures::thrown(fn () => (new AssistantAgent([($this->embedTool)()]))->prompt('Hi', model: FakeAnthropic::MODEL));
-        $run = ($this->stored)()->assertVolatileColumns(untimed: [3]);
+        $run = ($this->stored)()->assertVolatileColumns(untimed: sdkReportsFailures() ? [] : [3]);
 
         expect(Captured::pick($run->spans(), ['type', 'status', 'issue_kind', 'error_class', 'error_source', 'error_http_status']))->toBe([
             ['type' => 'agent', 'status' => 'failed', 'issue_kind' => 'tool_error', 'error_class' => RequestException::class, 'error_source' => 'tool', 'error_http_status' => 500],
             ['type' => 'step', 'status' => 'completed', 'issue_kind' => null, 'error_class' => null, 'error_source' => null, 'error_http_status' => null],
             ['type' => 'tool', 'status' => 'failed', 'issue_kind' => 'tool_error', 'error_class' => RequestException::class, 'error_source' => 'tool', 'error_http_status' => 500],
-            ['type' => 'embedding', 'status' => 'failed', 'issue_kind' => 'tool_error', 'error_class' => RequestException::class, 'error_source' => 'tool', 'error_http_status' => 500],
+            sdkReportsFailures()
+                ? ['type' => 'embedding', 'status' => 'failed', 'issue_kind' => 'exception', 'error_class' => RequestException::class, 'error_source' => 'run', 'error_http_status' => 500]
+                : ['type' => 'embedding', 'status' => 'failed', 'issue_kind' => 'tool_error', 'error_class' => RequestException::class, 'error_source' => 'tool', 'error_http_status' => 500],
         ])->and($run->trace()['status'])->toBe('failed');
     });
 
-    it('is failed with no error when the tool catches it and the run completes', function () {
+    it('is failed with its own error, or none before SDK 1.2.2, when the tool catches it and the run completes', function () {
         ($this->parentScript)();
 
         $tool = new CallbackTool('embed', function () {
@@ -236,15 +240,22 @@ describe('when the call fails', function () {
         });
 
         (new AssistantAgent([$tool]))->prompt('Hi', model: FakeAnthropic::MODEL);
-        $run = ($this->stored)()->assertVolatileColumns(untimed: [3]);
+        $run = ($this->stored)()->assertVolatileColumns(untimed: sdkReportsFailures() ? [] : [3]);
+        $embedding = sdkReportsFailures()
+            ? ['type' => 'embedding', 'status' => 'failed', 'issue_kind' => 'exception', 'error_class' => RequestException::class, 'error_message' => $run->spans()[3]['error_message'], 'error_source' => 'run', 'error_http_status' => 500]
+            : ['type' => 'embedding', 'status' => 'failed', 'issue_kind' => null, 'error_class' => null, 'error_message' => null, 'error_source' => null, 'error_http_status' => null];
 
         expect(Captured::pick($run->spans(), ['type', 'status', 'issue_kind', 'error_class', 'error_message', 'error_source', 'error_http_status']))->toBe([
             ['type' => 'agent', 'status' => 'completed', 'issue_kind' => null, 'error_class' => null, 'error_message' => null, 'error_source' => null, 'error_http_status' => null],
             ['type' => 'step', 'status' => 'completed', 'issue_kind' => null, 'error_class' => null, 'error_message' => null, 'error_source' => null, 'error_http_status' => null],
             ['type' => 'tool', 'status' => 'completed', 'issue_kind' => null, 'error_class' => null, 'error_message' => null, 'error_source' => null, 'error_http_status' => null],
-            ['type' => 'embedding', 'status' => 'failed', 'issue_kind' => null, 'error_class' => null, 'error_message' => null, 'error_source' => null, 'error_http_status' => null],
+            $embedding,
             ['type' => 'step', 'status' => 'completed', 'issue_kind' => null, 'error_class' => null, 'error_message' => null, 'error_source' => null, 'error_http_status' => null],
         ])->and($run->trace()['status'])->toBe('completed');
+
+        if (sdkReportsFailures()) {
+            expect($run->spans()[3]['error_message'])->toContain('bad');
+        }
     });
 
     it('stays running when it is standalone, for the sweep to find', function () {
@@ -257,7 +268,21 @@ describe('when the call fails', function () {
             ->and($run->rawTrace()['ended_at'])->toBeNull()
             ->and(Captured::pick($run->spans(), ['status', 'issue_kind']))->toBe([['status' => 'running', 'issue_kind' => null]])
             ->and($run->rawSpans()[0]['ended_at'])->toBeNull();
-    });
+    })->skip(fn () => sdkReportsFailures(), 'From SDK 1.2.2 the SDK reports the failure itself.');
+
+    it('is a failed trace of its own, timed and with its error, when it is standalone', function () {
+        Failures::thrown(fn () => Embeddings::for(['a'])->generate());
+        $id = $this->sdk->sole(GeneratingEmbeddings::class)->invocationId;
+        Trail::flush();
+        $run = Captured::read($id);
+
+        expect(Captured::pick([$run->trace()], ['status', 'issue_kind', 'error_class', 'error_source', 'error_http_status', 'span_count'])[0])
+            ->toBe(['status' => 'failed', 'issue_kind' => 'exception', 'error_class' => RequestException::class, 'error_source' => 'run', 'error_http_status' => 500, 'span_count' => 1])
+            ->and($run->rawTrace()['ended_at'])->not->toBeNull()
+            ->and($run->rawTrace()['duration_ms'])->toBeFloat()
+            ->and(Captured::pick($run->spans(), ['status', 'issue_kind', 'error_http_status', 'input_tokens', 'cost']))->toBe([['status' => 'failed', 'issue_kind' => 'exception', 'error_http_status' => 500, 'input_tokens' => null, 'cost' => null]])
+            ->and($run->rawSpans()[0]['duration_ms'])->toBeFloat();
+    })->skip(fn () => ! sdkReportsFailures(), 'Before SDK 1.2.2 a standalone call that fails fires no event.');
 });
 
 it('lets embeddings return their result when every Trail listener throws', function () {
@@ -352,14 +377,14 @@ describe('when the call fails over to another provider', function () {
             ->and($run->trace()['status'])->toBe('completed');
     });
 
-    it('leaves a standalone call that fails with an error the SDK does not fail over on running', function () {
+    it('leaves a standalone call that fails with an error the SDK does not fail over on running, until SDK 1.2.2 reports it', function () {
         Http::fake(['api.openai.com/*' => Http::response(['error' => ['message' => 'bad']], 500)]);
 
         Failures::thrown(fn () => Embeddings::for(['a'])->generate());
         $id = $this->sdk->sole(GeneratingEmbeddings::class)->invocationId;
         Trail::flush();
 
-        expect(Captured::read($id)->rawTrace()['status'])->toBe('running');
+        expect(Captured::read($id)->rawTrace()['status'])->toBe(sdkReportsFailures() ? 'failed' : 'running');
     });
 
     it('does not take an agent failover for an embeddings failover', function () {
@@ -401,7 +426,25 @@ describe('when the call fails over to another provider', function () {
             ->and((new DatabaseStoreProbe)->traceCount())->toBe(1);
 
         Exceptions::assertNothingReported();
-    });
+    })->skip(fn () => sdkReportsFailures(), 'From SDK 1.2.2 the SDK reports the failure itself, so the call is not left open.');
+
+    it('takes no failover for an open call once the SDK names each failed call itself', function () {
+        $provider = Ai::embeddingProvider('openai');
+        Http::fake(['api.openai.com/*' => function () use ($provider) {
+            // A failover of something else on the same provider and model, while this call is open.
+            event(new ProviderFailedOver($provider, 'text-embedding-3-small', new RateLimitedException('slow down')));
+
+            return ($this->succeeded)();
+        }]);
+
+        Embeddings::for(['a'])->generate();
+        $id = $this->sdk->sole(GeneratingEmbeddings::class)->invocationId;
+        Trail::flush();
+        $run = Captured::read($id);
+
+        expect(Captured::pick([$run->trace()], ['status', 'issue_kind', 'input_tokens'])[0])->toBe(['status' => 'completed', 'issue_kind' => null, 'input_tokens' => 7])
+            ->and(Captured::pick($run->spans(), ['status']))->toBe([['status' => 'completed']]);
+    })->skip(fn () => ! sdkReportsFailures(), 'Before SDK 1.2.2 a failover is the only sign of a failed call.');
 
     it('lets embeddings fail over when every Trail listener throws', function () {
         Http::fake(['api.openai.com/*' => ($this->rateLimited)(), 'second.openai.test/*' => ($this->succeeded)()]);
@@ -413,11 +456,15 @@ describe('when the call fails over to another provider', function () {
         expect($response->embeddings)->toHaveCount(1);
 
         Exceptions::assertReported(fn (RuntimeException $e) => $e->getMessage() === 'providerFailedOver failed');
+
+        if (sdkReportsFailures()) {
+            Exceptions::assertReported(fn (RuntimeException $e) => $e->getMessage() === 'embeddingsFailed failed');
+        }
     });
 });
 
 describe('a stray event for a call that already ended', function () {
-    it('does not reopen an embedding the tool closed as failed', function () {
+    it('does not reopen an embedding that was closed as failed', function () {
         Http::fake(['api.openai.com/*' => Http::response(['error' => ['message' => 'bad']], 500)]);
         ($this->parentScript)();
 
@@ -437,7 +484,7 @@ describe('a stray event for a call that already ended', function () {
         $response = new EmbeddingsResponse([[0.1]], new Usage(9), new Meta('openai', $generating->model));
 
         event(new EmbeddingsGenerated($generating->invocationId, $generating->provider, $generating->model, $generating->prompt, $response));
-        $run = ($this->stored)()->assertVolatileColumns(untimed: [3]);
+        $run = ($this->stored)()->assertVolatileColumns(untimed: sdkReportsFailures() ? [] : [3]);
 
         expect(Captured::pick([$run->spans()[3]], ['type', 'status', 'input_tokens', 'cost'])[0])->toBe(['type' => 'embedding', 'status' => 'failed', 'input_tokens' => null, 'cost' => null])
             ->and($run->spans()[3]['output'])->toBeNull();

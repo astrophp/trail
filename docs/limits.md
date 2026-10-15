@@ -237,13 +237,17 @@ about 377 MiB on MySQL and 409 MiB on Postgres at 100,000 runs, and about 3.7 Gi
 
 ## Classification and reranking limits
 
-The SDK exposes start and successful completion events, but no invocation-specific failure event.
-A nested call still open when its recorded caller ends becomes Incomplete with no inferred error or
-duration. A standalone call without a completion stays Running until the stale rule or sweep applies.
-Each SDK failover attempt has its own ID and may appear as a separate standalone trace. A generic
-ProviderFailedOver event cannot prove which classification, reranking or embedding call failed;
-ambiguous events leave evidence incomplete. The recorder bounds remembered IDs and conservatively
-suppresses embedding failover attribution after ambiguity overflow until its next flush.
+From SDK 1.2.2 each failed embeddings, classification or reranking attempt fires a failure event
+that names the call, and Trail stores the call as Failed with its own error and duration. Each SDK
+failover attempt has its own ID and may appear as a separate standalone trace.
+
+Before SDK 1.2.2 the SDK exposes start and successful completion events, but no invocation-specific
+failure event. A nested call still open when its recorded caller ends becomes Incomplete with no
+inferred error or duration. A standalone call without a completion stays Running until the stale
+rule or sweep applies. A generic ProviderFailedOver event cannot prove which classification,
+reranking or embedding call failed; ambiguous events leave evidence incomplete. The recorder bounds
+remembered IDs and conservatively suppresses embedding failover attribution after ambiguity overflow
+until its next flush.
 
 All-zero SDK token totals do not prove measured zero usage. Explicit cache subsets are retained
 independently. Reranking output zero is structural and is not recorded as measured tokens. Search

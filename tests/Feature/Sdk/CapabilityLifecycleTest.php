@@ -51,6 +51,11 @@ function sdkCapabilityEvents(string $capability): array
     return $capability === 'classification' ? [Classifying::class, Classified::class] : [RerankingEvent::class, Reranked::class];
 }
 
+function sdkCapabilityFailed(string $capability): array
+{
+    return sdkFailed($capability === 'classification' ? 'ClassificationFailed' : 'RerankingFailed');
+}
+
 function sdkCapabilityHttp(string $capability, array $turns): FakeDecisions|FakeCohere
 {
     return $capability === 'classification' ? FakeDecisions::script($turns) : FakeCohere::script($turns);
@@ -86,10 +91,12 @@ it('starts a fresh UUID7 attempt after HTTP failover and only completes the succ
     [$startClass, $endClass] = sdkCapabilityEvents($capability);
     [$first, $second] = $this->sdk->of($startClass);
 
-    expect($this->sdk->names())->toBe([class_basename($startClass), 'ProviderFailedOver', class_basename($startClass), class_basename($endClass)])
+    $failed = sdkCapabilityFailed($capability);
+
+    expect($this->sdk->names())->toBe([class_basename($startClass), ...$failed, 'ProviderFailedOver', class_basename($startClass), class_basename($endClass)])
         ->and($first->invocationId)->not->toBe($second->invocationId)
         ->and($this->sdk->sole($endClass)->invocationId)->toBe($second->invocationId)
-        ->and($this->sdk->forInvocation($first->invocationId)->names())->toBe([class_basename($startClass)])
+        ->and($this->sdk->forInvocation($first->invocationId)->names())->toBe([class_basename($startClass), ...$failed])
         ->and(array_keys(get_object_vars($this->sdk->sole(ProviderFailedOver::class)->event)))->toBe(['provider', 'model', 'exception'])
         ->and($fake->remaining())->toBe(0);
     foreach ([$first, $second] as $entry) {
@@ -110,7 +117,7 @@ it('dispatches generic failover even for the final exhausted HTTP attempt', func
     $failovers = $this->sdk->of(ProviderFailedOver::class);
 
     expect($caught)->toBeInstanceOf(RateLimitedException::class)
-        ->and($this->sdk->names())->toBe([class_basename($startClass), 'ProviderFailedOver', class_basename($startClass), 'ProviderFailedOver'])
+        ->and($this->sdk->names())->toBe([class_basename($startClass), ...sdkCapabilityFailed($capability), 'ProviderFailedOver', class_basename($startClass), ...sdkCapabilityFailed($capability), 'ProviderFailedOver'])
         ->and($this->sdk->invocationIds())->toHaveCount(2)
         ->and($this->sdk->of($endClass))->toBe([])
         ->and($failovers[1]->event->exception)->toBe($caught)
@@ -118,11 +125,11 @@ it('dispatches generic failover even for the final exhausted HTTP attempt', func
         ->and($failovers[1]->invocationId)->toBeNull();
 })->with('sdk capabilities');
 
-it('emits no terminal or failover for a non-failoverable HTTP error caught by the application', function (string $capability) {
+it('emits no terminal or failover, only the failure event of an SDK that has one, for a non-failoverable HTTP error caught by the application', function (string $capability) {
     sdkCapabilityHttp($capability, [FakeDecisions::error(500)]);
     expect(fn () => sdkCapabilityCall($capability))->toThrow(RequestException::class);
     [$startClass] = sdkCapabilityEvents($capability);
-    expect($this->sdk->names())->toBe([class_basename($startClass)])
+    expect($this->sdk->names())->toBe([class_basename($startClass), ...sdkCapabilityFailed($capability)])
         ->and(ParentInvocation::current())->toBe([null, null]);
 })->with('sdk capabilities');
 
@@ -161,7 +168,7 @@ it('restores ambient context when an uncaught arbitrary capability exception fai
 
     expect(fn () => $agent->prompt('Hi'))->toThrow($failure);
     [$startClass] = sdkCapabilityEvents($capability);
-    expect($this->sdk->timeline())->toBe(['PromptingAgent', 'StartingStep#0', 'StepCompleted#0', 'InvokingTool(decide)', class_basename($startClass), 'ToolFailed(decide)', 'AgentFailed'])
+    expect($this->sdk->timeline())->toBe(['PromptingAgent', 'StartingStep#0', 'StepCompleted#0', 'InvokingTool(decide)', class_basename($startClass), ...sdkCapabilityFailed($capability), 'ToolFailed(decide)', 'AgentFailed'])
         ->and($this->sdk->sole(ToolFailed::class)->event->exception)->toBe($failure)
         ->and($this->sdk->sole(AgentFailed::class)->event->exception)->toBe($failure)
         ->and(ParentInvocation::current())->toBe([null, null]);
@@ -321,10 +328,11 @@ it('cannot identify the failed capability from generic failover beside an open e
     $response = Embeddings::for(['document'])->dimensions(3)->generate('openrouter', 'shared-model');
     $prompt = $this->sdk->sole(GeneratingEmbeddings::class)->event->prompt;
     [$startClass, $endClass] = sdkCapabilityEvents($capability);
+    $failed = sdkCapabilityFailed($capability);
     expect($response->embeddings)->toBe([[0.1, 0.2, 0.3]])
         ->and($this->sdk->names())->toBe($interleaved
-            ? ['GeneratingEmbeddings', class_basename($startClass), class_basename($startClass), 'ProviderFailedOver', 'ProviderFailedOver', 'EmbeddingsGenerated']
-            : ['GeneratingEmbeddings', class_basename($startClass), 'ProviderFailedOver', 'EmbeddingsGenerated']);
+            ? ['GeneratingEmbeddings', class_basename($startClass), class_basename($startClass), ...$failed, 'ProviderFailedOver', ...$failed, 'ProviderFailedOver', 'EmbeddingsGenerated']
+            : ['GeneratingEmbeddings', class_basename($startClass), ...$failed, 'ProviderFailedOver', 'EmbeddingsGenerated']);
     expect($this->sdk->of($startClass))->toHaveCount($interleaved ? 2 : 1)
         ->and($this->sdk->of($endClass))->toBe([]);
     foreach ($this->sdk->of(ProviderFailedOver::class) as $entry) {

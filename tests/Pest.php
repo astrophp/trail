@@ -27,6 +27,18 @@ uses(MigratesLaravelTables::class)->in('Feature/Http/Api/ContractTest.php', 'Fea
 uses(MigratesLaravelAndSdkTables::class, ObservesSdk::class)->in('Feature/Http/Api/TraceShowTest.php', 'Feature/Http/Api/ConversationTranscriptCaptureTest.php');
 uses(BootsWorkbench::class, RefreshDatabase::class)->in('Feature/Workbench');
 
+/** Whether the installed SDK dispatches an event for each failed embeddings, classification or reranking attempt, as it does from 1.2.2 on. */
+function sdkReportsFailures(): bool
+{
+    return class_exists('Laravel\\Ai\\Events\\EmbeddingsFailed');
+}
+
+/** A failure event's name to spread into an expected event sequence, or nothing on an SDK that does not dispatch it. */
+function sdkFailed(string $event): array
+{
+    return sdkReportsFailures() ? [$event] : [];
+}
+
 /** The window.Trail object of a page, decoded the way the browser decodes it. */
 function bootObject(string $html): array
 {

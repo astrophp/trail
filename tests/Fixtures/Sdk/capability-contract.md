@@ -7,9 +7,10 @@ They use real pending responses, provider concerns and gateways with HTTP script
 scripted gateway implementations exercise reentrancy and arbitrary exceptions without changing
 provider dispatch or the pending response failover loop.
 
-The contract is checked against Laravel AI SDK **1.1.0** and **1.2.0**. CI resolves each exact
-version against Laravel 12/Testbench 10 and Laravel 13/Testbench 11, preserving the package's
-`^1.1` requirement. On 1.1, the attachment-only cases skip with an explicit version reason,
+The contract is checked against Laravel AI SDK **1.1.0** and **1.2.0**, and against the latest
+release. CI resolves each exact version against Laravel 12/Testbench 10 and Laravel 13/Testbench 11,
+preserving the package's `^1.1` requirement. Differences from 1.2.2 on are described under
+[SDK 1.2.2 failure events](#sdk-122-failure-events). On 1.1, the attachment-only cases skip with an explicit version reason,
 while the actual provider prompt's absent property and guarded access are tested. The 1.2 CI
 attachment gate fails if any case skips.
 
@@ -40,6 +41,26 @@ Sources: SDK [Classifies](https://github.com/laravel/ai/blob/v1.1.0/src/Provider
 [PendingClassification](https://github.com/laravel/ai/blob/v1.1.0/src/PendingResponses/PendingClassification.php),
 [PendingReranking](https://github.com/laravel/ai/blob/v1.1.0/src/PendingResponses/PendingReranking.php),
 [ProviderFailedOver](https://github.com/laravel/ai/blob/v1.1.0/src/Events/ProviderFailedOver.php).
+
+## SDK 1.2.2 failure events
+
+From 1.2.2 the SDK dispatches `ClassificationFailed`, `RerankingFailed` and `EmbeddingsFailed` once
+per failed attempt, after the start and before any `ProviderFailedOver`. Each carries the attempt's
+invocation ID, provider, model, prompt and exception, so the failed call is named rather than
+inferred. Written `C!`/`R!`, the sequences above become:
+
+| Operation | Dispatch order |
+| --- | --- |
+| Failover then success | `+ A`, `! A`, `ProviderFailedOver`, `+ B`, `- B` |
+| Two exhausted providers | `+ A`, `! A`, `ProviderFailedOver`, `+ B`, `! B`, `ProviderFailedOver` |
+| HTTP 500 or arbitrary exception | `+ A`, `! A` |
+
+A provider that rejects an attachment after the start also fires the failure event. The tests
+expect these events only when the installed SDK defines them.
+
+Sources: SDK [ClassificationFailed](https://github.com/laravel/ai/blob/v1.2.2/src/Events/ClassificationFailed.php),
+[RerankingFailed](https://github.com/laravel/ai/blob/v1.2.2/src/Events/RerankingFailed.php),
+[EmbeddingsFailed](https://github.com/laravel/ai/blob/v1.2.2/src/Events/EmbeddingsFailed.php).
 
 ## Parent context and incomplete evidence
 
@@ -114,7 +135,8 @@ Actual SDK 1.2 prompts add a public readonly **array** of attachments, preservin
 objects at start and completion. SDK 1.1 has no property; guarded access returns unavailable
 rather than an invented empty attachment list.
 
-TypeSafe and OpenRouter reject nonempty attachments **before** dispatching `Classifying`.
+Before 1.2.3, TypeSafe and OpenRouter reject nonempty attachments **before** dispatching
+`Classifying`; from 1.2.3 they accept them.
 OpenAI supports Base64Image, RemoteImage, LocalImage, StoredImage and UploadedFile using inline
 JPEG/PNG/GIF/WebP content; ProviderImage IDs and unsupported MIME types are rejected **after**
 the start, without terminal or HTTP decisions request. Remote content goes through the SDK's

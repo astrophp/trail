@@ -17,6 +17,7 @@ use Laravel\Ai\Events\StepFailed;
 use Laravel\Ai\Events\ToolFailed;
 use Laravel\Ai\Events\ToolInvoked;
 use RuntimeException;
+use Throwable;
 use TypeError;
 
 /**
@@ -82,6 +83,16 @@ class ThrowingRecorder extends Recorder
     public function embeddingsGenerated(EmbeddingsGenerated $event): void
     {
         throw new TypeError('embeddingsGenerated failed');
+    }
+
+    public function embeddingsFailed(string $invocationId, Throwable $exception): void
+    {
+        throw new RuntimeException('embeddingsFailed failed');
+    }
+
+    public function capabilityFailed(string $invocationId, Throwable $exception): void
+    {
+        throw new TypeError('capabilityFailed failed');
     }
 
     public function flush(): void
