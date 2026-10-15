@@ -46,7 +46,7 @@ Trail does not do today, see [Known limits](docs/limits.md).
 - Root-operation filters, inspectors, comparison, usage, CSV and Boost readers.
 - SDK 1.1/1.2 compatibility, offline scenarios and a coordinated migration/restart upgrade.
 
-## Next release — images, audio and transcription
+## v0.4.0 — images, audio and transcription
 
 - Event capture of image generation, text-to-speech and transcription calls, standalone and inside
   tools, with their failures from SDK 1.2.2 on.
