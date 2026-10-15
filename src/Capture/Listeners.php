@@ -25,6 +25,7 @@ use Laravel\Ai\Events\StreamingAgent;
 use Laravel\Ai\Events\ToolApprovalResolved;
 use Laravel\Ai\Events\ToolFailed;
 use Laravel\Ai\Events\ToolInvoked;
+use Throwable;
 
 /**
  * The SDK events Trail listens to. Each event class is registered by its own name, because the
@@ -57,6 +58,23 @@ final class Listeners
         $events->listen(ProviderFailedOver::class, static fn (ProviderFailedOver $event) => self::handle($container, static fn (Recorder $recorder) => $recorder->providerFailedOver($event)));
         $events->listen(ToolApprovalResolved::class, static fn (ToolApprovalResolved $event) => self::handle($container, static fn (Recorder $recorder) => $recorder->approvalsResolved($event)));
         $events->listen(AgentPrompted::class, static fn (AgentPrompted $event) => self::handle($container, static fn (Recorder $recorder) => $recorder->agentCompleted($event)));
+        // The SDK dispatches these from 1.2.2 on. Earlier versions have no such classes, so they are
+        // named by string and read through the two properties every one of them carries.
+        $events->listen(Recorder::EMBEDDINGS_FAILED, static fn (object $event) => self::failed($container, $event, static fn (Recorder $recorder, string $id, Throwable $exception) => $recorder->embeddingsFailed($id, $exception)));
+        $events->listen(Recorder::CLASSIFICATION_FAILED, static fn (object $event) => self::failed($container, $event, static fn (Recorder $recorder, string $id, Throwable $exception) => $recorder->capabilityFailed($id, $exception)));
+        $events->listen(Recorder::RERANKING_FAILED, static fn (object $event) => self::failed($container, $event, static fn (Recorder $recorder, string $id, Throwable $exception) => $recorder->capabilityFailed($id, $exception)));
+    }
+
+    /**
+     * @param  Closure(Recorder, string, Throwable): void  $call
+     */
+    private static function failed(Container $container, object $event, Closure $call): void
+    {
+        self::handle($container, static function (Recorder $recorder) use ($event, $call): void {
+            if (property_exists($event, 'invocationId') && is_string($event->invocationId) && property_exists($event, 'exception') && $event->exception instanceof Throwable) {
+                $call($recorder, $event->invocationId, $event->exception);
+            }
+        });
     }
 
     /**

@@ -208,7 +208,7 @@ describe('embeddings generated inside a tool', function () {
 });
 
 describe('embeddings failures', function () {
-    it('has no failure event: the SDK only defines a generating and a generated one', function () {
+    it('defines a failure event only from SDK 1.2.2 on, beside the generating and generated ones', function () {
         $directory = dirname((new ReflectionClass(AiServiceProvider::class))->getFileName()).'/Events';
 
         $embeddingEvents = collect(glob($directory.'/*.php'))
@@ -217,10 +217,10 @@ describe('embeddings failures', function () {
             ->values()
             ->all();
 
-        expect($embeddingEvents)->toBe(['EmbeddingsGenerated', 'GeneratingEmbeddings']);
+        expect($embeddingEvents)->toBe([...sdkFailed('EmbeddingsFailed'), 'EmbeddingsGenerated', 'GeneratingEmbeddings']);
     });
 
-    it('fires only the generating event when the provider answers with a server error', function () {
+    it('fires the generating event, and the failure event of an SDK that has one, when the provider answers with a server error', function () {
         Http::fake(['api.openai.com/*' => Http::response(['error' => ['message' => 'bad']], 500)]);
 
         $caught = null;
@@ -233,7 +233,15 @@ describe('embeddings failures', function () {
 
         expect($caught)->toBeInstanceOf(RequestException::class)
             ->and($caught->response->status())->toBe(500)
-            ->and($this->sdk->timeline())->toBe(['GeneratingEmbeddings']);
+            ->and($this->sdk->timeline())->toBe(['GeneratingEmbeddings', ...sdkFailed('EmbeddingsFailed')]);
+
+        if (sdkReportsFailures()) {
+            [$generating, $failed] = $this->sdk->all();
+
+            // Unlike a failover event, the failure event names the call that failed.
+            expect($failed->invocationId)->toBe($generating->invocationId)
+                ->and($failed->event->exception)->toBe($caught);
+        }
     });
 
     it('fires the generating event and then a failover event when the provider rate limits, even with one provider', function () {
@@ -248,7 +256,7 @@ describe('embeddings failures', function () {
         }
 
         expect($caught)->toBeInstanceOf(RateLimitedException::class)
-            ->and($this->sdk->timeline())->toBe(['GeneratingEmbeddings', 'ProviderFailedOver']);
+            ->and($this->sdk->timeline())->toBe(['GeneratingEmbeddings', ...sdkFailed('EmbeddingsFailed'), 'ProviderFailedOver']);
 
         $failedOver = $this->sdk->sole(ProviderFailedOver::class)->event;
 
@@ -279,6 +287,7 @@ describe('embeddings failures', function () {
                 'StepCompleted#0',
                 'InvokingTool(embed)',
                 'GeneratingEmbeddings',
+                ...sdkFailed('EmbeddingsFailed'),
                 'ToolFailed(embed)',
                 'AgentFailed',
             ]);

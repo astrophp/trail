@@ -57,6 +57,13 @@ class Recorder
 
     private const ANONYMOUS_TOOL = 'Anonymous tool';
 
+    /** The SDK's failure events for single calls, dispatched from 1.2.2 on and absent before it. */
+    public const EMBEDDINGS_FAILED = 'Laravel\\Ai\\Events\\EmbeddingsFailed';
+
+    public const CLASSIFICATION_FAILED = 'Laravel\\Ai\\Events\\ClassificationFailed';
+
+    public const RERANKING_FAILED = 'Laravel\\Ai\\Events\\RerankingFailed';
+
     /** @var array<string, Run> */
     private array $runs = [];
 
@@ -733,8 +740,8 @@ class Recorder
     }
 
     /**
-     * Close the embeddings calls of a tool that are still running. A failed embeddings call fires
-     * no event of its own, so this is the first Trail learns of it.
+     * Close the embeddings calls of a tool that are still running. Before SDK 1.2.2 a failed
+     * embeddings call fires no event of its own, so this is the first Trail learns of it.
      */
     private function closeEmbeddingsOf(Run $run, SpanDraft $tool, Carbon $now, ?Failure $failure): void
     {
@@ -970,6 +977,22 @@ class Recorder
         }
     }
 
+    /**
+     * One attempt failed, including an attempt that failover then recovers from: the next provider
+     * is tried as a new call with its own id.
+     */
+    public function capabilityFailed(string $invocationId, Throwable $exception): void
+    {
+        unset($this->ambiguousCapabilities[$invocationId]);
+        $call = $this->capabilities[$invocationId] ?? null;
+        if ($call === null) {
+            return;
+        }
+        $this->skip($invocationId);
+        $this->dropCapability($invocationId);
+        $this->fail($call->span, $call->standalone ? $call->buffer : null, $exception);
+    }
+
     private function dropCapability(string $id): void
     {
         $call = $this->capabilities[$id] ?? null;
@@ -985,7 +1008,7 @@ class Recorder
             if ($call === null || ($parent !== null && ! $this->descendsFrom($buffer, $call->span, $parent))) {
                 continue;
             }
-            // No capability-specific failure event exists; its caller's error proves no duration or error here.
+            // The call fired no failure event of its own; its caller's error proves no duration or error here.
             $call->span->status = Status::Incomplete;
             $call->span->endedAt = Carbon::now();
             $this->dropCapability($id);
@@ -1103,15 +1126,32 @@ class Recorder
     }
 
     /**
-     * An embeddings call that failed with an error the SDK can fail over on fires only this event,
-     * which names no invocation: the next provider is tried as a new call with its own id. Calls are
-     * synchronous, so the failed one is the most recently opened call still running against that
-     * provider and model. The event also serves other SDK features; without such a call it is ignored.
+     * One attempt failed, including an attempt that failover then recovers from: the next provider
+     * is tried as a new call with its own id.
+     */
+    public function embeddingsFailed(string $invocationId, Throwable $exception): void
+    {
+        $call = $this->embeddings[$invocationId] ?? null;
+
+        if ($call === null) {
+            return;
+        }
+
+        $this->dropEmbedding($invocationId);
+        $this->fail($call->span, $call->standalone ? $call->buffer : null, $exception);
+    }
+
+    /**
+     * Before SDK 1.2.2, an embeddings call that failed with an error the SDK can fail over on fires
+     * only this event, which names no invocation: the next provider is tried as a new call with its
+     * own id. Calls are synchronous, so the failed one is the most recently opened call still running
+     * against that provider and model. The event also serves other SDK features; without such a call
+     * it is ignored. An SDK with failure events has already closed the call by its id.
      */
     public function providerFailedOver(ProviderFailedOver $event): void
     {
         $driver = $event->provider->driver();
-        if ($this->ambiguousOverflow) {
+        if ($this->ambiguousOverflow || class_exists(self::EMBEDDINGS_FAILED)) {
             return;
         }
 
@@ -1127,28 +1167,37 @@ class Recorder
             }
 
             $this->dropEmbedding($id);
-
-            $now = Carbon::now();
-            $span = $call->span;
-            $duration = $span->openedAt === null ? null : (hrtime(true) - $span->openedAt) / 1e6;
-            $failure = $this->failure($event->exception, ErrorSource::Run);
-
-            $span->status = Status::Failed;
-            $span->endedAt = $now;
-            $span->durationMs = $duration;
-            $span->fail($failure);
-
-            if ($call->standalone) {
-                $call->buffer->status = Status::Failed;
-                $call->buffer->endedAt = $now;
-                $call->buffer->durationMs = $duration;
-                $call->buffer->fail($failure);
-
-                $this->finishedBuffer($call->buffer);
-            }
+            $this->fail($call->span, $call->standalone ? $call->buffer : null, $event->exception);
 
             return;
         }
+    }
+
+    /**
+     * End a single call as failed with its own error, and the trace with it when the call is the
+     * whole trace.
+     */
+    private function fail(SpanDraft $span, ?RunBuffer $standalone, Throwable $exception): void
+    {
+        $now = Carbon::now();
+        $duration = $span->openedAt === null ? null : (hrtime(true) - $span->openedAt) / 1e6;
+        $failure = $this->failure($exception, ErrorSource::Run);
+
+        $span->status = Status::Failed;
+        $span->endedAt = $now;
+        $span->durationMs = $duration;
+        $span->fail($failure);
+
+        if ($standalone === null) {
+            return;
+        }
+
+        $standalone->status = Status::Failed;
+        $standalone->endedAt = $now;
+        $standalone->durationMs = $duration;
+        $standalone->fail($failure);
+
+        $this->finishedBuffer($standalone);
     }
 
     /**

@@ -107,12 +107,24 @@ describe('SDK 1.2 classification attachments', function () {
             ->and($response->meta->model)->toBe('reported-model');
     });
 
-    it('rejects attachments on decisions providers before dispatching a start', function (string $provider) {
-        expect(fn () => Classification::of('Example', [Image::fromBase64(base64_encode('fixture'), 'image/png')])
-            ->question('valid', new Boolean('Valid?'))->classify($provider))
-            ->toThrow(LogicException::class, "Provider [{$provider}] does not support classification attachments.");
-        expect($this->sdk->names())->toBe([]);
-        Http::assertNothingSent();
+    it('rejects attachments on decisions providers before dispatching a start, until SDK 1.2.3 accepts them', function (string $provider) {
+        $attachment = Image::fromBase64(base64_encode('fixture'), 'image/png');
+
+        if (version_compare(InstalledVersions::getVersion('laravel/ai'), '1.2.3', '<')) {
+            expect(fn () => Classification::of('Example', [$attachment])->question('valid', new Boolean('Valid?'))->classify($provider))
+                ->toThrow(LogicException::class, "Provider [{$provider}] does not support classification attachments.");
+            expect($this->sdk->names())->toBe([]);
+            Http::assertNothingSent();
+
+            return;
+        }
+
+        $fake = FakeDecisions::script([FakeDecisions::response(['answers' => []])]);
+        Classification::of('Example', [$attachment])->question('valid', new Boolean('Valid?'))->classify($provider);
+
+        expect($this->sdk->timeline())->toBe(['Classifying', 'Classified'])
+            ->and(sdkClassificationAttachments($this->sdk->sole(Classifying::class)->event->prompt))->toBe([$attachment])
+            ->and($fake->remaining())->toBe(0);
     })->with(['typesafe', 'openrouter']);
 
     it('rejects provider IDs unsupported MIME types and private remote addresses after the OpenAI start', function (string $kind) {
@@ -123,7 +135,7 @@ describe('SDK 1.2 classification attachments', function () {
         };
         expect(fn () => Classification::of('Example', [$image])->question('valid', new Boolean('Valid?'))->classify('openai'))
             ->toThrow(InvalidArgumentException::class);
-        expect($this->sdk->names())->toBe(['Classifying']);
+        expect($this->sdk->names())->toBe(['Classifying', ...sdkFailed('ClassificationFailed')]);
         Http::assertNothingSent();
     })->with(['provider-id', 'unsupported-mime', 'blocked-remote']);
 });

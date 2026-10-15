@@ -4,6 +4,31 @@ All notable changes to Trail are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and Trail follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## v0.3.2
+
+### Added
+
+- Record failed embeddings, classification and reranking calls as Failed, with their own error and
+  duration, from the failure events Laravel AI SDK 1.2.2 dispatches for each failed attempt. A
+  standalone call that fails is now a Failed trace instead of staying Running until the stale rule
+  applies, and a call inside a tool keeps its own error instead of becoming Incomplete.
+
+### Changed
+
+- On SDK 1.2.2 and later, a generic provider failover event no longer closes an open embeddings
+  call by guessing from its provider and model; the failure event names the call that failed.
+  Earlier SDK versions keep the previous behaviour.
+
+### Fixed
+
+- Keep the SDK compatibility tests green on Laravel AI SDK 1.2.2 and 1.2.3, which add failure
+  events and attachment support for TypeSafe and OpenRouter classification.
+
+### Upgrade
+
+- No new migrations or configuration. Upgrade `laravel/ai` to 1.2.2 or later to record failed
+  calls, and restart long-lived processes.
+
 ## v0.3.1
 
 ### Added
