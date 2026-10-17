@@ -284,8 +284,8 @@ class Recorder
     {
         $this->skipped[$invocationId] = true;
 
-        while (count($this->skipped) > $this->maxSkippedIds) {
-            unset($this->skipped[array_key_first($this->skipped)]);
+        if (count($this->skipped) > $this->maxSkippedIds) {
+            $this->skipped = array_slice($this->skipped, count($this->skipped) - $this->maxSkippedIds, null, true);
         }
     }
 
@@ -979,9 +979,9 @@ class Recorder
             return null;
         }
         $this->ambiguousCapabilities[$id] = ['provider' => $provider, 'model' => $model];
-        while (count($this->ambiguousCapabilities) > $this->maxSkippedIds) {
+        if (count($this->ambiguousCapabilities) > $this->maxSkippedIds) {
             $this->ambiguousOverflow = true;
-            unset($this->ambiguousCapabilities[array_key_first($this->ambiguousCapabilities)]);
+            $this->ambiguousCapabilities = array_slice($this->ambiguousCapabilities, count($this->ambiguousCapabilities) - $this->maxSkippedIds, null, true);
         }
         if (isset($this->skipped[$id])) {
             return null;
