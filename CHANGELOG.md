@@ -4,6 +4,21 @@ All notable changes to Trail are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and Trail follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## v0.4.1
+
+### Fixed
+
+- Pass PHPStan at level max on PHP 8.5: the bounded maps that remember skipped and ambiguous call
+  ids are trimmed with `array_slice`, and the trace id prefix query raises its last digit without
+  `chr()`. Behaviour is unchanged.
+- Make the UTC date test independent of the Carbon version: Carbon before 3.12.0 read dates in the
+  timezone of a frozen test clock. Dates in the API were already correct.
+
+### Changed
+
+- CI runs static analysis on PHP 8.4 and 8.5, and the test suite with the lowest dependencies the
+  package allows on Laravel 12 and 13.
+
 ## v0.4.0
 
 ### Added
