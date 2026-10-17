@@ -4,6 +4,32 @@ All notable changes to Trail are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and Trail follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## v0.4.0
+
+### Added
+
+- Record image generation, text-to-speech audio and transcription calls through the Laravel AI SDK's
+  events, as the span types `image`, `audio` and `transcription`. A call made on its own is a trace
+  of its own; a call made inside a tool is a span under that tool. Each stores its settings and
+  counts (image size, quality and count, the voice and number of characters spoken, the language
+  and the seconds of audio transcribed), its texts only when payloads are captured, and never
+  image or audio bytes.
+- Record their failures as Failed with their own error and duration from the `ImageFailed`,
+  `AudioFailed` and `TranscriptionFailed` events of SDK 1.2.2 and later. On earlier versions a
+  failed call is left for its caller (Incomplete) or the stale rule, as for classification.
+- Filter the runs list, its CSV export and the Boost trace listing by the new root operations.
+
+### Changed
+
+- Image, audio and transcription calls bill: their reported tokens count in a run's totals and are
+  priced from the ordinary token rates of their model. No defaults ship for these models, so they
+  are Unpriced until you add a price; a call whose provider reports no tokens is Not captured.
+
+### Upgrade
+
+- No new migrations or configuration. Deploy the new version to every process that reads Trail's
+  tables before recording these calls: an earlier version cannot read the new span types.
+
 ## v0.3.2
 
 ### Added

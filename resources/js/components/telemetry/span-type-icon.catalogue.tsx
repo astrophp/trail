@@ -9,6 +9,9 @@ const types: SpanType[] = [
     'embedding',
     'classification',
     'reranking',
+    'image',
+    'audio',
+    'transcription',
 ]
 
 export const catalogue: CatalogueEntry = {

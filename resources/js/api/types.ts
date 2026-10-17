@@ -56,10 +56,11 @@ export type DirectUsage = {
     search_units: string | null
 }
 
+export type MediaSpanType = 'image' | 'audio' | 'transcription'
 export type OperationType =
-    'agent' | 'embedding' | 'classification' | 'reranking'
+    'agent' | 'embedding' | 'classification' | 'reranking' | MediaSpanType
 export type BillableSpanType =
-    'step' | 'embedding' | 'classification' | 'reranking'
+    'step' | 'embedding' | 'classification' | 'reranking' | MediaSpanType
 
 /** `name` and `email` are `null` when the user can no longer be resolved. */
 export type User = {

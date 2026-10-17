@@ -116,10 +116,10 @@ A `RecordingCandidate` has these public properties:
 
 | Property | Holds |
 | -- | -- |
-| `type` | `Astro\Trail\Enums\SpanType::Agent` for an agent run, `SpanType::Embedding` for an embeddings call made on its own; `Classification` and `Reranking` identify those standalone calls |
+| `type` | `Astro\Trail\Enums\SpanType::Agent` for an agent run, `SpanType::Embedding` for an embeddings call made on its own; `Classification`, `Reranking`, `Image`, `Audio` and `Transcription` identify those standalone calls |
 | `agentClass` | The agent's class, or `null` for an anonymous agent and for embeddings |
 | `agent` | The agent instance, or `null` for embeddings |
-| `prompt` | The prompt text, or `null` for embeddings |
+| `prompt` | The prompt text: an image's prompt or the text an audio call speaks; `null` for embeddings, classification, reranking and transcription |
 | `userId`, `userType` | The user of the conversation, when the agent remembers conversations and has one |
 | `provider` | The provider's driver name, not the name of its connection |
 | `model` | The model |
@@ -176,3 +176,14 @@ content. Fixed native answer fields remain intact at small collection limits. Un
 are not dumped. Capture disabled retains structural counts, provider/model, timing and measured
 usage; query, state, questions, answers, probabilities, scores, snippets, attachment names and excerpts
 are absent. These limits are upper bounds, not guarantees that each field will fit.
+
+## Image, audio and transcription payloads
+
+These calls always keep their settings and counts: an image's size, quality, number of attachments,
+number of images and their types; an audio call's voice, number of characters, and the audio's
+type and size; a transcription's language, whether it was diarized, and its number of segments.
+When payloads are captured they also keep their texts, redacted and cut like any payload: the image
+prompt and its attachments' descriptors (type, file name and size), the spoken text and its
+instructions, the transcribed audio's descriptor and the transcript. Image and audio bytes, file
+paths, remote URLs and provider options are never stored, and nothing is read or fetched to
+describe a file.

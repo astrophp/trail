@@ -21,10 +21,15 @@ use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Events\AgentFailed;
 use Laravel\Ai\Events\AgentFailedOver;
 use Laravel\Ai\Events\AgentPrompted;
+use Laravel\Ai\Events\AudioGenerated;
 use Laravel\Ai\Events\Classified;
 use Laravel\Ai\Events\Classifying;
 use Laravel\Ai\Events\EmbeddingsGenerated;
+use Laravel\Ai\Events\GeneratingAudio;
 use Laravel\Ai\Events\GeneratingEmbeddings;
+use Laravel\Ai\Events\GeneratingImage;
+use Laravel\Ai\Events\GeneratingTranscription;
+use Laravel\Ai\Events\ImageGenerated;
 use Laravel\Ai\Events\InvokingTool;
 use Laravel\Ai\Events\PromptingAgent;
 use Laravel\Ai\Events\ProviderFailedOver;
@@ -36,13 +41,21 @@ use Laravel\Ai\Events\StepFailed;
 use Laravel\Ai\Events\ToolApprovalResolved;
 use Laravel\Ai\Events\ToolFailed;
 use Laravel\Ai\Events\ToolInvoked;
+use Laravel\Ai\Events\TranscriptionGenerated;
 use Laravel\Ai\Gateway\ParentInvocation;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Messages\ToolResultMessage;
 use Laravel\Ai\Prompts\AgentPrompt;
+use Laravel\Ai\Prompts\AudioPrompt;
+use Laravel\Ai\Prompts\ImagePrompt;
 use Laravel\Ai\Responses\AgentResponse;
+use Laravel\Ai\Responses\AudioResponse;
+use Laravel\Ai\Responses\Data\TextUsage;
+use Laravel\Ai\Responses\Data\Usage;
+use Laravel\Ai\Responses\ImageResponse;
 use Laravel\Ai\Responses\StructuredAgentResponse;
+use Laravel\Ai\Responses\TranscriptionResponse;
 use Laravel\Ai\Tools\ToolNameResolver;
 use ReflectionClass;
 use Throwable;
@@ -63,6 +76,12 @@ class Recorder
     public const CLASSIFICATION_FAILED = 'Laravel\\Ai\\Events\\ClassificationFailed';
 
     public const RERANKING_FAILED = 'Laravel\\Ai\\Events\\RerankingFailed';
+
+    public const IMAGE_FAILED = 'Laravel\\Ai\\Events\\ImageFailed';
+
+    public const AUDIO_FAILED = 'Laravel\\Ai\\Events\\AudioFailed';
+
+    public const TRANSCRIPTION_FAILED = 'Laravel\\Ai\\Events\\TranscriptionFailed';
 
     /** @var array<string, Run> */
     private array $runs = [];
@@ -487,7 +506,7 @@ class Recorder
     }
 
     /**
-     * Whether a span belongs to the run itself: its steps and tools, and the embeddings its tools
+     * Whether a span belongs to the run itself: its steps and tools, and the single calls its tools
      * made. A sub-agent's spans, its agent span included, belong to the sub-agent's own run.
      */
     private function owns(Run $run, SpanDraft $span): bool
@@ -502,7 +521,7 @@ class Recorder
 
         $parent = $span->parentId === null ? null : $run->buffer->span($span->parentId);
 
-        return in_array($span->type, [SpanType::Embedding, SpanType::Classification, SpanType::Reranking], true)
+        return in_array($span->type, [SpanType::Embedding, SpanType::Classification, SpanType::Reranking, SpanType::Image, SpanType::Audio, SpanType::Transcription], true)
             && $parent !== null
             && $parent->type === SpanType::Tool
             && $parent->parentId === $run->span->id;
@@ -894,87 +913,238 @@ class Recorder
 
     public function capabilityStarting(Classifying|Reranking $event): void
     {
-        if ($this->writing > 0 || isset($this->capabilities[$event->invocationId]) || isset($this->buffers[$event->invocationId])) {
-            return;
+        $type = $event instanceof Classifying ? SpanType::Classification : SpanType::Reranking;
+
+        $this->startCall($event->invocationId, $type, $event->provider->driver(), $event->model, null, function (SpanDraft $span) use ($event): CapabilityPayload {
+            $configured = config('trail.capture.max_items', 100);
+            $maxItems = filter_var($configured, FILTER_VALIDATE_INT);
+            $payload = new CapabilityPayload($this->payload(), is_int($maxItems) && $maxItems > 0 ? min(100, $maxItems) : 100);
+            $span->apply('input', $payload->input($event->prompt));
+
+            return $payload;
+        });
+    }
+
+    /**
+     * An image, audio or transcription call. What it was asked for is stored as settings and counts;
+     * its texts only when payloads are captured, redacted and cut like any payload. Image and audio
+     * bytes are never read or stored.
+     */
+    public function mediaStarting(GeneratingImage|GeneratingAudio|GeneratingTranscription $event): void
+    {
+        $prompt = $event->prompt;
+
+        [$type, $text] = match (true) {
+            $prompt instanceof ImagePrompt => [SpanType::Image, $prompt->prompt],
+            $prompt instanceof AudioPrompt => [SpanType::Audio, $prompt->text],
+            default => [SpanType::Transcription, null],
+        };
+
+        $call = $this->startCall($event->invocationId, $type, $event->provider->driver(), $event->model, $text, function (SpanDraft $span) use ($prompt): null {
+            $span->apply('input', match (true) {
+                $prompt instanceof ImagePrompt => $this->described('input', [
+                    'size' => $prompt->size,
+                    'quality' => $prompt->quality,
+                    'attachment_count' => $prompt->attachments->count(),
+                ], fn (): array => ['prompt' => $prompt->prompt, 'attachments' => $this->payload()->attachments($prompt->attachments)]),
+                $prompt instanceof AudioPrompt => $this->described('input', [
+                    'voice' => $prompt->voice,
+                    // Text-to-speech is commonly billed by the character, so the count is kept without the text.
+                    'characters' => mb_strlen($prompt->text, 'UTF-8'),
+                ], fn (): array => ['text' => $prompt->text, 'instructions' => $prompt->instructions]),
+                default => $this->described('input', [
+                    'language' => $prompt->language,
+                    'diarize' => $prompt->diarize,
+                ], fn (): array => ['audio' => $this->payload()->attachments([$prompt->audio])[0] ?? null]),
+            });
+
+            return null;
+        });
+
+        if ($call !== null && $call->standalone && $type !== SpanType::Transcription) {
+            $input = $call->span->input;
+            $call->buffer->promptExcerpt = $this->excerpt($input[$type === SpanType::Image ? 'prompt' : 'text'] ?? null);
         }
-        $this->ambiguousCapabilities[$event->invocationId] = ['provider' => $event->provider->driver(), 'model' => $event->model];
+    }
+
+    /**
+     * Open a single call: a trace of its own when it is made outside any run, otherwise a span under
+     * the tool or run that made it.
+     *
+     * @param  Closure(SpanDraft): ?CapabilityPayload  $input  applies the input and returns the payload budget, if any
+     */
+    private function startCall(string $id, SpanType $type, string $provider, string $model, ?string $prompt, Closure $input): ?CapabilityCall
+    {
+        if ($this->writing > 0 || isset($this->capabilities[$id]) || isset($this->buffers[$id])) {
+            return null;
+        }
+        $this->ambiguousCapabilities[$id] = ['provider' => $provider, 'model' => $model];
         while (count($this->ambiguousCapabilities) > $this->maxSkippedIds) {
             $this->ambiguousOverflow = true;
             unset($this->ambiguousCapabilities[array_key_first($this->ambiguousCapabilities)]);
         }
-        if (isset($this->skipped[$event->invocationId])) {
-            return;
+        if (isset($this->skipped[$id])) {
+            return null;
         }
         [$runId, $toolId] = ParentInvocation::current();
         $run = $runId === null ? null : ($this->runs[$runId] ?? null);
-        if ($run !== null && $run->buffer->span($event->invocationId) !== null) {
-            return;
+        if ($run !== null && $run->buffer->span($id) !== null) {
+            return null;
         }
-        $type = $event instanceof Classifying ? SpanType::Classification : SpanType::Reranking;
-        if (($runId !== null && ($run === null || $run->span->status !== Status::Running || $this->suppressed())) || ($runId === null && ! $this->shouldRecord(new RecordingCandidate($type, null, null, null, null, null, $event->provider->driver(), $event->model)))) {
-            $this->skip($event->invocationId);
+        if (($runId !== null && ($run === null || $run->span->status !== Status::Running || $this->suppressed())) || ($runId === null && ! $this->shouldRecord(new RecordingCandidate($type, null, null, $prompt, null, null, $provider, $model)))) {
+            $this->skip($id);
 
-            return;
+            return null;
         }
-        $configured = config('trail.capture.max_items', 100);
-        $maxItems = filter_var($configured, FILTER_VALIDATE_INT);
-        $payload = new CapabilityPayload($this->payload(), is_int($maxItems) && $maxItems > 0 ? min(100, $maxItems) : 100);
         $span = new SpanDraft(
-            id: $event->invocationId, type: $type, name: ucfirst($type->value).' calls', status: Status::Running,
-            startedAt: Carbon::now(), provider: $event->provider->driver(), model: $event->model,
+            id: $id, type: $type, name: ucfirst($type->value).' calls', status: Status::Running,
+            startedAt: Carbon::now(), provider: $provider, model: $model,
             parentId: $run === null ? null : $this->parentSpanId($run->buffer, $runId, $toolId),
             attempt: $run === null ? 1 : $run->attempt, openedAt: (float) hrtime(true),
         );
         if ($run !== null && ($parent = $span->parentId === null ? null : $run->buffer->span($span->parentId)) !== null && $parent->status !== Status::Running) {
             $span->parentId = $run->span->id;
         }
-        $span->apply('input', $payload->input($event->prompt));
-        $buffer = ($run === null ? null : $run->buffer) ?? new RunBuffer(id: $event->invocationId, type: $type, name: $span->name, startedAt: $span->startedAt, provider: $span->provider, model: $span->model);
+        $payload = $input($span);
+        $buffer = ($run === null ? null : $run->buffer) ?? new RunBuffer(id: $id, type: $type, name: $span->name, startedAt: $span->startedAt, provider: $span->provider, model: $span->model);
         $buffer->open($span);
         $buffer->capabilityIds[$span->id] = true;
-        $this->capabilities[$span->id] = new CapabilityCall($buffer, $span, $run === null, $payload);
+        $call = $this->capabilities[$span->id] = new CapabilityCall($buffer, $span, $run === null, $payload);
         if ($run === null) {
             $this->buffers[$buffer->id] = $buffer;
             Guard::run(fn () => $this->shed());
             $this->storing(fn () => $this->container->make(TraceStore::class)->start($buffer->trace()));
         }
+
+        return $call;
     }
 
     public function capabilityCompleted(Classified|Reranked $event): void
     {
-        unset($this->ambiguousCapabilities[$event->invocationId]);
-        $call = $this->capabilities[$event->invocationId] ?? null;
-        if ($call === null) {
-            return;
+        $this->completeCall($event->invocationId, $event->response->meta->model, function (CapabilityCall $call, SpanDraft $span) use ($event): void {
+            $span->apply('output', $call->payload?->output($event->response));
+            if ($event instanceof Classified) {
+                $this->tokens($span, $event->response->usage);
+            } else {
+                $usage = $event->response->usage;
+                $span->inputTokens = $usage->inputTokens === 0 ? null : $usage->inputTokens;
+                $span->searchUnits = SearchUnits::normalize($usage->searchUnits);
+                // The SDK's output zero is structural, not measured token evidence.
+            }
+        });
+    }
+
+    public function mediaCompleted(ImageGenerated|AudioGenerated|TranscriptionGenerated $event): void
+    {
+        $response = $event->response;
+
+        $call = $this->completeCall($event->invocationId, $response->meta->model, function (CapabilityCall $call, SpanDraft $span) use ($response): void {
+            $this->tokens($span, $response->usage);
+
+            if ($response instanceof ImageResponse) {
+                $mimes = [];
+                foreach ($response->images as $image) {
+                    // Only what the provider said: the SDK's own fallback type is not evidence.
+                    if ($image->mime !== null && ! in_array($image->mime, $mimes, true)) {
+                        $mimes[] = $image->mime;
+                    }
+                }
+                $span->apply('output', new Captured(['count' => $response->count(), 'mime_types' => $mimes]));
+                if ($response->usage->imageInputTokens !== null) {
+                    $span->setMetadata('image_input_tokens', $response->usage->imageInputTokens);
+                }
+                if ($response->usage->imageOutputTokens !== null) {
+                    $span->setMetadata('image_output_tokens', $response->usage->imageOutputTokens);
+                }
+            } elseif ($response instanceof AudioResponse) {
+                $span->apply('output', new Captured(['mime_type' => $response->mime, 'size' => $this->base64Size($response->audio)]));
+            } else {
+                $span->apply('output', $this->described('output', ['segment_count' => $response->segments->count()], fn (): array => ['text' => $response->text]));
+                if ($response->usage->audioSeconds !== null) {
+                    $span->setMetadata('audio_seconds', $response->usage->audioSeconds);
+                }
+            }
+        });
+
+        if ($call !== null && $call->standalone && $response instanceof TranscriptionResponse) {
+            $call->buffer->responseExcerpt = $this->excerpt($call->span->output['text'] ?? null);
         }
-        $this->skip($event->invocationId);
-        $this->dropCapability($event->invocationId);
+    }
+
+    /**
+     * End a single call as completed, and its trace with it when the call is the whole trace. A call
+     * that already ended, a failed one included, is not reopened by a late completion.
+     *
+     * @param  Closure(CapabilityCall, SpanDraft): void  $apply
+     */
+    private function completeCall(string $id, ?string $respondingModel, Closure $apply): ?CapabilityCall
+    {
+        unset($this->ambiguousCapabilities[$id]);
+        $call = $this->capabilities[$id] ?? null;
+        if ($call === null) {
+            return null;
+        }
+        $this->skip($id);
+        $this->dropCapability($id);
         $span = $call->span;
         $span->status = Status::Completed;
         $span->endedAt = Carbon::now();
         $span->durationMs = $span->openedAt === null ? null : (hrtime(true) - $span->openedAt) / 1e6;
-        $span->respondingModel = $event->response->meta->model;
-        $span->apply('output', $call->payload->output($event->response));
-        if ($event instanceof Classified) {
-            $usage = $event->response->usage;
-            $reported = $usage->inputTokens !== 0 || $usage->outputTokens !== 0;
-            $span->inputTokens = $reported ? $usage->inputTokens : null;
-            $span->outputTokens = $reported ? $usage->outputTokens : null;
-            $span->cacheReadTokens = $usage->cacheReadInputTokens;
-            $span->cacheWriteTokens = $usage->cacheWriteInputTokens;
-            $span->reasoningTokens = $usage->reasoningTokens;
-        } else {
-            $usage = $event->response->usage;
-            $span->inputTokens = $usage->inputTokens === 0 ? null : $usage->inputTokens;
-            $span->searchUnits = SearchUnits::normalize($usage->searchUnits);
-            // The SDK's output zero is structural, not measured token evidence.
-        }
+        $span->respondingModel = $respondingModel;
+        $apply($call, $span);
         if ($call->standalone) {
             $call->buffer->status = Status::Completed;
             $call->buffer->endedAt = $span->endedAt;
             $call->buffer->durationMs = $span->durationMs;
             $this->finishedBuffer($call->buffer);
         }
+
+        return $call;
+    }
+
+    /**
+     * Token usage as the SDK reports it. All-zero input and output totals are what a provider that
+     * sends no usage is read as, so they are not stored as a measured zero.
+     */
+    private function tokens(SpanDraft $span, Usage $usage): void
+    {
+        $reported = $usage->inputTokens !== 0 || $usage->outputTokens !== 0;
+        $span->inputTokens = $reported ? $usage->inputTokens : null;
+        $span->outputTokens = $reported ? $usage->outputTokens : null;
+
+        if ($usage instanceof TextUsage) {
+            $span->cacheReadTokens = $usage->cacheReadInputTokens;
+            $span->cacheWriteTokens = $usage->cacheWriteInputTokens;
+            $span->reasoningTokens = $usage->reasoningTokens;
+        }
+    }
+
+    /**
+     * Settings and counts that are always kept, with the content beside them only when payloads are
+     * captured. If the content cannot be captured, the settings are still stored.
+     *
+     * @param  array<string, mixed>  $settings
+     * @param  Closure(): array<string, mixed>  $content
+     */
+    private function described(string $field, array $settings, Closure $content): Captured
+    {
+        $captured = new Captured($settings);
+
+        Guard::run(function () use (&$captured, $field, $settings, $content): void {
+            if ($this->payload()->capturing()) {
+                $captured = $this->payload()->capture($content() + $settings, $field);
+            }
+        });
+
+        return $captured;
+    }
+
+    /** The size of base64 content once decoded, worked out without decoding it. */
+    private function base64Size(string $base64): int
+    {
+        $padding = strlen($base64) - strlen(rtrim($base64, '='));
+
+        return max(0, intdiv(strlen($base64) * 3, 4) - $padding);
     }
 
     /**

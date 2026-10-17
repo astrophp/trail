@@ -54,7 +54,7 @@ final readonly class TraceFilters
         $string = [...$text, 'max:255'];
 
         $data = Validator::make(array_filter($request->query(), fn (mixed $value) => $value !== '' && $value !== null), [
-            'operation_type' => ['string', Rule::in(['agent', 'embedding', 'classification', 'reranking'])],
+            'operation_type' => ['string', Rule::in(SpanType::operationValues())],
             'status' => ['string', Rule::enum(Status::class)],
             'agent' => $string,
             'provider' => $string,

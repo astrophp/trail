@@ -24,7 +24,7 @@ directory, and `php artisan migrate` runs them with your own. They create six ta
 | Table | Holds |
 | -- | -- |
 | `trail_traces` | One row per recorded run |
-| `trail_spans` | The agent, step, tool, embedding, classification and reranking spans of each run |
+| `trail_spans` | The agent, step, tool, embedding, classification, reranking, image, audio and transcription spans of each run |
 | `trail_trace_models` | A per-run summary of the models its steps used |
 | `trail_trace_tools` | A per-run summary of the tools it called |
 | `trail_prices` | The model prices saved from the dashboard |

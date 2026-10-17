@@ -82,7 +82,7 @@ it('stores the documented enum values', function () {
     expect(array_column(Status::cases(), 'value'))
         ->toBe(['running', 'completed', 'failed', 'incomplete', 'awaiting_approval'])
         ->and(array_column(SpanType::cases(), 'value'))
-        ->toBe(['agent', 'step', 'tool', 'embedding', 'classification', 'reranking'])
+        ->toBe(['agent', 'step', 'tool', 'embedding', 'classification', 'reranking', 'image', 'audio', 'transcription'])
         ->and(array_column(IssueKind::cases(), 'value'))
         ->toBe(['rate_limited', 'provider_overloaded', 'provider_connection', 'insufficient_credits', 'tool_error', 'exception', 'abandoned'])
         ->and(array_column(ErrorSource::cases(), 'value'))

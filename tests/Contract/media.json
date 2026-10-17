@@ -1,0 +1,557 @@
+{
+    "image": {
+        "data": {
+            "trace": {
+                "id": "contract-image",
+                "type": "image",
+                "name": "Image calls",
+                "agent_class": null,
+                "status": "completed",
+                "issue_kind": null,
+                "streamed": false,
+                "recovered": false,
+                "child_failed": false,
+                "provider": null,
+                "model": null,
+                "duration_ms": null,
+                "usage": {
+                    "state": "reported",
+                    "input_tokens": 12,
+                    "output_tokens": 400,
+                    "cache_read_tokens": null,
+                    "cache_write_tokens": null,
+                    "reasoning_tokens": null,
+                    "total_tokens": 412,
+                    "search_units": null
+                },
+                "cost": {
+                    "state": "unpriced",
+                    "amount": null
+                },
+                "span_count": 1,
+                "prompt_excerpt": null,
+                "response_excerpt": null,
+                "conversation_id": null,
+                "user": null,
+                "bookmarked": false,
+                "started_at": "2026-01-02T11:00:00.000Z",
+                "ended_at": null
+            },
+            "detail": {
+                "error": null,
+                "pending_approvals": [],
+                "resolved_tool_call_ids": []
+            },
+            "spans": [
+                {
+                    "id": "image-span",
+                    "parent_id": null,
+                    "type": "image",
+                    "name": "Image calls",
+                    "agent_class": null,
+                    "status": "completed",
+                    "issue_kind": null,
+                    "attempt": 1,
+                    "sequence": 1,
+                    "step_number": null,
+                    "provider": "openai",
+                    "model": "synthetic-model",
+                    "responding_model": null,
+                    "billing_basis": null,
+                    "duration_ms": null,
+                    "offset_ms": 0,
+                    "started_at": "2026-01-02T11:00:00.000Z",
+                    "ended_at": null,
+                    "usage": {
+                        "state": "reported",
+                        "input_tokens": 12,
+                        "output_tokens": 400,
+                        "cache_read_tokens": null,
+                        "cache_write_tokens": null,
+                        "reasoning_tokens": null,
+                        "total_tokens": 412,
+                        "search_units": null
+                    },
+                    "cost": {
+                        "state": "unpriced",
+                        "amount": null
+                    },
+                    "error": null,
+                    "input": {
+                        "prompt": "Synthetic prompt",
+                        "size": "3:2",
+                        "quality": "high",
+                        "attachment_count": 0
+                    },
+                    "output": {
+                        "count": 1,
+                        "mime_types": [
+                            "image/png"
+                        ]
+                    },
+                    "metadata": {
+                        "image_input_tokens": 0,
+                        "image_output_tokens": 400
+                    },
+                    "redacted": false,
+                    "truncated": false,
+                    "truncated_paths": {}
+                }
+            ],
+            "usage": {
+                "totals": {
+                    "usage": {
+                        "state": "reported",
+                        "input_tokens": 12,
+                        "output_tokens": 400,
+                        "cache_read_tokens": null,
+                        "cache_write_tokens": null,
+                        "reasoning_tokens": null,
+                        "total_tokens": 412,
+                        "search_units": null
+                    },
+                    "cost": {
+                        "state": "unpriced",
+                        "amount": null
+                    }
+                },
+                "rows": [
+                    {
+                        "span_id": "image-span",
+                        "agent_span_id": null,
+                        "type": "image",
+                        "name": "Image calls",
+                        "attempt": 1,
+                        "step_number": null,
+                        "provider": "openai",
+                        "model": "synthetic-model",
+                        "usage": {
+                            "state": "reported",
+                            "input_tokens": 12,
+                            "output_tokens": 400,
+                            "cache_read_tokens": null,
+                            "cache_write_tokens": null,
+                            "reasoning_tokens": null,
+                            "total_tokens": 412,
+                            "search_units": null
+                        },
+                        "cost": {
+                            "state": "unpriced",
+                            "amount": null
+                        }
+                    }
+                ],
+                "agents": []
+            },
+            "coverage": {
+                "timing": {
+                    "state": "not_captured",
+                    "captured": 0,
+                    "expected": 1,
+                    "reason": "not_reported"
+                },
+                "responding_model": {
+                    "state": "not_captured",
+                    "captured": 0,
+                    "expected": 1,
+                    "reason": "not_reported"
+                },
+                "usage": {
+                    "state": "captured",
+                    "captured": 1,
+                    "expected": 1,
+                    "reason": null
+                },
+                "cost": {
+                    "state": "not_captured",
+                    "captured": 0,
+                    "expected": 1,
+                    "reason": "no_price"
+                },
+                "system_prompt": {
+                    "state": "not_applicable",
+                    "captured": 0,
+                    "expected": 0,
+                    "reason": null
+                },
+                "payloads": {
+                    "state": "captured",
+                    "captured": 1,
+                    "expected": 1,
+                    "reason": null
+                }
+            }
+        },
+        "span_limit": {
+            "limit": 2000,
+            "total": 1,
+            "truncated": false
+        }
+    },
+    "audio": {
+        "data": {
+            "trace": {
+                "id": "contract-audio",
+                "type": "audio",
+                "name": "Audio calls",
+                "agent_class": null,
+                "status": "completed",
+                "issue_kind": null,
+                "streamed": false,
+                "recovered": false,
+                "child_failed": false,
+                "provider": null,
+                "model": null,
+                "duration_ms": null,
+                "usage": {
+                    "state": "not_reported",
+                    "input_tokens": null,
+                    "output_tokens": null,
+                    "cache_read_tokens": null,
+                    "cache_write_tokens": null,
+                    "reasoning_tokens": null,
+                    "total_tokens": null,
+                    "search_units": null
+                },
+                "cost": {
+                    "state": "unpriced",
+                    "amount": null
+                },
+                "span_count": 1,
+                "prompt_excerpt": null,
+                "response_excerpt": null,
+                "conversation_id": null,
+                "user": null,
+                "bookmarked": false,
+                "started_at": "2026-01-02T11:00:00.000Z",
+                "ended_at": null
+            },
+            "detail": {
+                "error": null,
+                "pending_approvals": [],
+                "resolved_tool_call_ids": []
+            },
+            "spans": [
+                {
+                    "id": "audio-span",
+                    "parent_id": null,
+                    "type": "audio",
+                    "name": "Audio calls",
+                    "agent_class": null,
+                    "status": "completed",
+                    "issue_kind": null,
+                    "attempt": 1,
+                    "sequence": 1,
+                    "step_number": null,
+                    "provider": "openai",
+                    "model": "synthetic-model",
+                    "responding_model": null,
+                    "billing_basis": null,
+                    "duration_ms": null,
+                    "offset_ms": 0,
+                    "started_at": "2026-01-02T11:00:00.000Z",
+                    "ended_at": null,
+                    "usage": {
+                        "state": "not_reported",
+                        "input_tokens": null,
+                        "output_tokens": null,
+                        "cache_read_tokens": null,
+                        "cache_write_tokens": null,
+                        "reasoning_tokens": null,
+                        "total_tokens": null,
+                        "search_units": null
+                    },
+                    "cost": {
+                        "state": "not_captured",
+                        "amount": null
+                    },
+                    "error": null,
+                    "input": {
+                        "voice": "alloy",
+                        "characters": 15
+                    },
+                    "output": {
+                        "mime_type": "audio/mpeg",
+                        "size": 2048
+                    },
+                    "metadata": null,
+                    "redacted": false,
+                    "truncated": false,
+                    "truncated_paths": {}
+                }
+            ],
+            "usage": {
+                "totals": {
+                    "usage": {
+                        "state": "not_reported",
+                        "input_tokens": null,
+                        "output_tokens": null,
+                        "cache_read_tokens": null,
+                        "cache_write_tokens": null,
+                        "reasoning_tokens": null,
+                        "total_tokens": null,
+                        "search_units": null
+                    },
+                    "cost": {
+                        "state": "unpriced",
+                        "amount": null
+                    }
+                },
+                "rows": [
+                    {
+                        "span_id": "audio-span",
+                        "agent_span_id": null,
+                        "type": "audio",
+                        "name": "Audio calls",
+                        "attempt": 1,
+                        "step_number": null,
+                        "provider": "openai",
+                        "model": "synthetic-model",
+                        "usage": {
+                            "state": "not_reported",
+                            "input_tokens": null,
+                            "output_tokens": null,
+                            "cache_read_tokens": null,
+                            "cache_write_tokens": null,
+                            "reasoning_tokens": null,
+                            "total_tokens": null,
+                            "search_units": null
+                        },
+                        "cost": {
+                            "state": "not_captured",
+                            "amount": null
+                        }
+                    }
+                ],
+                "agents": []
+            },
+            "coverage": {
+                "timing": {
+                    "state": "not_captured",
+                    "captured": 0,
+                    "expected": 1,
+                    "reason": "not_reported"
+                },
+                "responding_model": {
+                    "state": "not_captured",
+                    "captured": 0,
+                    "expected": 1,
+                    "reason": "not_reported"
+                },
+                "usage": {
+                    "state": "not_captured",
+                    "captured": 0,
+                    "expected": 1,
+                    "reason": "not_reported"
+                },
+                "cost": {
+                    "state": "not_captured",
+                    "captured": 0,
+                    "expected": 1,
+                    "reason": "no_price"
+                },
+                "system_prompt": {
+                    "state": "not_applicable",
+                    "captured": 0,
+                    "expected": 0,
+                    "reason": null
+                },
+                "payloads": {
+                    "state": "captured",
+                    "captured": 1,
+                    "expected": 1,
+                    "reason": null
+                }
+            }
+        },
+        "span_limit": {
+            "limit": 2000,
+            "total": 1,
+            "truncated": false
+        }
+    },
+    "transcription": {
+        "data": {
+            "trace": {
+                "id": "contract-transcription",
+                "type": "transcription",
+                "name": "Transcription calls",
+                "agent_class": null,
+                "status": "completed",
+                "issue_kind": null,
+                "streamed": false,
+                "recovered": false,
+                "child_failed": false,
+                "provider": null,
+                "model": null,
+                "duration_ms": null,
+                "usage": {
+                    "state": "reported",
+                    "input_tokens": 30,
+                    "output_tokens": 6,
+                    "cache_read_tokens": null,
+                    "cache_write_tokens": null,
+                    "reasoning_tokens": null,
+                    "total_tokens": 36,
+                    "search_units": null
+                },
+                "cost": {
+                    "state": "unpriced",
+                    "amount": null
+                },
+                "span_count": 1,
+                "prompt_excerpt": null,
+                "response_excerpt": null,
+                "conversation_id": null,
+                "user": null,
+                "bookmarked": false,
+                "started_at": "2026-01-02T11:00:00.000Z",
+                "ended_at": null
+            },
+            "detail": {
+                "error": null,
+                "pending_approvals": [],
+                "resolved_tool_call_ids": []
+            },
+            "spans": [
+                {
+                    "id": "transcription-span",
+                    "parent_id": null,
+                    "type": "transcription",
+                    "name": "Transcription calls",
+                    "agent_class": null,
+                    "status": "completed",
+                    "issue_kind": null,
+                    "attempt": 1,
+                    "sequence": 1,
+                    "step_number": null,
+                    "provider": "openai",
+                    "model": "synthetic-model",
+                    "responding_model": null,
+                    "billing_basis": null,
+                    "duration_ms": null,
+                    "offset_ms": 0,
+                    "started_at": "2026-01-02T11:00:00.000Z",
+                    "ended_at": null,
+                    "usage": {
+                        "state": "reported",
+                        "input_tokens": 30,
+                        "output_tokens": 6,
+                        "cache_read_tokens": null,
+                        "cache_write_tokens": null,
+                        "reasoning_tokens": null,
+                        "total_tokens": 36,
+                        "search_units": null
+                    },
+                    "cost": {
+                        "state": "unpriced",
+                        "amount": null
+                    },
+                    "error": null,
+                    "input": {
+                        "language": "en",
+                        "diarize": false
+                    },
+                    "output": {
+                        "text": "Synthetic transcript",
+                        "segment_count": 0
+                    },
+                    "metadata": {
+                        "audio_seconds": 3.5
+                    },
+                    "redacted": false,
+                    "truncated": false,
+                    "truncated_paths": {}
+                }
+            ],
+            "usage": {
+                "totals": {
+                    "usage": {
+                        "state": "reported",
+                        "input_tokens": 30,
+                        "output_tokens": 6,
+                        "cache_read_tokens": null,
+                        "cache_write_tokens": null,
+                        "reasoning_tokens": null,
+                        "total_tokens": 36,
+                        "search_units": null
+                    },
+                    "cost": {
+                        "state": "unpriced",
+                        "amount": null
+                    }
+                },
+                "rows": [
+                    {
+                        "span_id": "transcription-span",
+                        "agent_span_id": null,
+                        "type": "transcription",
+                        "name": "Transcription calls",
+                        "attempt": 1,
+                        "step_number": null,
+                        "provider": "openai",
+                        "model": "synthetic-model",
+                        "usage": {
+                            "state": "reported",
+                            "input_tokens": 30,
+                            "output_tokens": 6,
+                            "cache_read_tokens": null,
+                            "cache_write_tokens": null,
+                            "reasoning_tokens": null,
+                            "total_tokens": 36,
+                            "search_units": null
+                        },
+                        "cost": {
+                            "state": "unpriced",
+                            "amount": null
+                        }
+                    }
+                ],
+                "agents": []
+            },
+            "coverage": {
+                "timing": {
+                    "state": "not_captured",
+                    "captured": 0,
+                    "expected": 1,
+                    "reason": "not_reported"
+                },
+                "responding_model": {
+                    "state": "not_captured",
+                    "captured": 0,
+                    "expected": 1,
+                    "reason": "not_reported"
+                },
+                "usage": {
+                    "state": "captured",
+                    "captured": 1,
+                    "expected": 1,
+                    "reason": null
+                },
+                "cost": {
+                    "state": "not_captured",
+                    "captured": 0,
+                    "expected": 1,
+                    "reason": "no_price"
+                },
+                "system_prompt": {
+                    "state": "not_applicable",
+                    "captured": 0,
+                    "expected": 0,
+                    "reason": null
+                },
+                "payloads": {
+                    "state": "captured",
+                    "captured": 1,
+                    "expected": 1,
+                    "reason": null
+                }
+            }
+        },
+        "span_limit": {
+            "limit": 2000,
+            "total": 1,
+            "truncated": false
+        }
+    }
+}

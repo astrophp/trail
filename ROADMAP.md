@@ -46,11 +46,17 @@ Trail does not do today, see [Known limits](docs/limits.md).
 - Root-operation filters, inspectors, comparison, usage, CSV and Boost readers.
 - SDK 1.1/1.2 compatibility, offline scenarios and a coordinated migration/restart upgrade.
 
-## After v0.3.0
+## v0.4.0 — images, audio and transcription
+
+- Event capture of image generation, text-to-speech and transcription calls, standalone and inside
+  tools, with their failures from SDK 1.2.2 on.
+- Settings, counts and redacted texts only; never image or audio bytes.
+- Token-based estimates where providers report tokens, and Not captured where they do not.
+
+## Later
 
 These are ideas, not promises.
 
-- More run types: images, audio and transcription.
 - Linking runs that pause for tool approval to the run that resumes them, which are separate
   traces today.
 - Saved views shared between dashboard users.
