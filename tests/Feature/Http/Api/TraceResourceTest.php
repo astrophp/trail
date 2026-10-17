@@ -103,6 +103,9 @@ it('writes dates in UTC whatever the application timezone is', function () {
     // What the framework does at boot: the timezone of the application is the one PHP reads dates in.
     config(['app.timezone' => 'Europe/Istanbul']);
     date_default_timezone_set('Europe/Istanbul');
+    // Freeze the clock again, as a host's tests would after boot: Carbon before 3.12 reads dates in
+    // the timezone of the frozen moment, and the one from beforeEach was frozen in UTC.
+    Carbon::setTestNow('2026-01-02 12:00:00');
 
     try {
         $trace = Rows::trace(['started_at' => '2026-01-01 12:00:00', 'ended_at' => '2026-01-01 12:00:02.500']);
