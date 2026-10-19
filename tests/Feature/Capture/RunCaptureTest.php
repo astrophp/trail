@@ -2,6 +2,7 @@
 
 use Astro\Trail\Facades\Trail;
 use Astro\Trail\Tests\Fixtures\Agents\AssistantAgent;
+use Astro\Trail\Tests\Fixtures\Agents\StoppingStructuredAgent;
 use Astro\Trail\Tests\Fixtures\Agents\StructuredAgent;
 use Astro\Trail\Tests\Fixtures\Capture\Captured;
 use Astro\Trail\Tests\Fixtures\Capture\Steps;
@@ -11,6 +12,7 @@ use Astro\Trail\Tests\Fixtures\Tools\CallbackTool;
 use Astro\Trail\Tests\Fixtures\Tools\LookupTool;
 use Laravel\Ai\Events\StepCompleted;
 use Laravel\Ai\Events\ToolInvoked;
+use Laravel\Ai\Middleware\Stop;
 use Laravel\Ai\Responses\Data\ToolCall;
 
 it('stores a run without tools as one trace with an agent span and one step', function () {
@@ -233,6 +235,64 @@ describe('structured output', function () {
             ->and($spans[0]['output']['structured'])->toBe(['answer' => '42'])
             ->and($spans[1]['output']['structured'])->toBe(['answer' => '42'])
             ->and($spans[1]['output']['tool_calls'])->toBe([]);
+    });
+
+    it('stores structured data only on the step that answers, after a step that calls a tool', function () {
+        FakeAnthropic::script([
+            FakeAnthropic::toolUse([['id' => 'toolu_1', 'name' => 'lookup', 'input' => ['query' => 'laravel']]]),
+            FakeAnthropic::text('{"answer":"42"}'),
+        ]);
+
+        $response = (new StructuredAgent([new LookupTool, new LookupTool]))->prompt('Hi', model: FakeAnthropic::MODEL);
+        Trail::flush();
+
+        $spans = Captured::read($response->invocationId)->spans();
+
+        expect(array_column($spans, 'type'))->toBe(['agent', 'step', 'tool', 'step'])
+            ->and($spans[1]['output'])->not->toHaveKey('structured')
+            ->and($spans[3]['output']['structured'])->toBe(['answer' => '42'])
+            ->and($spans[0]['output'])->toBe(['text' => '{"answer":"42"}', 'structured' => ['answer' => '42']]);
+    });
+
+    it('stores no structured data for an answer that does not decode', function () {
+        FakeAnthropic::script([FakeAnthropic::text('{"answer":"4', stopReason: 'max_tokens')]);
+
+        $response = (new StructuredAgent)->prompt('Hi', model: FakeAnthropic::MODEL);
+        Trail::flush();
+
+        $spans = Captured::read($response->invocationId)->spans();
+
+        expect($spans[0]['output'])->toBe(['text' => '{"answer":"4'])
+            ->and($spans[1]['output'])->not->toHaveKey('structured')
+            ->and($spans[1]['output']['finish_reason'])->toBe('length');
+    });
+
+    it('keeps an answer that is an empty object', function () {
+        FakeAnthropic::script([FakeAnthropic::text('{}')]);
+
+        $response = (new StructuredAgent)->prompt('Hi', model: FakeAnthropic::MODEL);
+        Trail::flush();
+
+        expect(Captured::read($response->invocationId)->spans()[0]['output'])->toBe(['text' => '{}', 'structured' => []]);
+    });
+
+    // SDK 1.3 answers such a run with structured data of [], which is not what the model returned.
+    it('stores no structured data for a run that middleware stops before it answers', function () {
+        if (! class_exists(Stop::class)) {
+            $this->markTestSkipped('Laravel AI SDK 1.2.1 added the Stop middleware.');
+        }
+
+        FakeAnthropic::script([FakeAnthropic::toolUse([['id' => 'toolu_1', 'name' => 'lookup', 'input' => ['query' => 'laravel']]])]);
+
+        $response = (new StoppingStructuredAgent([new LookupTool]))->prompt('Hi', model: FakeAnthropic::MODEL);
+        Trail::flush();
+
+        $spans = Captured::read($response->invocationId)->spans();
+
+        expect(array_column($spans, 'type'))->toBe(['agent', 'step', 'tool'])
+            ->and($spans[0]['status'])->toBe('completed')
+            ->and($spans[0]['output'])->toBe(['text' => ''])
+            ->and($spans[1]['output'])->not->toHaveKey('structured');
     });
 });
 

@@ -592,8 +592,8 @@ reranking. Every type has this one shape.
 
   | Type | `input` | `output` |
   | -- | -- | -- |
-  | agent | `prompt`, `system` (`null` when the system prompt is not captured), `attachments` (only when there are any) | `text`, and `structured` for a structured response |
-  | step | `messages`, `messages_offset`, `options` | `text`, `tool_calls`, `finish_reason`, and `structured` for structured output |
+  | agent | `prompt`, `system` (`null` when the system prompt is not captured), `attachments` (only when there are any) | `text`, and `structured` for a structured response whose last step answered |
+  | step | `messages`, `messages_offset`, `options` | `text`, `tool_calls`, `finish_reason`, and `structured` when the step answered with structured output (not when it calls tools or its text decodes to nothing) |
   | tool | `arguments` | `result` |
   | embedding | `count`, `dimensions` | `count` |
   | image | `size`, `quality`, `attachment_count`, and when captured `prompt`, `attachments` | `count`, `mime_types` |

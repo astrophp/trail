@@ -442,6 +442,7 @@ class Recorder
         $run->attempt++;
         $run->step = null;
         $run->lastText = null;
+        $run->lastStructured = false;
         $run->sent = 0;
         $run->fingerprint = null;
         $run->forgetFailure();
@@ -626,15 +627,20 @@ class Recorder
         $response = $event->response;
         $usage = $response->usage;
 
+        // The SDK gives a step empty structured data when its text decodes to nothing: a step that calls
+        // tools, or an answer that is blank, prose or cut short. Only an empty JSON value is a real answer.
+        $structured = $response->structured === [] && json_decode(trim($response->text), true) !== [] ? null : $response->structured;
+
         // Remembered before anything that can fail, so the run's final answer never falls back to an earlier step's text.
         $run->lastText = $response->text;
+        $run->lastStructured = $structured !== null;
 
         // Everything that can fail is built first, so a step is never completed with its output or usage missing.
         $output = $this->capturing('output', fn (): array => [
             'text' => $response->text,
             'tool_calls' => $this->payload()->toolCalls($response->toolCalls),
             'finish_reason' => $response->finishReason->value,
-            ...($response->structured === null ? [] : ['structured' => $response->structured]),
+            ...($structured === null ? [] : ['structured' => $structured]),
         ]);
 
         // A provider that sent no usage block shows up as zero tokens and no cache counts; that is not "free".
@@ -867,7 +873,8 @@ class Recorder
         $output = $this->capturing('output', fn (): array => [
             // A plain response's text is its last step's; a streamed response joins every step's.
             'text' => $run->streamed ? ($run->lastText ?? $response->text) : $response->text,
-            ...($response instanceof StructuredAgentResponse ? ['structured' => $response->structured] : []),
+            // A run that paused or was stopped before its last step answered still carries empty structured data.
+            ...($response instanceof StructuredAgentResponse && $run->lastStructured ? ['structured' => $response->structured] : []),
         ]);
 
         $pending = $response->hasPendingApprovals() ? $this->pendingApprovalsCaptured($response) : null;

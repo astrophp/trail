@@ -2,6 +2,7 @@
 
 use Astro\Trail\Facades\Trail;
 use Astro\Trail\Tests\Fixtures\Agents\AssistantAgent;
+use Astro\Trail\Tests\Fixtures\Agents\RememberingStructuredAgent;
 use Astro\Trail\Tests\Fixtures\Capture\Approvals;
 use Astro\Trail\Tests\Fixtures\Capture\Captured;
 use Astro\Trail\Tests\Fixtures\Capture\Streams;
@@ -80,6 +81,20 @@ describe('a run that pauses', function () {
             ['type' => 'step', 'name' => 'step', 'status' => 'completed'],
             ['type' => 'tool', 'name' => 'lookup', 'status' => 'completed'],
         ])->and(array_column($run->rawTrace()['metadata']['pending_approvals'], 'tool_call_id'))->toBe(['toolu_1']);
+    });
+
+    // SDK 1.3 answers a paused structured run with structured data of [], which the model never returned.
+    it('stores no structured data for a structured agent', function () {
+        FakeAnthropic::script([Approvals::turn()]);
+
+        $paused = (new RememberingStructuredAgent([(new ApprovalTool)->requireApproval()]))->forUser($this->user)->prompt('Delete the users', model: FakeAnthropic::MODEL);
+        $spans = ($this->read)($paused->invocationId)->spans();
+
+        expect(Captured::pick($spans, ['type', 'status']))->toBe([
+            ['type' => 'agent', 'status' => 'awaiting_approval'],
+            ['type' => 'step', 'status' => 'completed'],
+        ])->and($spans[0]['output'])->toBe(['text' => ''])
+            ->and($spans[1]['output'])->not->toHaveKey('structured');
     });
 
     it('fails when the agent cannot be resumed, with its step completed', function () {
