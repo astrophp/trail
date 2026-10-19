@@ -627,8 +627,9 @@ class Recorder
         $response = $event->response;
         $usage = $response->usage;
 
-        // A structured agent's step that calls tools has not answered yet; some gateways still give it empty structured data.
-        $structured = $response->structured === [] && $response->toolCalls !== [] ? null : $response->structured;
+        // The SDK gives a step empty structured data when its text decodes to nothing: a step that calls
+        // tools, or an answer that is blank, prose or cut short. Only an empty JSON value is a real answer.
+        $structured = $response->structured === [] && json_decode(trim($response->text), true) !== [] ? null : $response->structured;
 
         // Remembered before anything that can fail, so the run's final answer never falls back to an earlier step's text.
         $run->lastText = $response->text;

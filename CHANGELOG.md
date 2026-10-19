@@ -8,15 +8,17 @@ All notable changes to Trail are documented here. The format follows
 
 ### Fixed
 
-- Store no structured data for a structured-output agent's run or step that has not answered yet.
-  A step that calls tools, a run that pauses for tool approval and a run that the SDK's `Stop`
-  middleware ends early were stored with empty structured data, which looked like an empty answer.
+- Store no structured data for a structured-output agent's run or step that has not answered.
+  A step that calls tools, an answer that does not decode (blank, prose or cut short), a run that
+  pauses for tool approval and a run that the SDK's `Stop` middleware ends early were stored with
+  empty structured data, which looked like an empty answer. An answer of `{}` is still stored.
   Laravel AI SDK 1.3.0 gives such runs empty structured data with every provider; earlier versions
   did so with Anthropic.
 
 ### Changed
 
 - CI also runs the test suite on exact Laravel AI SDK 1.3.0 on Laravel 12 and 13.
+- The release script recognises newer curl's wording for a missing Packagist package.
 
 ## v0.4.1
 
