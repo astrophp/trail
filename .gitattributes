@@ -2,6 +2,10 @@
 
 /dist/* -diff linguist-generated
 
+# Trail is a PHP package with a bundled React dashboard: keep the dashboard
+# source out of the repository language statistics.
+/resources/js/** -linguist-detectable
+
 /.github            export-ignore
 /tests              export-ignore
 /docs               export-ignore
