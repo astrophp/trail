@@ -162,8 +162,7 @@ export function CapabilityPanel({
             side === 'input' &&
             entries.length > 0 ? (
                 <p className="text-caption text-muted-foreground">
-                    Document snippets are bounded to 1,000 characters. Indexes
-                    refer to the original input order.
+                    Snippets up to 1,000 characters, in input order.
                 </p>
             ) : null}
         </div>

@@ -83,10 +83,26 @@ until explicitly updated; they do not expire automatically. Check [Cost](cost.md
 
 The dashboard's JavaScript and CSS are inlined into the page, so there is nothing to publish and
 no asset URL to configure. The cost is that every dashboard page load carries them. In this
-release the script is about 1.3 MB, about 380 KB gzipped
+release the script is about 1.5 MB, about 430 KB gzipped
 (measure it with `gzip -c dist/app.js | wc -c`), and the stylesheet is about 135 KB, about 20 KB
 gzipped. Whether the page is compressed in transit depends on your web server. The size changes
 with every release that changes the dashboard.
+
+## Answers shown as markdown
+
+Model answers are drawn as GitHub-flavoured markdown (see [Payloads](payloads.md#how-answers-are-shown)),
+with these limits:
+
+- Code is not highlighted.
+- Raw HTML is shown as the text it is, never as markup.
+- An image is never loaded: its description and address are shown, and a long inline `data:`
+  image is summarised.
+- A link to anything but an `http`, `https` or `mailto` address is shown as text.
+- A long answer is drawn in parts of about 4,000 characters, cut between blocks. A code block
+  is never cut, so a part holding a very long one is longer.
+- Block quotes nested more than 64 deep are shown as plain text.
+
+Raw always shows the answer exactly as stored.
 
 ## Several SQLite writers can lose a trace
 

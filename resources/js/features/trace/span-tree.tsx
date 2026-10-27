@@ -335,7 +335,8 @@ export function SpanTree({
             aria-label="Execution tree"
             aria-describedby={describedBy}
             data-slot="span-tree"
-            className={cn('flex flex-col gap-0.5 p-2', className)}
+            // Edge to edge, so the gridlines of the rows join into one.
+            className={cn('flex flex-col p-2', className)}
         >
             {rows.map((row) =>
                 row.kind === 'attempt' ? (
@@ -351,6 +352,7 @@ export function SpanTree({
                         onPress={onPress}
                         onKeyDown={onKeyDown}
                         onSelect={onSelect}
+                        axisMs={axisMs}
                     />
                 ) : (
                     <SpanRow

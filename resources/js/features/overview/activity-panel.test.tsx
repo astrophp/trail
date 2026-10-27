@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { forgetAttentionRefreshFailures } from '@/features/overview/use-attention'
 import { forgetOverviewRefreshFailures } from '@/features/overview/use-overview'
 import { renderApp } from '@/test/render-app'
+import { stubResizeObserver } from '@/test/resize-observer'
 import {
     deferred,
     expectSearch,
@@ -59,6 +60,18 @@ async function showData(of: HTMLElement) {
     await userEvent.click(within(of).getByRole('button', { name: 'View data' }))
 
     return within(of).getByRole('table')
+}
+
+/** What the chart shows and the clock its buckets follow, from the hint beside the title. */
+async function aboutChart(of: HTMLElement) {
+    // The tooltip measures itself; jsdom has nothing to measure with. Stubbed only now, once the
+    // chart has drawn, so the chart does not measure itself either.
+    stubResizeObserver()
+    await userEvent.hover(
+        within(of).getByRole('button', { name: 'About this chart' }),
+    )
+
+    return screen.findByRole('tooltip')
 }
 
 const header = (table: HTMLElement) =>
@@ -609,11 +622,9 @@ describe('the choice of view', () => {
         const of = await open('/?chart=cost')
 
         expect(within(of).getByRole('radio', { name: 'Cost' })).toBeChecked()
-        expect(
-            within(of).getByText(
-                'Estimated cost of the traces started per hour',
-            ),
-        ).toBeVisible()
+        expect(await aboutChart(of)).toHaveTextContent(
+            'Estimated cost of the traces started per hour.',
+        )
     })
 
     it('falls back to volume for a view it does not know', async () => {
@@ -673,33 +684,33 @@ describe('the words for the buckets', () => {
             '1',
             '4',
         ])
-        expect(
-            within(of).getByText(
-                'Buckets follow the application’s time zone (Europe/Istanbul).',
-            ),
-        ).toBeVisible()
+        expect(await aboutChart(of)).toHaveTextContent(
+            'Buckets follow the application’s time zone (Europe/Istanbul).',
+        )
     })
 
     it('say so without a name when the application did not give a usable one', async () => {
         mockApi()
         const of = await open('/', { timezone: 'Not/AZone' })
 
-        expect(
-            within(of).getByText('Buckets are shown in your local time zone.'),
-        ).toBeVisible()
-        expect(of.textContent).not.toMatch(/application’s time zone/)
+        const about = await aboutChart(of)
+
+        expect(about).toHaveTextContent(
+            'Buckets are shown in your local time zone.',
+        )
+        expect(about).not.toHaveTextContent(/application’s time zone/)
     })
 
     it('say the zone they follow only when it is one the labels are written in', async () => {
         mockApi()
         const of = await open('/', { timezone: 'Asia/Tokyo' })
 
-        expect(
-            within(of).getByText(
-                'Buckets follow the application’s time zone (Asia/Tokyo).',
-            ),
-        ).toBeVisible()
-        expect(of.textContent).not.toMatch(/local time zone/)
+        const about = await aboutChart(of)
+
+        expect(about).toHaveTextContent(
+            'Buckets follow the application’s time zone (Asia/Tokyo).',
+        )
+        expect(about).not.toHaveTextContent(/local time zone/)
     })
 
     it('are the day for day buckets, and the span of a day the range cut', async () => {
@@ -730,9 +741,9 @@ describe('the words for the buckets', () => {
             'Jan 1, 12:20–00:00',
             'Jan 2',
         ])
-        expect(
-            within(of).getByText(/Traces started per day, by outcome/),
-        ).toBeVisible()
+        expect(await aboutChart(of)).toHaveTextContent(
+            /Traces started per day, by outcome/,
+        )
     })
 
     it('are 5-minute spans for the last hour', async () => {
@@ -762,9 +773,9 @@ describe('the words for the buckets', () => {
             '11:20–11:25',
             '11:25–11:30',
         ])
-        expect(
-            within(of).getByText(/Traces started per 5 minutes, by outcome/),
-        ).toBeVisible()
+        expect(await aboutChart(of)).toHaveTextContent(
+            /Traces started per 5 minutes, by outcome/,
+        )
     })
 })
 
@@ -869,7 +880,10 @@ describe('the states', () => {
 
         expect(content).toHaveClass('opacity-60')
         expect(content).toHaveTextContent('Jan 2, 10:00–11:00')
-        expect(within(of).getByText(/Traces started per hour/)).toBeVisible()
+        // The hint beside the title still describes the range drawn.
+        const about = await aboutChart(of)
+
+        expect(about).toHaveTextContent(/Traces started per hour/)
         // The announcement is outside the busy part, where a screen reader may mute it. The panel
         // holds a second one, the list of models', after it, which has nothing to say yet.
         const statuses = within(of).getAllByRole('status')
@@ -899,7 +913,9 @@ describe('the states', () => {
         await waitFor(() =>
             expect(of.querySelector('[aria-busy="true"]')).toBeNull(),
         )
-        expect(within(of).getByText(/Traces started per day/)).toBeVisible()
+        await waitFor(() =>
+            expect(about).toHaveTextContent(/Traces started per day/),
+        )
         expect(
             rows(within(of).getByRole('table')).map((row) => row[0]),
         ).toEqual(['Jan 1'])

@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import {
@@ -47,9 +47,12 @@ describe('reranking price group', () => {
             'Reranking: USD 0.1 per search unit',
         )
         expect(rowOf(model)).toHaveTextContent('Config reranking price')
-        expect(rowOf(model)).toHaveTextContent(
-            'Token calls without an input rate show as Unpriced',
-        )
+        // The source is drawn in the cell and in the narrow summary; each carries the hint.
+        expect(
+            within(rowOf(model)).getAllByRole('button', {
+                name: 'Why token calls show as Unpriced',
+            }),
+        ).not.toHaveLength(0)
         expect(rowOf(model)).not.toHaveTextContent(
             'Seen in usage; without an input rate it shows as Unpriced',
         )

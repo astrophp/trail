@@ -866,10 +866,7 @@ describe('the notices of a run', () => {
 
         expect(text).toContain('This run never reported an end')
         expect(text).toContain(
-            'It was still marked running after the stale timeout of 1h 00m, which happens when a stream is abandoned or a worker crashes.',
-        )
-        expect(text).toContain(
-            'What was recorded up to that point is shown below.',
+            'Still running after the stale timeout of 1h 00m. Shown as recorded.',
         )
     })
 
@@ -885,9 +882,7 @@ describe('the notices of a run', () => {
         const text = (notices() as HTMLElement).textContent
 
         expect(text).toContain('This run never reported an end')
-        expect(text).toContain(
-            'What was recorded up to that point is shown below.',
-        )
+        expect(text).toContain('Shown as recorded.')
         expect(text).not.toContain('stale timeout')
     })
 
@@ -914,9 +909,7 @@ describe('the notices of a run', () => {
             notice.getByText('Waiting for approval of: issue_refund'),
         ).toBeInTheDocument()
         expect(
-            notice.getByText(
-                'When it is approved, the run that continues is recorded as a separate run.',
-            ),
+            notice.getByText('The resumed run is recorded separately.'),
         ).toBeInTheDocument()
 
         await userEvent.click(
@@ -1004,9 +997,7 @@ describe('the notices of a run', () => {
         const notice = within(notices() as HTMLElement)
 
         expect(
-            notice.getByText(
-                'An earlier attempt failed and the run moved on to another.',
-            ),
+            notice.getByText('An earlier attempt failed.'),
         ).toBeInTheDocument()
         expect(notice.queryByRole('button')).not.toBeInTheDocument()
     })
@@ -1084,9 +1075,8 @@ describe('the notices of a run', () => {
         const text = (notices() as HTMLElement).textContent
 
         expect(text).toContain('Showing the first 2,000 of 12,345 spans')
-        expect(text).toContain('Totals in the header cover the whole run.')
         expect(text).toContain(
-            'The tree, the usage table and the coverage cover the spans shown.',
+            'Header totals cover the whole run; the tree and tables cover the spans shown.',
         )
         expect(text.indexOf('Showing the first')).toBeLessThan(
             text.indexOf('still open'),
@@ -1106,11 +1096,7 @@ describe('a run that is not there', () => {
         expect(
             await screen.findByRole('heading', { name: 'Run not found' }),
         ).toBeVisible()
-        expect(
-            screen.getByText(
-                'No recorded run has this id. It may have been pruned, or it was never recorded.',
-            ),
-        ).toBeInTheDocument()
+        expect(screen.getByText('It may have been pruned.')).toBeInTheDocument()
     })
 
     it('is not found for the run asked for, never for the one shown before it', async () => {

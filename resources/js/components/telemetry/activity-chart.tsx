@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import type { Series, Summary } from '@/api/types'
+import { InfoHint } from '@/components/patterns/info-hint'
 import { Panel } from '@/components/patterns/panel'
 import { PanelContent } from '@/components/patterns/panel-content'
 import { PanelHeader } from '@/components/patterns/panel-header'
@@ -109,15 +110,23 @@ export function ActivityChart({
         }
 
         chart = (
-            <div className="flex min-w-0 flex-col gap-2">
+            // Beside a column, the chart fills the height the taller of the two sets.
+            <div
+                className={cn(
+                    'flex min-w-0 flex-col gap-2',
+                    aside !== undefined && 'h-full',
+                )}
+            >
                 {mode === 'volume' ? (
                     <TimeSeriesChart
                         {...common}
+                        fill={aside !== undefined}
                         bars={volumeSeries(series.buckets)}
                     />
                 ) : (
                     <TimeSeriesChart
                         {...common}
+                        fill={aside !== undefined}
                         line={
                             mode === 'duration'
                                 ? durationSeries(series.buckets)
@@ -133,9 +142,6 @@ export function ActivityChart({
                         {note}
                     </p>
                 )}
-                <p className="text-caption text-muted-foreground">
-                    {timeZoneNote(timeZone)}
-                </p>
             </div>
         )
     }
@@ -151,7 +157,13 @@ export function ActivityChart({
             </span>
             <PanelHeader
                 title="Trace activity"
-                description={description}
+                hint={
+                    description === undefined ? undefined : (
+                        <InfoHint label="About this chart">
+                            {description}. {timeZoneNote(timeZone)}
+                        </InfoHint>
+                    )
+                }
                 action={
                     <ActivityModeSwitch
                         value={mode}
@@ -182,7 +194,10 @@ export function ActivityChart({
                     >
                         <div
                             aria-busy={busyMark}
-                            className={cn('min-w-0 lg:col-span-2', fade)}
+                            className={cn(
+                                'flex min-w-0 flex-col lg:col-span-2',
+                                fade,
+                            )}
                         >
                             {chart}
                         </div>

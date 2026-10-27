@@ -8,10 +8,7 @@ export function AgentsPage() {
 
     return (
         <>
-            <PageHeader
-                title="Agents"
-                description="Agents are discovered from recorded runs: how often each ran, how reliably, how fast and at what cost."
-            >
+            <PageHeader title="Agents">
                 <TimeRangeSelect value={range} onValueChange={setRange} />
             </PageHeader>
             <AgentsList className="mt-5.75 lg:mt-6.5" />

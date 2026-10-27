@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { conversationPath } from '@/lib/conversation-path'
 import { appReady, renderApp, testQueryClient } from '@/test/render-app'
+import { stubResizeObserver } from '@/test/resize-observer'
 import {
     call,
     deferred,
@@ -151,6 +152,35 @@ describe('the conversation page', () => {
         expect(turn(1).querySelector('b, script')).toBeNull()
     })
 
+    it('draws an answer as markdown and leaves the prompt as typed', async () => {
+        await open(
+            windowOf([
+                turnOf('a', {
+                    messages: [
+                        message('prompt', 'Show **this** as typed'),
+                        message('response', '- **one**\n- two'),
+                    ],
+                }),
+            ]),
+        )
+
+        const prompt = turn(1).querySelector('[data-slot="turn-prompt"]')!
+        const response = turn(1).querySelector('[data-slot="turn-response"]')!
+
+        expect(prompt).toHaveTextContent('Show **this** as typed')
+        expect(prompt.querySelector('strong')).toBeNull()
+        expect(response.querySelectorAll('li')).toHaveLength(2)
+        expect(within(response as HTMLElement).getByText('one').tagName).toBe(
+            'STRONG',
+        )
+        // The switch sits on the agent's line, above the answer's card.
+        expect(
+            within(response as HTMLElement).getByRole('radiogroup', {
+                name: 'Turn 1 response view',
+            }),
+        ).toBeVisible()
+    })
+
     it('shows the figures of a turn through the telemetry components, and links to its trace', async () => {
         await open()
 
@@ -197,23 +227,31 @@ describe('the conversation page', () => {
         await open()
 
         expect(heading('#1').tagName).toBe('H2')
-        expect(heading('Jump to turn').tagName).toBe('H2')
+        // The side cards are panels, whose titles are headings by role.
+        expect(
+            screen.getByRole('heading', { name: 'Jump to turn', level: 2 }),
+        ).toBeVisible()
         expect(screen.getByRole('article', { name: 'Turn 1' })).toHaveAttribute(
             'aria-labelledby',
             heading('#1').id,
         )
     })
 
-    it('says what the page shows, and does not claim to be complete', async () => {
+    it('says, in a hint, what each turn shows, and does not claim to be complete', async () => {
         await open()
 
-        expect(
-            screen.getByText(
-                'This page shows what was stored for each turn. Messages a turn resent from earlier in the conversation are left out.',
-            ),
-        ).toBeVisible()
         expect(document.body.textContent).not.toMatch(
             /continu|resum|followed|complete transcript|full transcript/i,
+        )
+
+        // The tooltip measures itself; jsdom has nothing to measure with.
+        stubResizeObserver()
+        await userEvent.hover(
+            screen.getByRole('button', { name: 'What each turn shows' }),
+        )
+
+        expect(await screen.findByRole('tooltip')).toHaveTextContent(
+            'What was stored for each turn. Messages a turn resent from earlier in the conversation are left out.',
         )
     })
 })
@@ -536,6 +574,22 @@ describe('tool chips', () => {
 
         expect(chip).toHaveTextContent('Failed')
         expect(chip).not.toHaveTextContent('Completed')
+    })
+
+    it('puts the tool calls on the line of the activity card, apart from the two messages', async () => {
+        await open()
+
+        const activity = turn(3).querySelector('[data-slot="turn-activity"]')!
+        const chips = activity.querySelectorAll('[data-slot="tool-chip"]')
+
+        expect(activity).toHaveTextContent('Agent activity')
+        expect(activity).toHaveTextContent(/\d+ tool calls? · \d+ messages?/)
+        expect(chips.length).toBeGreaterThan(0)
+        expect(
+            within(activity as HTMLElement).getByRole('button', {
+                name: 'Show messages',
+            }),
+        ).toBeVisible()
     })
 
     it('shows a call waiting for approval without a link', async () => {

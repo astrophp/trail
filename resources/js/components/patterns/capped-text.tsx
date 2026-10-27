@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { RedactionMark } from '@/components/patterns/redaction-mark'
 import { Button } from '@/components/ui/button'
 import { formatCount } from '@/lib/format'
 import { cutPoint, splitOnMarker, textChunk } from '@/lib/json'
@@ -39,18 +40,7 @@ export function CappedText({
             {splitOnMarker(text.slice(0, end), redactionMarker).map(
                 (part, index) =>
                     part.marker ? (
-                        <span
-                            key={index}
-                            data-slot="redaction"
-                            title="Redacted before it was stored"
-                            className="rounded-sm bg-warning-soft px-1 text-warning"
-                        >
-                            {part.text}
-                            <span className="sr-only">
-                                {' '}
-                                (redacted before it was stored)
-                            </span>
-                        </span>
+                        <RedactionMark key={index} text={part.text} />
                     ) : (
                         part.text
                     ),

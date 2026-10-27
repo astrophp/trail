@@ -81,7 +81,7 @@ const empty: Summary = {
 }
 
 describe('the Overview page', () => {
-    it('has the title, a description and the time range, and asks for the default range', async () => {
+    it('has the title and the time range, with no description, and asks for the default range', async () => {
         // Nothing is running, so the page asks for nothing again while the test lists its requests.
         const fetchMock = mockApi((url) => json(quietOverviewFor(url)))
         await open()
@@ -90,8 +90,8 @@ describe('the Overview page', () => {
             screen.getByRole('heading', { level: 1, name: 'Overview' }),
         ).toBeInTheDocument()
         expect(
-            screen.getByText('How your agents are doing, at a glance.'),
-        ).toBeVisible()
+            screen.queryByText('How your agents are doing, at a glance.'),
+        ).toBeNull()
         expect(
             screen.getByRole('combobox', { name: 'Time range' }),
         ).toHaveTextContent('Last 24 hours')

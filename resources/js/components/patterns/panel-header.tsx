@@ -14,6 +14,8 @@ type PanelHeaderProps = {
     description?: ReactNode
     /** A control that acts on the panel, at the end of the header: a tab list, a link. */
     action?: ReactNode
+    /** Sits right after the title: an `InfoHint` with a detail the panel need not spell out. */
+    hint?: ReactNode
     /**
      * Makes the heading something a link can point at and move focus to: an `id`, and `tabIndex`
      * -1 so script can focus it without it becoming a tab stop.
@@ -28,6 +30,7 @@ export function PanelHeader({
     headingLevel = 2,
     description,
     action,
+    hint,
     titleTarget,
     className,
 }: PanelHeaderProps) {
@@ -36,15 +39,19 @@ export function PanelHeader({
             data-slot="panel-header"
             className={cn('px-5 pt-5 pb-3.5', className)}
         >
-            <CardTitle
-                role="heading"
-                aria-level={headingLevel}
-                id={titleTarget?.id}
-                tabIndex={titleTarget ? -1 : undefined}
-                className="text-heading"
-            >
-                {title}
-            </CardTitle>
+            {/* The hint sits beside the heading, not in it, so the heading's name stays the title. */}
+            <div className="flex min-w-0 items-center gap-1.5">
+                <CardTitle
+                    role="heading"
+                    aria-level={headingLevel}
+                    id={titleTarget?.id}
+                    tabIndex={titleTarget ? -1 : undefined}
+                    className="text-heading"
+                >
+                    {title}
+                </CardTitle>
+                {hint}
+            </div>
             {description ? (
                 <CardDescription className="text-xs">
                     {description}

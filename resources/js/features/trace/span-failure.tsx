@@ -33,7 +33,7 @@ export function SpanFailure({ span, tree, onSelect }: SpanFailureProps) {
             {swallowed ? (
                 <Notice
                     tone="warning"
-                    title="The agent this tool started failed. The tool returned its error as a normal result."
+                    title="Its sub-agent failed; the tool returned the error as its result."
                     action={
                         <Button
                             type="button"

@@ -5,7 +5,11 @@ import { tracesLink } from '@/api/traces-link'
 import { DataTable } from '@/components/patterns/data-table'
 import { EmptyState } from '@/components/patterns/empty-state'
 import { ErrorState } from '@/components/patterns/error-state'
+import { Panel } from '@/components/patterns/panel'
+import { PanelContent } from '@/components/patterns/panel-content'
+import { PanelHeader } from '@/components/patterns/panel-header'
 import { RefreshNote } from '@/components/patterns/refresh-note'
+import { Button } from '@/components/ui/button'
 import { recentTraceColumns } from '@/features/traces/trace-columns'
 import {
     useRecentTraces,
@@ -80,58 +84,67 @@ export function RecentTraces({
         <section
             aria-labelledby={headingId}
             data-slot="recent-traces"
-            className={cn('flex flex-col gap-3', className)}
+            className={cn('min-w-0', className)}
         >
-            <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-                <h2 id={headingId} className="text-heading">
-                    Recent traces
-                </h2>
-                {total === undefined || total === 0 ? null : (
-                    <Link
-                        to={tracesLink(shown, { agent })}
-                        className="rounded-sm text-ui text-primary-ink outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/50"
-                    >
-                        View all {formatCount(total)}
-                        <span className="sr-only"> traces of {agent}</span>
-                    </Link>
-                )}
-            </div>
-            {failed ? (
-                <ErrorState
-                    title="The recent traces could not be loaded"
-                    error={failure}
-                    retrying={retrying}
-                    onRetry={() => void traces.refetch()}
+            <Panel>
+                <PanelHeader
+                    title="Recent traces"
+                    titleTarget={{ id: headingId }}
+                    action={
+                        total === undefined || total === 0 ? undefined : (
+                            <Button asChild variant="link" size="sm">
+                                <Link to={tracesLink(shown, { agent })}>
+                                    View all {formatCount(total)}
+                                    <span className="sr-only">
+                                        {' '}
+                                        traces of {agent}
+                                    </span>
+                                </Link>
+                            </Button>
+                        )
+                    }
                 />
-            ) : (
-                <div>
-                    {loading ? null : (
-                        <RefreshNote
-                            refreshing={traces.refreshing}
-                            failed={isError}
-                            onRetry={() => void traces.refreshAgain()}
+                {failed ? (
+                    <PanelContent>
+                        <ErrorState
+                            title="The recent traces could not be loaded"
+                            error={failure}
+                            retrying={retrying}
+                            onRetry={() => void traces.refetch()}
                         />
-                    )}
-                    <DataTable
-                        loading={loading}
-                        busy={isPlaceholderData}
-                        skeletonRows={3}
-                        columns={columns}
-                        data={data?.data ?? []}
-                        getRowId={getRowId}
-                        sort={sort}
-                        onSortChange={() => {}}
-                        caption={`Recent traces of ${agent}`}
-                        empty={
-                            <EmptyState
-                                icon={SearchXIcon}
-                                title="No runs found"
-                                description="No run of this agent started in this range."
+                    </PanelContent>
+                ) : (
+                    // The table fills the panel: its own border would double the panel's.
+                    <div>
+                        {loading ? null : (
+                            <RefreshNote
+                                refreshing={traces.refreshing}
+                                failed={isError}
+                                onRetry={() => void traces.refreshAgain()}
                             />
-                        }
-                    />
-                </div>
-            )}
+                        )}
+                        <DataTable
+                            loading={loading}
+                            busy={isPlaceholderData}
+                            skeletonRows={3}
+                            columns={columns}
+                            data={data?.data ?? []}
+                            getRowId={getRowId}
+                            sort={sort}
+                            onSortChange={() => {}}
+                            caption={`Recent traces of ${agent}`}
+                            className="rounded-none border-0 border-t"
+                            empty={
+                                <EmptyState
+                                    icon={SearchXIcon}
+                                    title="No runs found"
+                                    description="No run of this agent started in this range."
+                                />
+                            }
+                        />
+                    </div>
+                )}
+            </Panel>
         </section>
     )
 }

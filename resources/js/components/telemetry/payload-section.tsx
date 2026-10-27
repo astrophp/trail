@@ -11,6 +11,8 @@ type PayloadSectionProps = {
     /** Names the viewer and its copy button; defaults to the heading in lower case. */
     label?: string
     value: JsonValue | undefined
+    /** `markdown` draws a text as markdown, with a switch to the text as stored. */
+    format?: 'text' | 'markdown'
     className?: string
 }
 
@@ -21,6 +23,7 @@ export function PayloadSection({
     heading,
     label = heading.toLowerCase(),
     value,
+    format,
     className,
 }: PayloadSectionProps) {
     return (
@@ -34,6 +37,7 @@ export function PayloadSection({
                 label={label}
                 heading={heading}
                 value={value}
+                format={format}
             />
         </section>
     )

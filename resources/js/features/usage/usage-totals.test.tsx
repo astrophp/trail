@@ -5,6 +5,7 @@ import { forgetUsageRefreshFailures } from '@/features/usage/use-usage'
 import { forgetUsageBreakdownRefreshFailures } from '@/features/usage/use-usage-breakdown'
 import { formatCost } from '@/lib/format'
 import { renderApp } from '@/test/render-app'
+import { stubResizeObserver } from '@/test/resize-observer'
 import {
     deferred,
     json,
@@ -46,7 +47,7 @@ const strip = () => document.querySelector('[data-slot="metric-strip"]')
 const totals = () => screen.findByText('Pricing coverage')
 
 describe('the page', () => {
-    it('is titled Usage & cost and says once that the amounts are estimates', async () => {
+    it('is titled Usage & cost and says, in a hint beside the title, that the amounts are estimates', async () => {
         mockQuietApi()
         renderApp('/usage')
         await totals()
@@ -54,13 +55,18 @@ describe('the page', () => {
         expect(
             screen.getByRole('heading', { level: 1, name: 'Usage & cost' }),
         ).toBeVisible()
-        expect(screen.getAllByText(/not provider invoices/)).toHaveLength(1)
-        expect(
-            screen.getByText(
-                /^Token usage and estimated cost of recorded runs/,
-            ),
-        ).toBeVisible()
         expect(document.title).toBe('Usage & cost · Trail')
+        expect(screen.queryByText(/not provider invoices/)).toBeNull()
+
+        // The tooltip measures itself; jsdom has nothing to measure with.
+        stubResizeObserver()
+        await userEvent.hover(
+            screen.getByRole('button', { name: 'About these amounts' }),
+        )
+
+        expect(await screen.findByRole('tooltip')).toHaveTextContent(
+            'Estimates from your configured prices, not provider invoices.',
+        )
     })
 
     it('asks for the totals of the range in the address', async () => {

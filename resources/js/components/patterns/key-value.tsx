@@ -1,3 +1,4 @@
+import type { LucideIcon } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { CopyButton } from '@/components/patterns/copy-button'
 import { notify } from '@/components/patterns/notify'
@@ -13,6 +14,8 @@ type KeyValueProps = {
     missing?: string
     /** A part of the row above it, indented under it in the `rows` layout. */
     nested?: boolean
+    /** A small icon before the label, for a list read at a glance. */
+    icon?: LucideIcon
     className?: string
 }
 
@@ -23,6 +26,7 @@ export function KeyValue({
     copy,
     missing,
     nested,
+    icon: Icon,
     className,
 }: KeyValueProps) {
     const absent =
@@ -45,7 +49,17 @@ export function KeyValue({
                     nested && 'group-data-[layout=rows]/kvl:ps-4',
                 )}
             >
-                {label}
+                {Icon === undefined ? (
+                    label
+                ) : (
+                    <span className="inline-flex items-center gap-2">
+                        <Icon
+                            aria-hidden="true"
+                            className="size-3.5 shrink-0"
+                        />
+                        {label}
+                    </span>
+                )}
             </dt>
             <dd className="flex min-w-0 items-start gap-1.5 text-ui group-data-[layout=rows]/kvl:min-h-6 group-data-[layout=rows]/kvl:flex-1 group-data-[layout=rows]/kvl:items-center">
                 <span className="min-w-0 flex-1 wrap-anywhere group-data-[layout=rows]/kvl:flex-initial">

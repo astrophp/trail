@@ -4,6 +4,46 @@ All notable changes to Trail are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and Trail follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## v0.5.0
+
+### Added
+
+- Draw model answers as markdown in the dashboard: an assistant's response in a conversation, and
+  the response or text of an agent run or a model step in a run's evidence. Headings, lists,
+  task lists, tables, block quotes, code and links are drawn; prompts, instructions, tool
+  payloads and structured output are shown as stored, as before.
+- A Rendered / Raw switch beside each answer. Raw is the text exactly as stored; the choice
+  applies to every answer and is remembered in the browser.
+- In a conversation, the prompt and the answer each sit in a container of their own, with a
+  header above the message: the prompt lightly tinted with the user's initials and name, the
+  answer a white card with the agent, its model and the switch, and the turn's figures at its
+  foot. The agent's tool calls sit between them as a compact line, and a tool result stored as
+  JSON text can be read as a tree. The column beside the transcript is a stack of cards that
+  stays in view while you scroll; its jump list comes first, as a timeline that marks the turn
+  you are reading.
+- The execution timeline of a run reads like a network waterfall: ticks at the quarters of the
+  run, gridlines through every row, bars coloured by the kind of work (agent runs, model steps,
+  tools, retrieval, media) with a legend, the start, length and end of a span on hover, and
+  connectors between parents and children.
+
+### Security
+
+- Nothing in an answer runs or loads: raw HTML is shown as text, images are never loaded (their
+  description and address are shown), and only `http`, `https` and `mailto` links are followed,
+  in a new tab, with the address written beside them; any other link is marked as not linked.
+  Redaction markers stay highlighted, inside code and tables too.
+
+### Changed
+
+- One look across the dashboard: every card is the same panel, every choice of view (Tree or Raw,
+  Rendered or Raw, Volume, Duration or Cost) is the same switch, and a titled payload on the run
+  page is one framed block with its switch and copy button in a header bar.
+- Pages and panels no longer carry long descriptions. What keeps a figure honest (estimates,
+  the time zone, partial data) is in a short line or behind an ⓘ beside the title it qualifies.
+- The activity chart on the overview fills the height of the list beside it.
+- The dashboard script grows by about 56 KB gzipped (to about 441 KB), mostly for the markdown
+  parser.
+
 ## v0.4.2 - 2026-10-20
 
 ### Fixed

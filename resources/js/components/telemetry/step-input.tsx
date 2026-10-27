@@ -38,8 +38,8 @@ export function StepInput({ span }: StepInputProps) {
                     {offset > 0 ? (
                         <p className="text-ui text-muted-foreground">
                             {offset === 1
-                                ? '1 earlier message was sent with this step. It is stored on a step before it.'
-                                : `${formatCount(offset)} earlier messages were sent with this step. They are stored on the steps before it.`}
+                                ? '1 earlier message is on a step before.'
+                                : `${formatCount(offset)} earlier messages are on the steps before.`}
                         </p>
                     ) : null}
                     {messages.length === 0 ? (

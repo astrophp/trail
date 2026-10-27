@@ -107,11 +107,8 @@ export function AgentsList({ className }: { className?: string }) {
                     title="Only the busiest agents were read"
                     className="mb-4"
                 >
-                    Trail read the {formatCount(data.agent_limit.limit)} agents
-                    with the most runs, and the same number with the most
-                    delegated runs, so this list may be incomplete. An
-                    agent&rsquo;s own runs or its delegated runs may be missing
-                    from it.
+                    The {formatCount(data.agent_limit.limit)} busiest by runs
+                    and by delegated runs. This list may be incomplete.
                 </Notice>
             ) : null}
             {failed ? (
@@ -157,7 +154,7 @@ export function AgentsList({ className }: { className?: string }) {
                                     <EmptyState
                                         icon={BotIcon}
                                         title="No agents ran in this range"
-                                        description="Agents are discovered from recorded runs. A longer range may show more."
+                                        description="A longer range may show more."
                                     />
                                 )
                             ) : undefined
@@ -179,9 +176,7 @@ export function AgentsList({ className }: { className?: string }) {
                     />
                     {loading || empty ? null : (
                         <p className="mt-3 text-caption text-muted-foreground">
-                            An agent&rsquo;s own runs and its runs as a
-                            sub-agent are counted separately. Error rate,
-                            duration and cost cover its own runs only.
+                            Error rate, duration and cost cover own runs only.
                         </p>
                     )}
                 </>

@@ -4,6 +4,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { PayloadViewer } from '@/components/patterns/payload-viewer'
 import { textChunk, type JsonValue } from '@/lib/json'
 
+/** The view of a structured value that is shown: the tree or the raw text. */
+const shownView = (root: ParentNode = document) =>
+    root.querySelector<HTMLElement>('[data-view]:not([hidden])')!
+
 const notifyMock = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }))
 
 vi.mock('@/components/patterns/notify', () => ({ notify: notifyMock }))
@@ -192,17 +196,14 @@ describe('PayloadViewer', () => {
             const value = { a: 1, b: ['x'] }
 
             viewer(value)
-            await user.click(screen.getByRole('tab', { name: 'Raw' }))
+            await user.click(screen.getByRole('radio', { name: 'Raw' }))
 
-            const raw = screen.getByRole('tabpanel')
+            const raw = shownView()
 
             expect(raw.textContent).toBe(JSON.stringify(value, null, 2))
-            expect(screen.getByRole('tab', { name: 'Raw' })).toHaveAttribute(
-                'aria-selected',
-                'true',
-            )
+            expect(screen.getByRole('radio', { name: 'Raw' })).toBeChecked()
 
-            await user.click(screen.getByRole('tab', { name: 'Tree' }))
+            await user.click(screen.getByRole('radio', { name: 'Tree' }))
 
             expect(screen.getByText('a')).toBeVisible()
             expect(
@@ -364,9 +365,9 @@ describe('PayloadViewer', () => {
                 container.querySelectorAll('[data-slot="payload-node"]').length,
             ).toBeLessThan(10)
 
-            await user.click(screen.getByRole('tab', { name: 'Raw' }))
+            await user.click(screen.getByRole('radio', { name: 'Raw' }))
 
-            const raw = screen.getByRole('tabpanel')
+            const raw = shownView()
 
             expect(raw.textContent).toMatch(
                 /^\{\s+"n": |This value is too large or too deeply nested to show as raw JSON\./,
@@ -401,9 +402,9 @@ describe('PayloadViewer', () => {
             const items = Array.from({ length: 5000 }, (_, i) => i)
 
             viewer(items)
-            await user.click(screen.getByRole('tab', { name: 'Raw' }))
+            await user.click(screen.getByRole('radio', { name: 'Raw' }))
 
-            const raw = screen.getByRole('tabpanel')
+            const raw = shownView()
 
             expect(
                 within(raw).getByRole('button', { name: /Show more/ }),
@@ -613,11 +614,11 @@ describe('PayloadViewer', () => {
             )
             expect(screen.getByText('item-149')).toBeVisible()
 
-            await user.click(screen.getByRole('tab', { name: 'Raw' }))
+            await user.click(screen.getByRole('radio', { name: 'Raw' }))
             expect(screen.getByText('item-149')).not.toBeVisible()
-            expect(screen.getByRole('tabpanel').textContent).toContain('"list"')
+            expect(shownView().textContent).toContain('"list"')
 
-            await user.click(screen.getByRole('tab', { name: 'Tree' }))
+            await user.click(screen.getByRole('radio', { name: 'Tree' }))
 
             expect(screen.getByText('item-149')).toBeVisible()
             expect(list()).toHaveAttribute('aria-expanded', 'true')
@@ -636,14 +637,12 @@ describe('PayloadViewer', () => {
                 stringify.mock.calls.filter(([, , indent]) => indent === 2),
             ).toHaveLength(0)
             expect(
-                container.querySelectorAll('[role="tabpanel"]')[1].textContent,
+                container.querySelector('[data-view="raw"]')!.textContent,
             ).toBe('')
 
-            await user.click(screen.getByRole('tab', { name: 'Raw' }))
+            await user.click(screen.getByRole('radio', { name: 'Raw' }))
 
-            expect(screen.getByRole('tabpanel').textContent).toBe(
-                '{\n  "a": 1\n}',
-            )
+            expect(shownView().textContent).toBe('{\n  "a": 1\n}')
             expect(
                 stringify.mock.calls.filter(([, , indent]) => indent === 2),
             ).toHaveLength(1)
@@ -664,7 +663,7 @@ describe('PayloadViewer', () => {
             )
 
             viewer({ a: 1 })
-            await user.click(screen.getByRole('tab', { name: 'Raw' }))
+            await user.click(screen.getByRole('radio', { name: 'Raw' }))
 
             expect(
                 screen.getByText(
@@ -672,7 +671,7 @@ describe('PayloadViewer', () => {
                 ),
             ).toBeVisible()
 
-            await user.click(screen.getByRole('tab', { name: 'Tree' }))
+            await user.click(screen.getByRole('radio', { name: 'Tree' }))
 
             expect(screen.getByText('a')).toBeVisible()
         })
@@ -694,11 +693,11 @@ describe('PayloadViewer', () => {
             expect(container.querySelector('img')).toBeNull()
             expect(container.querySelector('script')).toBeNull()
 
-            await user.click(screen.getByRole('tab', { name: 'Raw' }))
+            await user.click(screen.getByRole('radio', { name: 'Raw' }))
 
             expect(container.querySelector('img')).toBeNull()
             expect(container.querySelector('script')).toBeNull()
-            expect(screen.getByRole('tabpanel').textContent).toContain(
+            expect(shownView().textContent).toContain(
                 '<script>alert(2)</script>',
             )
         })
@@ -723,7 +722,7 @@ describe('PayloadViewer', () => {
     })
 
     describe('with a heading', () => {
-        it('shows the heading on the left and the copy button in the same row, for text', () => {
+        it('shows the heading on the left and the copy button in the same header bar, for text', () => {
             viewer('Hello there', { heading: 'User prompt' })
 
             const heading = screen.getByRole('heading', {
@@ -731,19 +730,23 @@ describe('PayloadViewer', () => {
             })
             const copy = screen.getByRole('button', { name: 'Copy arguments' })
 
-            expect(heading.parentElement).toBe(copy.parentElement)
+            expect(heading.closest('[data-slot="payload-header"]')).toBe(
+                copy.closest('[data-slot="payload-header"]'),
+            )
             expect(screen.queryByRole('tab')).not.toBeInTheDocument()
             expect(screen.getByText('Hello there')).toBeVisible()
         })
 
-        it('puts the Tree and Raw switch and the copy button in the heading row for a structured value', () => {
+        it('puts the Tree and Raw switch and the copy button in the header bar for a structured value', () => {
             viewer({ a: 1 }, { heading: 'Arguments' })
 
             const heading = screen.getByRole('heading', { name: 'Arguments' })
-            const row = heading.parentElement as HTMLElement
+            const row = heading.closest<HTMLElement>(
+                '[data-slot="payload-header"]',
+            )!
 
             expect(
-                within(row).getByRole('tablist', { name: 'arguments view' }),
+                within(row).getByRole('radiogroup', { name: 'arguments view' }),
             ).toBeInTheDocument()
             expect(
                 within(row).getByRole('button', { name: 'Copy arguments' }),
@@ -753,7 +756,7 @@ describe('PayloadViewer', () => {
         it('keeps the tree and raw views working under a heading', async () => {
             viewer({ a: 1 }, { heading: 'Arguments' })
 
-            await userEvent.click(screen.getByRole('tab', { name: 'Raw' }))
+            await userEvent.click(screen.getByRole('radio', { name: 'Raw' }))
 
             expect(screen.getByText(/"a": 1/)).toBeVisible()
         })

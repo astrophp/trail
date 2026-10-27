@@ -50,7 +50,7 @@ export function TurnItem({
             data-slot="turn-item"
             data-marked={marked || undefined}
             className={cn(
-                'flex scroll-mt-20 flex-col gap-5 border-b py-8 first:pt-0 last:border-b-0 motion-safe:transition-colors motion-safe:duration-700',
+                'flex scroll-mt-20 flex-col gap-4 border-b py-8 first:pt-0 last:border-b-0 motion-safe:transition-colors motion-safe:duration-700',
                 // A ring in the same colour widens the highlight without moving anything.
                 marked && 'rounded-sm bg-accent ring-8 ring-accent',
             )}
@@ -71,12 +71,17 @@ export function TurnItem({
                 pagePath={pagePath}
                 onVisit={onVisit}
             />
-            <TurnResponse turn={turn} number={number} />
-            <TurnMeta
-                trace={turn.trace}
+            <TurnResponse
+                turn={turn}
                 number={number}
-                pagePath={pagePath}
-                onVisit={onVisit}
+                footer={
+                    <TurnMeta
+                        trace={turn.trace}
+                        number={number}
+                        pagePath={pagePath}
+                        onVisit={onVisit}
+                    />
+                }
             />
         </article>
     )

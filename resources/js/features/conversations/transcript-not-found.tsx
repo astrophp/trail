@@ -9,7 +9,7 @@ export function TranscriptNotFound() {
         <EmptyState
             icon={SearchXIcon}
             title="This conversation was not found"
-            description="No recorded turn has this conversation id. It may have been pruned, or it was never recorded."
+            description="It may have been pruned."
         >
             <Button asChild variant="outline" size="sm">
                 <Link to="/conversations">Back to Conversations</Link>

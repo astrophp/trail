@@ -1,3 +1,10 @@
+import {
+    CoinsIcon,
+    NetworkIcon,
+    TimerIcon,
+    type LucideIcon,
+    WholeWordIcon,
+} from 'lucide-react'
 import { Link } from 'react-router'
 import type { Trace } from '@/api/types'
 import { CopyLinkButton } from '@/components/patterns/copy-link-button'
@@ -9,14 +16,20 @@ import { formatCount } from '@/lib/format'
 import { tracePagePath } from '@/lib/trace-page-path'
 
 function Fact({
+    icon: Icon,
     label,
     children,
 }: {
+    icon: LucideIcon
     label: string
     children: React.ReactNode
 }) {
     return (
         <span className="inline-flex items-baseline gap-1.5">
+            <Icon
+                aria-hidden="true"
+                className="size-3 self-center text-faint"
+            />
             <span className="text-faint">{label}</span>
             {children}
         </span>
@@ -32,24 +45,24 @@ type TurnMetaProps = {
     onVisit?: () => void
 }
 
-/** The quiet line under a turn: how long it took, its tokens and cost, its spans, the way to its trace and a link to the turn. */
+/** The quiet line that closes a turn's answer: how long it took, its tokens and cost, its spans, the way to its trace and a link to the turn. */
 export function TurnMeta({ trace, number, pagePath, onVisit }: TurnMetaProps) {
     return (
         <div
             data-slot="turn-meta"
-            className="ms-10 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-caption text-muted-foreground"
+            className="flex w-full flex-wrap items-center justify-between gap-x-4 gap-y-1 text-caption text-muted-foreground"
         >
             <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
-                <Fact label="Duration">
+                <Fact icon={TimerIcon} label="Duration">
                     <DurationValue of={trace} />
                 </Fact>
-                <Fact label="Tokens">
+                <Fact icon={WholeWordIcon} label="Tokens">
                     <TokenValue usage={trace.usage} />
                 </Fact>
-                <Fact label="Cost">
+                <Fact icon={CoinsIcon} label="Cost">
                     <CostValue cost={trace.cost} />
                 </Fact>
-                <Fact label="Spans">
+                <Fact icon={NetworkIcon} label="Spans">
                     <span className="tabular-nums">
                         {formatCount(trace.span_count)}
                     </span>
