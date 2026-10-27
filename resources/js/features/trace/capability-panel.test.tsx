@@ -4,6 +4,10 @@ import { expect, it } from 'vitest'
 import { makeStepSpan } from '@/test/trace-api'
 import { CapabilityPanel } from '@/features/trace/capability-panel'
 
+/** The view of a structured value that is shown: the tree or the raw text. */
+const shownView = (root: ParentNode = document) =>
+    root.querySelector<HTMLElement>('[data-view]:not([hidden])')!
+
 it('shows provider result order with original indexes and labels relevance as a score', () => {
     render(
         <CapabilityPanel
@@ -89,10 +93,8 @@ it('preserves unexpected stored collection shapes through the whole-payload view
         'data-slot',
         'payload-viewer',
     )
-    await userEvent.setup().click(screen.getByRole('tab', { name: 'Raw' }))
-    expect(screen.getByRole('tabpanel')).toHaveTextContent(
-        'numeric-question-key',
-    )
+    await userEvent.setup().click(screen.getByRole('radio', { name: 'Raw' }))
+    expect(shownView()).toHaveTextContent('numeric-question-key')
     expect(
         screen.queryByText('No answers content was stored.'),
     ).not.toBeInTheDocument()

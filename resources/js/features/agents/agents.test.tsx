@@ -34,7 +34,7 @@ const pickRange = async (name: string) => {
     await userEvent.click(screen.getByRole('option', { name }))
 }
 const footnote = () =>
-    screen.queryByText(/^An agent’s own runs and its runs as a sub-agent/)
+    screen.queryByText(/^Error rate, duration and cost cover own runs only/)
 
 /** Three pages of the fixture's agents, the page being the URL's. */
 const sixty = (url: string) =>
@@ -64,10 +64,8 @@ describe('the Agents page', () => {
             screen.getByRole('heading', { level: 1, name: 'Agents' }),
         ).toBeInTheDocument()
         expect(
-            screen.getByText(
-                'Agents are discovered from recorded runs: how often each ran, how reliably, how fast and at what cost.',
-            ),
-        ).toBeVisible()
+            screen.queryByText(/^Agents are discovered from recorded runs/),
+        ).toBeNull()
         expect(document.title).toBe('Agents · Trail')
         expect(
             screen.getByRole('combobox', { name: 'Time range' }),
@@ -117,13 +115,13 @@ describe('the Agents page', () => {
         ).toEqual(['H1'])
     })
 
-    it('explains the two counts under the table once there are rows', async () => {
+    it('says under the table, once there are rows, which runs the rates cover', async () => {
         renderApp('/agents')
         await loaded()
 
         expect(footnote()).toBeVisible()
         expect(footnote()).toHaveTextContent(
-            'Error rate, duration and cost cover its own runs only.',
+            'Error rate, duration and cost cover own runs only.',
         )
     })
 })
@@ -565,11 +563,7 @@ describe('when no agent ran in the range', () => {
             name: 'No agents ran in this range',
         })
 
-        expect(
-            screen.getByText(
-                'Agents are discovered from recorded runs. A longer range may show more.',
-            ),
-        ).toBeVisible()
+        expect(screen.getByText('A longer range may show more.')).toBeVisible()
         expect(heading.closest('[data-slot="data-table"]')).toBe(
             table().closest('[data-slot="data-table"]'),
         )
@@ -616,7 +610,7 @@ describe('when the search hides every agent', () => {
 })
 
 describe('when the API says it read only some of the agents', () => {
-    it('says the list may be incomplete, and that own or delegated runs may be missing', async () => {
+    it('says the list may be incomplete, and that it holds the busiest by runs and by delegated runs', async () => {
         mockApi(() => json(listOf(agentFixture.data, { truncated: true })))
         renderApp('/agents')
         await loaded()
@@ -624,10 +618,8 @@ describe('when the API says it read only some of the agents', () => {
         const notice = document.querySelector('[data-slot="notice"]')
 
         expect(notice).toHaveTextContent('Only the busiest agents were read')
-        expect(notice).toHaveTextContent('1,000 agents with the most runs')
-        expect(notice).toHaveTextContent('this list may be incomplete')
         expect(notice).toHaveTextContent(
-            'own runs or its delegated runs may be missing',
+            'The 1,000 busiest by runs and by delegated runs. This list may be incomplete.',
         )
     })
 

@@ -560,9 +560,7 @@ describe('what happened inside the runs it was delegated to', () => {
         expect(delegatedRows('Tools')[0]).toHaveTextContent('inner_tool')
         expect(delegatedRows('Tools')[0]).toHaveTextContent('1 failed')
         expect(
-            within(panel('Models')).getByText(
-                'The traces list cannot filter on these, so they have no links.',
-            ),
+            within(panel('Models')).getByText('Not filterable, so not linked.'),
         ).toBeVisible()
     })
 
@@ -640,7 +638,7 @@ describe('what happened inside the runs it was delegated to', () => {
         expect(within(panel('Tools')).queryByRole('link')).toBeNull()
         expect(
             within(panel('Models')).getByText(
-                /Counted inside the runs of the agents/,
+                /^Counted inside the delegating runs\./,
             ),
         ).toBeVisible()
     })

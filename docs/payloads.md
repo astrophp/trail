@@ -12,6 +12,22 @@ A value passes through three stages before it is stored, in this order:
 
 Redaction runs before the cut, so a secret cut in half cannot slip past a pattern.
 
+## How answers are shown
+
+The dashboard draws a model's answer as markdown: an assistant's response in a conversation, and
+the response or text of an agent run or a model step in a run's evidence. Prompts, instructions,
+tool arguments and results, and structured output are shown as stored.
+
+A **Rendered / Raw** switch sits beside each answer. Raw is the text exactly as stored. The
+choice applies to every answer and is remembered in the browser. Drawing changes nothing that is
+stored, and `[redacted]` is highlighted in either view, inside code and tables too.
+
+Nothing in an answer can run or load anything: raw HTML is shown as text, images are never
+loaded (their description and address are shown instead), and only `http`, `https` and `mailto`
+links are followed, in a new tab, with their address written beside them; any other link is
+marked as not linked. See
+[Known limits](limits.md#answers-shown-as-markdown).
+
 ## Turning payload capture off
 
 ```php

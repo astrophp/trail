@@ -12,6 +12,7 @@ import { forgetUsageBreakdownRefreshFailures } from '@/features/usage/use-usage-
 import { forgetUsageSpendRefreshFailures } from '@/features/usage/use-usage-spend'
 import { formatCost } from '@/lib/format'
 import { renderApp } from '@/test/render-app'
+import { stubResizeObserver } from '@/test/resize-observer'
 import {
     deferred,
     json,
@@ -121,8 +122,24 @@ const withoutProjection = (
 const allBuckets = (cost: SpendBucket['cost']): SpendBucket[] =>
     series.buckets.map((bucket) => ({ ...bucket, cost, cumulative: cost }))
 
-const sentenceOf = () =>
+/** The short status line under the chart: whether there is a projection. */
+const statusOf = () =>
     panel().querySelector('[data-slot="spend-assumption"]')?.textContent
+
+/** What the projection assumes and leaves out, from the hint beside the status line. */
+async function detailOf() {
+    // The tooltip measures itself; jsdom has nothing to measure with. Stubbed only now, once the
+    // chart has drawn, so the chart does not measure itself either.
+    stubResizeObserver()
+    await userEvent.hover(
+        within(panel()).getByRole('button', { name: 'About the projection' }),
+    )
+
+    return (await screen.findByRole('tooltip')).textContent
+}
+
+/** The points of the chart's lines, and nothing else drawn round (the hint's icon). */
+const points = () => [...panel().querySelectorAll('.recharts-wrapper circle')]
 
 const legend = () =>
     panel().querySelector('.recharts-legend-wrapper')?.textContent
@@ -320,14 +337,14 @@ describe('the chart', () => {
         const divider = panel().querySelector('.recharts-reference-line line')!
         const area = panel().querySelector('.recharts-reference-area-rect')!
         // The recorded line has a point for each of its four amounts; the last is the last recorded bucket.
-        const points = [...panel().querySelectorAll('circle')]
-        const last = Number(points.at(-1)?.getAttribute('cx'))
+        const drawn = points()
+        const last = Number(drawn.at(-1)?.getAttribute('cx'))
 
-        expect(points).toHaveLength(4)
+        expect(drawn).toHaveLength(4)
         expect(Number(divider.getAttribute('x1'))).toBeCloseTo(last, 0)
         expect(Number(area.getAttribute('x'))).toBeCloseTo(last, 0)
         // The earlier points are to its left: the divider is not at the start.
-        expect(Number(points[0]?.getAttribute('cx'))).toBeLessThan(last)
+        expect(Number(drawn[0]?.getAttribute('cx'))).toBeLessThan(last)
     })
 
     it('draws no point for a bucket without an amount: a gap, never a zero', async () => {
@@ -340,7 +357,7 @@ describe('the chart', () => {
         ).length
 
         expect(withAmount).toBe(4)
-        expect(panel().querySelectorAll('circle')).toHaveLength(withAmount)
+        expect(points()).toHaveLength(withAmount)
         // One piece: it starts at the first amount and is not drawn up from a zero.
         expect(recorded.getAttribute('d')?.match(/M/g)).toHaveLength(1)
     })
@@ -358,14 +375,12 @@ describe('the chart', () => {
         expect(labels.at(-1)).toBe(formatCost(0.06))
     })
 
-    it('says in words which buckets follow the clock of the application', async () => {
+    it('says in words, in the hint beside the status line, which buckets follow the clock of the application', async () => {
         await open()
 
-        expect(
-            within(panel()).getByText(
-                'Buckets follow the application’s time zone (UTC).',
-            ),
-        ).toBeVisible()
+        expect(await detailOf()).toContain(
+            'Buckets follow the application’s time zone (UTC).',
+        )
     })
 
     it('draws a recorded line alone, with no divider, no shading and no projected name, when there is no projection', async () => {
@@ -536,8 +551,9 @@ describe('the sentences under the chart', () => {
     it('says the window the projection was taken from, the prices, that recorded costs stay, and what was left out', async () => {
         await open()
 
-        expect(sentenceOf()).toBe(
-            'Projected from the tokens recorded in the last 6 complete hours (3 with usage), priced at the prices saved now. Recorded costs do not change when a price changes. Left out: 1 run still in flight.',
+        expect(statusOf()).toBe('Projected at today’s prices')
+        expect(await detailOf()).toBe(
+            'Projected from the tokens recorded in the last 6 complete hours (3 with usage), priced at the prices saved now. Recorded costs do not change when a price changes. Left out: 1 run still in flight. Buckets follow the application’s time zone (UTC).',
         )
     })
 
@@ -554,8 +570,8 @@ describe('the sentences under the chart', () => {
             }),
         )
 
-        expect(sentenceOf()).toBe(
-            'Projected from the tokens recorded in the last 6 complete 5-minute buckets (5 with usage), priced at the prices saved now. Recorded costs do not change when a price changes.',
+        expect(await detailOf()).toBe(
+            'Projected from the tokens recorded in the last 6 complete 5-minute buckets (5 with usage), priced at the prices saved now. Recorded costs do not change when a price changes. Buckets follow the application’s time zone (UTC).',
         )
     })
 
@@ -583,8 +599,8 @@ describe('the sentences under the chart', () => {
             ),
         )
 
-        expect(sentenceOf()).toBe(
-            'Projected from the tokens recorded in the last 6 complete days (6 with usage), priced at the prices saved now. Recorded costs do not change when a price changes. Left out: 2 unpriced steps.',
+        expect(await detailOf()).toBe(
+            'Projected from the tokens recorded in the last 6 complete days (6 with usage), priced at the prices saved now. Recorded costs do not change when a price changes. Left out: 2 unpriced steps. Buckets follow the application’s time zone (UTC).',
         )
     })
 
@@ -603,7 +619,7 @@ describe('the sentences under the chart', () => {
             }),
         )
 
-        expect(sentenceOf()).toContain(
+        expect(await detailOf()).toContain(
             'Left out: 2 unpriced steps (5,300 tokens) and 1 run still in flight.',
         )
         // The dashed line has a point for every projected hour and the one it starts from, no dip.
@@ -616,8 +632,10 @@ describe('the sentences under the chart', () => {
             spendWith({ projection: { ...projection, left_out: noLeftOut } }),
         )
 
-        expect(sentenceOf()).toMatch(/^Projected from the tokens recorded/)
-        expect(sentenceOf()).not.toContain('Left out')
+        const detail = await detailOf()
+
+        expect(detail).toMatch(/^Projected from the tokens recorded/)
+        expect(detail).not.toContain('Left out')
     })
 })
 
@@ -715,7 +733,7 @@ describe('the states of the panel', () => {
                 'No usage was recorded in this range, so there is no estimated cost to draw.',
             ),
         ).toBeVisible()
-        expect(sentenceOf()).toBe(
+        expect(await detailOf()).toBe(
             'Not enough recent usage to project: none of the last 6 complete hours have recorded usage; 3 are needed.',
         )
         expect(panel().querySelector('.recharts-wrapper')).toBeNull()
@@ -746,7 +764,7 @@ describe('the states of the panel', () => {
             ),
         ).toBeVisible()
         expect(panel()).not.toHaveTextContent('$')
-        expect(sentenceOf()).toBe(
+        expect(await detailOf()).toBe(
             'Not enough recent usage to project: no complete hour yet.',
         )
     })
@@ -764,7 +782,7 @@ describe('the states of the panel', () => {
 
         // The chart is there: a dashed line, the divider and the shading, and no recorded point.
         expect(panel().querySelector('[stroke-dasharray]')).not.toBeNull()
-        expect(panel().querySelectorAll('circle')).toHaveLength(0)
+        expect(points()).toHaveLength(0)
         expect(within(panel()).getByText('Now')).toBeInTheDocument()
         expect(
             panel().querySelectorAll('.recharts-reference-area'),
@@ -774,8 +792,8 @@ describe('the states of the panel', () => {
         expect(
             within(panel()).queryByText(/there is no estimated cost to draw/),
         ).toBeNull()
-        expect(sentenceOf()).toBe(
-            'None of the usage recorded in this range has an estimated cost, so the recorded line has no amount. Projected from the tokens recorded in the last 6 complete hours (3 with usage), priced at the prices saved now. Recorded costs do not change when a price changes. Left out: 1 run still in flight.',
+        expect(await detailOf()).toBe(
+            'None of the usage recorded in this range has an estimated cost, so the recorded line has no amount. Projected from the tokens recorded in the last 6 complete hours (3 with usage), priced at the prices saved now. Recorded costs do not change when a price changes. Left out: 1 run still in flight. Buckets follow the application’s time zone (UTC).',
         )
         expect(
             within(figures()).getByText('Recorded').parentElement,
@@ -840,8 +858,9 @@ describe('the states of the panel', () => {
             }),
         )
 
-        expect(sentenceOf()).toBe(
-            'Not enough recent usage to project: 2 of the last 6 complete hours have recorded usage; 3 are needed.',
+        expect(statusOf()).toBe('No projection')
+        expect(await detailOf()).toBe(
+            'Not enough recent usage to project: 2 of the last 6 complete hours have recorded usage; 3 are needed. Buckets follow the application’s time zone (UTC).',
         )
         expect(curves()).toHaveLength(1)
     })
@@ -854,8 +873,8 @@ describe('the states of the panel', () => {
             }),
         )
 
-        expect(sentenceOf()).toBe(
-            'Not enough recent usage to project: no complete hour yet.',
+        expect(await detailOf()).toBe(
+            'Not enough recent usage to project: no complete hour yet. Buckets follow the application’s time zone (UTC).',
         )
         expect(curves()).toHaveLength(1)
     })
@@ -866,8 +885,8 @@ describe('the states of the panel', () => {
             spendWith({ projection: withoutProjection('range_not_current') }),
         )
 
-        expect(sentenceOf()).toBe(
-            'A projection is only made for a range that ends now.',
+        expect(await detailOf()).toBe(
+            'A projection is only made for a range that ends now. Buckets follow the application’s time zone (UTC).',
         )
         expect(curves()).toHaveLength(1)
         expect(within(panel()).queryByText('Now')).toBeNull()
@@ -889,8 +908,8 @@ describe('the states of the panel', () => {
             }),
         )
 
-        expect(sentenceOf()).toBe(
-            'Not enough recent usage to project: 2 of the last 6 complete hours have recorded usage; 3 are needed.',
+        expect(await detailOf()).toBe(
+            'Not enough recent usage to project: 2 of the last 6 complete hours have recorded usage; 3 are needed. Buckets follow the application’s time zone (UTC).',
         )
     })
 })

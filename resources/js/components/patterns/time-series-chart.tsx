@@ -113,6 +113,11 @@ type Shared = {
     table?: ReactNode
     /** The height of the chart, as a class. */
     chartClassName?: string
+    /**
+     * Grows the chart to the height its container gives it, never below the default height: for
+     * a chart beside something taller, so it does not stop short and leave a gap under it.
+     */
+    fill?: boolean
     className?: string
 }
 
@@ -165,6 +170,7 @@ export function TimeSeriesChart({
     showDataLabel = 'View data',
     hideDataLabel = 'Hide data',
     chartClassName = 'h-48',
+    fill = false,
     className,
 }: TimeSeriesChartProps) {
     const series =
@@ -248,7 +254,7 @@ export function TimeSeriesChart({
     return (
         <div
             data-slot="time-series-chart"
-            className={cn('flex flex-col gap-2', className)}
+            className={cn('flex flex-col gap-2', fill && 'flex-1', className)}
         >
             {filling.length > 0 ? (
                 <p
@@ -267,12 +273,18 @@ export function TimeSeriesChart({
                     {`${inProgressLabel}: ${filling.map((row) => row.label).join(', ')}`}
                 </p>
             ) : null}
-            <div ref={measure} role="img" aria-label={summary}>
+            <div
+                ref={measure}
+                role="img"
+                aria-label={summary}
+                className={cn(fill && 'flex flex-1 flex-col')}
+            >
                 <ChartContainer
                     config={config}
                     className={cn(
                         'aspect-auto w-full [&_.recharts-cartesian-axis-line]:stroke-border',
-                        chartClassName,
+                        // Filling, it grows from the default height; `chartClassName` is then unused.
+                        fill ? 'min-h-48 flex-1' : chartClassName,
                     )}
                 >
                     <ComposedChart

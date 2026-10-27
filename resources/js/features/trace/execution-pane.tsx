@@ -1,7 +1,6 @@
 import {
     ChevronsDownUpIcon,
     ChevronsUpDownIcon,
-    InfoIcon,
     SearchXIcon,
     TriangleAlertIcon,
 } from 'lucide-react'
@@ -17,6 +16,8 @@ import { isProblem } from '@/features/trace/filter-tree'
 import { durationWidth, rightColumn } from '@/features/trace/span-row'
 import { SpanTree } from '@/features/trace/span-tree'
 import { TimeAxis } from '@/features/trace/time-axis'
+import { TimingGrid } from '@/features/trace/timing-grid'
+import { TimingLegend } from '@/features/trace/timing-legend'
 import { useTreeView } from '@/features/trace/use-tree-view'
 import { formatCount } from '@/lib/format'
 import { cn } from '@/lib/utils'
@@ -158,50 +159,49 @@ export const ExecutionPane = memo(function ExecutionPane({
                 </div>
             </div>
             <div className="min-h-0 flex-1 overflow-auto">
-                <SpanTree
-                    tree={tree}
-                    view={view}
-                    selectedId={selectedId}
-                    onSelect={onSelect}
-                    agents={agents}
-                    axisMs={axisMs}
-                    describedBy={hintId}
-                    empty={
-                        <EmptyState
-                            icon={SearchXIcon}
-                            title="No spans match"
-                            description="Nothing in this run fits the search and filter."
-                            className="py-8"
-                        >
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={view.clear}
+                {/* At least the pane's height, so the gridlines run on to its bottom under a short list. */}
+                <div className="relative isolate min-h-full">
+                    <TimingGrid axisMs={axisMs} className="inset-x-4" />
+                    <SpanTree
+                        tree={tree}
+                        view={view}
+                        selectedId={selectedId}
+                        onSelect={onSelect}
+                        agents={agents}
+                        axisMs={axisMs}
+                        describedBy={hintId}
+                        empty={
+                            <EmptyState
+                                icon={SearchXIcon}
+                                title="No spans match"
+                                description="Nothing in this run fits the search and filter."
+                                className="py-8"
                             >
-                                {clearLabel(query, problemsOnly)}
-                            </Button>
-                        </EmptyState>
-                    }
-                />
-            </div>
-            <div className="flex flex-col gap-1 border-t px-4 py-3 text-caption text-muted-foreground">
-                <p className="flex items-start gap-1.5">
-                    <InfoIcon
-                        aria-hidden="true"
-                        className="mt-px size-3 shrink-0"
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={view.clear}
+                                >
+                                    {clearLabel(query, problemsOnly)}
+                                </Button>
+                            </EmptyState>
+                        }
                     />
-                    Parent durations include their children.
-                </p>
+                </div>
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 border-t px-4 py-3 text-caption text-muted-foreground">
                 {gap ? (
                     <p>
-                        Timing was captured for {formatCount(timing.captured)}{' '}
-                        of {formatCount(timing.expected)}{' '}
-                        {timing.expected === 1 ? 'span' : 'spans'}.
+                        Timing captured for {formatCount(timing.captured)} of{' '}
+                        {formatCount(timing.expected)}{' '}
+                        {timing.expected === 1 ? 'span' : 'spans'}
                     </p>
                 ) : null}
-                <p id={hintId}>
+                {/* Read with the tree; the keys are listed by ? for everyone else. */}
+                <p id={hintId} className="sr-only">
                     e next problem · Shift+E previous problem · * open siblings
                 </p>
+                <TimingLegend tree={tree} axisMs={axisMs} className="ms-auto" />
             </div>
         </div>
     )

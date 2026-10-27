@@ -53,6 +53,13 @@ Trail does not do today, see [Known limits](docs/limits.md).
 - Settings, counts and redacted texts only; never image or audio bytes.
 - Token-based estimates where providers report tokens, and Not captured where they do not.
 
+## v0.5.0 — readable answers
+
+- Model answers in conversations and run evidence drawn as markdown: headings, lists, task lists,
+  tables, code and links.
+- A Rendered / Raw switch, remembered in the browser, so the stored text is one click away.
+- No raw HTML, no remote images and only http, https and mailto links; redaction stays marked.
+
 ## Later
 
 These are ideas, not promises.

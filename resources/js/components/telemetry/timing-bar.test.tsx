@@ -1,5 +1,6 @@
+import userEvent from '@testing-library/user-event'
 import { render, screen } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { Span } from '@/api/types'
 import { TimingBar } from '@/components/telemetry/timing-bar'
 
@@ -41,10 +42,8 @@ describe('TimingBar', () => {
         expect(
             screen.getByRole('img', { name: 'Starts at +100 ms, took 200 ms' }),
         ).toBeInTheDocument()
-        expect(root(container)).toHaveAttribute(
-            'title',
-            'Starts at +100 ms, took 200 ms',
-        )
+        // The breakdown shows on hover in a tooltip, not the browser's own title.
+        expect(root(container)).not.toHaveAttribute('title')
         expect(fill(container)).toHaveAttribute('aria-hidden', 'true')
     })
 
@@ -273,7 +272,7 @@ describe('TimingBar', () => {
         expect(root(live)).toHaveClass(
             'relative',
             'block',
-            'h-2',
+            'h-3.5',
             'w-full',
             'overflow-hidden',
         )
@@ -485,6 +484,47 @@ describe('TimingBar', () => {
         })
 
         expect(new Set(classes).size).toBe(statuses.length)
+    })
+
+    it('colours a finished bar by its kind of work, and keeps failure red', () => {
+        const { container: tool } = render(
+            <TimingBar span={{ ...completed, type: 'tool' }} axisMs={1000} />,
+        )
+        const { container: failed } = render(
+            <TimingBar
+                span={{ ...completed, type: 'tool', status: 'failed' }}
+                axisMs={1000}
+            />,
+        )
+
+        expect(fill(tool)).toHaveClass('bg-chart-4')
+        expect(fill(failed)).toHaveClass('bg-destructive')
+        expect(fill(failed)).not.toHaveClass('bg-chart-4')
+    })
+
+    it('shows when it started, how long it took and when it ended, on hover', async () => {
+        // The tooltip measures itself; jsdom has nothing to measure with.
+        vi.stubGlobal(
+            'ResizeObserver',
+            class {
+                observe() {}
+                unobserve() {}
+                disconnect() {}
+            },
+        )
+        const user = userEvent.setup()
+        const { container } = render(
+            <TimingBar span={completed} axisMs={1000} />,
+        )
+
+        await user.hover(root(container))
+
+        const tip = await screen.findByRole('tooltip')
+
+        expect(tip).toHaveTextContent('Started+100 ms')
+        expect(tip).toHaveTextContent('Duration200 ms')
+        expect(tip).toHaveTextContent('Ended+300 ms')
+        vi.unstubAllGlobals()
     })
 
     it('accepts a className in every state', () => {

@@ -11,10 +11,7 @@ export function TracesPage() {
 
     return (
         <>
-            <PageHeader
-                title="Traces"
-                description="Follow every run from prompt to response."
-            >
+            <PageHeader title="Traces">
                 <TimeRangeSelect value={range} onValueChange={setRange} />
                 <ExportButton />
             </PageHeader>

@@ -253,7 +253,7 @@ describe('recording paused', () => {
 
         expect(box).toHaveAttribute('data-tone', 'warning')
         expect(within(box).getByText('php artisan trail:resume')).toBeVisible()
-        expect(box).toHaveTextContent(/nothing new is being recorded/i)
+        expect(box).toHaveTextContent('Resume with php artisan trail:resume.')
         expect(await heading('Traces')).toBeVisible()
     })
 

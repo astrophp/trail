@@ -85,6 +85,33 @@ const live: Timing = { offset_ms: 400, duration_ms: null, status: 'running' }
 export const catalogue: CatalogueEntry = {
     title: 'Timing bar',
     specimens: [
+        {
+            name: 'By kind of work (agent, model step, tool, retrieval, media)',
+            Component: () => (
+                <div className="flex w-80 flex-col gap-3">
+                    {(
+                        [
+                            ['agent', 0, 1000],
+                            ['step', 50, 250],
+                            ['tool', 320, 400],
+                            ['embedding', 380, 120],
+                            ['image', 760, 200],
+                        ] as const
+                    ).map(([type, offset, duration]) => (
+                        <TimingBar
+                            key={type}
+                            span={{
+                                type,
+                                offset_ms: offset,
+                                duration_ms: duration,
+                                status: 'completed',
+                            }}
+                            axisMs={1000}
+                        />
+                    ))}
+                </div>
+            ),
+        },
         ...bars.map(([name, span, axisMs]) => ({
             name,
             Component: () => (

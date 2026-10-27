@@ -1,3 +1,4 @@
+import { ClockIcon } from 'lucide-react'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -183,5 +184,20 @@ describe('KeyValue', () => {
         expect(screen.getByText('Input')).not.toHaveClass(
             'group-data-[layout=rows]/kvl:ps-4',
         )
+    })
+
+    it('draws an icon before the label, hidden from screen readers', () => {
+        const { container } = render(
+            <KeyValueList>
+                <KeyValue icon={ClockIcon} label="Last activity">
+                    today
+                </KeyValue>
+            </KeyValueList>,
+        )
+
+        const icon = container.querySelector('dt svg')
+
+        expect(icon).toHaveAttribute('aria-hidden', 'true')
+        expect(container.querySelector('dt')).toHaveTextContent('Last activity')
     })
 })

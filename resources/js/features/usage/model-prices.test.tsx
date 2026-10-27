@@ -22,6 +22,7 @@ import {
     table,
     tableLoaded,
 } from '@/test/prices-api'
+import { stubResizeObserver } from '@/test/resize-observer'
 
 const tab = (name: RegExp | string) => screen.getByRole('tab', { name })
 const filter = () =>
@@ -107,37 +108,24 @@ describe('the list', () => {
         expect(screen.queryByRole('table')).not.toBeInTheDocument()
     })
 
-    it('says in a few words where models come from, and the unit', async () => {
+    it('says nothing under the title, and keeps the unit and when a price applies in a hint beside it', async () => {
         mockPrices()
         renderPrices()
         await tableLoaded()
 
         expect(
-            screen.getByText(
-                'Token rates are US dollars per million tokens; reranking rates show their billing unit. Models come from your Trail configuration and recorded usage.',
-            ),
-        ).toBeVisible()
-    })
+            screen.queryByText(/applies to runs recorded from now on/),
+        ).toBeNull()
 
-    it('says once that a price applies from now on and recorded costs stay', async () => {
-        mockPrices()
-        renderPrices()
-        await tableLoaded()
+        // The tooltip measures itself; jsdom has nothing to measure with.
+        stubResizeObserver()
+        await userEvent.hover(
+            screen.getByRole('button', { name: 'About model prices' }),
+        )
 
-        expect(
-            screen.getAllByText(/applies to runs recorded from now on/),
-        ).toHaveLength(1)
-        expect(
-            screen.getByText(
-                'A price you save applies to runs recorded from now on. Costs already recorded stay as they were.',
-            ),
-        ).toBeVisible()
-        expect(
-            screen.getByText(/Costs already recorded stay as they were/),
-        ).toBeVisible()
-        expect(
-            screen.getByText(/can take up to a minute to pick up a new price/),
-        ).toBeVisible()
+        expect(await screen.findByRole('tooltip')).toHaveTextContent(
+            'Token rates are US dollars per million tokens. A saved price applies to runs recorded from now on; recorded costs stay as they were. A long-running worker can take a minute to pick it up.',
+        )
     })
 
     it('has no way to add a model or to delete one', async () => {
@@ -188,7 +176,7 @@ describe('the list', () => {
 
         expect(note).toBeVisible()
         expect(note.parentElement).toHaveTextContent(
-            'Trail lists 500 of 1,200 models',
+            '500 of 1,200 models, those seen in usage first.',
         )
     })
 
@@ -306,9 +294,15 @@ describe('where the rates come from', () => {
         renderPrices()
         await tableLoaded()
 
-        expect(cellOf(rowOf(mystery), 'source')).toHaveTextContent(
-            'No rateToken calls without an input rate show as Unpriced',
-        )
+        const source = cellOf(rowOf(mystery), 'source')
+
+        expect(source).toHaveTextContent('No rate')
+        // Why it shows as Unpriced is a hint beside the source, not a sentence in every row.
+        expect(
+            within(source).getByRole('button', {
+                name: 'Why token calls show as Unpriced',
+            }),
+        ).toBeVisible()
     })
 
     it('flags a saved price whose rates are all blank, without blaming the config', async () => {
@@ -327,9 +321,11 @@ describe('where the rates come from', () => {
 
         expect(source).toHaveTextContent('Saved')
 
-        expect(source).toHaveTextContent(
-            'Token calls without an input rate show as Unpriced',
-        )
+        expect(
+            within(source).getByRole('button', {
+                name: 'Why token calls show as Unpriced',
+            }),
+        ).toBeVisible()
         expect(source).not.toHaveTextContent(/config/i)
     })
 
@@ -430,9 +426,12 @@ describe('the compact summary a narrow screen shows', () => {
             '[data-slot="price-summary"]',
         )
 
-        expect(summary).toHaveTextContent(
-            'No rateToken calls without an input rate show as Unpriced',
-        )
+        expect(summary).toHaveTextContent('No rate')
+        expect(
+            within(summary as HTMLElement).getByRole('button', {
+                name: 'Why token calls show as Unpriced',
+            }),
+        ).toBeVisible()
     })
 
     it('keeps one Edit button per row, and one set of four labelled fields while editing', async () => {

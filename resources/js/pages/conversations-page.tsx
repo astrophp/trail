@@ -11,10 +11,7 @@ export function ConversationsPage() {
 
     return (
         <>
-            <PageHeader
-                title="Conversations"
-                description="Understand the user's experience, one recorded turn at a time."
-            >
+            <PageHeader title="Conversations">
                 <TimeRangeSelect value={range} onValueChange={setRange} />
             </PageHeader>
             <ConversationsView

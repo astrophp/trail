@@ -201,7 +201,7 @@ describe('a failed request', () => {
 })
 
 describe('an agent that did nothing in the range', () => {
-    it('keeps the header and says so with its name and class, with no strip, chart or panels of zeros', async () => {
+    it('keeps the header with its name and class, says so in a short notice, with no strip, chart or panels of zeros', async () => {
         const fetchMock = mockApi({
             show: (url) => json(showFor(url, nothingInRange)),
         })
@@ -212,12 +212,15 @@ describe('an agent that did nothing in the range', () => {
             await screen.findByText('Nothing ran in this range.')
         ).closest('[data-slot="notice"]')
 
-        expect(notice).toHaveTextContent('Nothing ran in this range.')
-        expect(notice).toHaveTextContent('SupportAssistant')
-        expect(notice).toHaveTextContent('App\\Ai\\Agents\\SupportAssistant')
-        expect(notice).toHaveTextContent('Try a longer range.')
+        // The header names the agent and its class; the notice does not say them again.
+        expect(notice).toHaveTextContent(
+            /^Nothing ran in this range\.Try a longer range\.$/,
+        )
         expect(
             screen.getByRole('heading', { level: 1, name: 'SupportAssistant' }),
+        ).toBeVisible()
+        expect(
+            screen.getByText('App\\Ai\\Agents\\SupportAssistant'),
         ).toBeVisible()
         expect(strip()).toBeNull()
         expect(
@@ -267,7 +270,7 @@ describe('an agent that only ran as a sub-agent', () => {
         expect(screen.getByText(/Runs only as a sub-agent/)).toBeVisible()
         expect(
             screen.getByText(
-                /recorded inside the runs of the agents that delegated to it/,
+                'Its figures are part of the agents that delegated to it.',
             ),
         ).toBeVisible()
 

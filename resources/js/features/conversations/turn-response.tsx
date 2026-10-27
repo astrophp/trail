@@ -1,13 +1,17 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import type { Turn } from '@/api/types'
 import { Notice } from '@/components/patterns/notice'
+import { Panel } from '@/components/patterns/panel'
+import { PanelFooter } from '@/components/patterns/panel-footer'
 import { AgentIcon } from '@/components/telemetry/agent-icon'
 import { ErrorSummary } from '@/components/telemetry/error-summary'
 import { MessageItem } from '@/components/telemetry/message-item'
 import { ModelLabel } from '@/components/telemetry/model-label'
 import { PendingApprovalList } from '@/components/telemetry/pending-approval-list'
+import { TextViewSwitch } from '@/components/patterns/text-view-switch'
 import { Button } from '@/components/ui/button'
 import { responseOf } from '@/features/conversations/transcript-turns'
+import { asObject } from '@/lib/payload-access'
 import { waitingTools } from '@/components/telemetry/waiting-tools'
 
 /** What stands where the response would be, for a turn that has none. */
@@ -67,32 +71,58 @@ function NoResponse({ turn }: { turn: Turn }) {
     }
 }
 
+type TurnResponseProps = {
+    turn: Turn
+    number: number
+    /** What closes the card: the turn's figures and the way to its trace. */
+    footer?: ReactNode
+}
+
 /**
- * The assistant's side of a turn: the agent and its model, and the response as plain text. A turn
- * that has no response says why it can: how it failed, that it is in progress, or what it waits for.
+ * The agent's side of a turn, in a white card of its own: a header with a square avatar of the
+ * agent's icon, the agent and its model and the Rendered/Raw switch; a line; the response drawn
+ * as markdown at full width; and the turn's figures at its foot. A turn that has no response says why it can: how it
+ * failed, that it is in progress, or what it waits for.
  */
-export function TurnResponse({ turn, number }: { turn: Turn; number: number }) {
+export function TurnResponse({ turn, number, footer }: TurnResponseProps) {
     const response = responseOf(turn)
+    const answer = response === undefined ? null : asObject(response)
+    // The switch sits on the agent's line when there is an answer to draw as markdown.
+    const drawn =
+        answer?.role === 'assistant' &&
+        typeof answer.content === 'string' &&
+        answer.content !== ''
+    const heading = `Turn ${number} response`
 
     return (
-        <div data-slot="turn-response" className="flex gap-3">
-            <span
-                aria-hidden="true"
-                className="flex size-7 shrink-0 items-center justify-center rounded-lg border bg-muted"
-            >
-                <AgentIcon type={turn.trace.type} className="size-3.5" />
-            </span>
-            <div className="flex min-w-0 flex-1 flex-col gap-2">
-                <div className="flex min-w-0 flex-wrap items-baseline gap-x-2">
-                    <span className="text-xs font-medium wrap-anywhere">
-                        {turn.trace.name}
+        <Panel data-slot="turn-response" className="min-w-0">
+            <div className="flex min-w-0 items-center justify-between gap-2 border-b px-5 py-4">
+                <div className="flex min-w-0 items-center gap-2.5">
+                    <span
+                        aria-hidden="true"
+                        className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-primary-soft text-primary"
+                    >
+                        <AgentIcon
+                            type={turn.trace.type}
+                            className="size-3.5"
+                        />
                     </span>
-                    <ModelLabel
-                        of={turn.trace}
-                        layout="inline"
-                        className="text-caption"
-                    />
+                    <div className="flex min-w-0 flex-wrap items-baseline gap-x-2">
+                        <span className="text-xs font-medium wrap-anywhere">
+                            {turn.trace.name}
+                        </span>
+                        <ModelLabel
+                            of={turn.trace}
+                            layout="inline"
+                            className="text-caption"
+                        />
+                    </div>
                 </div>
+                {drawn ? (
+                    <TextViewSwitch label={heading} className="shrink-0" />
+                ) : null}
+            </div>
+            <div className="min-w-0 p-5">
                 {response === undefined ? (
                     <NoResponse turn={turn} />
                 ) : (
@@ -100,10 +130,15 @@ export function TurnResponse({ turn, number }: { turn: Turn; number: number }) {
                         variant="plain"
                         message={response}
                         truncatedPaths={response.truncated_paths}
-                        heading={`Turn ${number} response`}
+                        heading={heading}
+                        markdown
+                        viewSwitch={false}
                     />
                 )}
             </div>
-        </div>
+            {footer === undefined ? null : (
+                <PanelFooter className="border-t">{footer}</PanelFooter>
+            )}
+        </Panel>
     )
 }

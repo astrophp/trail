@@ -4,6 +4,8 @@ import type { UseQueryResult } from '@tanstack/react-query'
 import type { TraceDetailResponse } from '@/api/types'
 import { skeletonBarClass } from '@/components/patterns/data-table'
 import { EmptyState } from '@/components/patterns/empty-state'
+import { InfoHint } from '@/components/patterns/info-hint'
+import { Panel } from '@/components/patterns/panel'
 import { PageHeader } from '@/components/patterns/page-header'
 import { Skeleton } from '@/components/ui/skeleton'
 import { BackToTraces } from '@/features/compare/back-to-traces'
@@ -53,12 +55,18 @@ export function CompareView({ ids, runs, className }: CompareViewProps) {
         <div className={className}>
             <PageHeader
                 title="Compare traces"
-                description="A row is marked when both runs have a value and the two differ. Durations, tokens and cost are shown side by side and never compared."
+                badge={
+                    <InfoHint label="How runs are compared">
+                        A row is marked when both runs have a value and they
+                        differ. Durations, tokens and cost are shown side by
+                        side, never compared.
+                    </InfoHint>
+                }
             >
                 <BackToTraces />
             </PageHeader>
             {canCompare(ids.a, ids.b) ? (
-                <div className="mt-5.75 overflow-hidden rounded-xl border bg-card text-card-foreground lg:mt-6.5">
+                <Panel className="mt-5.75 overflow-hidden lg:mt-6.5">
                     <div
                         aria-hidden="true"
                         className="hidden gap-6 border-b bg-muted px-4 py-2.75 text-caption font-medium text-muted-foreground md:grid md:grid-cols-5"
@@ -109,13 +117,13 @@ export function CompareView({ ids, runs, className }: CompareViewProps) {
                             )
                         })}
                     </dl>
-                </div>
+                </Panel>
             ) : (
                 <EmptyState
                     icon={GitCompareIcon}
                     title="Choose two different runs to compare"
                     description="Tick two runs in the Traces list and press Compare."
-                    className="mt-5.75 rounded-xl border bg-card lg:mt-6.5"
+                    className="mt-5.75 rounded-lg border bg-card lg:mt-6.5"
                 />
             )}
         </div>

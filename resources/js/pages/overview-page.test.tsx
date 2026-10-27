@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { forgetAttentionRefreshFailures } from '@/features/overview/use-attention'
 import { forgetOverviewRefreshFailures } from '@/features/overview/use-overview'
 import { renderApp } from '@/test/render-app'
+import { stubResizeObserver } from '@/test/resize-observer'
 import { mockApi } from '@/test/overview-api'
 
 beforeEach(() => {
@@ -57,8 +58,11 @@ describe('the Overview page', () => {
         ])
     })
 
-    it('reads, and tabs, in the order it looks: figures, chart with its switch and data, then the list', async () => {
+    it('reads, and tabs, in the order it looks: figures, chart with its hint, switch and data, then the list', async () => {
         const main = await open()
+        // Tabbing past the chart's hint opens its tooltip, which measures itself; jsdom has
+        // nothing to measure with.
+        stubResizeObserver()
         const stripLink = main.querySelector(
             '[data-slot="metric-strip"] a',
         ) as HTMLElement
@@ -68,6 +72,9 @@ describe('the Overview page', () => {
         const attention = screen
             .getByRole('heading', { name: 'Needs attention' })
             .closest('[data-slot="panel"]') as HTMLElement
+        const hint = within(activity).getByRole('button', {
+            name: 'About this chart',
+        })
         const switchGroup = within(activity).getByRole('radiogroup')
         const viewData = within(activity).getByRole('button', {
             name: 'View data',
@@ -78,10 +85,11 @@ describe('the Overview page', () => {
 
         expect(before(stripLink, activity)).toBe(true)
         expect(before(activity, attention)).toBe(true)
+        expect(before(hint, switchGroup)).toBe(true)
         expect(before(switchGroup, viewData)).toBe(true)
         expect(before(viewData, firstRow)).toBe(true)
 
-        // The keyboard walks the same way: the strip's links, the switch, the button, the list.
+        // The keyboard walks the same way: the strip's links, the hint, the switch, the button, the list.
         const visited: Element[] = []
 
         await userEvent.click(document.body)
@@ -100,7 +108,8 @@ describe('the Overview page', () => {
             .find((radio) => radio.getAttribute('aria-checked') === 'true')
 
         expect(at(stripLink)).toBeGreaterThanOrEqual(0)
-        expect(at(checked as Element)).toBeGreaterThan(at(stripLink))
+        expect(at(hint)).toBeGreaterThan(at(stripLink))
+        expect(at(checked as Element)).toBeGreaterThan(at(hint))
         expect(at(viewData)).toBeGreaterThan(at(checked as Element))
         expect(at(firstRow)).toBeGreaterThan(at(viewData))
     })

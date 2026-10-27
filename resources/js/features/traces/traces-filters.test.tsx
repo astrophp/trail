@@ -683,9 +683,7 @@ describe('the states with filters', () => {
         const card = heading.closest('[data-slot="data-table"]') as HTMLElement
 
         expect(
-            within(card).getByText(
-                'Try removing a filter, widening the time range or searching for something else.',
-            ),
+            within(card).getByText('Try fewer filters or a longer range.'),
         ).toBeVisible()
         expect(
             screen.queryByRole('navigation', { name: 'Pagination' }),

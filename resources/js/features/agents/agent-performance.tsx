@@ -72,7 +72,7 @@ export function AgentPerformance({ className }: { className?: string }) {
         <Panel className={className}>
             <PanelHeader
                 title="Agent performance"
-                description="The busiest agents by runs, with their error rate, speed and cost."
+
                 action={
                     <Button asChild variant="link" size="sm">
                         <Link to={agentsLink(counted)}>View agents</Link>

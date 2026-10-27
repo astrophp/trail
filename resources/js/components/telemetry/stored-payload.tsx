@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import type { Span } from '@/api/types'
 import { PayloadViewer } from '@/components/patterns/payload-viewer'
 import { truncationAt } from '@/components/telemetry/payload-truncation'
@@ -14,6 +15,12 @@ type StoredPayloadProps = {
     value: JsonValue | undefined
     /** A text runs as plain text, with no box and no copy button; see `PayloadViewer`. */
     plain?: boolean
+    /** `markdown` draws a text as markdown, with a switch to the text as stored; see `PayloadViewer`. */
+    format?: 'text' | 'markdown' | 'json'
+    /** Leaves out the Rendered/Raw switch, for a caller that shows `TextViewSwitch` itself. */
+    viewSwitch?: boolean
+    /** Frames the value under this title; see `PayloadViewer`. */
+    title?: ReactNode
     className?: string
 }
 
@@ -25,6 +32,9 @@ export function StoredPayload({
     heading,
     value,
     plain,
+    format,
+    viewSwitch,
+    title,
     className,
 }: StoredPayloadProps) {
     const { truncated, originalLength } = truncationAt(
@@ -40,6 +50,9 @@ export function StoredPayload({
             truncated={truncated}
             originalLength={originalLength}
             plain={plain}
+            format={format}
+            viewSwitch={viewSwitch}
+            title={title}
             className={className}
         />
     )
