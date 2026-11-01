@@ -672,7 +672,7 @@ What the dashboard needs around every page. Takes a time range, which applies to
 {
   "data": {
     "app": { "name": "Laravel", "environment": "local", "timezone": "UTC" },
-    "version": "0.1.0",
+    "version": "1.0.0",
     "recording": "enabled",
     "stale_after": 3600,
     "traces": { "any": true, "running": 2 },

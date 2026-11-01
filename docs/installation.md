@@ -4,7 +4,7 @@
 
 - PHP 8.3 or newer
 - Laravel 12 or 13
-- `laravel/ai` 1.1 or newer
+- `laravel/ai` 1.1 or newer. The test suite runs against 1.1, 1.2 and 1.3.
 - A database Trail can write to: SQLite, MySQL or Postgres. The test suite runs on all three.
 
 ## Install
@@ -73,6 +73,25 @@ php artisan migrate
 - If you cache configuration or routes, rebuild the caches after upgrading.
 - The dashboard's JSON API is for the dashboard itself. It is not versioned and may change between
   releases.
+
+## Versioning
+
+From `v1.0.0` Trail follows [semantic versioning](https://semver.org/spec/v2.0.0.html). A change
+that breaks any of these waits for a new major version:
+
+- The `Trail` facade's documented methods, such as `Trail::fake()`, `Trail::auth()`,
+  `Trail::filter()` and `Trail::withoutRecording()`.
+- The keys and environment variables in [Configuration](configuration.md).
+- The `trail:*` commands and their options.
+- The `viewTrail` gate.
+- Upgrading by `composer update` and `php artisan migrate`.
+
+These are not covered and can change in any release:
+
+- The dashboard, its pages and its [JSON API](api.md).
+- The `trail_` tables. They change through migrations; do not build on their columns.
+- Default prices, which follow the providers.
+- Anything else not documented.
 
 ## Checking that it works
 

@@ -1,6 +1,6 @@
 # Known limits
 
-This page lists what Trail does not do or does imperfectly in `v0.1.0`, so you do not have to
+This page lists what Trail does not do or does imperfectly today, so you do not have to
 find out from a missing number.
 
 ## Things the SDK does not report
@@ -83,8 +83,8 @@ until explicitly updated; they do not expire automatically. Check [Cost](cost.md
 
 The dashboard's JavaScript and CSS are inlined into the page, so there is nothing to publish and
 no asset URL to configure. The cost is that every dashboard page load carries them. In this
-release the script is about 1.5 MB, about 430 KB gzipped
-(measure it with `gzip -c dist/app.js | wc -c`), and the stylesheet is about 135 KB, about 20 KB
+release the script is about 1.5 MB, about 440 KB gzipped
+(measure it with `gzip -c dist/app.js | wc -c`), and the stylesheet is about 140 KB, about 23 KB
 gzipped. Whether the page is compressed in transit depends on your web server. The size changes
 with every release that changes the dashboard.
 

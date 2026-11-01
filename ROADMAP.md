@@ -1,6 +1,6 @@
 # Roadmap
 
-This page lists what the first release contains and what is planned after it. What comes after is
+This page lists what each major step of Trail contained and what may come next. What comes next is
 not a commitment to dates. For the detail of a release, see the [changelog](CHANGELOG.md); for what
 Trail does not do today, see [Known limits](docs/limits.md).
 
@@ -39,6 +39,12 @@ Trail does not do today, see [Known limits](docs/limits.md).
 - `Trail::fake()` and its assertions for your own tests.
 - User documentation in `docs/`.
 
+## v0.2.0 — Laravel Boost
+
+- Four read-only MCP tools through Laravel Boost: recent traces, a trace, conversation turns, and
+  usage and estimated cost.
+- A package guideline and a `TRAIL_BOOST_ENABLED` switch; no separate MCP server is needed.
+
 ## v0.3.0 — classification and reranking
 
 - Event capture, bounded and redacted payloads, honest incomplete lifecycle evidence.
@@ -54,6 +60,9 @@ Trail does not do today, see [Known limits](docs/limits.md).
 - Token-based estimates where providers report tokens, and Not captured where they do not.
 
 ## v1.0.0 — readable answers
+
+The first stable release. From here on Trail's public surface follows semantic versioning; see
+[Versioning](docs/installation.md#versioning).
 
 - Model answers in conversations and run evidence drawn as markdown: headings, lists, task lists,
   tables, code and links.
