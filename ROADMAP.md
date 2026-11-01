@@ -53,7 +53,7 @@ Trail does not do today, see [Known limits](docs/limits.md).
 - Settings, counts and redacted texts only; never image or audio bytes.
 - Token-based estimates where providers report tokens, and Not captured where they do not.
 
-## v0.5.0 — readable answers
+## v1.0.0 — readable answers
 
 - Model answers in conversations and run evidence drawn as markdown: headings, lists, task lists,
   tables, code and links.

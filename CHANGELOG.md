@@ -4,7 +4,7 @@ All notable changes to Trail are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and Trail follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## v0.5.0
+## v1.0.0 - 2026-11-01
 
 ### Added
 
