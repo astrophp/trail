@@ -2,7 +2,7 @@
 
 ## Requirements
 
-- PHP 8.3, 8.4, 8.5 or 8.6
+- PHP 8.3, 8.4, 8.5 or 8.6 (8.6 is tested on Laravel 13 only)
 - Laravel 12 or 13
 - `laravel/ai` 1.1 or newer within 1.x. The test suite runs against 1.1, 1.2 and 1.3.
 - A database Trail can write to: SQLite, MySQL or Postgres. The test suite runs on all three.

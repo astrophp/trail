@@ -90,7 +90,8 @@ change:
 | PHP | 8.3, 8.4, 8.5, 8.6 |
 | Database | SQLite, MySQL, Postgres |
 
-Composer allows `laravel/ai` 1.1 or newer within 1.x.
+PHP 8.6 is tested on Laravel 13 only, because Laravel 12's test tools cannot be installed on it
+yet. Composer allows `laravel/ai` 1.1 or newer within 1.x.
 
 ## Install
 

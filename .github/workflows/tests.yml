@@ -44,6 +44,11 @@ jobs:
       matrix:
         php: ['8.3', '8.4', '8.5', '8.6']
         laravel: ['12.*', '13.*']
+        # Laravel 12's test tools (Testbench 10 with Symfony 7) cannot be installed beside a Pest
+        # that runs on PHP 8.6, so PHP 8.6 is tested on Laravel 13 only.
+        exclude:
+          - php: '8.6'
+            laravel: '12.*'
         include:
           - laravel: '12.*'
             testbench: '^10.6'
