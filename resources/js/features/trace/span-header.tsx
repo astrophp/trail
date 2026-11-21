@@ -26,6 +26,9 @@ const kinds: Record<SpanType, string> = {
     embedding: 'Embedding',
     classification: 'Classification',
     reranking: 'Reranking',
+    image: 'Image generation',
+    audio: 'Audio generation',
+    transcription: 'Transcription',
 }
 
 type SpanHeaderProps = {

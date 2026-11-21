@@ -127,10 +127,9 @@ export function BreakdownPanel({
                             )}
                             <p className="text-caption">
                                 {own === undefined
-                                    ? 'Counted inside the runs of the agents that delegated to it. '
+                                    ? 'Counted inside the delegating runs. '
                                     : null}
-                                The traces list cannot filter on these, so they
-                                have no links.
+                                Not filterable, so not linked.
                             </p>
                         </div>
                         <RankedList

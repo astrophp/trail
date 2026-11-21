@@ -2,6 +2,12 @@
 
 /dist/* -diff linguist-generated
 
+# Trail is a PHP package with a bundled React dashboard: count the dashboard
+# itself in the repository language statistics, but not its test suite.
+/resources/js/**/*.test.ts  -linguist-detectable
+/resources/js/**/*.test.tsx -linguist-detectable
+/resources/js/test/**       -linguist-detectable
+
 /.github            export-ignore
 /tests              export-ignore
 /docs               export-ignore

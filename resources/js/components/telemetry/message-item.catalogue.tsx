@@ -132,11 +132,27 @@ export const catalogue: CatalogueEntry = {
             ),
         },
         {
-            name: 'Response, plain (transcript)',
+            name: 'Response, plain',
             Component: framed('plain', {
                 role: 'assistant',
                 content: 'Your order shipped on Monday.',
             }),
+        },
+        {
+            name: 'Response, markdown (transcript)',
+            Component: () => (
+                <MessageItem
+                    message={{
+                        role: 'assistant',
+                        content:
+                            'Your order **shipped** on Monday.\n\n| Item | Qty |\n| -- | -- |\n| Rain shell | 1 |\n\n```bash\ncurl https://api.example.test/orders/1042\n```',
+                    }}
+                    truncatedPaths={{}}
+                    heading="Turn 1 response"
+                    variant="plain"
+                    markdown
+                />
+            ),
         },
     ],
 }

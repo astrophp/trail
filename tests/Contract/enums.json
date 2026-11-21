@@ -21,7 +21,10 @@
         "tool",
         "embedding",
         "classification",
-        "reranking"
+        "reranking",
+        "image",
+        "audio",
+        "transcription"
     ],
     "error_source": [
         "step",

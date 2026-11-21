@@ -46,8 +46,7 @@ export function AgentInput({ span, coverage }: AgentInputProps) {
                             aria-hidden="true"
                             className="mt-px size-3 shrink-0"
                         />
-                        Captured prompt for this turn. This is not a
-                        reconstruction of the full model context.
+                        Captured prompt only, not the full model context.
                     </p>
                 )}
             </div>

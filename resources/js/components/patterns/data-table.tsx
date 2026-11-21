@@ -228,7 +228,7 @@ export function DataTable<TData extends RowData>({
                 ref={ref}
                 data-slot="data-table"
                 className={cn(
-                    'overflow-hidden rounded-xl border bg-card text-card-foreground',
+                    'overflow-hidden rounded-lg border bg-card text-card-foreground',
                     className,
                 )}
             >

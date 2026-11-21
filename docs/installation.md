@@ -4,7 +4,7 @@
 
 - PHP 8.3, 8.4, 8.5 or 8.6
 - Laravel 12 or 13
-- `laravel/ai` 1.1 or newer within 1.x; CI tests 1.1.0 and 1.2.0
+- `laravel/ai` 1.1 or newer within 1.x. The test suite runs against 1.1, 1.2 and 1.3.
 - A database Trail can write to: SQLite, MySQL or Postgres. The test suite runs on all three.
 
 ## Install
@@ -24,7 +24,7 @@ directory, and `php artisan migrate` runs them with your own. They create six ta
 | Table | Holds |
 | -- | -- |
 | `trail_traces` | One row per recorded run |
-| `trail_spans` | The agent, step, tool, embedding, classification and reranking spans of each run |
+| `trail_spans` | The agent, step, tool, embedding, classification, reranking, image, audio and transcription spans of each run |
 | `trail_trace_models` | A per-run summary of the models its steps used |
 | `trail_trace_tools` | A per-run summary of the tools it called |
 | `trail_prices` | The model prices saved from the dashboard |
@@ -73,6 +73,25 @@ php artisan migrate
 - If you cache configuration or routes, rebuild the caches after upgrading.
 - The dashboard's JSON API is for the dashboard itself. It is not versioned and may change between
   releases.
+
+## Versioning
+
+From `v1.0.0` Trail follows [semantic versioning](https://semver.org/spec/v2.0.0.html). A change
+that breaks any of these waits for a new major version:
+
+- The `Trail` facade's documented methods, such as `Trail::fake()`, `Trail::auth()`,
+  `Trail::filter()` and `Trail::withoutRecording()`.
+- The keys and environment variables in [Configuration](configuration.md).
+- The `trail:*` commands and their options.
+- The `viewTrail` gate.
+- Upgrading by `composer update` and `php artisan migrate`.
+
+These are not covered and can change in any release:
+
+- The dashboard, its pages and its [JSON API](api.md).
+- The `trail_` tables. They change through migrations; do not build on their columns.
+- Default prices, which follow the providers.
+- Anything else not documented.
 
 ## Checking that it works
 

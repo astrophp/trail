@@ -4,6 +4,7 @@ import { EmbeddingInput } from '@/features/trace/embedding-input'
 import { StepInput } from '@/components/telemetry/step-input'
 import { CapabilityPanel } from '@/features/trace/capability-panel'
 import { ToolInput } from '@/features/trace/tool-input'
+import { WholeInput } from '@/components/telemetry/whole-input'
 
 type InputPanelProps = { span: Span; coverage: Coverage }
 
@@ -15,6 +16,11 @@ export function InputPanel({ span, coverage }: InputPanelProps) {
             return span.input === null ? null : (
                 <CapabilityPanel span={span} side="input" />
             )
+        case 'image':
+        case 'audio':
+        case 'transcription':
+            // Settings and counts, and the texts when payloads are captured; never image or audio bytes.
+            return span.input === null ? null : <WholeInput span={span} />
         case 'agent':
             return <AgentInput span={span} coverage={coverage} />
         case 'step':

@@ -151,6 +151,16 @@ function expectations(): array
                 ->and($tools->sole()->name)->toBe('lookup_order')
                 ->and($tools->sole()->trace_id)->toBe(inOrder($traces)[1]->id);
         }],
+        'markdown-answers' => [Outcome::Ok, 3, function (Collection $traces) {
+            $answer = inOrder($traces)[0]->spans()->where('type', SpanType::Agent)->sole()->output['text'];
+
+            expect($traces->pluck('conversation_id')->unique()->all())->toHaveCount(1)->not->toContain(null)
+                ->and($traces->every(fn (Trace $trace) => $trace->status === Status::Completed))->toBeTrue()
+                ->and($answer)->toContain('| Ridgeline rain shell | 1 | €129.00 |')
+                ->and($answer)->toContain('[redacted]')
+                ->and($answer)->not->toContain('nwtok_')
+                ->and(mb_strlen(inOrder($traces)[1]->spans()->where('type', SpanType::Agent)->sole()->output['text']))->toBeGreaterThan(8000);
+        }],
         'conversation-failover' => [Outcome::Ok, 2, function (Collection $traces) {
             [$first, $second] = inOrder($traces)->all();
             $steps = $second->spans()->where('type', SpanType::Step)->orderBy('sequence')->get();
@@ -291,9 +301,9 @@ it('records the run of the scenario', function (string $key) {
 it('runs every scenario one after the other in one process', function () {
     $results = app(ScenarioRunner::class)->runAll();
 
-    expect($results)->toHaveCount(23)
+    expect($results)->toHaveCount(24)
         ->and(array_filter($results, fn ($result) => $result->outcome === Outcome::Error))->toBe([])
-        ->and(Trace::query()->count())->toBe(33);
+        ->and(Trace::query()->count())->toBe(36);
 });
 
 it('leaves the HTTP client and its script as it found them', function () {
@@ -353,7 +363,7 @@ describe('the landing page', function () {
     it('runs every scenario with Run all', function () {
         $this->post('/run')->assertRedirect('/');
 
-        expect(Trace::query()->count())->toBe(33);
+        expect(Trace::query()->count())->toBe(36);
     });
 
     it('answers 404 for a scenario that does not exist', function () {

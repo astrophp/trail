@@ -26,6 +26,7 @@ export function AgentOutput({ span }: AgentOutputProps) {
                 span={span}
                 path="output.text"
                 heading="Response"
+                format="markdown"
                 value={text ?? undefined}
             />
             {isAbsent(structured) ? null : (

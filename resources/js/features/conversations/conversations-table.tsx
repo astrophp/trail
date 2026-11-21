@@ -104,7 +104,7 @@ export function ConversationsTable({
                             <EmptyState
                                 icon={MessageSquareIcon}
                                 title="No conversations with failures in this period"
-                                description="No conversation active in this period has a failed or incomplete turn."
+                                description="None failed in this period."
                             />
                         ) : hasFilters ? (
                             <EmptyState
@@ -127,7 +127,7 @@ export function ConversationsTable({
                             <EmptyState
                                 icon={MessageSquareIcon}
                                 title="No conversations in this period"
-                                description="A conversation appears when an agent uses the SDK's conversation memory. Runs without one are on the Traces page."
+                                description="Runs that use conversation memory appear here."
                             />
                         )
                     ) : undefined
@@ -152,8 +152,7 @@ export function ConversationsTable({
             />
             {loading || empty ? null : (
                 <p className="mt-3 text-caption text-muted-foreground">
-                    Totals cover every recorded turn of a conversation,
-                    including turns outside the selected period.
+                    Totals include turns outside this period.
                 </p>
             )}
         </div>

@@ -6,7 +6,8 @@ your provider charges you. For the real figure, use your provider's invoice or u
 
 ## How an estimate is made
 
-Each model step, embeddings call and classification call is priced by its own usage when it is recorded. A run's cost is the
+Each model step, embeddings call, classification call and image, audio or transcription call is
+priced by its own usage when it is recorded. A run's cost is the
 sum of its priced steps.
 
 - Prices are in US dollars per **one million tokens**, with up to four rates per model: `input`,
@@ -127,6 +128,14 @@ The Usage & cost page also shows a spend projection. It carries the recent rate 
 prices, and is a projection, not a prediction and not a recorded cost. It is kept apart from the
 recorded amounts and is not added to them.
 
+
+## Images, audio and transcription
+
+These calls are priced from the tokens their provider reported, at their model's ordinary `input`
+and `output` rates. No default prices ship for them: add one for the model, in `trail.pricing` or
+the dashboard, to estimate them. A call whose provider reported no tokens, which is how per-image,
+per-character and per-minute billing reaches the SDK, is Not captured, never free. See
+[Known limits](limits.md#image-audio-and-transcription-pricing).
 
 ## Reranking and coverage
 

@@ -21,7 +21,6 @@ import { pageShortcuts, useListShortcuts } from '@/hooks/use-list-shortcuts'
 import { useListStatus } from '@/hooks/use-list-status'
 import { formatCount } from '@/lib/format'
 import type {} from '@/lib/refresh-policy'
-import { timeRangeLabels } from '@/lib/time-range'
 
 const tabs: (CountTab & { value: UsageGrouping })[] = [
     { value: 'model', label: 'By model' },
@@ -105,8 +104,8 @@ export function UsageBreakdown({
                     title="Only part of the usage was read"
                     className="mb-4"
                 >
-                    Trail read {formatCount(data.row_limit.limit)} groups, and
-                    there were more, so this list may be incomplete.
+                    The first {formatCount(data.row_limit.limit)} groups. This
+                    list may be incomplete.
                 </Notice>
             ) : null}
             {loading || failed || refreshNoted ? null : (
@@ -174,7 +173,7 @@ export function UsageBreakdown({
                                             <EmptyState
                                                 icon={ChartColumnIcon}
                                                 title="No recorded usage in this range"
-                                                description={`Nothing was recorded in the ${timeRangeLabels[shownRange].toLowerCase()}. A longer range may show more.`}
+                                                description="A longer range may show more."
                                             />
                                         ) : undefined
                                     }

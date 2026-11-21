@@ -12,7 +12,7 @@ export function TraceNotFound() {
         <EmptyState
             icon={SearchXIcon}
             title="Run not found"
-            description="No recorded run has this id. It may have been pruned, or it was never recorded."
+            description="It may have been pruned."
         >
             <Button asChild variant="outline" size="sm">
                 <Link to={to}>{label}</Link>

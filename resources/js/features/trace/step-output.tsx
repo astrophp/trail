@@ -59,6 +59,7 @@ export function StepOutput({ span, tree, onSelect }: StepOutputProps) {
                     span={span}
                     path="output.text"
                     heading="Text"
+                    format="markdown"
                     value={text}
                 />
             ) : null}

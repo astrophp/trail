@@ -5,6 +5,7 @@ import { EmbeddingOutput } from '@/features/trace/embedding-output'
 import { StepOutput } from '@/features/trace/step-output'
 import { CapabilityPanel } from '@/features/trace/capability-panel'
 import { ToolOutput } from '@/features/trace/tool-output'
+import { WholeOutput } from '@/features/trace/whole-output'
 
 type OutputPanelProps = {
     span: Span
@@ -20,6 +21,10 @@ export function OutputPanel({ span, tree, onSelect }: OutputPanelProps) {
             return span.output === null ? null : (
                 <CapabilityPanel span={span} side="output" />
             )
+        case 'image':
+        case 'audio':
+        case 'transcription':
+            return span.output === null ? null : <WholeOutput span={span} />
         case 'agent':
             return <AgentOutput span={span} />
         case 'step':

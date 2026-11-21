@@ -3,6 +3,7 @@ import { usageSpendExportUrl } from '@/api/usage'
 import type { SpendBucket, UsageSpendResponse } from '@/api/types'
 import { BusyRegion } from '@/components/patterns/busy-region'
 import { ExportLinkButton } from '@/components/patterns/export-link-button'
+import { InfoHint } from '@/components/patterns/info-hint'
 import { Panel } from '@/components/patterns/panel'
 import { PanelContent } from '@/components/patterns/panel-content'
 import { PanelError } from '@/components/patterns/panel-error'
@@ -32,6 +33,7 @@ import { useFocusHandoff } from '@/hooks/use-focus-handoff'
 import { useQueryStatus } from '@/hooks/use-query-status'
 import { useTimeRange } from '@/hooks/use-time-range'
 import { formatCost, resolveTimeZone } from '@/lib/format'
+import { cn } from '@/lib/utils'
 import type { Refreshing } from '@/lib/refresh-policy'
 import { timeRangePeriods } from '@/lib/time-range'
 
@@ -228,12 +230,22 @@ function SpendContent({
                     {nothingToDraw(last?.cumulative.state ?? 'not_captured')}
                 </p>
             )}
-            {explanation === '' ? null : (
-                <p data-slot="spend-assumption" className={caption}>
-                    {explanation}
+            {/* One short status; what it assumes and leaves out is a hint away. */}
+            {explanation === '' && !drawn ? null : (
+                <p
+                    data-slot="spend-assumption"
+                    className={cn(caption, 'flex items-center gap-1')}
+                >
+                    {projection.state === 'projected'
+                        ? 'Projected at today’s prices'
+                        : 'No projection'}
+                    <InfoHint label="About the projection">
+                        {[explanation, drawn ? timeZoneNote(timeZone) : '']
+                            .filter((sentence) => sentence !== '')
+                            .join(' ')}
+                    </InfoHint>
                 </p>
             )}
-            {drawn ? <p className={caption}>{timeZoneNote(timeZone)}</p> : null}
         </div>
     )
 }

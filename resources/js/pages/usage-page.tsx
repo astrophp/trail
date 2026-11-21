@@ -1,3 +1,4 @@
+import { InfoHint } from '@/components/patterns/info-hint'
 import { PageHeader } from '@/components/patterns/page-header'
 import { TimeRangeSelect } from '@/components/patterns/time-range-select'
 import { UsageView } from '@/features/usage'
@@ -10,7 +11,12 @@ export function UsagePage() {
         <>
             <PageHeader
                 title="Usage & cost"
-                description="Token usage and estimated cost of recorded runs. Amounts are estimates from your configured prices, not provider invoices."
+                badge={
+                    <InfoHint label="About these amounts">
+                        Estimates from your configured prices, not provider
+                        invoices.
+                    </InfoHint>
+                }
             >
                 <TimeRangeSelect value={range} onValueChange={setRange} />
             </PageHeader>

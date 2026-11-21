@@ -86,6 +86,47 @@ A value Trail did not capture is `null`, and is shown as `Not captured`, `Pendin
 `Incomplete`, never as zero. Only the `telemetry` components format such values; nothing else
 formats a cost, a token count or a duration by hand.
 
+## Markdown
+
+A model's answer is drawn as markdown by `PayloadViewer` when it is given `format="markdown"`
+(through `StoredPayload`, `PayloadSection` and `MessageItem`'s `markdown`). Only answers get it:
+the assistant's text in a transcript, and the `output.text` of an agent run or a model step.
+Prompts, instructions, tool payloads and structured output stay as stored.
+
+- **`MarkdownText`** (`patterns`) is the counterpart of `CappedText`: it draws the text in parts
+  of about `textChunk` characters, cut between blocks by `blockCutPoint` (`lib/markdown`) and
+  never inside a code fence, and parses each part once. Every part gets the text's link
+  definitions (`referenceDefinitions`), so a reference resolves wherever it is.
+- **`Markdown`** (`patterns`) draws one part with react-markdown and remark-gfm. Every element
+  goes through its components map. Keep its rules when changing it:
+  - never `rehype-raw` or `dangerouslySetInnerHTML`: raw HTML becomes text;
+  - never an `<img>`: an image is named by its description and address;
+  - a link goes through `safeUrl` (http, https, mailto, relative), opens in a new tab with
+    `rel="noopener noreferrer nofollow"`, and its address is written beside it;
+  - redaction markers are swapped for a private-use character before parsing and drawn with
+    `RedactionMark` wherever they land, code included;
+  - a link with any other scheme is text, marked "not linked";
+  - headings start one level below the heading the answer sits under (`headingLevel`), so the
+    page's outline stays the dashboard's;
+  - code blocks keep their lines as written and scroll sideways.
+- **Rendered / Raw** is one choice for the dashboard, kept in `localStorage` as
+  `trail-text-view` by `useTextView` and switched by `TextViewSwitch`. Raw is
+  `CappedText`, the text exactly as stored. A view stays mounted once shown, so switching back
+  keeps what was revealed. A caller that shows the switch itself passes `viewSwitch={false}`.
+
+## Showing a payload
+
+- **One view switch.** Every choice of how something is shown (Tree or Raw, Rendered or Raw,
+  Volume, Duration or Cost) is a `ViewSwitch` (`patterns`): a row of outlined toggles, one always
+  on. Do not build another one from tabs or buttons.
+- **Framed when titled.** `PayloadViewer` with a `heading` (a section of the evidence panel) or a
+  `title` (a tool's arguments or result, under the tool's name) is one framed block: the title,
+  the view switch and the copy button in a header bar, the value under a line. Without either it
+  keeps its bare row, for a value already under a label of its own.
+- **Cards are panels.** A card on a page is a `Panel` (with `PanelHeader`, `PanelContent` and
+  `PanelFooter` where they fit), so every card shares one border, radius and 20 px rhythm. Never
+  draw `rounded-lg border bg-card` by hand.
+
 ## Building a list page
 
 A list page (a table of rows the server sorts, filters and pages) is assembled from shared pieces.

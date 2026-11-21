@@ -19,6 +19,9 @@ export function AgentCell({ agent, to }: { agent: Agent; to: string }) {
         embedding: 'Embeddings',
         classification: 'Classification calls',
         reranking: 'Reranking calls',
+        image: 'Image calls',
+        audio: 'Audio calls',
+        transcription: 'Transcription calls',
         agent: '',
     }[agent.type]
     const unnamed = agent.name.trim() === ''

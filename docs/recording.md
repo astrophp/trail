@@ -20,6 +20,9 @@ A **trace** is one top-level run. Its **spans** are the parts of it, in a tree:
 | Classification | One classification call, its questions and state, all stored answer forms and measured token usage. |
 | Reranking | One reranking call, original input document indexes, bounded snippets, provider result order and scores, and measured tokens or search units. |
 | Embedding | One embeddings call, with the model, the token count the provider reported, and the dimensions asked for. |
+| Image | One image generation call: its prompt, size, quality and attachments, how many images came back and their types, and the tokens the provider reported. Never the images. |
+| Audio | One text-to-speech call: its text, voice and instructions, how many characters it spoke, and the audio's type and size. Never the audio. |
+| Transcription | One transcription call: the audio it was given (its type, name and size, never its bytes), the language, the transcript, and the tokens and seconds of audio the provider reported. |
 
 A trace also carries the agent class, the final status, the provider and model, the conversation
 and user it belongs to (when the agent remembers conversations), the totals of its steps, an
@@ -39,6 +42,9 @@ Prompts, messages, arguments and results are redacted and cut to a length before
   carries on, the trace is marked as having a failed child.
 - **Embeddings.** A call made inside a tool is an embedding span under that tool. A call made on
   its own is a trace of its own.
+- **Images, audio and transcription.** The same: a span under the tool that made the call, or a
+  trace of its own. A failed attempt is Failed with its own error from SDK 1.2.2 on; see
+  [Direct capability calls](#direct-capability-calls) for earlier versions.
 - **Failover.** A run that moves to the next provider is one trace. A step records the failed
   attempt, and a trace that a later provider answered is marked recovered. The usage and cost of
   the failed attempt are counted, and a tool that ran in it is kept as its own span.
@@ -57,8 +63,9 @@ Prompts, messages, arguments and results are redacted and cut to a length before
 
 ## What is not recorded
 
-- **Runs the SDK reports no event for.** Trail records agent runs, embeddings, classification and reranking.
-  Images, audio and transcription are not recorded.
+- **Runs the SDK reports no event for.** Trail records agent runs, embeddings, classification,
+  reranking, image generation, audio and transcription.
+- **Image and audio bytes.** Only their settings, counts, types and sizes are stored.
 - **The title call.** When an agent remembers conversations and generates a title for a new one,
   the SDK makes an extra model call that no event reports. It is neither recorded nor priced.
 - **Embeddings served from the SDK's embeddings cache,** which fire no events.
@@ -116,7 +123,7 @@ A cost is an estimate from list prices, frozen when the run was recorded ([Cost]
 
 ### Direct capability calls
 
-A standalone classification or reranking call is its own root trace. Inside a recorded invocation,
+A standalone classification, reranking, image, audio or transcription call is its own root trace. Inside a recorded invocation,
 it is a child of the observed open tool or agent span and follows the parent's recording decision.
 An unknown or suppressed parent never creates an orphan trace. The SDK invocation ID is used for
 both start and completion, and each recorded call contributes usage exactly once. Agent and tool

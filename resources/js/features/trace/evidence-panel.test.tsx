@@ -342,12 +342,12 @@ describe('an agent span', () => {
         ).not.toHaveTextContent('1 chars')
     })
 
-    it('says the prompt is the captured one for this turn, and not the full model context', async () => {
+    it('says the prompt is only the captured one, not the full model context', async () => {
         await open([agent()])
 
         expect(
             panel().getByText(
-                'Captured prompt for this turn. This is not a reconstruction of the full model context.',
+                'Captured prompt only, not the full model context.',
             ),
         ).toBeInTheDocument()
     })
@@ -356,9 +356,7 @@ describe('an agent span', () => {
         await open([root({ input: { system: 'S', prompt: null } })])
 
         expect(
-            panel().queryByText(
-                /not a reconstruction of the full model context/,
-            ),
+            panel().queryByText(/not the full model context/),
         ).not.toBeInTheDocument()
     })
 
@@ -395,6 +393,26 @@ describe('an agent span', () => {
             panel().getByRole('heading', { name: 'Structured output' }),
         ).toBeInTheDocument()
         expect(group('structured output')).toBeInTheDocument()
+    })
+
+    it('draws the response as markdown, with the text as stored one click away', async () => {
+        const user = userEvent.setup()
+
+        await open([
+            root({
+                input: { prompt: 'Hi' },
+                output: { text: '**Shipped** on Monday.' },
+            }),
+        ])
+        await openTab('Output')
+
+        expect(screen.getByText('Shipped').tagName).toBe('STRONG')
+
+        await user.click(
+            within(group('response')).getByRole('radio', { name: 'Raw' }),
+        )
+
+        expect(screen.getByText('**Shipped** on Monday.')).toBeVisible()
     })
 
     it('shows an input of an unexpected shape as stored', async () => {
@@ -465,7 +483,7 @@ describe('a model step', () => {
         expect(within(items[3]).getByText('Answer briefly.')).toBeVisible()
     })
 
-    it('says how many earlier messages were sent, in the singular and the plural', async () => {
+    it('says how many earlier messages are on the steps before, in the singular and the plural', async () => {
         await open(
             withInput({
                 messages: [{ role: 'user', content: 'Hi' }],
@@ -477,7 +495,7 @@ describe('a model step', () => {
 
         expect(
             screen.getByText(
-                `${formatCount(3)} earlier messages were sent with this step. They are stored on the steps before it.`,
+                `${formatCount(3)} earlier messages are on the steps before.`,
             ),
         ).toBeInTheDocument()
     })
@@ -493,9 +511,7 @@ describe('a model step', () => {
         )
 
         expect(
-            screen.getByText(
-                '1 earlier message was sent with this step. It is stored on a step before it.',
-            ),
+            screen.getByText('1 earlier message is on a step before.'),
         ).toBeInTheDocument()
     })
 
@@ -642,9 +658,7 @@ describe('a tool span and an embedding span', () => {
         )
 
         expect(
-            screen.queryByText(
-                /not a reconstruction of the full model context/,
-            ),
+            screen.queryByText(/not the full model context/),
         ).not.toBeInTheDocument()
 
         await userEvent.click(
@@ -652,9 +666,7 @@ describe('a tool span and an embedding span', () => {
         )
 
         expect(
-            screen.queryByText(
-                /not a reconstruction of the full model context/,
-            ),
+            screen.queryByText(/not the full model context/),
         ).not.toBeInTheDocument()
     })
 
@@ -1003,7 +1015,7 @@ describe('the link from a tool to the agent it started', () => {
 
         expect(
             panel().getByText(
-                'The agent this tool started failed. The tool returned its error as a normal result.',
+                'Its sub-agent failed; the tool returned the error as its result.',
             ),
         ).toBeInTheDocument()
         expect(

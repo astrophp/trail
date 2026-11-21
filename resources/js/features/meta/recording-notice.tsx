@@ -62,9 +62,7 @@ export function RecordingNotice() {
                 setDismissed(true)
             }}
         >
-            Nothing new is being recorded, and runs that have already been
-            recorded stay here. To record again, run{' '}
-            <Code>php artisan trail:resume</Code>.
+            Resume with <Code>php artisan trail:resume</Code>.
         </Notice>
     )
 }

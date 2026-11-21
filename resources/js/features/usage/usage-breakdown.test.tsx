@@ -637,7 +637,11 @@ describe('when the breakdown holds more groups than were read', () => {
         expect(
             screen.getByText('Only part of the usage was read'),
         ).toBeVisible()
-        expect(screen.getByText(/Trail read 1,000 groups/)).toBeVisible()
+        expect(
+            screen.getByText(
+                'The first 1,000 groups. This list may be incomplete.',
+            ),
+        ).toBeVisible()
     })
 
     it('says nothing when every group was read', async () => {
@@ -673,7 +677,7 @@ describe('when the breakdown holds more groups than were read', () => {
 })
 
 describe('an empty range', () => {
-    it('says no usage was recorded, naming the range, and draws no table rows or pagination', async () => {
+    it('says no usage was recorded in the range, and draws no table rows or pagination', async () => {
         mockQuietApi((url) =>
             json(
                 breakdownOf('model', [], {
@@ -686,9 +690,7 @@ describe('an empty range', () => {
         expect(
             await screen.findByText('No recorded usage in this range'),
         ).toBeVisible()
-        expect(
-            screen.getByText(/Nothing was recorded in the last hour\./),
-        ).toBeVisible()
+        expect(screen.getByText('A longer range may show more.')).toBeVisible()
         expect(
             screen.queryByRole('navigation', { name: 'Pagination' }),
         ).not.toBeInTheDocument()

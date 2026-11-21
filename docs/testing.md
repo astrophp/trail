@@ -100,7 +100,7 @@ fields for one span, plus its parent, tokens, cost, input and output.
 ## Capability compatibility gates
 
 The suite characterizes real SDK HTTP mapping and events with scripts below its gateways; it does
-not call live providers. CI pins SDK 1.1.0 and 1.2.0 on Laravel 12 and 13, and runs the full package
+not call live providers. CI pins SDK 1.1.0, 1.2.0 and 1.3.0 on Laravel 12 and 13, and runs the full package
 suite plus an attachment gate on SDK 1.2. SQLite, MySQL and Postgres verify exact quantities,
 nullable migrations, sweeps, mixed operation totals, per-group prices and projection behavior.
 

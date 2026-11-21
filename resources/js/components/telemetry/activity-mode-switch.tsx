@@ -1,9 +1,14 @@
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { ViewSwitch } from '@/components/patterns/view-switch'
 import {
     activityModeLabels,
     activityModes,
     type ActivityMode,
 } from '@/components/telemetry/activity-mode'
+
+const options = activityModes.map((mode) => ({
+    value: mode,
+    label: activityModeLabels[mode],
+}))
 
 type ActivityModeSwitchProps = {
     value: ActivityMode
@@ -18,28 +23,12 @@ export function ActivityModeSwitch({
     className,
 }: ActivityModeSwitchProps) {
     return (
-        <ToggleGroup
-            type="single"
-            variant="outline"
-            size="sm"
-            spacing={0}
-            aria-label="Chart shows"
+        <ViewSwitch
+            label="Chart shows"
+            options={options}
             value={value}
-            onValueChange={(next) => {
-                // Pressing the one that is on reports an empty value.
-                const mode = activityModes.find((one) => one === next)
-
-                if (mode !== undefined) {
-                    onValueChange(mode)
-                }
-            }}
+            onValueChange={onValueChange}
             className={className}
-        >
-            {activityModes.map((mode) => (
-                <ToggleGroupItem key={mode} value={mode}>
-                    {activityModeLabels[mode]}
-                </ToggleGroupItem>
-            ))}
-        </ToggleGroup>
+        />
     )
 }

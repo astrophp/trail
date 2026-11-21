@@ -2,6 +2,7 @@
 
 namespace Astro\Trail\Http\Controllers\Api;
 
+use Astro\Trail\Enums\SpanType;
 use Astro\Trail\Queries\Meta;
 use Astro\Trail\Queries\TimeRange;
 use Astro\Trail\Storage\StaleRuns;
@@ -23,7 +24,7 @@ class MetaController
                 'stale_after' => StaleRuns::timeout(),
                 'traces' => ['any' => $meta->anyTraces(), 'running' => $meta->runningCount()],
                 'filters' => [
-                    'operation_types' => ['agent', 'embedding', 'classification', 'reranking'],
+                    'operation_types' => SpanType::operationValues(),
                     'agents' => $meta->agents($range),
                     'providers' => $meta->providers($range),
                     'models' => $meta->models($range),

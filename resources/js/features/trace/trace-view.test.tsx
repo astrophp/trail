@@ -394,7 +394,7 @@ describe('the execution pane', () => {
         expect(screen.queryByText('1 spans')).not.toBeInTheDocument()
     })
 
-    it('puts the tree and the evidence in one bordered card, and notes what durations include', async () => {
+    it('puts the tree and the evidence in one bordered card, with a hint on what durations include', async () => {
         mockTraceApi({ [id]: completedDetail() })
         await openRun()
 
@@ -412,7 +412,9 @@ describe('the execution pane', () => {
             }),
         ).toBeInTheDocument()
         expect(
-            screen.getByText('Parent durations include their children.'),
+            within(card as HTMLElement).getByRole('button', {
+                name: 'About the timeline',
+            }),
         ).toBeInTheDocument()
         // The tree itself is not a second box inside the card.
         expect(screen.getByRole('tree')).not.toHaveClass('border')
