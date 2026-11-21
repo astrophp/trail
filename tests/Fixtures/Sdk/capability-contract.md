@@ -72,9 +72,13 @@ For two delegation levels, callbacks during the researcher's step observe the ou
 callbacks during the summarizer's step observe the researcher's delegation tool. Only calls
 inside the deepest actual tool observe the summarizer's own invocation and tool ID. The
 five-call context sequence is outer, middle, inner, middle, outer. Context restores on both
-success and exceptions. In automatic delegation, AgentTool catches the deepest agent failure
-and returns `Agent failed: ...`; only that agent and its ordinary tool emit failure events,
-while the two outer agents complete. Ordinary tools do propagate uncaught exceptions. It cannot
+success and exceptions. When the deepest actual tool throws, it emits ToolFailed. Before SDK
+1.4.0 that exception fails the deepest agent, and AgentTool catches the failure and returns
+`Agent failed: ...` (only that agent and its ordinary tool emit failure events, while the two
+outer agents complete). From 1.4.0 the deepest agent answers its model with the failure and
+completes, so no agent fails. From 1.4.1 AgentTool no longer catches a sub-agent's failure:
+the delegation tool emits ToolFailed with the sub-agent's exception, and its parent answers its
+model with the failure. Before 1.4.0 ordinary tools propagate uncaught exceptions. It cannot
 always identify the currently running delegated agent from events alone.
 
 Trail suppression, a rejecting filter and a flush inside the provider callback do not change

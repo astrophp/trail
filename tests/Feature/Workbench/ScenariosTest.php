@@ -8,6 +8,7 @@ use Astro\Trail\Storage\Models\Span;
 use Astro\Trail\Storage\Models\Trace;
 use Astro\Trail\Storage\StaleRuns;
 use Astro\Trail\Tests\Fixtures\Sdk\FakeAnthropic;
+use Astro\Trail\Tests\Fixtures\Sdk\Sdk;
 use Illuminate\Http\Client\Factory;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -89,13 +90,27 @@ function expectations(): array
                 ->and($trace->child_failed)->toBeTrue()
                 ->and($child->status)->toBe(Status::Failed);
         }],
-        'throwing-tool' => [Outcome::FailedAsExpected, 1, function (Collection $traces) {
+        // From SDK 1.4.0 the run carries on after the tool fails.
+        'throwing-tool' => [Sdk::recoversFromToolFailures() ? Outcome::Ok : Outcome::FailedAsExpected, 1, function (Collection $traces) {
             $trace = $traces->sole();
+            $tool = $trace->spans()->where('type', SpanType::Tool)->sole();
+
+            expect($tool->status)->toBe(Status::Failed)
+                ->and($tool->issue_kind)->toBe(IssueKind::ToolError)
+                ->and($tool->error_class)->toBe(CarrierUnavailable::class);
+
+            if (Sdk::recoversFromToolFailures()) {
+                expect($trace->status)->toBe(Status::Completed)
+                    ->and($trace->recovered)->toBeFalse()
+                    ->and($trace->issue_kind)->toBeNull()
+                    ->and($trace->spans()->where('type', SpanType::Step)->count())->toBe(2);
+
+                return;
+            }
 
             expect($trace->status)->toBe(Status::Failed)
                 ->and($trace->issue_kind)->toBe(IssueKind::ToolError)
-                ->and($trace->error_class)->toBe(CarrierUnavailable::class)
-                ->and($trace->spans()->where('type', SpanType::Tool)->sole()->status)->toBe(Status::Failed);
+                ->and($trace->error_class)->toBe(CarrierUnavailable::class);
         }],
         'provider-failure' => [Outcome::FailedAsExpected, 1, function (Collection $traces) {
             $trace = $traces->sole();

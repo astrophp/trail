@@ -5,9 +5,11 @@ use Astro\Trail\Tests\Fixtures\Agents\AssistantAgent;
 use Astro\Trail\Tests\Fixtures\Capture\Captured;
 use Astro\Trail\Tests\Fixtures\Capture\Failures;
 use Astro\Trail\Tests\Fixtures\Sdk\FakeAnthropic;
+use Astro\Trail\Tests\Fixtures\Sdk\Sdk;
 use Astro\Trail\Tests\Fixtures\Storage\DatabaseStoreProbe;
 use Astro\Trail\Tests\Fixtures\Tools\CallbackTool;
 use Astro\Trail\Tests\Fixtures\Tools\LookupTool;
+use Illuminate\Support\Facades\Exceptions;
 use Laravel\Ai\Exceptions\ProviderConnectionException;
 use Laravel\Ai\Exceptions\ProviderOverloadedException;
 use Laravel\Ai\Exceptions\RateLimitedException;
@@ -166,7 +168,33 @@ describe('a tool that throws a failoverable exception', function () {
             Failures::span('tool', 2, null, 'completed'),
             Failures::span('step', 2, 1, 'completed', [], ['input_tokens' => 10, 'output_tokens' => 5]),
         ]);
-    });
+    })->skip(fn () => Sdk::recoversFromToolFailures(), 'From SDK 1.4.0 a tool that throws does not fail over.');
+
+    it('does not mark the run recovered when it carries on after the tool failed, since recovered means a provider failover', function () {
+        Exceptions::fake();
+        $limited = RateLimitedException::forProvider('some-api');
+        $tool = new CallbackTool('flaky', fn () => throw $limited);
+
+        FakeAnthropic::script([
+            FakeAnthropic::toolUse([['id' => 'toolu_1', 'name' => 'flaky', 'input' => []]]),
+            FakeAnthropic::text('ok'),
+        ]);
+
+        (new AssistantAgent([$tool]))->prompt('Hi', provider: $this->providers);
+        $run = ($this->stored)()->assertVolatileColumns();
+
+        $failure = Captured::failure('rate_limited', RateLimitedException::class, 'Application rate limited by AI provider [some-api].', 'tool', null);
+
+        expect(Captured::pick([$run->trace()], Failures::TRACE)[0])->toBe(Failures::trace('completed', false, 4, [], [
+            'input_tokens' => 20, 'output_tokens' => 10, 'unpriced_span_count' => 2,
+        ]))->and(Captured::pick($run->spans(), Failures::SPAN))->toBe([
+            Failures::span('agent', 1, null, 'completed'),
+            Failures::span('step', 1, 0, 'completed', [], ['input_tokens' => 10, 'output_tokens' => 5]),
+            Failures::span('tool', 1, null, 'failed', $failure),
+            Failures::span('step', 1, 1, 'completed', [], ['input_tokens' => 10, 'output_tokens' => 5]),
+        ])->and($run->trace()['provider'])->toBe('anthropic')
+            ->and(Exceptions::reported())->toBe([$limited]);
+    })->skip(fn () => ! Sdk::recoversFromToolFailures(), 'Before SDK 1.4.0 a failoverable tool exception fails over.');
 });
 
 it('leaves the trace running while a failed attempt is followed by another, since only the terminal event ends a run', function () {
@@ -202,4 +230,32 @@ it('leaves the trace running while a failed attempt is followed by another, sinc
             ['type' => 'step', 'attempt' => 2, 'status' => 'completed'],
             ['type' => 'tool', 'attempt' => 2, 'status' => 'running'],
         ])->and(Captured::pick([$run->spans()[2]], array_keys($failure))[0])->toBe($failure);
-});
+})->skip(fn () => Sdk::recoversFromToolFailures(), 'From SDK 1.4.0 a tool that throws does not fail over.');
+
+it('leaves the trace running after a tool failed while the run goes on, since only the terminal event ends a run', function () {
+    Exceptions::fake();
+    $broke = new RuntimeException('Tool broke');
+    $explode = new CallbackTool('explode', fn () => throw $broke);
+    $flush = new CallbackTool('flush', function () {
+        // The run is still in flight: the tool before this one already failed.
+        Trail::flush();
+
+        return 'flushed';
+    });
+
+    FakeAnthropic::script([
+        FakeAnthropic::toolUse([['id' => 'toolu_1', 'name' => 'explode', 'input' => []], ['id' => 'toolu_2', 'name' => 'flush', 'input' => []]]),
+        FakeAnthropic::text('ok'),
+    ]);
+
+    (new AssistantAgent([$explode, $flush]))->prompt('Hi', provider: $this->providers);
+    $run = Captured::read($this->sdk->invocationIds()[0]);
+
+    expect(Captured::pick([$run->trace()], Failures::TRACE)[0]['status'])->toBe('running')
+        ->and(Captured::pick($run->spans(), ['type', 'attempt', 'status']))->toBe([
+            ['type' => 'agent', 'attempt' => 1, 'status' => 'running'],
+            ['type' => 'step', 'attempt' => 1, 'status' => 'completed'],
+            ['type' => 'tool', 'attempt' => 1, 'status' => 'failed'],
+            ['type' => 'tool', 'attempt' => 1, 'status' => 'running'],
+        ])->and(Exceptions::reported())->toBe([$broke]);
+})->skip(fn () => ! Sdk::recoversFromToolFailures(), 'Before SDK 1.4.0 a tool that throws ends the run.');

@@ -10,6 +10,7 @@ use Astro\Trail\Tests\Fixtures\Capture\Failures;
 use Astro\Trail\Tests\Fixtures\Capture\Streams;
 use Astro\Trail\Tests\Fixtures\Capture\ThrowingRecorder;
 use Astro\Trail\Tests\Fixtures\Sdk\FakeAnthropic;
+use Astro\Trail\Tests\Fixtures\Sdk\Sdk;
 use Astro\Trail\Tests\Fixtures\Storage\DatabaseStoreProbe;
 use Astro\Trail\Tests\Fixtures\Tools\CallbackTool;
 use Illuminate\Http\Client\RequestException;
@@ -213,17 +214,27 @@ describe('when the call fails', function () {
     it('is failed with its own error, or the tool\'s before SDK 1.2.2, when the tool fails', function () {
         ($this->parentScript)();
 
-        Failures::thrown(fn () => (new AssistantAgent([($this->embedTool)()]))->prompt('Hi', model: FakeAnthropic::MODEL));
+        // From SDK 1.4.0 the failed tool is handed to the model and the run carries on to its answer.
+        $recovers = Sdk::recoversFromToolFailures();
+        $thrown = Failures::outcome(fn () => (new AssistantAgent([($this->embedTool)()]))->prompt('Hi', model: FakeAnthropic::MODEL));
         $run = ($this->stored)()->assertVolatileColumns(untimed: sdkReportsFailures() ? [] : [3]);
+        $none = ['issue_kind' => null, 'error_class' => null, 'error_source' => null, 'error_http_status' => null];
+
+        $recovers
+            ? expect($thrown)->toBeNull()
+            : expect($thrown)->toBeInstanceOf(RequestException::class);
 
         expect(Captured::pick($run->spans(), ['type', 'status', 'issue_kind', 'error_class', 'error_source', 'error_http_status']))->toBe([
-            ['type' => 'agent', 'status' => 'failed', 'issue_kind' => 'tool_error', 'error_class' => RequestException::class, 'error_source' => 'tool', 'error_http_status' => 500],
-            ['type' => 'step', 'status' => 'completed', 'issue_kind' => null, 'error_class' => null, 'error_source' => null, 'error_http_status' => null],
+            $recovers
+                ? ['type' => 'agent', 'status' => 'completed', ...$none]
+                : ['type' => 'agent', 'status' => 'failed', 'issue_kind' => 'tool_error', 'error_class' => RequestException::class, 'error_source' => 'tool', 'error_http_status' => 500],
+            ['type' => 'step', 'status' => 'completed', ...$none],
             ['type' => 'tool', 'status' => 'failed', 'issue_kind' => 'tool_error', 'error_class' => RequestException::class, 'error_source' => 'tool', 'error_http_status' => 500],
             sdkReportsFailures()
                 ? ['type' => 'embedding', 'status' => 'failed', 'issue_kind' => 'exception', 'error_class' => RequestException::class, 'error_source' => 'run', 'error_http_status' => 500]
                 : ['type' => 'embedding', 'status' => 'failed', 'issue_kind' => 'tool_error', 'error_class' => RequestException::class, 'error_source' => 'tool', 'error_http_status' => 500],
-        ])->and($run->trace()['status'])->toBe('failed');
+            ...($recovers ? [['type' => 'step', 'status' => 'completed', ...$none]] : []),
+        ])->and($run->trace()['status'])->toBe($recovers ? 'completed' : 'failed');
     });
 
     it('is failed with its own error, or none before SDK 1.2.2, when the tool catches it and the run completes', function () {

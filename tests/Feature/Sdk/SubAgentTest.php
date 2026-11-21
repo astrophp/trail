@@ -3,6 +3,8 @@
 use Astro\Trail\Tests\Fixtures\Agents\AssistantAgent;
 use Astro\Trail\Tests\Fixtures\Agents\ResearcherAgent;
 use Astro\Trail\Tests\Fixtures\Agents\SummarizerAgent;
+use Astro\Trail\Tests\Fixtures\Sdk\EventLog;
+use Astro\Trail\Tests\Fixtures\Sdk\Sdk;
 use Astro\Trail\Tests\Fixtures\Tools\CallbackTool;
 use Laravel\Ai\Events\AgentFailed;
 use Laravel\Ai\Events\AgentPrompted;
@@ -300,8 +302,32 @@ describe('two levels of nesting', function () {
     });
 });
 
+/**
+ * How the parent's tool call ends when the sub-agent it delegated to fails: before SDK 1.4.1 the
+ * agent tool catches the failure and returns it as an ordinary "Agent failed" result; from 1.4.1
+ * the tool call fails, with the child's exception, and the model is told the call failed.
+ */
+function failingChildToolEvent(string $tool = 'ResearcherAgent'): string
+{
+    return Sdk::failsAgentToolWithSubAgent() ? "ToolFailed({$tool})" : "ToolInvoked({$tool})";
+}
+
+function expectFailingChildHandedToParent(EventLog $sdk, string $message): void
+{
+    if (Sdk::failsAgentToolWithSubAgent()) {
+        expect($sdk->of(ToolInvoked::class))->toBe([])
+            ->and($sdk->sole(ToolFailed::class)->event->exception)->toBe($sdk->sole(AgentFailed::class)->event->exception)
+            ->and($sdk->sole(ToolFailed::class)->event->exception->getMessage())->toBe($message);
+
+        return;
+    }
+
+    expect($sdk->of(ToolFailed::class))->toBe([])
+        ->and($sdk->sole(ToolInvoked::class)->event->result)->toBe('Agent failed: '.$message);
+}
+
 describe('a failing sub-agent', function () {
-    it('fails only the child and hands the parent an "Agent failed" result', function () {
+    it('fails only the child and hands the failure to the parent, which carries on', function () {
         AssistantAgent::fake([new ToolCall('call_1', 'ResearcherAgent', ['task' => 'Dig']), 'Done']);
         ResearcherAgent::fake([fn () => throw new RuntimeException('boom')]);
 
@@ -317,7 +343,7 @@ describe('a failing sub-agent', function () {
                 'StartingStep#0',
                 'StepFailed#0',
                 'AgentFailed',
-                'ToolInvoked(ResearcherAgent)',
+                failingChildToolEvent(),
                 'StartingStep#1',
                 'StepCompleted#1',
                 'AgentPrompted',
@@ -331,20 +357,22 @@ describe('a failing sub-agent', function () {
             ->and($failed->event->exception->getMessage())->toBe('boom')
             ->and($failed->event->prompt->parentInvocationId)->toBe($parentId)
             ->and($failed->event->prompt->parentToolInvocationId)->toBe($this->sdk->sole(InvokingTool::class)->event->toolInvocationId)
-            ->and($this->sdk->of(ToolFailed::class))->toBe([])
-            ->and($this->sdk->sole(ToolInvoked::class)->event->result)->toBe('Agent failed: boom');
+            ->and($response->toolResults[0]->failed)->toBe(Sdk::failsAgentToolWithSubAgent())
+            ->and($response->toolResults[0]->result)->toBe(Sdk::failsAgentToolWithSubAgent() ? 'The tool call failed: boom' : 'Agent failed: boom');
+
+        expectFailingChildHandedToParent($this->sdk, 'boom');
     });
 
-    it('swallows an Error thrown inside the child the same way', function () {
+    it('hands an Error thrown inside the child to the parent the same way', function () {
         AssistantAgent::fake([new ToolCall('call_1', 'ResearcherAgent', ['task' => 'Dig']), 'Done']);
         ResearcherAgent::fake([fn () => throw new Error('fatal')]);
 
         $response = (new AssistantAgent([new ResearcherAgent]))->prompt('Hi');
 
         expect($response->text)->toBe('Done')
-            ->and($this->sdk->sole(ToolInvoked::class)->event->result)->toBe('Agent failed: fatal')
-            ->and($this->sdk->of(ToolFailed::class))->toBe([])
             ->and($this->sdk->sole(AgentFailed::class)->event->exception)->toBeInstanceOf(Error::class);
+
+        expectFailingChildHandedToParent($this->sdk, 'fatal');
     });
 
     it('lets the exception reach the parent when the child is prompted by hand', function () {
@@ -388,7 +416,41 @@ describe('a failing sub-agent', function () {
             ->and($parentFailed->event->exception)->toBe($caught)
             ->and($this->sdk->of(ToolInvoked::class))->toBe([])
             ->and($parentFailed->parentInvocation)->toBe([null, null]);
-    });
+    })->skip(fn () => Sdk::recoversFromToolFailures(), 'From SDK 1.4.0 a tool that throws does not end the run.');
+
+    it('fails the tool that prompted the child by hand with the child\'s exception, and the parent carries on', function () {
+        AssistantAgent::fake([new ToolCall('call_1', 'ask', ['query' => 'x']), 'Done']);
+        ResearcherAgent::fake([fn () => throw new RuntimeException('boom')]);
+
+        $tool = new CallbackTool('ask', fn () => (new ResearcherAgent)->prompt('Dig')->text);
+
+        $response = (new AssistantAgent([$tool]))->prompt('Hi');
+
+        expect($response->text)->toBe('Done')
+            ->and($this->sdk->timeline())->toBe([
+                'PromptingAgent',
+                'StartingStep#0',
+                'StepCompleted#0',
+                'InvokingTool(ask)',
+                'PromptingAgent',
+                'StartingStep#0',
+                'StepFailed#0',
+                'AgentFailed',
+                'ToolFailed(ask)',
+                'StartingStep#1',
+                'StepCompleted#1',
+                'AgentPrompted',
+            ]);
+
+        [$parentId, $childId] = $this->sdk->invocationIds();
+        $childFailed = $this->sdk->sole(AgentFailed::class);
+        $toolFailed = $this->sdk->sole(ToolFailed::class);
+
+        expect($childFailed->invocationId)->toBe($childId)
+            ->and($toolFailed->invocationId)->toBe($parentId)
+            ->and($toolFailed->event->exception)->toBe($childFailed->event->exception)
+            ->and($this->sdk->of(ToolInvoked::class))->toBe([]);
+    })->skip(fn () => ! Sdk::recoversFromToolFailures(), 'Before SDK 1.4.0 a tool that throws ends the run.');
 });
 
 describe('a streamed parent', function () {
@@ -466,7 +528,7 @@ describe('a streamed parent', function () {
         ]);
     });
 
-    it('reports a failing child as an "Agent failed" result and no ToolFailed', function () {
+    it('hands a failing child to the parent the same way', function () {
         AssistantAgent::fake([new ToolCall('call_1', 'ResearcherAgent', ['task' => 'Dig']), 'Done']);
         ResearcherAgent::fake([fn () => throw new RuntimeException('boom')]);
 
@@ -484,13 +546,13 @@ describe('a streamed parent', function () {
             'StartingStep#0',
             'StepFailed#0',
             'AgentFailed',
-            'ToolInvoked(ResearcherAgent)',
+            failingChildToolEvent(),
             'StartingStep#1',
             'StepCompleted#1',
             'AgentStreamed',
-        ])->and($this->sdk->sole(ToolInvoked::class)->event->result)->toBe('Agent failed: boom')
-            ->and($this->sdk->sole(AgentFailed::class)->invocationId)->toBe($this->sdk->invocationIds()[1])
-            ->and($this->sdk->of(ToolFailed::class))->toBe([]);
+        ])->and($this->sdk->sole(AgentFailed::class)->invocationId)->toBe($this->sdk->invocationIds()[1]);
+
+        expectFailingChildHandedToParent($this->sdk, 'boom');
     });
 
     it('still scopes an ordinary tool, and an agent prompted by hand inside it, to the parent ids', function () {

@@ -8,11 +8,13 @@ use Astro\Trail\Tests\Fixtures\Capture\Captured;
 use Astro\Trail\Tests\Fixtures\Capture\Failures;
 use Astro\Trail\Tests\Fixtures\Capture\Streams;
 use Astro\Trail\Tests\Fixtures\Sdk\FakeAnthropic;
+use Astro\Trail\Tests\Fixtures\Sdk\Sdk;
 use Astro\Trail\Tests\Fixtures\Storage\DatabaseStoreProbe;
 use Astro\Trail\Tests\Fixtures\Tools\CallbackTool;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Embeddings;
 use Laravel\Ai\Events\AgentFailed;
@@ -21,6 +23,7 @@ use Laravel\Ai\Events\InvokingTool;
 use Laravel\Ai\Events\PromptingAgent;
 use Laravel\Ai\Events\StartingStep;
 use Laravel\Ai\Events\StepCompleted;
+use Laravel\Ai\Events\ToolFailed;
 use Laravel\Ai\Prompts\AgentPrompt;
 
 /*
@@ -238,7 +241,10 @@ describe('a sub-agent that fails', function () {
         $response = (new AssistantAgent([new ResearcherAgent]))->prompt('Hi', model: FakeAnthropic::MODEL);
         $run = ($this->stored)()->assertVolatileColumns();
 
-        $failure = Captured::failure('exception', RequestException::class, $this->sdk->sole(AgentFailed::class)->event->exception->getMessage(), 'step', 500);
+        $message = $this->sdk->sole(AgentFailed::class)->event->exception->getMessage();
+        $failure = Captured::failure('exception', RequestException::class, $message, 'step', 500);
+        // Before SDK 1.4.1 the agent tool returns the child's failure as its result; from 1.4.1 the tool call fails with it.
+        $handedOver = Sdk::failsAgentToolWithSubAgent();
 
         expect($response->text)->toBe('Done')
             ->and(Captured::pick([$run->trace()], [...Failures::TRACE, 'child_failed'])[0])->toBe(Failures::trace('completed', false, 6, [], [
@@ -247,11 +253,19 @@ describe('a sub-agent that fails', function () {
             ->and(Captured::pick($run->spans(), Failures::SPAN))->toBe([
                 Failures::span('agent', 1, null, 'completed'),
                 Failures::span('step', 1, 0, 'completed', [], ['input_tokens' => 10, 'output_tokens' => 5]),
-                Failures::span('tool', 1, null, 'completed'),
+                $handedOver
+                    ? Failures::span('tool', 1, null, 'failed', Captured::failure('tool_error', RequestException::class, $message, 'tool', 500))
+                    : Failures::span('tool', 1, null, 'completed'),
                 Failures::span('agent', 1, null, 'failed', $failure),
                 Failures::span('step', 1, 0, 'failed', $failure),
                 Failures::span('step', 1, 1, 'completed', [], ['input_tokens' => 10, 'output_tokens' => 5]),
-            ])->and($run->spans()[2]['output']['result'])->toStartWith('Agent failed: HTTP request returned status code 500');
+            ]);
+
+        if ($handedOver) {
+            expect($run->spans()[2]['output'])->toBeNull();
+        } else {
+            expect($run->spans()[2]['output']['result'])->toStartWith('Agent failed: HTTP request returned status code 500');
+        }
     });
 
     it('fails the tool, the parent and the trace when a hand-prompted child throws', function () {
@@ -274,7 +288,36 @@ describe('a sub-agent that fails', function () {
             ['type' => 'agent', 'status' => 'failed', 'issue_kind' => 'exception', 'error_source' => 'step'],
             ['type' => 'step', 'status' => 'failed', 'issue_kind' => 'exception', 'error_source' => 'step'],
         ]);
-    });
+    })->skip(fn () => Sdk::recoversFromToolFailures(), 'From SDK 1.4.0 a tool that throws does not end the run.');
+
+    it('fails the tool and the child, not the parent, when a hand-prompted child throws and the parent carries on', function () {
+        Exceptions::fake();
+        FakeAnthropic::script([($this->delegating)('ask'), FakeAnthropic::error(500, 'Server error'), FakeAnthropic::text('Done')]);
+
+        $ask = new CallbackTool('ask', fn () => (new ResearcherAgent)->prompt('Dig')->text);
+
+        (new AssistantAgent([$ask]))->prompt('Hi', model: FakeAnthropic::MODEL);
+        $run = ($this->stored)()->assertVolatileColumns();
+
+        expect(Captured::pick([$run->trace()], [...Failures::TRACE, 'child_failed'])[0])->toBe(
+            Failures::trace('completed', false, 6, [], ['input_tokens' => 20, 'output_tokens' => 10, 'unpriced_span_count' => 2]) + ['child_failed' => true],
+        )->and(Captured::pick($run->spans(), ['type', 'status', 'issue_kind', 'error_source']))->toBe([
+            ['type' => 'agent', 'status' => 'completed', 'issue_kind' => null, 'error_source' => null],
+            ['type' => 'step', 'status' => 'completed', 'issue_kind' => null, 'error_source' => null],
+            ['type' => 'tool', 'status' => 'failed', 'issue_kind' => 'tool_error', 'error_source' => 'tool'],
+            ['type' => 'agent', 'status' => 'failed', 'issue_kind' => 'exception', 'error_source' => 'step'],
+            ['type' => 'step', 'status' => 'failed', 'issue_kind' => 'exception', 'error_source' => 'step'],
+            ['type' => 'step', 'status' => 'completed', 'issue_kind' => null, 'error_source' => null],
+        ]);
+
+        // The tool and the child failed with the same exception, which the SDK reports once; Trail reports nothing.
+        $boom = $this->sdk->sole(AgentFailed::class)->event->exception;
+        $error = ['error_class' => RequestException::class, 'error_message' => $boom->getMessage(), 'error_http_status' => 500];
+
+        expect($this->sdk->sole(ToolFailed::class)->event->exception)->toBe($boom)
+            ->and(Captured::pick(array_slice($run->spans(), 2, 3), array_keys($error)))->toBe([$error, $error, $error])
+            ->and(Exceptions::reported())->toBe([$boom]);
+    })->skip(fn () => ! Sdk::recoversFromToolFailures(), 'Before SDK 1.4.0 a tool that throws ends the run.');
 
     it('records a child that fails over and recovers, leaving the root run unrecovered', function () {
         FakeAnthropic::script([($this->delegating)('ask'), FakeAnthropic::error(429), FakeAnthropic::text('found it'), FakeAnthropic::text('Done')]);
@@ -576,6 +619,7 @@ describe('embeddings inside a sub-agent', function () {
         FakeAnthropic::script([
             ($this->delegating)('ResearcherAgent'),
             FakeAnthropic::toolUse([['id' => 'toolu_2', 'name' => 'embed', 'input' => ['query' => 'x']]]),
+            ...FakeAnthropic::afterToolFailure(FakeAnthropic::text('Nothing found')),
             FakeAnthropic::text('Done'),
         ]);
 
@@ -583,18 +627,21 @@ describe('embeddings inside a sub-agent', function () {
 
         (new AssistantAgent([new ResearcherAgent([$embed])]))->prompt('Hi');
         $run = ($this->stored)()->assertVolatileColumns(untimed: sdkReportsFailures() ? [] : [6]);
+        // Before SDK 1.4.0 the tool's failure ends the child; from 1.4.0 the child carries on to another step.
+        $recovers = Sdk::recoversFromToolFailures();
 
         expect(Captured::pick($run->spans(), ['type', 'status', 'error_source']))->toBe([
             ['type' => 'agent', 'status' => 'completed', 'error_source' => null],
             ['type' => 'step', 'status' => 'completed', 'error_source' => null],
             ['type' => 'tool', 'status' => 'completed', 'error_source' => null],
-            ['type' => 'agent', 'status' => 'failed', 'error_source' => 'tool'],
+            $recovers ? ['type' => 'agent', 'status' => 'completed', 'error_source' => null] : ['type' => 'agent', 'status' => 'failed', 'error_source' => 'tool'],
             ['type' => 'step', 'status' => 'completed', 'error_source' => null],
             ['type' => 'tool', 'status' => 'failed', 'error_source' => 'tool'],
             ['type' => 'embedding', 'status' => 'failed', 'error_source' => sdkReportsFailures() ? 'run' : 'tool'],
+            ...($recovers ? [['type' => 'step', 'status' => 'completed', 'error_source' => null]] : []),
             ['type' => 'step', 'status' => 'completed', 'error_source' => null],
         ])->and($run->rawSpans()[6]['parent_id'])->toBe($run->spanId(5))
-            ->and(Captured::pick([$run->trace()], ['status', 'child_failed'])[0])->toBe(['status' => 'completed', 'child_failed' => true]);
+            ->and(Captured::pick([$run->trace()], ['status', 'child_failed'])[0])->toBe(['status' => 'completed', 'child_failed' => ! $recovers]);
     });
 
     it('nests an embeddings call made after an inner tool returned under the outer tool that is still running', function () {
@@ -680,7 +727,8 @@ describe('sub-agents in more shapes', function () {
                 ['type' => 'tool', 'agent_class' => null, 'status' => 'completed'],
                 ['type' => 'agent', 'agent_class' => ResearcherAgent::class, 'status' => 'completed'],
                 ['type' => 'step', 'agent_class' => null, 'status' => 'completed'],
-                ['type' => 'tool', 'agent_class' => null, 'status' => 'completed'],
+                // From SDK 1.4.1 the agent tool fails with its sub-agent.
+                ['type' => 'tool', 'agent_class' => null, 'status' => Sdk::failsAgentToolWithSubAgent() ? 'failed' : 'completed'],
                 ['type' => 'agent', 'agent_class' => SummarizerAgent::class, 'status' => 'failed'],
                 ['type' => 'step', 'agent_class' => null, 'status' => 'failed'],
                 ['type' => 'step', 'agent_class' => null, 'status' => 'completed'],
@@ -698,7 +746,7 @@ describe('sub-agents in more shapes', function () {
             ->and(Captured::pick($run->spans(), ['type', 'status']))->toBe([
                 ['type' => 'agent', 'status' => 'completed'],
                 ['type' => 'step', 'status' => 'completed'],
-                ['type' => 'tool', 'status' => 'completed'],
+                ['type' => 'tool', 'status' => Sdk::failsAgentToolWithSubAgent() ? 'failed' : 'completed'],
                 ['type' => 'agent', 'status' => 'failed'],
                 ['type' => 'step', 'status' => 'failed'],
                 ['type' => 'step', 'status' => 'completed'],

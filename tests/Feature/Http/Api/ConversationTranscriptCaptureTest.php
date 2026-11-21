@@ -12,10 +12,12 @@ use Astro\Trail\Tests\Fixtures\Capture\Hardening\Replay;
 use Astro\Trail\Tests\Fixtures\Capture\Streams;
 use Astro\Trail\Tests\Fixtures\Conversations\ConversationParticipant;
 use Astro\Trail\Tests\Fixtures\Sdk\FakeAnthropic;
+use Astro\Trail\Tests\Fixtures\Sdk\Sdk;
 use Astro\Trail\Tests\Fixtures\Tools\ApprovalTool;
 use Astro\Trail\Tests\Fixtures\Tools\CallbackTool;
 use Astro\Trail\Tests\Fixtures\Tools\LookupTool;
 use Illuminate\Http\Client\RequestException;
+use Illuminate\Support\Facades\Exceptions;
 use Laravel\Ai\Approvals\Decision;
 use Laravel\Ai\Approvals\Decisions;
 use Laravel\Ai\Events\StartingStep;
@@ -194,7 +196,27 @@ describe('a run with tools', function () {
             ->and($turn['messages'][1]['tool_calls'][0])->toMatchArray(['link' => 'linked'])
             ->and($turn['messages'][1]['tool_calls'][0]['span'])->toMatchArray(['status' => 'failed', 'issue_kind' => 'tool_error'])
             ->and(array_column($turn['messages'], 'part'))->toBe(['prompt', 'activity']);
-    });
+    })->skip(fn () => Sdk::recoversFromToolFailures(), 'From SDK 1.4.0 a tool that throws does not end the run.');
+
+    it('shows a tool that failed as the span it is, and the failure the model was told of, in a turn that carried on', function () {
+        Exceptions::fake();
+        FakeAnthropic::script([
+            FakeAnthropic::toolUse([['id' => 'toolu_1', 'name' => 'boom', 'input' => ['query' => 'a']]], text: 'Trying'),
+            FakeAnthropic::text('The disk is full.'),
+        ]);
+
+        $full = new RuntimeException('Disk full');
+        $boom = new CallbackTool('boom', fn () => throw $full);
+        (new AssistantAgent([$boom]))->prompt('Hi', model: FakeAnthropic::MODEL);
+        $turn = ($this->turnOf)($this->sdk->invocationIds()[0]);
+
+        expect($turn['trace'])->toMatchArray(['status' => 'completed', 'issue_kind' => null])
+            ->and($turn['messages'][1]['tool_calls'][0])->toMatchArray(['link' => 'linked'])
+            ->and($turn['messages'][1]['tool_calls'][0]['span'])->toMatchArray(['status' => 'failed', 'issue_kind' => 'tool_error'])
+            ->and($turn['messages'][2]['tool_results'][0]['result'])->toBe('The tool call failed: Disk full')
+            ->and(captureOutline($turn))->toBe([['prompt', 'user', 'Hi'], ['activity', 'assistant', 'Trying'], ['activity', 'tool_result', null], ['response', 'assistant', 'The disk is full.']])
+            ->and(Exceptions::reported())->toBe([$full]);
+    })->skip(fn () => ! Sdk::recoversFromToolFailures(), 'Before SDK 1.4.0 a tool that throws ends the run.');
 });
 
 describe('a remembered conversation', function () {
@@ -378,7 +400,7 @@ describe('a delegation', function () {
         expect(array_column($turn['messages'], 'content'))->toBe(['Hi', '', null, 'Done']);
     });
 
-    it('shows the tool of a sub-agent that failed as completed, and the agent as failed', function () {
+    it('shows the agent of a sub-agent that failed as failed, and its tool as the SDK ended it', function () {
         FakeAnthropic::script([
             FakeAnthropic::toolUse([['id' => 'toolu_1', 'name' => 'ResearcherAgent', 'input' => ['task' => 'Dig']]]),
             FakeAnthropic::error(500, 'Server error'),
@@ -387,11 +409,13 @@ describe('a delegation', function () {
 
         $turn = ($this->turnOf)((new AssistantAgent([new ResearcherAgent]))->prompt('Hi', model: FakeAnthropic::MODEL)->invocationId);
         $call = $turn['messages'][1]['tool_calls'][0];
+        // Before SDK 1.4.1 the agent tool returns the sub-agent's failure as its result; from 1.4.1 the tool call fails with it.
+        $failsTool = Sdk::failsAgentToolWithSubAgent();
 
         expect($turn['trace'])->toMatchArray(['status' => 'completed', 'child_failed' => true])
-            ->and($call['span']['status'])->toBe('completed')
+            ->and($call['span'])->toMatchArray($failsTool ? ['status' => 'failed', 'issue_kind' => 'tool_error'] : ['status' => 'completed', 'issue_kind' => null])
             ->and($call['agent'])->toMatchArray(['status' => 'failed', 'name' => 'ResearcherAgent'])
-            ->and($turn['messages'][2]['tool_results'][0]['result'])->toStartWith('Agent failed: ');
+            ->and($turn['messages'][2]['tool_results'][0]['result'])->toStartWith($failsTool ? 'The tool call failed: HTTP request returned status code 500' : 'Agent failed: HTTP request returned status code 500');
     });
 });
 
