@@ -281,12 +281,21 @@ describe('a recorded run', function () {
 
     it('shows a sub-agent that failed under a run that carried on', function () {
         FakeAnthropic::script([
-            FakeAnthropic::toolUse([['id' => 'toolu_1', 'name' => 'ResearcherAgent', 'input' => ['task' => 'Dig']]]),
+            FakeAnthropic::toolUse([['id' => 'toolu_1', 'name' => 'ask', 'input' => []]]),
             FakeAnthropic::error(500, 'Server error'),
             FakeAnthropic::text('Done'),
         ]);
 
-        (new AssistantAgent([new ResearcherAgent]))->prompt('Hi', model: FakeAnthropic::MODEL);
+        // The tool catches the sub-agent's failure itself, so the parent carries on whatever the SDK does with a failed agent tool.
+        $ask = new CallbackTool('ask', function () {
+            try {
+                return (new ResearcherAgent)->prompt('Dig', model: FakeAnthropic::MODEL)->text;
+            } catch (RequestException $exception) {
+                return 'Agent failed: '.$exception->getMessage();
+            }
+        });
+
+        (new AssistantAgent([$ask]))->prompt('Hi', model: FakeAnthropic::MODEL);
         $body = ($this->shown)();
         [$root, , $tool, $child, $childStep] = $body['data']['spans'];
 

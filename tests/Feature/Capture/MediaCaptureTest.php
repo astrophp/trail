@@ -6,8 +6,10 @@ use Astro\Trail\Pricing\CostCalculator;
 use Astro\Trail\Storage\Models\Span;
 use Astro\Trail\Storage\Models\Trace;
 use Astro\Trail\Tests\Fixtures\Agents\AssistantAgent;
+use Astro\Trail\Tests\Fixtures\Capture\Failures;
 use Astro\Trail\Tests\Fixtures\Capture\ThrowingRecorder;
 use Astro\Trail\Tests\Fixtures\Sdk\FakeAnthropic;
+use Astro\Trail\Tests\Fixtures\Sdk\Sdk;
 use Astro\Trail\Tests\Fixtures\Tools\CallbackTool;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Event;
@@ -278,7 +280,7 @@ describe('inside a tool', function () {
         }
     })->with('media calls');
 
-    it('fails with its own error, or is left incomplete before SDK 1.2.2, when the failure fails the run', function (string $type) {
+    it('fails with its own error, or is left incomplete before SDK 1.2.2, when the failure fails the tool', function (string $type) {
         fakeOpenAiMedia(500);
         FakeAnthropic::script([FakeAnthropic::toolUse([['id' => 'toolu_1', 'name' => 'make', 'input' => []]]), FakeAnthropic::text('Done')]);
         $tool = new CallbackTool('make', function () use ($type) {
@@ -287,11 +289,19 @@ describe('inside a tool', function () {
             return 'unreachable';
         });
 
-        expect(fn () => (new AssistantAgent([$tool]))->prompt('Hi', model: FakeAnthropic::MODEL))->toThrow(RequestException::class);
+        // From SDK 1.4.0 the failed tool is handed to the model and the run carries on to its answer.
+        $thrown = Failures::outcome(fn () => (new AssistantAgent([$tool]))->prompt('Hi', model: FakeAnthropic::MODEL));
         Trail::flush();
         $span = Span::query()->where('type', $type)->sole();
+        $tool = Span::query()->where('type', 'tool')->sole();
 
-        expect(Trace::query()->sole()->status->value)->toBe('failed')
+        Sdk::recoversFromToolFailures()
+            ? expect($thrown)->toBeNull()
+            : expect($thrown)->toBeInstanceOf(RequestException::class);
+
+        expect(Trace::query()->sole()->status->value)->toBe(Sdk::recoversFromToolFailures() ? 'completed' : 'failed')
+            ->and($tool->status->value)->toBe('failed')
+            ->and($tool->error_class)->toBe(RequestException::class)
             ->and($span->status->value)->toBe(sdkReportsFailures() ? 'failed' : 'incomplete')
             ->and($span->error_class)->toBe(sdkReportsFailures() ? RequestException::class : null);
     })->with('media calls');

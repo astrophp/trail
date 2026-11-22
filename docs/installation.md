@@ -4,7 +4,7 @@
 
 - PHP 8.3 or newer
 - Laravel 12 or 13
-- `laravel/ai` 1.1 or newer. The test suite runs against 1.1, 1.2 and 1.3.
+- `laravel/ai` 1.1 or newer. The test suite runs against 1.1.0, 1.2.0, 1.3.0, 1.4.0 and 1.4.1.
 - A database Trail can write to: SQLite, MySQL or Postgres. The test suite runs on all three.
 
 ## Install
