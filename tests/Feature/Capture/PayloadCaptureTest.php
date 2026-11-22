@@ -111,18 +111,16 @@ describe('a secret', function () {
     });
 
     it('in an exception message never reaches the database', function () {
-        FakeAnthropic::script([($this->toolTurn)()]);
+        AssistantAgent::fake([fn () => throw new RuntimeException('failed with '.Secrets::ERROR)]);
 
-        $tool = new CallbackTool('lookup', fn () => throw new RuntimeException('failed with '.Secrets::ERROR));
-
-        Failures::thrown(fn () => (new AssistantAgent([$tool]))->prompt('Hi', model: FakeAnthropic::MODEL));
+        Failures::thrown(fn () => (new AssistantAgent)->prompt('Hi', model: FakeAnthropic::MODEL));
         $run = ($this->stored)();
 
         expect(($this->rows)())->not->toContain(Secrets::ERROR)
             ->and($run->rawTrace()['error_message'])->toBe('failed with [redacted]')
             ->and($run->rawSpans()[0]['error_message'])->toBe('failed with [redacted]')
-            ->and($run->rawSpans()[2]['error_message'])->toBe('failed with [redacted]')
-            ->and(($this->flags)($run))->toBe([true, false, true]);
+            ->and($run->rawSpans()[1]['error_message'])->toBe('failed with [redacted]')
+            ->and(($this->flags)($run))->toBe([true, true]);
     });
 
     it('in a pending approval, its arguments and its reason, never reaches the database', function () {
@@ -155,16 +153,14 @@ describe('truncation', function () {
 
     it('cuts an exception message too', function () {
         config(['trail.capture.max_length' => 30]);
-        FakeAnthropic::script([($this->toolTurn)()]);
+        AssistantAgent::fake([fn () => throw new RuntimeException(str_repeat('e', 100))]);
 
-        $tool = new CallbackTool('lookup', fn () => throw new RuntimeException(str_repeat('e', 100)));
-
-        Failures::thrown(fn () => (new AssistantAgent([$tool]))->prompt('Hi', model: FakeAnthropic::MODEL));
+        Failures::thrown(fn () => (new AssistantAgent)->prompt('Hi', model: FakeAnthropic::MODEL));
         $run = ($this->stored)();
 
         expect($run->rawTrace()['error_message'])->toBe(str_repeat('e', 30))
-            ->and($run->rawSpans()[2]['metadata'])->toBe(['truncated' => ['error_message' => 100]])
-            ->and(($this->flags)($run, 'truncated'))->toBe([true, false, true]);
+            ->and($run->rawSpans()[1]['metadata'])->toBe(['truncated' => ['error_message' => 100]])
+            ->and(($this->flags)($run, 'truncated'))->toBe([true, true]);
     });
 });
 
@@ -216,14 +212,14 @@ describe('with payload capture off', function () {
         expect($paused->rawTrace()['metadata']['pending_approvals'])->toBe([['tool_call_id' => 'toolu_1', 'tool' => 'delete_records']]);
 
         $this->sdk->clear();
-        FakeAnthropic::script([($this->toolTurn)()]);
-        $tool = new CallbackTool('lookup', fn () => throw new RuntimeException('failed with '.Secrets::ERROR));
+        AssistantAgent::fake([fn () => throw new RuntimeException('failed with '.Secrets::ERROR)]);
 
-        Failures::thrown(fn () => (new AssistantAgent([$tool]))->prompt('Hi', model: FakeAnthropic::MODEL));
+        Failures::thrown(fn () => (new AssistantAgent)->prompt('Hi', model: FakeAnthropic::MODEL));
         $failed = ($this->stored)();
 
         expect($failed->rawTrace()['error_message'])->toBe('failed with [redacted]')
-            ->and($failed->rawSpans()[2]['input'])->toBeNull();
+            ->and($failed->rawSpans()[1]['error_message'])->toBe('failed with [redacted]')
+            ->and($failed->rawSpans()[1]['input'])->toBeNull();
     });
 
     it('does not read the system prompt when it is turned off', function () {

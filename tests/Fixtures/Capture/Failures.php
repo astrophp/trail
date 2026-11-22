@@ -32,6 +32,20 @@ final class Failures
     }
 
     /**
+     * Run the callback and return what it throws, or null when it returns.
+     */
+    public static function outcome(Closure $run): ?Throwable
+    {
+        try {
+            $run();
+        } catch (Throwable $exception) {
+            return $exception;
+        }
+
+        return null;
+    }
+
+    /**
      * A span's expected columns, with the five error columns and no usage unless given.
      *
      * @param  array<string, mixed>  $extra

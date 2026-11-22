@@ -13,6 +13,7 @@ use Astro\Trail\Tests\Fixtures\Capture\Streams;
 use Astro\Trail\Tests\Fixtures\Capture\ThrowingRecorder;
 use Astro\Trail\Tests\Fixtures\Capture\ThrowingStore;
 use Astro\Trail\Tests\Fixtures\Sdk\FakeAnthropic;
+use Astro\Trail\Tests\Fixtures\Sdk\Sdk;
 use Astro\Trail\Tests\Fixtures\Storage\DatabaseStoreProbe;
 use Astro\Trail\Tests\Fixtures\Tools\CallbackTool;
 use Astro\Trail\Tests\Fixtures\Tools\LookupTool;
@@ -21,6 +22,7 @@ use Illuminate\Support\Facades\Exceptions;
 use Laravel\Ai\Events\AgentFailed;
 use Laravel\Ai\Events\StepCompleted;
 use Laravel\Ai\Events\StepFailed;
+use Laravel\Ai\Events\ToolFailed;
 use Laravel\Ai\Events\ToolInvoked;
 use Laravel\Ai\Exceptions\RateLimitedException;
 use Laravel\Ai\Responses\Data\ToolCall;
@@ -111,15 +113,20 @@ it('leaves a failing tool\'s own exception untouched when every Trail listener t
     Exceptions::fake();
     $this->app->instance(Recorder::class, new ThrowingRecorder($this->app, $this->app->make(CostCalculator::class)));
 
-    FakeAnthropic::script([FakeAnthropic::toolUse([['id' => 'toolu_1', 'name' => 'explode', 'input' => []]])]);
+    FakeAnthropic::script([
+        FakeAnthropic::toolUse([['id' => 'toolu_1', 'name' => 'explode', 'input' => []]]),
+        ...FakeAnthropic::afterToolFailure(FakeAnthropic::text('Sorry')),
+    ]);
 
-    $tool = new CallbackTool('explode', fn () => throw new LogicException('Tool broke'));
-    $thrown = Failures::thrown(fn () => (new AssistantAgent([$tool]))->prompt('Hi'));
+    $broke = new LogicException('Tool broke');
+    $tool = new CallbackTool('explode', fn () => throw $broke);
 
-    expect($thrown)->toBeInstanceOf(LogicException::class)
-        ->and($thrown->getMessage())->toBe('Tool broke');
-
-    Exceptions::assertReported(fn (RuntimeException $e) => $e->getMessage() === 'toolFailed failed');
+    // Before SDK 1.4.0 the caller gets the tool's exception; from 1.4.0 the SDK reports it and hands it to the model.
+    expect(Failures::outcome(fn () => (new AssistantAgent([$tool]))->prompt('Hi')))->toBe(Sdk::recoversFromToolFailures() ? null : $broke)
+        ->and($this->sdk->sole(ToolFailed::class)->event->exception)->toBe($broke)
+        ->and(array_map(fn (Throwable $e) => $e->getMessage(), Exceptions::reported()))->toBe(Sdk::recoversFromToolFailures()
+            ? ['agentStarting failed', 'stepStarting failed', 'stepCompleted failed', 'toolInvoking failed', 'toolFailed failed', 'Tool broke', 'stepStarting failed', 'stepCompleted failed', 'agentCompleted failed']
+            : ['agentStarting failed', 'stepStarting failed', 'stepCompleted failed', 'toolInvoking failed', 'toolFailed failed', 'agentFailed failed']);
 });
 
 it('leaves the failover untouched when the listener on it throws', function () {

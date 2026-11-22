@@ -204,9 +204,9 @@ describe('very long names', function () {
 
         $agent = "Hardening\\LongAgent{$suffix}";
         $exception = "Hardening\\LongException{$suffix}";
-        $tool = new CallbackTool(str_repeat('t', 500), fn () => throw new $exception('too long'));
+        $tool = new CallbackTool(str_repeat('t', 500), fn () => 'ran');
 
-        $agent::fake([new ToolCall('call_1', str_repeat('t', 500), []), 'Done']);
+        $agent::fake([new ToolCall('call_1', str_repeat('t', 500), []), fn () => throw new $exception('too long')]);
 
         try {
             (new $agent([$tool]))->prompt('Hi');
@@ -220,6 +220,7 @@ describe('very long names', function () {
 
         expect($this->probe->trace($id)['status'])->not->toBe('running')
             ->and(strlen($this->probe->trace($id)['agent_class']))->toBeLessThanOrEqual(255)
+            ->and(strlen($this->probe->trace($id)['error_class']))->toBe(255)
             ->and($lengths->max())->toBeLessThanOrEqual(255)
             ->and($this->reports->count())->toBe(0);
     });

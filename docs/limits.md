@@ -7,8 +7,10 @@ find out from a missing number.
 
 Trail records what the SDK reports through its events, so a few things cannot be recorded:
 
-- When an agent remembers conversations and generates a title for a new one, the SDK makes an
-  extra model call that no event reports. It is neither recorded nor priced.
+- Before `laravel/ai` 1.4.0, when an agent remembers conversations and generates a title for a new
+  one, the SDK makes an extra model call that no event reports. It is neither recorded nor priced.
+  From 1.4.0 the title is an agent run of its own, recorded and priced as a child run of the run
+  that opened the conversation.
 - Embeddings served from the SDK's embeddings cache fire no events, so they do not appear.
 - Image, audio and transcription calls are recorded, but never their image or audio bytes.
 

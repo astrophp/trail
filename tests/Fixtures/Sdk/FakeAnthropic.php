@@ -101,6 +101,18 @@ class FakeAnthropic
     }
 
     /**
+     * The turns a run asks for after one of its tools throws: the given turns where the SDK answers
+     * the model with the failure and asks for another step, none where the failure ends the run.
+     *
+     * @param  array<string, mixed>  ...$turns
+     * @return list<array<string, mixed>>
+     */
+    public static function afterToolFailure(array ...$turns): array
+    {
+        return Sdk::recoversFromToolFailures() ? array_values($turns) : [];
+    }
+
+    /**
      * The decoded JSON bodies the gateway sent, in order.
      *
      * @return list<array<string, mixed>>

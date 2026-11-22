@@ -5,6 +5,7 @@ use Astro\Trail\Tests\Fixtures\Agents\RememberingAgent;
 use Astro\Trail\Tests\Fixtures\Conversations\ConversationParticipant;
 use Astro\Trail\Tests\Fixtures\Sdk\FakeAnthropic;
 use Astro\Trail\Tests\Fixtures\Sdk\RecordedEvent;
+use Astro\Trail\Tests\Fixtures\Sdk\Sdk;
 use Astro\Trail\Tests\Fixtures\Tools\LookupTool;
 use Illuminate\Http\Client\RequestException;
 use Laravel\Ai\Events\AgentFailed;
@@ -306,14 +307,17 @@ describe('conversation title generation', function () {
         config(['ai.conversations.generate_title' => true]);
     });
 
-    it('makes one more model call for a new conversation that no SDK event reports', function () {
+    it('makes one more model call for a new conversation, which no event reports before SDK 1.4.0', function () {
         $anthropic = FakeAnthropic::script([FakeAnthropic::text('Hello'), FakeAnthropic::text('A Short Title')]);
 
         $response = (new RememberingAgent)->forUser($this->user)->prompt('Hi');
 
         $requests = $anthropic->requests();
 
-        expect($this->sdk->timeline())->toBe(['PromptingAgent', 'StartingStep#0', 'StepCompleted#0', 'AgentPrompted'])
+        expect($this->sdk->timeline())->toBe(Sdk::reportsTitleCallAsAgentRun()
+            // The title is an agent run of its own, inside the conversation's run and before it ends.
+            ? ['PromptingAgent', 'StartingStep#0', 'StepCompleted#0', 'PromptingAgent', 'StartingStep#0', 'StepCompleted#0', 'AgentPrompted', 'AgentPrompted']
+            : ['PromptingAgent', 'StartingStep#0', 'StepCompleted#0', 'AgentPrompted'])
             ->and($requests)->toHaveCount(2)
             ->and($anthropic->remaining())->toBe(0)
             ->and($requests[0]['system'])->toBe('You remember conversations.')
@@ -322,6 +326,18 @@ describe('conversation title generation', function () {
             ->and($response->usage->inputTokens)->toBe(10)
             ->and(Conversation::query()->findOrFail($response->conversationId)->title)->toBe('A Short Title');
     });
+
+    it('runs the title as a sub-agent of the run that opened the conversation, outside any tool call', function () {
+        FakeAnthropic::script([FakeAnthropic::text('Hello'), FakeAnthropic::text('A Short Title')]);
+
+        (new RememberingAgent)->forUser($this->user)->prompt('Hi');
+
+        [$conversation, $title] = $this->sdk->of(PromptingAgent::class);
+
+        expect($title->event->prompt->parentInvocationId)->toBe($conversation->invocationId)
+            ->and($title->event->prompt->parentToolInvocationId)->toBeNull()
+            ->and($title->event->prompt->agent)->not->toBeInstanceOf(RememberingAgent::class);
+    })->skip(fn () => ! Sdk::reportsTitleCallAsAgentRun(), 'Before SDK 1.4.0 the title call fires no event.');
 
     it('does not call the model for a title when the conversation already exists', function () {
         $anthropic = FakeAnthropic::script([FakeAnthropic::text('One'), FakeAnthropic::text('A Short Title'), FakeAnthropic::text('Two')]);
@@ -336,12 +352,14 @@ describe('conversation title generation', function () {
             ->and($anthropic->requests()[2]['system'])->toBe('You remember conversations.');
     });
 
-    it('falls back to the prompt as the title and fires no failure event when the title call fails', function () {
+    it('falls back to the prompt as the title when the title call fails, which fails only the title run from SDK 1.4.0', function () {
         $anthropic = FakeAnthropic::script([FakeAnthropic::text('Hello'), FakeAnthropic::error(500, 'Provider down')]);
 
         $response = (new RememberingAgent)->forUser($this->user)->prompt('Hi');
 
-        expect($this->sdk->timeline())->toBe(['PromptingAgent', 'StartingStep#0', 'StepCompleted#0', 'AgentPrompted'])
+        expect($this->sdk->timeline())->toBe(Sdk::reportsTitleCallAsAgentRun()
+            ? ['PromptingAgent', 'StartingStep#0', 'StepCompleted#0', 'PromptingAgent', 'StartingStep#0', 'StepFailed#0', 'AgentFailed', 'AgentPrompted']
+            : ['PromptingAgent', 'StartingStep#0', 'StepCompleted#0', 'AgentPrompted'])
             ->and($anthropic->requests())->toHaveCount(2)
             ->and(Conversation::query()->findOrFail($response->conversationId)->title)->toBe('Hi');
     });

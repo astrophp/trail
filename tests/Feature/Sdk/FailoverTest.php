@@ -2,9 +2,11 @@
 
 use Astro\Trail\Tests\Fixtures\Agents\AssistantAgent;
 use Astro\Trail\Tests\Fixtures\Sdk\FakeAnthropic;
+use Astro\Trail\Tests\Fixtures\Sdk\Sdk;
 use Astro\Trail\Tests\Fixtures\Tools\CallbackTool;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Exceptions;
 use Laravel\Ai\Events\AgentFailed;
 use Laravel\Ai\Events\AgentFailedOver;
 use Laravel\Ai\Events\AgentPrompted;
@@ -358,6 +360,9 @@ describe('a failover after tools already ran', function () {
 });
 
 describe('a tool that throws with a second provider configured', function () {
+    // Before SDK 1.4.0 a tool's exception ends the attempt, and a failoverable one moves the run to
+    // the next provider. From 1.4.0 the SDK answers the model with the failure on the same provider.
+
     it('ends the run at once when the tool throws an ordinary exception', function () {
         $anthropic = FakeAnthropic::script([
             FakeAnthropic::toolUse([['id' => 'toolu_1', 'name' => 'explode', 'input' => []]]),
@@ -372,7 +377,7 @@ describe('a tool that throws with a second provider configured', function () {
             'PromptingAgent', 'StartingStep#0', 'StepCompleted#0', 'InvokingTool(explode)', 'ToolFailed(explode)', 'AgentFailed',
         ])->and($thrown->getMessage())->toBe('Tool broke')
             ->and($anthropic->remaining())->toBe(1);
-    });
+    })->skip(fn () => Sdk::recoversFromToolFailures(), 'From SDK 1.4.0 a tool that throws does not end the run.');
 
     it('fails over when the tool throws a failoverable exception, and the tool runs again on the next provider', function () {
         $calls = 0;
@@ -400,7 +405,32 @@ describe('a tool that throws with a second provider configured', function () {
             ->and($this->sdk->sole(AgentFailed::class)->event->exception)->toBe($thrown)
             ->and($this->sdk->sole(AgentFailedOver::class)->event->exception)->toBe($this->sdk->of(ToolFailed::class)[0]->event->exception)
             ->and($this->sdk->of(StepFailed::class))->toBe([]);
-    });
+    })->skip(fn () => Sdk::recoversFromToolFailures(), 'From SDK 1.4.0 a tool that throws does not end the run.');
+
+    it('stays on the same provider when the tool throws, ordinary or failoverable, and answers the model with the failure', function (Closure $exception) {
+        Exceptions::fake();
+        $anthropic = FakeAnthropic::script([
+            FakeAnthropic::toolUse([['id' => 'toolu_1', 'name' => 'explode', 'input' => []]]),
+            FakeAnthropic::text('ok'),
+        ]);
+
+        $thrown = $exception();
+        $tool = new CallbackTool('explode', fn () => throw $thrown);
+
+        $response = (new AssistantAgent([$tool]))->prompt('Hi', provider: failoverProviders());
+
+        expect($this->sdk->timeline())->toBe([
+            'PromptingAgent', 'StartingStep#0', 'StepCompleted#0', 'InvokingTool(explode)', 'ToolFailed(explode)',
+            'StartingStep#1', 'StepCompleted#1', 'AgentPrompted',
+        ])->and($response->text)->toBe('ok')
+            ->and($response->meta->provider)->toBe('anthropic')
+            ->and($response->toolResults[0]->failed)->toBeTrue()
+            ->and($anthropic->urls())->each->toStartWith('https://api.anthropic.com/')
+            ->and(Exceptions::reported())->toBe([$thrown]);
+    })->with([
+        'ordinary' => [fn () => new RuntimeException('Tool broke')],
+        'failoverable' => [fn () => RateLimitedException::forProvider('some-api')],
+    ])->skip(fn () => ! Sdk::recoversFromToolFailures(), 'Before SDK 1.4.0 a tool that throws ends the attempt.');
 
     it('lets the second provider answer when the tool fails over once and then works', function () {
         $calls = 0;
@@ -423,7 +453,7 @@ describe('a tool that throws with a second provider configured', function () {
         expect($response->text)->toBe('ok')
             ->and($response->meta->provider)->toBe('backup')
             ->and($this->sdk->of(AgentFailed::class))->toBe([]);
-    });
+    })->skip(fn () => Sdk::recoversFromToolFailures(), 'From SDK 1.4.0 a tool that throws does not fail over.');
 });
 
 describe('a listener that throws during failover', function () {

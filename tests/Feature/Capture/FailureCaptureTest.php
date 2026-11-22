@@ -7,14 +7,17 @@ use Astro\Trail\Tests\Fixtures\Agents\FailingSingleStepAgent;
 use Astro\Trail\Tests\Fixtures\Capture\Captured;
 use Astro\Trail\Tests\Fixtures\Capture\Failures;
 use Astro\Trail\Tests\Fixtures\Sdk\FakeAnthropic;
+use Astro\Trail\Tests\Fixtures\Sdk\Sdk;
 use Astro\Trail\Tests\Fixtures\Tools\CallbackTool;
 use Astro\Trail\Tests\Fixtures\Tools\LookupTool;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Validation\ValidationException;
 use Laravel\Ai\Events\StepFailed;
 use Laravel\Ai\Exceptions\AiException;
 use Laravel\Ai\Exceptions\InsufficientCreditsException;
+use Laravel\Ai\Exceptions\InvalidApiKeyException;
 use Laravel\Ai\Exceptions\NoSuchToolException;
 use Laravel\Ai\Exceptions\ProviderConnectionException;
 use Laravel\Ai\Exceptions\ProviderOverloadedException;
@@ -100,7 +103,40 @@ it('stores a tool that throws as a failed tool span, with the run failed from th
         Failures::span('step', 1, 0, 'completed', [], ['input_tokens' => 10, 'output_tokens' => 5]),
         Failures::span('tool', 1, null, 'failed', $failure),
     ])->and($run->spans()[2]['name'])->toBe('explode');
-});
+})->skip(fn () => Sdk::recoversFromToolFailures(), 'From SDK 1.4.0 a tool that throws does not end the run.');
+
+it('stores a tool that throws as a failed tool span in a run that completed, when the SDK carries on after it', function () {
+    Exceptions::fake();
+    FakeAnthropic::script([
+        FakeAnthropic::toolUse([
+            ['id' => 'toolu_1', 'name' => 'explode', 'input' => []],
+            ['id' => 'toolu_2', 'name' => 'lookup', 'input' => ['query' => 'laravel']],
+        ]),
+        FakeAnthropic::text('Found it anyway.'),
+    ]);
+
+    $broke = new RuntimeException('Tool broke');
+    $tool = new CallbackTool('explode', fn () => throw $broke);
+
+    (new AssistantAgent([$tool, new LookupTool]))->prompt('Hi', model: FakeAnthropic::MODEL);
+    $run = ($this->stored)()->assertVolatileColumns();
+
+    $failure = Captured::failure('tool_error', RuntimeException::class, 'Tool broke', 'tool');
+
+    // The run's end is decided by its own terminal event: the tool failed, the run did not, and nothing failed over.
+    expect(Captured::pick([$run->trace()], Failures::TRACE)[0])->toBe(Failures::trace('completed', false, 5, [], [
+        'input_tokens' => 20, 'output_tokens' => 10, 'unpriced_span_count' => 2,
+    ]))->and(Captured::pick($run->spans(), Failures::SPAN))->toBe([
+        Failures::span('agent', 1, null, 'completed'),
+        Failures::span('step', 1, 0, 'completed', [], ['input_tokens' => 10, 'output_tokens' => 5]),
+        Failures::span('tool', 1, null, 'failed', $failure),
+        Failures::span('tool', 1, null, 'completed'),
+        Failures::span('step', 1, 1, 'completed', [], ['input_tokens' => 10, 'output_tokens' => 5]),
+    ])->and(array_column($run->spans(), 'name'))->toBe(['AssistantAgent', 'step', 'explode', 'lookup', 'step'])
+        ->and($run->trace()['response_excerpt'])->toBe('Found it anyway.')
+        // The SDK reports the tool's exception; Trail reports nothing of its own.
+        ->and(Exceptions::reported())->toBe([$broke]);
+})->skip(fn () => ! Sdk::recoversFromToolFailures(), 'Before SDK 1.4.0 a tool that throws ends the run.');
 
 it('does not treat a tool validation error as a failure', function () {
     FakeAnthropic::script([toolTurn('strict', input: ['query' => '']), FakeAnthropic::text('Fixed')]);
@@ -197,7 +233,7 @@ describe('what each kind of provider error is stored as', function () {
         '403 with an insufficient permissions message' => [403, 'Insufficient permissions for this model.', 'insufficient_credits', InsufficientCreditsException::class, 403],
         '400 with a credit balance message' => [400, 'Your credit balance is too low to access the API.', 'insufficient_credits', InsufficientCreditsException::class, 400],
         '500' => [500, 'Server error', 'exception', RequestException::class, 500],
-        '401' => [401, 'Invalid key', 'exception', RequestException::class, 401],
+        '401' => [401, 'Invalid key', 'exception', Sdk::raisesInvalidApiKey() ? InvalidApiKeyException::class : RequestException::class, 401],
         '400' => [400, 'Bad request', 'exception', RequestException::class, 400],
         '404' => [404, 'No such model', 'exception', RequestException::class, 404],
     ]);
