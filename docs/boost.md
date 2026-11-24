@@ -31,6 +31,10 @@ from Trail's dashboard `viewTrail` gate, so use it only with agents you trust wi
 tools do not run an agent, change a trace, or recalculate a cost. A missing usage or cost stays
 missing.
 
+Every tool returns a top-level `currency`: the install's currency code from
+[`trail.currency`](cost.md#currency), such as `USD`, or `null` when that setting is not valid. Every
+amount in the result is in that currency. Nothing is converted.
+
 To turn off the integration, set `TRAIL_BOOST_ENABLED=false` in the application's environment.
 Trail's dashboard and recording continue to work. Rebuild cached configuration after changing the
 setting.
