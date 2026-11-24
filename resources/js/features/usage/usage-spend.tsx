@@ -32,7 +32,7 @@ import { useBoot } from '@/hooks/use-boot'
 import { useFocusHandoff } from '@/hooks/use-focus-handoff'
 import { useQueryStatus } from '@/hooks/use-query-status'
 import { useTimeRange } from '@/hooks/use-time-range'
-import { formatCost, resolveTimeZone } from '@/lib/format'
+import { currencyName, formatCost, resolveTimeZone } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import type { Refreshing } from '@/lib/refresh-policy'
 import { timeRangePeriods } from '@/lib/time-range'
@@ -136,7 +136,7 @@ export function UsageSpend({
                     title="Estimated cost over time"
                     // Below md the action drops under the title and subtitle, full width.
                     className="max-md:has-data-[slot=card-action]:grid-cols-1 max-md:[&>[data-slot=card-action]]:col-start-1 max-md:[&>[data-slot=card-action]]:row-span-1 max-md:[&>[data-slot=card-action]]:row-start-3 max-md:[&>[data-slot=card-action]]:justify-self-start"
-                    description="Cumulative US dollars · estimates"
+                    description={`Cumulative ${currencyName() ?? 'amounts'} · estimates`}
                     action={
                         <div className="flex flex-wrap items-center gap-x-6 gap-y-2 md:justify-end">
                             {shown === undefined ? null : (

@@ -384,6 +384,20 @@ describe('with provider usage', function () {
             ->and($run->trace()['unpriced_span_count'])->toBe(1);
     });
 
+    it('leaves every step unpriced, not free, when the currency is not the one the config prices are in', function () {
+        config(['trail.currency' => 'EUR']);
+
+        $response = (new AssistantAgent([new LookupTool]))->prompt('Hi', model: FakeAnthropic::MODEL);
+        Trail::flush();
+
+        $run = Captured::read($response->invocationId);
+
+        expect(array_column($run->spans(), 'cost'))->toBe([null, null, null, null])
+            ->and($run->trace()['cost'])->toBeNull()
+            ->and($run->trace()['input_tokens'])->toBe(155)
+            ->and($run->trace()['unpriced_span_count'])->toBe(2);
+    });
+
     it('reports a step as unpriced when no price is configured for its model', function () {
         config(['trail.pricing.anthropic' => ['some-other-model' => ['input' => 1.0, 'output' => 1.0]]]);
 

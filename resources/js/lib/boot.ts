@@ -14,6 +14,8 @@ export type Boot = {
     version: string | null
     staleAfter: number
     recording: Recording | null
+    /** The currency amounts are shown in, an upper-case ISO 4217 code such as `USD`; null when the install's setting is not valid. */
+    currency: string | null
 }
 
 declare global {
@@ -33,6 +35,7 @@ const fallback: Boot = {
     version: null,
     staleAfter: 3600,
     recording: null,
+    currency: 'USD',
 }
 
 const recordings: readonly string[] = ['enabled', 'paused', 'disabled']
@@ -67,6 +70,13 @@ export function parseBoot(source: unknown): Boot {
             recordings.includes(raw.recording)
                 ? (raw.recording as Recording)
                 : null,
+        currency:
+            raw.currency === undefined
+                ? fallback.currency
+                : typeof raw.currency === 'string' &&
+                    /^[A-Z]{3}$/.test(raw.currency)
+                  ? raw.currency
+                  : null,
     }
 }
 

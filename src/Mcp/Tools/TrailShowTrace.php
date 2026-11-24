@@ -5,6 +5,7 @@ namespace Astro\Trail\Mcp\Tools;
 use Astro\Trail\Http\Resources\SpanResource;
 use Astro\Trail\Http\Resources\TraceDetailResource;
 use Astro\Trail\Http\Resources\TraceResource;
+use Astro\Trail\Pricing\Currency;
 use Astro\Trail\Queries\TraceDetail;
 use Astro\Trail\Queries\TraceId;
 use Astro\Trail\Storage\Models\Span;
@@ -65,6 +66,7 @@ class TrailShowTrace extends Tool
         }, $resource->collection($spans->take($limit)));
 
         return Response::json([
+            'currency' => Currency::configured(),
             'trace' => TraceResource::of([$trace])->toArray($trace),
             'detail' => TraceDetailResource::of($trace),
             'spans' => $items,

@@ -4,6 +4,7 @@ namespace Astro\Trail\Mcp\Tools;
 
 use Astro\Trail\Http\Resources\SummaryResource;
 use Astro\Trail\Http\Resources\UsageResource;
+use Astro\Trail\Pricing\Currency;
 use Astro\Trail\Queries\OverviewQuery;
 use Astro\Trail\Queries\Page;
 use Astro\Trail\Queries\RunScope;
@@ -62,6 +63,7 @@ class TrailUsageSummary extends Tool
 
         return Response::json([
             'range' => $range->toArray(),
+            'currency' => Currency::configured(),
             ...$totals,
             'by' => $breakdown['by'],
             'groups' => $breakdown['data'],

@@ -51,7 +51,7 @@ function exportAt(mixed $test, string $query = ''): array
 
     $header = array_shift($lines);
 
-    expect($header)->toBe(TraceCsv::COLUMNS);
+    expect($header)->toBe(TraceCsv::columns());
 
     return [
         'header' => $header,
@@ -695,4 +695,26 @@ describe('the route', function () {
 
         $response->assertHeader('X-Trail-Export-Rows', '0')->assertHeader('X-Trail-Export-Total', '0')->assertHeader('X-Trail-Export-Truncated', 'false');
     });
+});
+
+describe('the currency of the install', function () {
+    beforeEach(fn () => exportDataset());
+
+    it('names the amount column after it, with the amounts of the list', function (string $currency, string $column) {
+        config(['trail.currency' => $currency]);
+
+        $list = $this->getJson('/trail/api/traces?per_page=100')->assertOk()->json('data');
+        $export = exportAt($this);
+
+        expect($export['header'])->toContain($column)->not->toContain('cost_usd')
+            ->and($list)->not->toBeEmpty()
+            ->and(array_filter(array_column($list, 'cost'), fn (array $cost) => $cost['amount'] !== null))->not->toBeEmpty();
+
+        foreach ($list as $position => $row) {
+            expect(cellSays($export['rows'][$position][$column], $row['cost']['amount']))->toBeTrue("{$row['id']} {$column}");
+        }
+    })->with([
+        'eur' => ['eur', 'cost_eur'],
+        'not a currency' => ['EURO', 'cost'],
+    ]);
 });

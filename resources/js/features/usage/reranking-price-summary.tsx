@@ -1,5 +1,6 @@
 import type { Price } from '@/api/types'
 import { PriceRate } from '@/components/telemetry/price-rate'
+import { currencyCode } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
 /** A reranking unit rate and its independent source, visible without opening the editor. */
@@ -14,6 +15,7 @@ export function RerankingPriceSummary({
     if (!group || group.rates.basis === null) return null
 
     const search = group.rates.basis === 'search_units'
+    const code = currencyCode()
     const source =
         group.source === 'saved'
             ? 'Saved'
@@ -31,7 +33,7 @@ export function RerankingPriceSummary({
                 className,
             )}
         >
-            Reranking: USD{' '}
+            Reranking: {code === null ? null : `${code} `}
             <PriceRate
                 rate={search ? group.rates.search_unit : group.rates.input}
                 className="text-foreground"

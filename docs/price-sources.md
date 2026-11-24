@@ -5,7 +5,8 @@ entries. Official sources were checked on **2026-10-14**. This is a static list 
 not a provider billing feed. A price entry does not promise that a model is available to your
 account or that every operation it supports is supported by the SDK.
 
-All token rates below are **USD per one million reported tokens**. `—` means no rate is configured,
+All token rates below are **US dollars per one million reported tokens**, and Trail uses them only on
+an install whose `trail.currency` is `USD` (see [Currency](cost.md#currency)). `—` means no rate is configured,
 not zero. A reranking rate is either USD per million input tokens or USD per reported search unit;
 the basis is explicit. Ordinary token rates never price reranking. For override precedence,
 frozen recorded costs and upgrading a published config, see [Cost](cost.md).

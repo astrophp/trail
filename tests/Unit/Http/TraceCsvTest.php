@@ -50,13 +50,13 @@ it('writes the documented columns in order', function () {
 
 it('writes a value that was not captured as an empty cell, beside a zero that was', function () {
     $row = parsedCsv(TraceCsv::row(traceArray()))[0];
-    $cells = array_combine(TraceCsv::COLUMNS, $row);
+    $cells = array_combine(TraceCsv::columns(), $row);
 
     foreach (['duration_ms', 'input_tokens', 'output_tokens', 'total_tokens', 'cost_usd', 'provider', 'user_id', 'ended_at'] as $column) {
         expect($cells[$column])->toBe('', $column);
     }
 
-    $captured = array_combine(TraceCsv::COLUMNS, parsedCsv(TraceCsv::row(traceArray([
+    $captured = array_combine(TraceCsv::columns(), parsedCsv(TraceCsv::row(traceArray([
         'duration_ms' => 0.0, 'span_count' => 0, 'cost' => ['state' => 'estimated', 'amount' => 0.0],
         'usage' => ['state' => 'reported', 'input_tokens' => 0, 'output_tokens' => 0, 'cache_read_tokens' => null, 'cache_write_tokens' => null, 'reasoning_tokens' => null, 'total_tokens' => 0],
     ])))[0]);
@@ -96,7 +96,7 @@ it('writes the numbers and timestamps Trail produces without a quote, and none i
         'usage' => ['state' => 'reported', 'input_tokens' => 10, 'output_tokens' => 5, 'cache_read_tokens' => 0, 'cache_write_tokens' => null, 'reasoning_tokens' => 2, 'total_tokens' => 15],
         'ended_at' => '2026-01-02T10:00:01.840Z',
     ]));
-    $cells = array_combine(TraceCsv::COLUMNS, parsedCsv($line)[0]);
+    $cells = array_combine(TraceCsv::columns(), parsedCsv($line)[0]);
 
     foreach (['duration_ms', 'input_tokens', 'output_tokens', 'cache_read_tokens', 'reasoning_tokens', 'total_tokens', 'cost_usd', 'span_count', 'started_at', 'ended_at', 'streamed', 'bookmarked'] as $column) {
         expect($cells[$column])->not->toStartWith("'")->and($cells[$column])->not->toStartWith('-');
@@ -119,7 +119,7 @@ it('ends every line with CRLF', function () {
 });
 
 it('flattens the user into four cells', function () {
-    $cells = array_combine(TraceCsv::COLUMNS, parsedCsv(TraceCsv::row(traceArray([
+    $cells = array_combine(TraceCsv::columns(), parsedCsv(TraceCsv::row(traceArray([
         'user' => ['id' => '7', 'type' => 'App\\Models\\User', 'name' => 'Ada', 'email' => null],
     ])))[0]);
 
@@ -128,3 +128,18 @@ it('flattens the user into four cells', function () {
         ->and($cells['user_name'])->toBe('Ada')
         ->and($cells['user_email'])->toBe('');
 });
+
+it('names the amount column after the currency of the install, and the row still lines up', function (string $currency, string $column) {
+    config(['trail.currency' => $currency]);
+
+    $header = parsedCsv(TraceCsv::header())[0];
+    $row = parsedCsv(TraceCsv::row(traceArray(['cost' => ['state' => 'estimated', 'amount' => 0.5]])))[0];
+
+    expect($header)->toHaveCount(count($row))
+        ->and(array_combine($header, $row)[$column])->toBe('0.5')
+        ->and(array_values(array_filter($header, fn (string $name) => str_starts_with($name, 'cost') && $name !== 'cost_state')))->toBe([$column]);
+})->with([
+    'usd' => ['usd', 'cost_usd'],
+    'eur' => ['eur', 'cost_eur'],
+    'not a currency' => ['EURO', 'cost'],
+]);

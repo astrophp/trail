@@ -524,3 +524,24 @@ describe('access', function () {
         $this->app['env'] = 'testing';
     });
 });
+
+describe('the currency of the install', function () {
+    beforeEach(fn () => UsageRows::dataset());
+
+    it('names the amount column after it, with the amounts of the breakdown', function (string $currency, string $column) {
+        config(['trail.currency' => $currency]);
+
+        $json = usageExportJsonAt($this)['data'];
+        $export = usageExportAt($this);
+
+        expect($export['header'])->toBe(['provider', 'model', ...str_replace('estimated_cost_usd', $column, USAGE_EXPORT_FIGURES)])
+            ->and(array_filter(array_column($json, 'cost'), fn (array $cost) => $cost['amount'] !== null))->not->toBeEmpty();
+
+        foreach ($json as $position => $row) {
+            expect($export['rows'][$position][$column])->toBe(usageExportCell($row['cost']['amount']), "row {$position}");
+        }
+    })->with([
+        'eur' => ['eur', 'estimated_cost_eur'],
+        'not a currency' => ['EURO', 'estimated_cost'],
+    ]);
+});

@@ -23,7 +23,7 @@ import {
 import { usePrices } from '@/features/usage/use-prices'
 import { useFocusHandoff } from '@/hooks/use-focus-handoff'
 import { useQueryStatus } from '@/hooks/use-query-status'
-import { formatCount } from '@/lib/format'
+import { currencyCode, formatCount, tokenRateUnit } from '@/lib/format'
 
 const isTab = (value: string): value is PriceTab =>
     priceTabs.some((tab) => tab === value)
@@ -45,6 +45,7 @@ export function ModelPrices({ className }: { className?: string }) {
     const editor = usePriceEditor(prices)
     const view = usePriceView(prices)
     const filterRef = useRef<HTMLInputElement>(null)
+    const code = currencyCode()
 
     useLeaveWarning(editor.unsaved)
     // The retry button, or the one of the refresh note, goes away when the list loads.
@@ -71,11 +72,14 @@ export function ModelPrices({ className }: { className?: string }) {
                     titleTarget={{ id: pricesHeadingId }}
                     hint={
                         <InfoHint label="About model prices">
-                            Token rates are US dollars per million tokens. A
-                            saved price applies to runs recorded from now on;
-                            recorded costs stay as they were. A long-running
-                            worker can take a minute to pick it up. Reranking
-                            rates show their billing unit.
+                            Token rates are {tokenRateUnit()}. A saved price
+                            applies to runs recorded from now on; recorded costs
+                            stay as they were. A long-running worker can take a
+                            minute to pick it up. Reranking rates show their
+                            billing unit.
+                            {code === null || code === 'USD'
+                                ? null
+                                : ' Bundled prices are in US dollars and are not used.'}
                         </InfoHint>
                     }
                 />

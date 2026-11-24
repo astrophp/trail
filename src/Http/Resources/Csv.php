@@ -2,6 +2,8 @@
 
 namespace Astro\Trail\Http\Resources;
 
+use Astro\Trail\Pricing\Currency;
+
 /**
  * The cells and lines of the CSV files the API sends (RFC 4180, CRLF line ends): how a value is
  * written, quoted and guarded against spreadsheet formulas. A value that was not captured is an
@@ -69,6 +71,17 @@ abstract class Csv
         }
 
         return implode(',', $encoded).self::LINE_END;
+    }
+
+    /**
+     * The name of a column that holds an amount: the base name and the install's currency in lower
+     * case (`cost_usd`), or the base name alone when the configured currency is not valid.
+     */
+    protected static function amountColumn(string $base): string
+    {
+        $currency = Currency::configured();
+
+        return $currency === null ? $base : $base.'_'.strtolower($currency);
     }
 
     /**

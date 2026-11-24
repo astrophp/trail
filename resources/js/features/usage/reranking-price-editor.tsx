@@ -22,6 +22,7 @@ import {
     SelectValue,
 } from '@/components/ui/select'
 import { decimalText } from '@/lib/decimal-text'
+import { rateLabel } from '@/lib/format'
 import { useLeaveWarning } from '@/features/usage/use-leave-warning'
 
 /** A separate price group: saves and resets preserve the ordinary token rates. */
@@ -157,7 +158,7 @@ export function RerankingPriceEditor({
                     </div>
                     <div className="flex flex-col gap-2">
                         <Label htmlFor={`${id}-input`}>
-                            USD per million input tokens
+                            {rateLabel('million input tokens')}
                         </Label>
                         <Input
                             id={`${id}-input`}
@@ -172,7 +173,7 @@ export function RerankingPriceEditor({
                     </div>
                     <div className="flex flex-col gap-2">
                         <Label htmlFor={`${id}-unit`}>
-                            USD per search unit
+                            {rateLabel('search unit')}
                         </Label>
                         <Input
                             id={`${id}-unit`}

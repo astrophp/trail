@@ -7,6 +7,7 @@ import {
     type Draft,
     type RateKey,
 } from '@/features/usage/price-draft'
+import { tokenRateUnit } from '@/lib/format'
 
 /** What a reset returns the model to, in the words of the button. */
 export function resetLabel(price: Price): string {
@@ -75,7 +76,7 @@ export function PriceEditor({
                 {rateKeys.map((rate) => (
                     <DecimalField
                         key={rate}
-                        label={`${rateNames[rate]} rate for ${price.provider} ${price.model}, US dollars per million tokens`}
+                        label={`${rateNames[rate]} rate for ${price.provider} ${price.model}, ${tokenRateUnit()}`}
                         caption={rateNames[rate]}
                         value={draft.fields[rate]}
                         onValueChange={(text) => onChange(rate, text)}

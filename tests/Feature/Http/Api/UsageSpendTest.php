@@ -10,6 +10,7 @@ use Astro\Trail\Queries\SpendQuery;
 use Astro\Trail\Tests\Fixtures\Http\AgentRows;
 use Astro\Trail\Tests\Fixtures\Http\UsageRows;
 use Astro\Trail\Tests\Fixtures\Pricing\FlakyResolver;
+use Astro\Trail\Tests\Fixtures\Storage\Rows;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\ConnectionResolverInterface;
 use Illuminate\Support\Carbon;
@@ -340,6 +341,21 @@ describe('the projection', function () {
             ->and($three['per_bucket'])->toBe(1.5)
             ->and($three['total'])->toBe(36)
             ->and($three['buckets'])->toHaveCount(24);
+    });
+
+    it('prices only from saved prices when the currency is not the one the config prices are in', function () {
+        config(['trail.currency' => 'EUR']);
+        Rows::price(['provider' => 'acme', 'model' => 'alpha', 'input' => 4, 'output' => 20]);
+        spendRun('2026-01-02 06:10:00', [spendStep()]);
+        spendRun('2026-01-02 07:10:00', [spendStep(model: 'plain')]);
+        spendRun('2026-01-02 08:10:00', [spendStep()]);
+
+        $projection = spendAt($this)['data']['projection'];
+
+        // Two steps of alpha at the saved rates (4 + 2 each) over six buckets; the step of plain has no saved price.
+        expect($projection['state'])->toBe('projected')
+            ->and($projection['per_bucket'])->toBe(2)
+            ->and($projection['left_out'])->toBe(['unpriced_steps' => 1, 'unpriced_tokens' => 1_100_000, 'unfinished_runs' => 0]);
     });
 
     it('leaves out the bucket in progress and the bucket cut by the start of the range', function () {

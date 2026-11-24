@@ -96,8 +96,8 @@ it('boots the dashboard from window.Trail', function () {
     $html = $this->withSession(['_token' => 'session-token'])->get('/trail')->assertOk()->getContent();
     $boot = bootObject($html);
 
-    expect($boot)->toHaveKeys(['path', 'apiPath', 'csrfToken', 'appName', 'environment', 'timezone', 'version', 'staleAfter', 'recording'])
-        ->and($boot)->toHaveCount(9)
+    expect($boot)->toHaveKeys(['path', 'apiPath', 'csrfToken', 'appName', 'environment', 'timezone', 'version', 'staleAfter', 'recording', 'currency'])
+        ->and($boot)->toHaveCount(10)
         ->and($boot['path'])->toBe('/trail')
         ->and($boot['apiPath'])->toBe('/trail/api')
         ->and($boot['csrfToken'])->toBe('session-token')
@@ -106,8 +106,23 @@ it('boots the dashboard from window.Trail', function () {
         ->and($boot['timezone'])->toBe('Europe/Istanbul')
         ->and($boot['staleAfter'])->toBe(120)
         ->and($boot['recording'])->toBe('enabled')
+        ->and($boot['currency'])->toBe('USD')
         ->and($boot['version'])->toBeString()->not->toBeEmpty();
 });
+
+it('writes the currency of the install into the boot object', function (mixed $configured, ?string $expected) {
+    $this->app['env'] = 'local';
+    config(['trail.currency' => $configured]);
+
+    expect(app(TrailManager::class)->scriptVariables()['currency'])->toBe($expected);
+})->with([
+    ['USD', 'USD'],
+    ['eur', 'EUR'],
+    [' try ', 'TRY'],
+    ['EURO', null],
+    ['', 'USD'],
+    [null, null],
+]);
 
 it('gives every dashboard url the same page', function () {
     $this->app['env'] = 'local';

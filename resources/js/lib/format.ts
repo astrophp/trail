@@ -1,19 +1,67 @@
 // The one place a number or a date from Trail's API becomes text. Every function takes a real value:
 // whether a value was captured at all is decided by the components in components/telemetry.
-// The locale is fixed so the output is the same on every machine.
+// The locale is fixed so the output is the same on every machine. Amounts of money are written in
+// the install's currency, which the boot object carries.
+
+import { boot } from '@/lib/boot'
 
 const locale = 'en-US'
 
-const usd = (digits: number) =>
-    new Intl.NumberFormat(locale, {
-        style: 'currency',
-        currency: 'USD',
-        minimumFractionDigits: digits,
-        maximumFractionDigits: digits,
-    })
+const moneyFormatters = new Map<number, Intl.NumberFormat>()
 
-const cents = usd(2)
-const fractions = usd(4)
+/**
+ * The money formatter for a number of decimals, made on first use and kept: the boot object is read
+ * once, so one formatter per digit count is enough. Without a currency the amount is a plain decimal.
+ */
+function money(digits: number): Intl.NumberFormat {
+    let formatter = moneyFormatters.get(digits)
+
+    if (!formatter) {
+        const currency = boot().currency
+
+        formatter = new Intl.NumberFormat(locale, {
+            ...(currency === null ? {} : { style: 'currency', currency }),
+            minimumFractionDigits: digits,
+            maximumFractionDigits: digits,
+        })
+        moneyFormatters.set(digits, formatter)
+    }
+
+    return formatter
+}
+
+/** The install's currency as an upper-case ISO 4217 code, or `null` when its setting is not valid. */
+export function currencyCode(): string | null {
+    return boot().currency
+}
+
+/** The currency in prose: `US dollars` for `USD`, the code for any other, `null` without one. */
+export function currencyName(): string | null {
+    const code = currencyCode()
+
+    return code === 'USD' ? 'US dollars' : code
+}
+
+/**
+ * The unit of a token rate: `US dollars per million tokens`, `EUR per million tokens`, and without
+ * a currency `per million tokens`. A preposition is put before the currency only when there is one:
+ * `in US dollars per million tokens`.
+ */
+export function tokenRateUnit(preposition?: string): string {
+    const name = currencyName()
+    const unit = 'per million tokens'
+
+    return name === null
+        ? unit
+        : [preposition, name, unit].filter(Boolean).join(' ')
+}
+
+/** A label for a rate in some unit: `USD per search unit`, and without a currency `Per search unit`. */
+export function rateLabel(unit: string): string {
+    const code = currencyCode()
+
+    return code === null ? `Per ${unit}` : `${code} per ${unit}`
+}
 
 const decimal = new Intl.NumberFormat(locale, {
     minimumFractionDigits: 1,
@@ -38,20 +86,24 @@ export function formatSearchUnits(value: string): string {
     return digits === '' ? grouped : `${grouped}.${digits}`
 }
 
-/** `$0.0466` under $1, `$1,234.50` from $1. A real zero is `$0.00`; a sliver is `<$0.0001`, never zero. */
+/**
+ * In US dollars, `$0.0466` under $1 and `$1,234.50` from $1; another currency has its own sign
+ * (`€0.0466`), and none leaves the bare number. A real zero is `$0.00`; a sliver is `<$0.0001`,
+ * never zero.
+ */
 export function formatCost(amount: number): string {
     if (amount === 0) {
-        return cents.format(0)
+        return money(2).format(0)
     }
 
     if (amount > 0 && amount < 0.00005) {
-        return '<$0.0001'
+        return `<${money(4).format(0.0001)}`
     }
 
-    // 0.99999 rounds to 1.0000 at four decimals; from $1 the amount is shown in cents.
+    // 0.99999 rounds to 1.0000 at four decimals; from one unit the amount is shown in cents.
     return Math.abs(Number(amount.toFixed(4))) >= 1
-        ? cents.format(amount)
-        : fractions.format(amount)
+        ? money(2).format(amount)
+        : money(4).format(amount)
 }
 
 const tokenUnits = [
@@ -104,7 +156,7 @@ export function formatRate(rate: number): string {
 const perMillion = new Intl.NumberFormat(locale, { maximumFractionDigits: 6 })
 
 /**
- * A price per million tokens as the number it is, in US dollars, up to the six decimals the API
+ * A price per million tokens as the number it is, in the install's currency, up to the six decimals the API
  * keeps: `3`, `0.3`, `0.000001`. Never rounded to fewer, so what is shown is what is stored. A
  * real zero is `0`.
  */

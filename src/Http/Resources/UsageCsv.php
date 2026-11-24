@@ -15,19 +15,18 @@ final class UsageCsv extends Csv
         'agent' => ['agent'],
     ];
 
-    private const FIGURES = [
-        'runs', 'steps', 'usage_state',
-        'input_tokens', 'output_tokens', 'cache_read_tokens', 'cache_write_tokens', 'reasoning_tokens', 'total_tokens',
-        'cost_state', 'estimated_cost_usd', 'reported_steps', 'unpriced_steps', 'unpriced_tokens',
-        'calls', 'search_units', 'unit_assessment', 'search_unit_calls', 'reported_search_unit_calls', 'unpriced_search_unit_calls', 'unpriced_search_units', 'unknown_cost_calls', 'incomplete_calls', 'ambiguous_reranking_calls',
-    ];
-
     /**
      * @return list<string>
      */
     public static function columns(string $by): array
     {
-        return [...(self::KEYS[$by] ?? self::KEYS['model']), ...self::FIGURES];
+        return [
+            ...(self::KEYS[$by] ?? self::KEYS['model']),
+            'runs', 'steps', 'usage_state',
+            'input_tokens', 'output_tokens', 'cache_read_tokens', 'cache_write_tokens', 'reasoning_tokens', 'total_tokens',
+            'cost_state', self::amountColumn('estimated_cost'), 'reported_steps', 'unpriced_steps', 'unpriced_tokens',
+            'calls', 'search_units', 'unit_assessment', 'search_unit_calls', 'reported_search_unit_calls', 'unpriced_search_unit_calls', 'unpriced_search_units', 'unknown_cost_calls', 'incomplete_calls', 'ambiguous_reranking_calls',
+        ];
     }
 
     /** The header line of a view. */
@@ -72,7 +71,7 @@ final class UsageCsv extends Csv
             'reasoning_tokens' => $usage['reasoning_tokens'] ?? null,
             'total_tokens' => $usage['total_tokens'] ?? null,
             'cost_state' => $cost['state'] ?? null,
-            'estimated_cost_usd' => $cost['amount'] ?? null,
+            self::amountColumn('estimated_cost') => $cost['amount'] ?? null,
             'reported_steps' => $coverage['reported_steps'] ?? null,
             'unpriced_steps' => $coverage['unpriced_steps'] ?? null,
             'unpriced_tokens' => $coverage['unpriced_tokens'] ?? null,
