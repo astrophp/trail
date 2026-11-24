@@ -28,6 +28,8 @@ it('reads the configured currency', function (mixed $configured, ?string $expect
     expect(Currency::configured())->toBe($expected);
 })->with([
     'null' => [null, null],
+    'empty' => ['', 'USD'],
+    'blank' => ['   ', 'USD'],
     'USD' => ['USD', 'USD'],
     'lower case' => ['eur', 'EUR'],
     'invalid' => ['EURO', null],

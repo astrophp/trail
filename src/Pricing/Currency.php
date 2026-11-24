@@ -12,16 +12,23 @@ use Illuminate\Contracts\Config\Repository;
  */
 final class Currency
 {
-    /** The currency of the bundled prices, and the one used when trail.currency is absent. */
+    /** The currency of the bundled prices, and the one used when trail.currency is absent or blank. */
     public const DEFAULT = 'USD';
 
     /**
-     * The install's currency: the default when trail.currency is absent, and null when it is
-     * set to anything that is not a three-letter code, an explicit null included.
+     * The install's currency: the default when trail.currency is absent or blank, as an empty
+     * TRAIL_CURRENCY= line leaves it, and null when it is set to anything else that is not a
+     * three-letter code, an explicit null included.
      */
     public static function from(Repository $config): ?string
     {
-        return $config->has('trail.currency') ? self::normalize($config->get('trail.currency')) : self::DEFAULT;
+        $configured = $config->get('trail.currency');
+
+        if (! $config->has('trail.currency') || (is_string($configured) && trim($configured) === '')) {
+            return self::DEFAULT;
+        }
+
+        return self::normalize($configured);
     }
 
     /**

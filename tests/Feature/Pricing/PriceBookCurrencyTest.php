@@ -38,7 +38,7 @@ it('uses the bundled prices when the currency is USD, however it is written', fu
         ->and($book->resolve('openai', 'gpt-5-2025-08-07')->source)->toBe(PriceSource::Prefix)
         ->and($book->resolveReranking('cohere', 'rank')->source)->toBe(PriceSource::Config)
         ->and($book->resolveReranking('cohere', 'rank-2025-08-07')->source)->toBe(PriceSource::Prefix);
-})->with(['USD' => ['USD'], 'lower case' => ['usd'], 'padded' => [' Usd ']]);
+})->with(['USD' => ['USD'], 'lower case' => ['usd'], 'padded' => [' Usd '], 'empty' => ['']]);
 
 describe('another currency', function () {
     beforeEach(function () {
@@ -165,7 +165,7 @@ describe('a currency that is not a code', function () {
             ->and($book->resolve('openai', 'embed')->source)->toBe(PriceSource::None)
             ->and($book->resolveReranking('cohere', 'rank')->source)->toBe(PriceSource::None)
             ->and($book->resolve('openai', 'gpt-5', withoutOwnRow: true)->source)->toBe(PriceSource::None);
-    })->with(['null' => [null], 'empty' => [''], 'too long' => ['EURO'], 'digits' => ['12'], 'an integer' => [123], 'a list' => [[]]]);
+    })->with(['null' => [null], 'too long' => ['EURO'], 'digits' => ['12'], 'an integer' => [123], 'a list' => [[]]]);
 
     it('is reported once by a price book, however many prices it looks up and flushes', function () {
         config(['trail.currency' => 'EURO']);
@@ -192,7 +192,7 @@ describe('a currency that is not a code', function () {
     });
 
     it('resolves a price when the exception handler itself throws', function () {
-        config(['trail.currency' => '']);
+        config(['trail.currency' => 'EURO']);
         Rows::price(['provider' => 'openai', 'model' => 'gpt-5', 'input' => 2]);
         $this->app->make(ExceptionHandler::class)->reportable(function (InvalidArgumentException $e): never {
             throw new LogicException('the handler is broken');

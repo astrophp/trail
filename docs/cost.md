@@ -27,10 +27,10 @@ it: saved prices, recorded costs, totals and the spend projection.
   `projected_line`.
 - **After changing it,** rebuild the configuration cache if you use one and restart queue workers
   and Octane, which read the configuration once.
-- **A code that is not three letters** (an empty value, `null`, `EURO`, `12`) is reported,
+- **A code that is not three letters** (`null`, `EURO`, `12`) is reported,
   and the dashboard has no currency to show. Recording goes on: the prices in `trail.pricing` are
   not used, saved prices are. Only the shape is checked: Trail does not look the code up in a list
-  of real currencies.
+  of real currencies. A blank value, such as an empty `TRAIL_CURRENCY=` line, is the default, `USD`.
 
 ## How an estimate is made
 

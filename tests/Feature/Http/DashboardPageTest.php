@@ -120,7 +120,7 @@ it('writes the currency of the install into the boot object', function (mixed $c
     ['eur', 'EUR'],
     [' try ', 'TRY'],
     ['EURO', null],
-    ['', null],
+    ['', 'USD'],
     [null, null],
 ]);
 
