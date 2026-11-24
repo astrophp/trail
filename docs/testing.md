@@ -8,7 +8,8 @@ While faked, the runs Trail records are also priced from the `trail.pricing` ent
 configuration alone. Recording runs no database query to find saved prices, so a test whose database
 has no `trail_prices` table reports nothing from it, and a price saved in that table does not price
 a recorded run. This holds for the rest of the process, however long it runs, and whether you fake
-before or after the first run.
+before or after the first run. Those entries are US dollars and apply only when
+[`trail.currency`](cost.md#currency) is `USD`: in any other currency a faked run has no cost.
 
 ```php
 use App\Ai\Agents\SupportAgent;
