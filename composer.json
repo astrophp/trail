@@ -1,6 +1,6 @@
 {
     "name": "astrophp/trail",
-    "description": "Self-hosted observability for Laravel AI SDK agents. Track execution traces, tool calls, token usage, estimated costs, and failures.",
+    "description": "Self-hosted observability for Laravel AI SDK (laravel/ai 1.x) agents. Track execution traces, tool calls, token usage, estimated costs, and failures.",
     "keywords": [
         "laravel",
         "laravel-ai",
