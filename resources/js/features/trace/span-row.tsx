@@ -8,6 +8,7 @@ import { StatusBadge, statusLabel } from '@/components/telemetry/status-badge'
 import { TimingBar } from '@/components/telemetry/timing-bar'
 import { TokenValue } from '@/components/telemetry/token-value'
 import { rowIndent, toggleSlot } from '@/features/trace/row-layout'
+import { TimingGrid } from '@/features/trace/timing-grid'
 import { RowToggle } from '@/features/trace/row-toggle'
 import type { SpanNode } from '@/features/trace/build-span-tree'
 import { spanBilling } from '@/features/trace/span-billing'
@@ -101,17 +102,22 @@ export const SpanRow = memo(function SpanRow({
                 )
             }
             onKeyDown={(event) => onKeyDown(event, span.id)}
-            className="span-row flex min-h-12.5 items-center gap-3 rounded-md px-2 py-1.5 text-ui outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset aria-selected:bg-primary-soft aria-selected:hover:bg-primary-soft"
+            className="group/row span-row relative isolate flex min-h-12.5 items-center gap-3 rounded-md px-2 py-1.5 text-ui outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset aria-selected:bg-primary-soft aria-selected:before:absolute aria-selected:before:inset-y-1 aria-selected:before:start-0 aria-selected:before:w-0.5 aria-selected:before:rounded-full aria-selected:before:bg-primary aria-selected:before:content-[''] aria-selected:hover:bg-primary-soft"
         >
             <div
                 className="flex min-w-0 flex-1 items-center gap-2"
                 style={rowIndent(node.depth)}
             >
-                <RowToggle expanded={filtering ? undefined : expanded} />
+                <RowToggle
+                    expanded={filtering ? undefined : expanded}
+                    connector={node.depth > 0}
+                />
                 <SpanTypeIcon type={span.type} decorative />
                 <div className="flex min-w-0 flex-col gap-0.5">
                     <span className="flex min-w-0 items-center gap-2">
-                        <span className="truncate font-medium">{title}</span>
+                        <span className="truncate font-medium group-aria-selected/row:text-primary-ink">
+                            {title}
+                        </span>
                         {span.status === 'completed' ? null : (
                             <StatusBadge status={span.status} />
                         )}
@@ -140,18 +146,7 @@ export const SpanRow = memo(function SpanRow({
                     'flex flex-col gap-0.5 text-caption text-muted-foreground',
                 )}
             >
-                <div className="flex items-center gap-2">
-                    {/* Hidden from the tree itself: the row's description reads the bar by its id. */}
-                    <div
-                        aria-hidden="true"
-                        className="hidden min-w-0 flex-1 md:block"
-                    >
-                        <TimingBar
-                            id={`${domId}-bar`}
-                            span={span}
-                            axisMs={axisMs}
-                        />
-                    </div>
+                <div className="flex items-center justify-end">
                     <DurationValue
                         of={span}
                         className={cn(durationWidth, 'text-foreground')}
@@ -173,6 +168,24 @@ export const SpanRow = memo(function SpanRow({
                     </span>
                 ) : null}
             </div>
+            {/* The lane spans the whole row, laid out as the grid is, so the bar sits in the row's
+                middle however many lines the facts beside it take. Hidden from the tree itself: the
+                row's description reads the bar by its id. */}
+            <div
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-x-2 inset-y-0 hidden justify-end md:flex"
+            >
+                <div className="flex h-full w-1/2 items-center pe-22">
+                    <div className="pointer-events-auto relative min-w-0 flex-1">
+                        <TimingBar
+                            id={`${domId}-bar`}
+                            span={span}
+                            axisMs={axisMs}
+                        />
+                    </div>
+                </div>
+            </div>
+            <TimingGrid axisMs={axisMs} />
         </div>
     )
 })

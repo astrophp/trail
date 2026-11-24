@@ -10,8 +10,8 @@ import { cn } from '@/lib/utils'
 /**
  * How the message is framed. `section` is a labelled item of a list, with its role (the run page's
  * step input, and the transcript's expanded activity); `bubble` is a soft bordered box with the
- * text running plain in it (a prompt in the transcript); `plain` is the same text with no frame
- * (a response in the transcript).
+ * text running plain in it; `plain` is the same text with no frame, for a caller that frames it
+ * (a prompt or a response in the transcript).
  */
 export type MessageVariant = 'section' | 'bubble' | 'plain'
 
@@ -41,6 +41,10 @@ type MessageItemProps = {
     /** What the viewers are called, when the heading is not the right name for them. */
     label?: string
     variant?: MessageVariant
+    /** Draws an assistant's text as markdown, with a switch to the text as stored. Other roles stay text. */
+    markdown?: boolean
+    /** Leaves out the Rendered/Raw switch of a markdown text, for a caller that shows `TextViewSwitch` itself. */
+    viewSwitch?: boolean
     className?: string
 }
 
@@ -108,6 +112,8 @@ export function MessageItem({
     heading = 'Message',
     label,
     variant = 'section',
+    markdown = false,
+    viewSwitch,
     className,
 }: MessageItemProps) {
     const cuts = { truncated_paths: truncatedPaths }
@@ -203,6 +209,12 @@ export function MessageItem({
                     label={`${names} text`}
                     value={content}
                     plain={plain}
+                    format={
+                        markdown && object.role === 'assistant'
+                            ? 'markdown'
+                            : 'text'
+                    }
+                    viewSwitch={viewSwitch}
                 />
             )}
             {section || isAbsent(object.structured) ? null : (
@@ -239,6 +251,7 @@ export function MessageItem({
                             name={result.name}
                             label={result.label}
                             value={result.value}
+                            format="json"
                         />
                     ))}
                 </div>

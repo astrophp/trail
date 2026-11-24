@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Status } from '@/api/types'
-import { timingAxis } from '@/features/trace/timing-axis'
+import { axisTicks, timingAxis } from '@/features/trace/timing-axis'
 
 const span = (
     offset_ms: number,
@@ -80,5 +80,17 @@ describe('timingAxis', () => {
                 span(0, null, 'running'),
             ]),
         ).toBeNull()
+    })
+})
+
+describe('axisTicks', () => {
+    it('marks the start, the quarters and the end of the axis', () => {
+        expect(axisTicks(5)).toEqual([0, 1.25, 2.5, 3.75, 5])
+        expect(axisTicks(2_000)).toEqual([0, 500, 1_000, 1_500, 2_000])
+    })
+
+    it('has no ticks for an axis that cannot be drawn', () => {
+        expect(axisTicks(0)).toEqual([])
+        expect(axisTicks(Number.NaN)).toEqual([])
     })
 })

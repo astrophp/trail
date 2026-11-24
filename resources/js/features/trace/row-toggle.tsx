@@ -5,10 +5,12 @@ import { cn } from '@/lib/utils'
 type RowToggleProps = {
     /** `undefined` for a row without anything under it: an empty space of the chevron's size. */
     expanded: boolean | undefined
+    /** For such a row under a parent: a small corner that ties it to the row above, like a tree's. */
+    connector?: boolean
 }
 
 /** The disclosure chevron of a row of the execution tree. The row itself carries `aria-expanded`. */
-export function RowToggle({ expanded }: RowToggleProps) {
+export function RowToggle({ expanded, connector = false }: RowToggleProps) {
     return (
         <span
             data-slot={toggleSlot}
@@ -18,7 +20,11 @@ export function RowToggle({ expanded }: RowToggleProps) {
                 expanded !== undefined && 'hover:bg-muted',
             )}
         >
-            {expanded === undefined ? null : (
+            {expanded === undefined ? (
+                connector ? (
+                    <span className="ms-1.5 mb-1.5 h-2.5 w-2 rounded-es-sm border-s border-b border-muted-foreground/40" />
+                ) : null
+            ) : (
                 <ChevronRightIcon
                     className={cn(
                         'size-3 transition-transform',

@@ -20,6 +20,9 @@ A **trace** is one top-level run. Its **spans** are the parts of it, in a tree:
 | Classification | One classification call, its questions and state, all stored answer forms and measured token usage. |
 | Reranking | One reranking call, original input document indexes, bounded snippets, provider result order and scores, and measured tokens or search units. |
 | Embedding | One embeddings call, with the model, the token count the provider reported, and the dimensions asked for. |
+| Image | One image generation call: its prompt, size, quality and attachments, how many images came back and their types, and the tokens the provider reported. Never the images. |
+| Audio | One text-to-speech call: its text, voice and instructions, how many characters it spoke, and the audio's type and size. Never the audio. |
+| Transcription | One transcription call: the audio it was given (its type, name and size, never its bytes), the language, the transcript, and the tokens and seconds of audio the provider reported. |
 
 A trace also carries the agent class, the final status, the provider and model, the conversation
 and user it belongs to (when the agent remembers conversations), the totals of its steps, an
@@ -33,15 +36,25 @@ Prompts, messages, arguments and results are redacted and cut to a length before
 - **Steps**, with real timing, usage and, on failure, the exception class, message and HTTP status
   when the SDK gave one. A failure is classified as rate limited, provider overloaded, provider
   connection, insufficient credits, tool error or exception.
-- **Tools**, including those that fail.
+- **Tools**, including those that fail. Before `laravel/ai` 1.4.0 a tool that throws ends the
+  run. From 1.4.0 the SDK tells the model the call failed and the run goes on, so the failed tool
+  span can sit in a run that completes. Such a run is not marked recovered: recovered means a
+  later provider answered after a failover.
 - **Sub-agents.** An agent used as a tool, or one prompted by hand inside a tool, is recorded under
   the run that started it, not as a trace of its own, at any depth. When it fails and the parent
-  carries on, the trace is marked as having a failed child.
+  carries on, the trace is marked as having a failed child. From `laravel/ai` 1.4.1 a sub-agent
+  that fails also fails the agent tool that delegated to it; before 1.4.1 that tool completes,
+  with the failure as its result.
 - **Embeddings.** A call made inside a tool is an embedding span under that tool. A call made on
   its own is a trace of its own.
+- **Images, audio and transcription.** The same: a span under the tool that made the call, or a
+  trace of its own. A failed attempt is Failed with its own error from SDK 1.2.2 on; see
+  [Direct capability calls](#direct-capability-calls) for earlier versions.
 - **Failover.** A run that moves to the next provider is one trace. A step records the failed
   attempt, and a trace that a later provider answered is marked recovered. The usage and cost of
-  the failed attempt are counted, and a tool that ran in it is kept as its own span.
+  the failed attempt are counted, and a tool that ran in it is kept as its own span. From
+  `laravel/ai` 1.4.0 a failing tool does not end the attempt, so it cannot trigger a failover,
+  whatever it throws.
 - **Streaming.** A streamed run is recorded when the SDK reports it. A streamed step carries no
   responding model, so it is priced at the model you asked for. A stream that is never iterated
   records nothing, and a stream that is abandoned part-way stays running until it is marked
@@ -57,10 +70,13 @@ Prompts, messages, arguments and results are redacted and cut to a length before
 
 ## What is not recorded
 
-- **Runs the SDK reports no event for.** Trail records agent runs, embeddings, classification and reranking.
-  Images, audio and transcription are not recorded.
-- **The title call.** When an agent remembers conversations and generates a title for a new one,
-  the SDK makes an extra model call that no event reports. It is neither recorded nor priced.
+- **Runs the SDK reports no event for.** Trail records agent runs, embeddings, classification,
+  reranking, image generation, audio and transcription.
+- **Image and audio bytes.** Only their settings, counts, types and sizes are stored.
+- **The title call, before `laravel/ai` 1.4.0.** When an agent remembers conversations and
+  generates a title for a new one, the SDK makes an extra model call that no event reports. It is
+  neither recorded nor priced. From 1.4.0 the title is an agent run of its own, recorded and
+  priced as a child run of the run that opened the conversation.
 - **Embeddings served from the SDK's embeddings cache,** which fire no events.
 - **A stream nobody iterates.**
 - **Runs you leave out:** sampled out, skipped by a filter, started inside `withoutRecording()`,
@@ -116,7 +132,7 @@ A cost is an estimate from list prices, frozen when the run was recorded ([Cost]
 
 ### Direct capability calls
 
-A standalone classification or reranking call is its own root trace. Inside a recorded invocation,
+A standalone classification, reranking, image, audio or transcription call is its own root trace. Inside a recorded invocation,
 it is a child of the observed open tool or agent span and follows the parent's recording decision.
 An unknown or suppressed parent never creates an orphan trace. The SDK invocation ID is used for
 both start and completion, and each recorded call contributes usage exactly once. Agent and tool

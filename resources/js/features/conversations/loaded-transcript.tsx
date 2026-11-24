@@ -2,11 +2,13 @@ import { useCallback, useLayoutEffect, useRef } from 'react'
 import type { Conversation } from '@/api/types'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
+import { InfoHint } from '@/components/patterns/info-hint'
 import { Notice } from '@/components/patterns/notice'
 import { ActivitySpan } from '@/features/conversations/activity-span'
 import { MoreTurns } from '@/features/conversations/more-turns'
 import { RefreshNote } from '@/features/conversations/refresh-note'
 import { TranscriptSide } from '@/features/conversations/transcript-side'
+import { useCurrentTurn } from '@/features/conversations/use-current-turn'
 import { transcriptParams } from '@/features/conversations/transcript-params'
 import {
     turnHeadingDomId,
@@ -149,6 +151,11 @@ export function LoadedTranscript({
         onTurnChange(traceId)
     }
 
+    const current = useCurrentTurn(
+        turns.map(({ turn }) => turn.trace.id),
+        turn,
+    )
+
     function jump(traceId: string) {
         arrive(traceId)
         // A jump within the page is not a place to come back to: Back leaves the page.
@@ -185,6 +192,11 @@ export function LoadedTranscript({
                             from={conversation.first_activity_at}
                             to={conversation.last_activity_at}
                         />
+                        <InfoHint label="What each turn shows">
+                            What was stored for each turn. Messages a turn
+                            resent from earlier in the conversation are left
+                            out.
+                        </InfoHint>
                     </p>
                     <div className="flex items-center gap-2">
                         <Checkbox
@@ -231,19 +243,18 @@ export function LoadedTranscript({
                     onLoad={loadLater}
                     className="pt-6 pb-6"
                 />
-                <p className="border-t pt-4 text-ui text-muted-foreground">
-                    This page shows what was stored for each turn. Messages a
-                    turn resent from earlier in the conversation are left out.
-                </p>
             </section>
+            {/* Beside the transcript it stays in view while the turns scroll, so the jump list is
+                always at hand; it scrolls on its own when it is taller than the window. */}
             <aside
                 aria-label="About this conversation"
-                className="order-first min-w-0 lg:order-none lg:w-64 lg:border-s lg:ps-6"
+                className="order-first min-w-0 lg:sticky lg:top-20 lg:order-none lg:max-h-[calc(100dvh-(--spacing(24)))] lg:w-72 lg:overflow-y-auto lg:overscroll-contain"
             >
                 <TranscriptSide
                     conversation={conversation}
                     turns={turns}
                     onJump={jump}
+                    current={current}
                 />
             </aside>
         </div>

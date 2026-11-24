@@ -9,6 +9,7 @@ use Astro\Trail\Tests\Fixtures\Sdk\FakeCohere;
 use Astro\Trail\Tests\Fixtures\Sdk\FakeDecisions;
 use Astro\Trail\Tests\Fixtures\Sdk\ScriptedClassificationGateway;
 use Astro\Trail\Tests\Fixtures\Sdk\ScriptedRerankingGateway;
+use Astro\Trail\Tests\Fixtures\Sdk\Sdk;
 use Astro\Trail\Tests\Fixtures\Tools\CallbackTool;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Event;
@@ -156,7 +157,7 @@ it('attributes real HTTP calls to ordinary and streamed tools', function (string
     expect(ParentInvocation::current())->toBe([null, null]);
 })->with('sdk capabilities')->with([false, true]);
 
-it('restores ambient context when an uncaught arbitrary capability exception fails a tool and agent', function (string $capability) {
+it('restores ambient context when an uncaught arbitrary capability exception fails a tool, and before SDK 1.4.0 the agent', function (string $capability) {
     $failure = new RuntimeException('Arbitrary gateway failure.');
     sdkCapabilityGateway($capability, fn () => throw $failure);
     AssistantAgent::fake([new ToolCall('call', 'decide', []), 'Done']);
@@ -166,11 +167,21 @@ it('restores ambient context when an uncaught arbitrary capability exception fai
         return 'Unreachable';
     })]);
 
-    expect(fn () => $agent->prompt('Hi'))->toThrow($failure);
+    $recovers = Sdk::recoversFromToolFailures();
+
+    if ($recovers) {
+        expect($agent->prompt('Hi')->text)->toBe('Done');
+    } else {
+        expect(fn () => $agent->prompt('Hi'))->toThrow($failure);
+    }
+
     [$startClass] = sdkCapabilityEvents($capability);
-    expect($this->sdk->timeline())->toBe(['PromptingAgent', 'StartingStep#0', 'StepCompleted#0', 'InvokingTool(decide)', class_basename($startClass), ...sdkCapabilityFailed($capability), 'ToolFailed(decide)', 'AgentFailed'])
+    expect($this->sdk->timeline())->toBe([
+        'PromptingAgent', 'StartingStep#0', 'StepCompleted#0', 'InvokingTool(decide)', class_basename($startClass), ...sdkCapabilityFailed($capability), 'ToolFailed(decide)',
+        ...($recovers ? ['StartingStep#1', 'StepCompleted#1', 'AgentPrompted'] : ['AgentFailed']),
+    ])
         ->and($this->sdk->sole(ToolFailed::class)->event->exception)->toBe($failure)
-        ->and($this->sdk->sole(AgentFailed::class)->event->exception)->toBe($failure)
+        ->and(array_map(fn ($entry) => $entry->event->exception, $this->sdk->of(AgentFailed::class)))->toBe($recovers ? [] : [$failure])
         ->and(ParentInvocation::current())->toBe([null, null]);
 })->with('sdk capabilities');
 
@@ -223,7 +234,7 @@ it('keeps outer tool context in delegated callbacks and switches to the deepest 
         ->and(ParentInvocation::current())->toBe([null, null]);
 })->with('sdk capabilities');
 
-it('restores delegated context when AgentTool catches the deepest capability exception', function (string $capability) {
+it('restores delegated context when the deepest capability exception is caught: by AgentTool before SDK 1.4.0, by the deepest agent from 1.4.0', function (string $capability) {
     $failure = new RuntimeException('Deep gateway failure.');
     sdkCapabilityGateway($capability, fn () => throw $failure);
     AssistantAgent::fake([new ToolCall('outer', 'ResearcherAgent', ['task' => 'Dig']), 'Done']);
@@ -237,12 +248,13 @@ it('restores delegated context when AgentTool catches the deepest capability exc
     $response = (new AssistantAgent([new ResearcherAgent([$deepest])]))->prompt('Hi');
     [$startClass, $endClass] = sdkCapabilityEvents($capability);
     $inner = $this->sdk->of(InvokingTool::class)[2];
+    $recovers = Sdk::recoversFromToolFailures();
     expect($this->sdk->sole($startClass)->parentInvocation)->toBe([$inner->invocationId, $inner->event->toolInvocationId])
         ->and($this->sdk->of($endClass))->toBe([])
         ->and($this->sdk->sole(ToolFailed::class)->event->exception)->toBe($failure)
-        ->and($this->sdk->sole(AgentFailed::class)->event->exception)->toBe($failure)
-        ->and($this->sdk->of(ToolInvoked::class)[0]->event->result)->toBe('Agent failed: Deep gateway failure.')
-        ->and($this->sdk->of(AgentPrompted::class))->toHaveCount(2)
+        ->and(array_map(fn ($entry) => $entry->event->exception, $this->sdk->of(AgentFailed::class)))->toBe($recovers ? [] : [$failure])
+        ->and($this->sdk->of(ToolInvoked::class)[0]->event->result)->toBe($recovers ? 'Summary' : 'Agent failed: Deep gateway failure.')
+        ->and($this->sdk->of(AgentPrompted::class))->toHaveCount($recovers ? 3 : 2)
         ->and($response->text)->toBe('Done')
         ->and(ParentInvocation::current())->toBe([null, null]);
 })->with('sdk capabilities');

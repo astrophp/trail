@@ -289,7 +289,7 @@ final class SpendQuery
             ->selectRaw('sum(m.output_tokens) as output_tokens')
             ->selectRaw('sum(m.cache_read_tokens) as cache_read_tokens')
             ->selectRaw('sum(m.cache_write_tokens) as cache_write_tokens')
-            // Projection computes dollars at current rates; quantity display uses exact storage elsewhere.
+            // Projection computes amounts at current rates; quantity display uses exact storage elsewhere.
             ->selectRaw('sum(cast(floor(m.search_units / 1000000000000) as decimal(38, 0))) as search_high')
             ->selectRaw('sum(cast(floor((m.search_units % 1000000000000) / 1000000) as decimal(38, 0))) as search_middle')
             ->selectRaw('sum(cast(m.search_units % 1000000 as decimal(38, 0))) as search_low')

@@ -27,11 +27,11 @@ export function AgentNotFound({ name }: { name: string }) {
                     'This address does not say which agent to show. Pick one from the list of agents.'
                 ) : (
                     <>
-                        No run or sub-agent run was recorded under the name{' '}
+                        Nothing was recorded as{' '}
                         <span className="font-mono text-xs wrap-anywhere whitespace-pre-wrap">
                             “{name}”
                         </span>
-                        . It may have been pruned, or it was never recorded.
+                        . It may have been pruned.
                     </>
                 )
             }

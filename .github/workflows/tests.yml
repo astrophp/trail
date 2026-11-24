@@ -14,14 +14,18 @@ concurrency:
 
 jobs:
   static:
-    name: Static analysis
+    name: Static analysis / PHP ${{ matrix.php }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.4', '8.5']
     steps:
       - uses: actions/checkout@v7
 
       - uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.4'
+          php-version: ${{ matrix.php }}
           coverage: none
 
       - run: composer update --prefer-dist --no-interaction --no-progress
@@ -62,13 +66,43 @@ jobs:
       - name: Pest
         run: vendor/bin/pest
 
+  lowest:
+    name: Lowest dependencies / Laravel ${{ matrix.laravel }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        laravel: ['12.*', '13.*']
+        include:
+          - laravel: '12.*'
+            testbench: '^10.6'
+          - laravel: '13.*'
+            testbench: '^11.0'
+    steps:
+      - uses: actions/checkout@v7
+
+      # PHP 8.3, the oldest the package allows, so the lowest resolution runs on the oldest runtime.
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pdo_sqlite
+          coverage: none
+
+      - name: Install dependencies
+        run: |
+          composer require "laravel/framework:${{ matrix.laravel }}" "orchestra/testbench:${{ matrix.testbench }}" --dev --no-update --no-interaction
+          composer update --prefer-lowest --prefer-stable --prefer-dist --no-interaction --no-progress
+
+      - name: Pest
+        run: vendor/bin/pest
+
   sdk:
     name: SDK ${{ matrix.sdk }} / Laravel ${{ matrix.laravel }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        sdk: ['1.1.0', '1.2.0']
+        sdk: ['1.1.0', '1.2.0', '1.3.0', '1.4.0', '1.4.1']
         laravel: ['12.*', '13.*']
         include:
           - laravel: '12.*'

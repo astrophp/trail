@@ -8,6 +8,9 @@ export type SpanCounts = {
     classifications: number
     rerankings: number
     embeddings: number
+    images: number
+    audio: number
+    transcriptions: number
     /** The highest attempt of any span; `null` when there are no spans. */
     attempts: number | null
     failed: number
@@ -27,6 +30,9 @@ export function countSpans(spans: Span[]): SpanCounts {
         embeddings: ofType('embedding'),
         classifications: ofType('classification'),
         rerankings: ofType('reranking'),
+        images: ofType('image'),
+        audio: ofType('audio'),
+        transcriptions: ofType('transcription'),
         attempts:
             spans.length === 0
                 ? null

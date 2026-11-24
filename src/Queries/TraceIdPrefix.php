@@ -53,6 +53,6 @@ final class TraceIdPrefix
         $last = $base[strlen($base) - 1];
 
         // The digits are in the order 0-9 then a-f in every collation.
-        return substr($base, 0, -1).($last === '9' ? 'a' : chr(ord($last) + 1));
+        return substr($base, 0, -1).strtr($last, '0123456789abcde', '123456789abcdef');
     }
 }

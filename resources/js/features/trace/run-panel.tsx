@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { Panel } from '@/components/patterns/panel'
 import { cn } from '@/lib/utils'
 
 type RunPanelProps = {
@@ -13,13 +14,12 @@ export function RunPanel({ title, children, className }: RunPanelProps) {
         <section
             data-slot="run-panel"
             aria-label={title}
-            className={cn(
-                'flex min-w-0 flex-col gap-3 rounded-lg border bg-card p-5',
-                className,
-            )}
+            className={cn('min-w-0', className)}
         >
-            <h2 className="text-heading">{title}</h2>
-            {children}
+            <Panel className="flex min-w-0 flex-col gap-3 p-5">
+                <h2 className="text-heading">{title}</h2>
+                {children}
+            </Panel>
         </section>
     )
 }

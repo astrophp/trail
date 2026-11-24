@@ -2,6 +2,7 @@ import { useRef } from 'react'
 import { failureMessage } from '@/api/client'
 import { CountTabs } from '@/components/patterns/count-tabs'
 import { HistorySearchField } from '@/components/patterns/history-search-field'
+import { InfoHint } from '@/components/patterns/info-hint'
 import { Notice } from '@/components/patterns/notice'
 import { Panel } from '@/components/patterns/panel'
 import { PanelContent } from '@/components/patterns/panel-content'
@@ -69,18 +70,17 @@ export function ModelPrices({ className }: { className?: string }) {
                 <PanelHeader
                     title="Model prices"
                     titleTarget={{ id: pricesHeadingId }}
-                    description={
-                        <>
-                            <span className="block">
-                                A price you save applies to runs recorded from
-                                now on. Costs already recorded stay as they
-                                were.
-                            </span>
-                            <span className="block">
-                                A long-running worker can take up to a minute to
-                                pick up a new price.
-                            </span>
-                        </>
+                    hint={
+                        <InfoHint label="About model prices">
+                            Token rates are {tokenRateUnit()}. A saved price
+                            applies to runs recorded from now on; recorded costs
+                            stay as they were. A long-running worker can take a
+                            minute to pick it up. Reranking rates show their
+                            billing unit.
+                            {code === null || code === 'USD'
+                                ? null
+                                : ' Bundled prices are in US dollars and are not used.'}
+                        </InfoHint>
                     }
                 />
                 <PanelContent className="p-0">
@@ -99,7 +99,7 @@ export function ModelPrices({ className }: { className?: string }) {
                     ) : data.data.length === 0 ? (
                         <PanelEmpty
                             title="No models yet"
-                            description="Models come from your Trail configuration and from recorded usage, and there are none of either."
+                            description="Configure a model or record a run."
                         />
                     ) : (
                         <>
@@ -109,20 +109,11 @@ export function ModelPrices({ className }: { className?: string }) {
                                     title="Only part of the list is shown"
                                     className="mx-5 mb-4"
                                 >
-                                    Trail lists {formatCount(data.limit.limit)}{' '}
-                                    of {formatCount(data.limit.total)} models,
-                                    those seen in usage first, so some are not
-                                    shown.
+                                    {formatCount(data.limit.limit)} of{' '}
+                                    {formatCount(data.limit.total)} models,
+                                    those seen in usage first.
                                 </Notice>
                             ) : null}
-                            <p className="px-5 pb-3 text-caption text-muted-foreground">
-                                Token rates are {tokenRateUnit()}; reranking
-                                rates show their billing unit. Models come from
-                                your Trail configuration and recorded usage.
-                                {code === null || code === 'USD'
-                                    ? null
-                                    : ' Bundled prices are in US dollars and are not used.'}
-                            </p>
                             <CountTabs
                                 aria-label="Which models to list"
                                 tabs={[
@@ -166,7 +157,7 @@ export function ModelPrices({ className }: { className?: string }) {
                                         description={
                                             view.find !== ''
                                                 ? 'Clear the filter, or try another provider or model.'
-                                                : 'Recorded steps and embeddings will list their models here. All models shows the ones from your configuration.'
+                                                : 'Models appear here once used.'
                                         }
                                     />
                                 ) : (

@@ -1,6 +1,9 @@
 import {
+    AudioLinesIcon,
     BotIcon,
     BoxIcon,
+    CaptionsIcon,
+    ImageIcon,
     TagsIcon,
     ListOrderedIcon,
     type LucideIcon,
@@ -13,6 +16,9 @@ const icons: Record<Trace['type'], { label: string; Icon: LucideIcon }> = {
     embedding: { label: 'Embedding run', Icon: BoxIcon },
     classification: { label: 'Classification run', Icon: TagsIcon },
     reranking: { label: 'Reranking run', Icon: ListOrderedIcon },
+    image: { label: 'Image run', Icon: ImageIcon },
+    audio: { label: 'Audio run', Icon: AudioLinesIcon },
+    transcription: { label: 'Transcription run', Icon: CaptionsIcon },
 }
 
 /** The label of a root operation, also used outside its icon. */
@@ -24,7 +30,7 @@ type AgentIconProps = {
     className?: string
 }
 
-/** The icon of a run: an agent, or an embedding. */
+/** The icon of a run: an agent, or a single call made on its own. */
 export function AgentIcon({ type, className }: AgentIconProps) {
     const { label, Icon } = icons[type]
 

@@ -6,6 +6,7 @@ import { resolve } from 'node:path'
 export function contractFixture(
     name:
         | 'capabilities'
+        | 'media'
         | 'meta'
         | 'traces'
         | 'trace'

@@ -1,7 +1,10 @@
 import { cva } from 'class-variance-authority'
 import {
+    AudioLinesIcon,
     BotIcon,
     BoxIcon,
+    CaptionsIcon,
+    ImageIcon,
     TagsIcon,
     ListOrderedIcon,
     SparklesIcon,
@@ -19,6 +22,9 @@ const types: Record<SpanType, { label: string; Icon: LucideIcon }> = {
     embedding: { label: 'Embedding', Icon: BoxIcon },
     classification: { label: 'Classification', Icon: TagsIcon },
     reranking: { label: 'Reranking', Icon: ListOrderedIcon },
+    image: { label: 'Image', Icon: ImageIcon },
+    audio: { label: 'Audio', Icon: AudioLinesIcon },
+    transcription: { label: 'Transcription', Icon: CaptionsIcon },
 }
 
 /** The words for a span type, for anything that names one outside an icon. */
@@ -35,6 +41,9 @@ const icon = cva('size-3.75 shrink-0', {
             embedding: 'text-success',
             classification: 'text-info',
             reranking: 'text-success',
+            image: 'text-warning',
+            audio: 'text-info',
+            transcription: 'text-success',
         },
     },
 })

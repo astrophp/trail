@@ -1,9 +1,11 @@
 import { render, screen, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import type { CoverageItem } from '@/api/types'
 import { makeAgentSpan, makeStepSpan, makeToolSpan } from '@/test/trace-api'
 import { TreeHarness } from '@/test/tree-harness'
 import { PaneHarness } from '@/test/pane-harness'
+import { stubResizeObserver } from '@/test/resize-observer'
 import { row } from '@/test/tree-queries'
 
 const spans = [
@@ -81,11 +83,18 @@ describe('the timing lane', () => {
         expect(row('Model step 2, Running')).toHaveTextContent('In progress')
     })
 
-    it('describes a closed bar by its sentence in the row description', () => {
+    it("points a closed row's description at its bar, whose label is the sentence (the computed description is not asserted: jsdom reads the bar's text instead of its label)", () => {
         render(<TreeHarness spans={spans} runDurationMs={1000} />)
 
-        expect(row('Model step 1, Completed')).toHaveAccessibleDescription(
-            /Starts at \+100 ms, took 500 ms/,
+        const closed = row('Model step 1, Completed')
+        const bar = closed.querySelector('[data-slot="timing-bar"]')
+
+        expect(closed.getAttribute('aria-describedby')?.split(' ')).toContain(
+            bar?.id,
+        )
+        expect(bar).toHaveAttribute(
+            'aria-label',
+            'Starts at +100 ms, took 500 ms',
         )
     })
 
@@ -212,15 +221,19 @@ const partial = (captured: number, expected: number): CoverageItem => ({
 })
 
 describe('the column labels of the lane', () => {
-    it('show the start, the middle and the end of the axis', () => {
+    it('mark the start, the quarters and the end, with the unit at the ends, where the gridlines are', () => {
         render(<PaneHarness spans={spans} runDurationMs={2000} />)
 
         const axis = document.querySelector('[data-slot="time-axis"]')
 
-        expect(axis).toHaveTextContent('0 ms')
-        expect(axis).toHaveTextContent('1.00s')
-        expect(axis).toHaveTextContent('2.00s')
-        expect(axis?.children).toHaveLength(3)
+        expect(
+            Array.from(axis?.children ?? [], (tick) => tick.textContent),
+        ).toEqual(['0 ms', '0.5', '1', '1.5', '2.00s'])
+        expect(
+            document
+                .querySelector('[data-slot="timing-grid"]')
+                ?.querySelectorAll('span'),
+        ).toHaveLength(5)
     })
 
     it('are hidden from assistive technology, because the rows carry the facts', () => {
@@ -258,15 +271,22 @@ describe('the column labels of the lane', () => {
 })
 
 describe('the note under the tree', () => {
-    it('keeps the note on parent durations and adds no count when timing is complete', () => {
+    it('keeps the note on parent durations in a hint and adds no count when timing is complete', async () => {
         render(<PaneHarness spans={spans} runDurationMs={1000} />)
 
         expect(
-            screen.getByText('Parent durations include their children.'),
-        ).toBeInTheDocument()
-        expect(
-            screen.queryByText(/Timing was captured/),
+            screen.queryByText(/Timing captured for/),
         ).not.toBeInTheDocument()
+
+        // The tooltip measures itself; jsdom has nothing to measure with.
+        stubResizeObserver()
+        await userEvent.hover(
+            screen.getByRole('button', { name: 'About the timeline' }),
+        )
+
+        expect(await screen.findByRole('tooltip')).toHaveTextContent(
+            'Bars are placed from the run’s start. A parent’s bar and duration include its children.',
+        )
     })
 
     it('says in words how many spans have timing when the server reports a gap', () => {
@@ -279,10 +299,10 @@ describe('the note under the tree', () => {
         )
 
         expect(
-            screen.getByText('Timing was captured for 4 of 6 spans.'),
+            screen.getByText('Timing captured for 4 of 6 spans'),
         ).toBeInTheDocument()
         expect(
-            screen.getByText('Parent durations include their children.'),
+            screen.getByRole('button', { name: 'About the timeline' }),
         ).toBeInTheDocument()
     })
 
@@ -296,7 +316,7 @@ describe('the note under the tree', () => {
         )
 
         expect(
-            screen.getByText('Timing was captured for 0 of 1 span.'),
+            screen.getByText('Timing captured for 0 of 1 span'),
         ).toBeInTheDocument()
     })
 })

@@ -4,10 +4,12 @@ use Astro\Trail\Facades\Trail;
 use Astro\Trail\Storage\Models\Span;
 use Astro\Trail\Storage\Models\Trace;
 use Astro\Trail\Tests\Fixtures\Agents\AssistantAgent;
+use Astro\Trail\Tests\Fixtures\Capture\Failures;
 use Astro\Trail\Tests\Fixtures\Sdk\EventLog;
 use Astro\Trail\Tests\Fixtures\Sdk\FakeAnthropic;
 use Astro\Trail\Tests\Fixtures\Sdk\FakeCohere;
 use Astro\Trail\Tests\Fixtures\Sdk\FakeDecisions;
+use Astro\Trail\Tests\Fixtures\Sdk\Sdk;
 use Astro\Trail\Tests\Fixtures\Tools\CallbackTool;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Event;
@@ -130,7 +132,7 @@ it('fails a call made in a tool with its own error, not as incomplete, when the 
         ->and(Trace::query()->sole()->status->value)->toBe('completed');
 })->with('failing capabilities');
 
-it('fails a call made in a tool with its own error when the failure fails the tool and the run', function (string $capability) {
+it('fails a call made in a tool with its own error when the failure fails the tool', function (string $capability) {
     failingCapabilityScript($capability, [FakeDecisions::error(500)]);
     FakeAnthropic::script([FakeAnthropic::toolUse([['id' => 'toolu_1', 'name' => 'decide', 'input' => []]]), FakeAnthropic::text('Done')]);
     $tool = new CallbackTool('decide', function () use ($capability) {
@@ -139,15 +141,23 @@ it('fails a call made in a tool with its own error when the failure fails the to
         return 'unreachable';
     });
 
-    expect(fn () => (new AssistantAgent([$tool]))->prompt('Hi', model: FakeAnthropic::MODEL))->toThrow(RequestException::class);
+    // How the run goes on after a failed tool depends on the SDK; tests/Feature/Capture/FailureCaptureTest.php covers it.
+    // From SDK 1.4.0 the failed tool is handed to the model and the run carries on to its answer.
+    $thrown = Failures::outcome(fn () => (new AssistantAgent([$tool]))->prompt('Hi', model: FakeAnthropic::MODEL));
     Trail::flush();
     $span = Span::query()->where('type', $capability)->sole();
+    $tool = Span::query()->where('type', 'tool')->sole();
+
+    Sdk::recoversFromToolFailures()
+        ? expect($thrown)->toBeNull()
+        : expect($thrown)->toBeInstanceOf(RequestException::class);
 
     expect($span->status->value)->toBe('failed')
         ->and($span->error_source->value)->toBe('run')
         ->and($span->duration_ms)->toBeFloat()
-        ->and(Span::query()->where('type', 'tool')->sole()->status->value)->toBe('failed')
-        ->and(Trace::query()->sole()->status->value)->toBe('failed');
+        ->and($tool->status->value)->toBe('failed')
+        ->and($tool->error_class)->toBe(RequestException::class)
+        ->and(Trace::query()->sole()->status->value)->toBe(Sdk::recoversFromToolFailures() ? 'completed' : 'failed');
 })->with('failing capabilities');
 
 it('does not reopen a failed call for a late completion with the same id', function () {

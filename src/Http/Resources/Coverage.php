@@ -38,7 +38,7 @@ final class Coverage
                 }
             }
 
-            if (in_array($span->type, [SpanType::Step, SpanType::Classification, SpanType::Reranking], true) && $status === Status::Completed) {
+            if (in_array($span->type, [SpanType::Step, SpanType::Classification, SpanType::Reranking, SpanType::Image, SpanType::Audio, SpanType::Transcription], true) && $status === Status::Completed) {
                 self::count($respondingModel, $span->responding_model !== null);
             }
 

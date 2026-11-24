@@ -68,8 +68,8 @@ export function RunNotices({
                         tone="info"
                         title={`Showing the first ${formatCount(notice.limit)} of ${formatCount(notice.total)} spans`}
                     >
-                        Totals in the header cover the whole run. The tree, the
-                        usage table and the coverage cover the spans shown.
+                        Header totals cover the whole run; the tree and tables
+                        cover the spans shown.
                     </Notice>
                 )
             case 'running':
@@ -104,9 +104,9 @@ export function RunNotices({
                         title="This run never reported an end"
                     >
                         {notice.abandoned
-                            ? `It was still marked running after the stale timeout${staleAfter === undefined ? '' : ` of ${formatDuration(staleAfter * 1000)}`}, which happens when a stream is abandoned or a worker crashes. `
+                            ? `Still running after the stale timeout${staleAfter === undefined ? '' : ` of ${formatDuration(staleAfter * 1000)}`}. `
                             : ''}
-                        What was recorded up to that point is shown below.
+                        Shown as recorded.
                     </Notice>
                 )
             case 'approval':
@@ -131,10 +131,7 @@ export function RunNotices({
                             )
                         }
                     >
-                        {notice.tools.length > 1
-                            ? 'When they are approved'
-                            : 'When it is approved'}
-                        , the run that continues is recorded as a separate run.
+                        The resumed run is recorded separately.
                     </Notice>
                 )
             case 'recovered':
@@ -145,8 +142,7 @@ export function RunNotices({
                         showLabel="Show the failed attempt"
                         onShow={show(notice.spanId)}
                     >
-                        An earlier attempt failed and the run moved on to
-                        another.
+                        An earlier attempt failed.
                     </FlagLine>
                 )
             case 'child-failed':

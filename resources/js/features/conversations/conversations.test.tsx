@@ -50,10 +50,10 @@ describe('the Conversations page', () => {
             screen.getByRole('heading', { level: 1, name: 'Conversations' }),
         ).toBeInTheDocument()
         expect(
-            screen.getByText(
+            screen.queryByText(
                 "Understand the user's experience, one recorded turn at a time.",
             ),
-        ).toBeVisible()
+        ).toBeNull()
     })
 
     it('has the seven columns in order, sortable only where the API sorts', async () => {
@@ -83,9 +83,7 @@ describe('the Conversations page', () => {
         await loaded()
 
         expect(
-            screen.getByText(
-                'Totals cover every recorded turn of a conversation, including turns outside the selected period.',
-            ),
+            screen.getByText('Totals include turns outside this period.'),
         ).toBeVisible()
     })
 
@@ -361,7 +359,7 @@ describe('while the conversations load', () => {
         ).toEqual(Array(8 * 7).fill(''))
         expect(screen.queryByText(/\d conversations$/)).not.toBeInTheDocument()
         expect(
-            screen.queryByText(/^Totals cover every recorded turn/),
+            screen.queryByText(/^Totals include turns outside/),
         ).not.toBeInTheDocument()
     })
 
@@ -489,7 +487,7 @@ describe('when the conversations cannot be loaded', () => {
 })
 
 describe('when the period holds no conversations', () => {
-    it('says what a conversation is and where the other runs are, inside the table card, with no pagination and no footer note', async () => {
+    it('says which runs appear here, inside the table card, with no pagination and no footer note', async () => {
         mockApi(() => json(emptyList))
         renderApp('/conversations')
 
@@ -498,9 +496,7 @@ describe('when the period holds no conversations', () => {
         })
 
         expect(
-            screen.getByText(
-                "A conversation appears when an agent uses the SDK's conversation memory. Runs without one are on the Traces page.",
-            ),
+            screen.getByText('Runs that use conversation memory appear here.'),
         ).toBeVisible()
         expect(heading.closest('[data-slot="data-table"]')).toBe(
             table().closest('[data-slot="data-table"]'),
@@ -509,7 +505,7 @@ describe('when the period holds no conversations', () => {
             screen.queryByRole('navigation', { name: 'Pagination' }),
         ).not.toBeInTheDocument()
         expect(
-            screen.queryByText(/^Totals cover every recorded turn/),
+            screen.queryByText(/^Totals include turns outside/),
         ).not.toBeInTheDocument()
         expect(
             screen.queryByRole('button', { name: 'Clear filters' }),

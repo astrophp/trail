@@ -8,6 +8,7 @@ use Astro\Trail\Storage\Models\Span;
 use Astro\Trail\Storage\Models\Trace;
 use Astro\Trail\Storage\StaleRuns;
 use Astro\Trail\Tests\Fixtures\Sdk\FakeAnthropic;
+use Astro\Trail\Tests\Fixtures\Sdk\Sdk;
 use Illuminate\Http\Client\Factory;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -89,13 +90,27 @@ function expectations(): array
                 ->and($trace->child_failed)->toBeTrue()
                 ->and($child->status)->toBe(Status::Failed);
         }],
-        'throwing-tool' => [Outcome::FailedAsExpected, 1, function (Collection $traces) {
+        // From SDK 1.4.0 the run carries on after the tool fails.
+        'throwing-tool' => [Sdk::recoversFromToolFailures() ? Outcome::Ok : Outcome::FailedAsExpected, 1, function (Collection $traces) {
             $trace = $traces->sole();
+            $tool = $trace->spans()->where('type', SpanType::Tool)->sole();
+
+            expect($tool->status)->toBe(Status::Failed)
+                ->and($tool->issue_kind)->toBe(IssueKind::ToolError)
+                ->and($tool->error_class)->toBe(CarrierUnavailable::class);
+
+            if (Sdk::recoversFromToolFailures()) {
+                expect($trace->status)->toBe(Status::Completed)
+                    ->and($trace->recovered)->toBeFalse()
+                    ->and($trace->issue_kind)->toBeNull()
+                    ->and($trace->spans()->where('type', SpanType::Step)->count())->toBe(2);
+
+                return;
+            }
 
             expect($trace->status)->toBe(Status::Failed)
                 ->and($trace->issue_kind)->toBe(IssueKind::ToolError)
-                ->and($trace->error_class)->toBe(CarrierUnavailable::class)
-                ->and($trace->spans()->where('type', SpanType::Tool)->sole()->status)->toBe(Status::Failed);
+                ->and($trace->error_class)->toBe(CarrierUnavailable::class);
         }],
         'provider-failure' => [Outcome::FailedAsExpected, 1, function (Collection $traces) {
             $trace = $traces->sole();
@@ -150,6 +165,16 @@ function expectations(): array
                 ->and($tools)->toHaveCount(1)
                 ->and($tools->sole()->name)->toBe('lookup_order')
                 ->and($tools->sole()->trace_id)->toBe(inOrder($traces)[1]->id);
+        }],
+        'markdown-answers' => [Outcome::Ok, 3, function (Collection $traces) {
+            $answer = inOrder($traces)[0]->spans()->where('type', SpanType::Agent)->sole()->output['text'];
+
+            expect($traces->pluck('conversation_id')->unique()->all())->toHaveCount(1)->not->toContain(null)
+                ->and($traces->every(fn (Trace $trace) => $trace->status === Status::Completed))->toBeTrue()
+                ->and($answer)->toContain('| Ridgeline rain shell | 1 | €129.00 |')
+                ->and($answer)->toContain('[redacted]')
+                ->and($answer)->not->toContain('nwtok_')
+                ->and(mb_strlen(inOrder($traces)[1]->spans()->where('type', SpanType::Agent)->sole()->output['text']))->toBeGreaterThan(8000);
         }],
         'conversation-failover' => [Outcome::Ok, 2, function (Collection $traces) {
             [$first, $second] = inOrder($traces)->all();
@@ -291,9 +316,9 @@ it('records the run of the scenario', function (string $key) {
 it('runs every scenario one after the other in one process', function () {
     $results = app(ScenarioRunner::class)->runAll();
 
-    expect($results)->toHaveCount(23)
+    expect($results)->toHaveCount(24)
         ->and(array_filter($results, fn ($result) => $result->outcome === Outcome::Error))->toBe([])
-        ->and(Trace::query()->count())->toBe(33);
+        ->and(Trace::query()->count())->toBe(36);
 });
 
 it('leaves the HTTP client and its script as it found them', function () {
@@ -353,7 +378,7 @@ describe('the landing page', function () {
     it('runs every scenario with Run all', function () {
         $this->post('/run')->assertRedirect('/');
 
-        expect(Trace::query()->count())->toBe(33);
+        expect(Trace::query()->count())->toBe(36);
     });
 
     it('answers 404 for a scenario that does not exist', function () {

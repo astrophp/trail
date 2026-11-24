@@ -6,6 +6,7 @@ import type { AttemptNode } from '@/features/trace/build-span-tree'
 import { rowIndent } from '@/features/trace/row-layout'
 import { RowToggle } from '@/features/trace/row-toggle'
 import { spanTitle } from '@/features/trace/span-title'
+import { TimingGrid } from '@/features/trace/timing-grid'
 
 type AttemptRowProps = {
     node: AttemptNode
@@ -24,6 +25,8 @@ type AttemptRowProps = {
     onKeyDown: (event: KeyboardEvent<HTMLElement>, id: string) => void
     /** Selects a span: the one that failed in this attempt. */
     onSelect: (id: string) => void
+    /** The length of the run's time axis, whose gridlines run through the row; `null` for none. */
+    axisMs?: number | null
 }
 
 /**
@@ -42,6 +45,7 @@ export const AttemptRow = memo(function AttemptRow({
     onPress,
     onKeyDown,
     onSelect,
+    axisMs = null,
 }: AttemptRowProps) {
     const { failed, outcome } = node
     const message = failed?.error?.message ?? null
@@ -64,10 +68,11 @@ export const AttemptRow = memo(function AttemptRow({
             tabIndex={tabbable ? 0 : -1}
             onClick={() => onPress(node.id, true)}
             onKeyDown={(event) => onKeyDown(event, node.id)}
-            className="span-row flex min-h-12.5 items-center gap-3 rounded-md px-2 py-1.5 text-ui outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+            className="span-row relative isolate flex min-h-12.5 items-center gap-3 rounded-md px-2 py-1.5 text-ui outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
         >
+            {/* Held to the left half, as a span row's name is, so the gridlines never cross its words. */}
             <div
-                className="flex min-w-0 flex-1 items-center gap-2"
+                className="flex min-w-0 flex-1 items-center gap-2 md:max-w-1/2"
                 style={rowIndent(node.depth)}
             >
                 <RowToggle expanded={filtering ? undefined : expanded} />
@@ -130,6 +135,7 @@ export const AttemptRow = memo(function AttemptRow({
                 <Button
                     variant="ghost"
                     size="xs"
+                    className="relative ms-auto"
                     // Not a second tab stop in the tree: the keyboard reaches the span with the arrows or `e`.
                     tabIndex={-1}
                     aria-label={`Show failure of attempt ${node.attempt}: ${spanTitle(failed)}`}
@@ -141,6 +147,7 @@ export const AttemptRow = memo(function AttemptRow({
                     Show failure
                 </Button>
             ) : null}
+            <TimingGrid axisMs={axisMs} />
         </div>
     )
 })

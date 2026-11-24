@@ -45,3 +45,18 @@ export function timingAxis(
     // An axis of no length has nothing to draw on.
     return axis === null || axis <= 0 ? null : axis
 }
+
+/**
+ * The ticks of a time axis of `axisMs`, in milliseconds from its start: its start, its quarters
+ * and its end, so the last tick always marks where the run ends. `[]` for an axis that cannot be
+ * drawn.
+ */
+export function axisTicks(axisMs: number): number[] {
+    if (!Number.isFinite(axisMs) || axisMs <= 0) {
+        return []
+    }
+
+    return [0, 1, 2, 3, 4].map((quarter) =>
+        Number(((axisMs * quarter) / 4).toFixed(6)),
+    )
+}

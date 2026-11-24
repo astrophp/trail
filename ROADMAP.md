@@ -1,6 +1,6 @@
 # Roadmap
 
-This page lists what the first release contains and what is planned after it. What comes after is
+This page lists what each major step of Trail contained and what may come next. What comes next is
 not a commitment to dates. For the detail of a release, see the [changelog](CHANGELOG.md); for what
 Trail does not do today, see [Known limits](docs/limits.md).
 
@@ -39,6 +39,12 @@ Trail does not do today, see [Known limits](docs/limits.md).
 - `Trail::fake()` and its assertions for your own tests.
 - User documentation in `docs/`.
 
+## v0.2.0 — Laravel Boost
+
+- Four read-only MCP tools through Laravel Boost: recent traces, a trace, conversation turns, and
+  usage and estimated cost.
+- A package guideline and a `TRAIL_BOOST_ENABLED` switch; no separate MCP server is needed.
+
 ## v0.3.0 — classification and reranking
 
 - Event capture, bounded and redacted payloads, honest incomplete lifecycle evidence.
@@ -46,11 +52,27 @@ Trail does not do today, see [Known limits](docs/limits.md).
 - Root-operation filters, inspectors, comparison, usage, CSV and Boost readers.
 - SDK 1.1/1.2 compatibility, offline scenarios and a coordinated migration/restart upgrade.
 
-## After v0.3.0
+## v0.4.0 — images, audio and transcription
+
+- Event capture of image generation, text-to-speech and transcription calls, standalone and inside
+  tools, with their failures from SDK 1.2.2 on.
+- Settings, counts and redacted texts only; never image or audio bytes.
+- Token-based estimates where providers report tokens, and Not captured where they do not.
+
+## v1.0.0 — readable answers
+
+The first stable release. From here on Trail's public surface follows semantic versioning; see
+[Versioning](docs/installation.md#versioning).
+
+- Model answers in conversations and run evidence drawn as markdown: headings, lists, task lists,
+  tables, code and links.
+- A Rendered / Raw switch, remembered in the browser, so the stored text is one click away.
+- No raw HTML, no remote images and only http, https and mailto links; redaction stays marked.
+
+## Later
 
 These are ideas, not promises.
 
-- More run types: images, audio and transcription.
 - Linking runs that pause for tool approval to the run that resumes them, which are separate
   traces today.
 - Saved views shared between dashboard users.

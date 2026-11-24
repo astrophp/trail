@@ -16,6 +16,7 @@ use Workbench\App\Scenarios\Catalog\EmbeddingsInTool;
 use Workbench\App\Scenarios\Catalog\FailingSubAgent;
 use Workbench\App\Scenarios\Catalog\Failover;
 use Workbench\App\Scenarios\Catalog\LongConversation;
+use Workbench\App\Scenarios\Catalog\MarkdownAnswers;
 use Workbench\App\Scenarios\Catalog\PartlyPricedRun;
 use Workbench\App\Scenarios\Catalog\PlainAnswer;
 use Workbench\App\Scenarios\Catalog\ProviderFailure;
@@ -47,6 +48,7 @@ final class Registry
         ApprovalGatedTool::class,
         Conversation::class,
         LongConversation::class,
+        MarkdownAnswers::class,
         ConversationFailover::class,
         ConversationApproval::class,
         ConversationDelegation::class,

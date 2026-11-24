@@ -90,7 +90,7 @@ export function TracesTable({
                         <EmptyState
                             icon={SearchXIcon}
                             title="No runs match these filters"
-                            description="Try removing a filter, widening the time range or searching for something else."
+                            description="Try fewer filters or a longer range."
                         >
                             <Button
                                 variant="outline"

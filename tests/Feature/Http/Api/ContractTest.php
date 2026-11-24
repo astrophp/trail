@@ -526,6 +526,42 @@ it('sends direct classification and reranking contracts without enabling capture
     assertContract('capabilities', $responses);
 });
 
+it('sends image, audio and transcription contracts with settings and counts, never media bytes', function () {
+    $calls = [
+        SpanType::Image->value => [
+            'inputTokens' => 12, 'outputTokens' => 400,
+            'input' => ['prompt' => 'Synthetic prompt', 'size' => '3:2', 'quality' => 'high', 'attachment_count' => 0],
+            'output' => ['count' => 1, 'mime_types' => ['image/png']],
+            'metadata' => ['image_input_tokens' => 0, 'image_output_tokens' => 400],
+        ],
+        SpanType::Audio->value => [
+            'input' => ['voice' => 'alloy', 'characters' => 15],
+            'output' => ['mime_type' => 'audio/mpeg', 'size' => 2048],
+        ],
+        SpanType::Transcription->value => [
+            'inputTokens' => 30, 'outputTokens' => 6,
+            'input' => ['language' => 'en', 'diarize' => false],
+            'output' => ['text' => 'Synthetic transcript', 'segment_count' => 0],
+            'metadata' => ['audio_seconds' => 3.5],
+        ],
+    ];
+    $responses = [];
+    foreach ([SpanType::Image, SpanType::Audio, SpanType::Transcription] as $type) {
+        $trace = Records::trace([
+            'id' => 'contract-'.$type->value, 'type' => $type, 'status' => Status::Completed,
+            'name' => ucfirst($type->value).' calls', 'startedAt' => Carbon::parse('2026-01-02 11:00:00'),
+        ]);
+        app(TraceStore::class)->store($trace, [Records::span($trace->id, [
+            'id' => $type->value.'-span', 'type' => $type, 'name' => ucfirst($type->value).' calls', 'sequence' => 1,
+            'provider' => 'openai', 'model' => 'synthetic-model', 'startedAt' => Carbon::parse('2026-01-02 11:00:00'),
+            ...$calls[$type->value],
+        ])]);
+        $response = $this->getJson('/trail/api/traces/'.$trace->id)->assertOk();
+        $responses[$type->value] = json_decode($response->getContent(), flags: JSON_THROW_ON_ERROR);
+    }
+    assertContract('media', $responses);
+});
+
 it('sends the meta response the dashboard expects', function () {
     contractDataset();
 

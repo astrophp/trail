@@ -3,12 +3,15 @@
 use Astro\Trail\Tests\Fixtures\Agents\AssistantAgent;
 use Astro\Trail\Tests\Fixtures\Agents\FailingRepairingAgent;
 use Astro\Trail\Tests\Fixtures\Agents\FailingSingleStepAgent;
+use Astro\Trail\Tests\Fixtures\Capture\Failures;
 use Astro\Trail\Tests\Fixtures\Sdk\FakeAnthropic;
+use Astro\Trail\Tests\Fixtures\Sdk\Sdk;
 use Astro\Trail\Tests\Fixtures\Tools\CallbackTool;
 use Astro\Trail\Tests\Fixtures\Tools\LookupTool;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Validation\ValidationException;
 use Laravel\Ai\Events\AgentFailed;
 use Laravel\Ai\Events\AgentPrompted;
@@ -21,6 +24,7 @@ use Laravel\Ai\Events\ToolInvoked;
 use Laravel\Ai\Exceptions\AiException;
 use Laravel\Ai\Exceptions\FailoverableException;
 use Laravel\Ai\Exceptions\InsufficientCreditsException;
+use Laravel\Ai\Exceptions\InvalidApiKeyException;
 use Laravel\Ai\Exceptions\NoSuchToolException;
 use Laravel\Ai\Exceptions\ProviderConnectionException;
 use Laravel\Ai\Exceptions\ProviderOverloadedException;
@@ -173,7 +177,8 @@ describe('a provider that answers HTTP 200 with an error body', function () {
 
 describe('exception classes for provider errors', function () {
     // The Anthropic gateway maps 429, 402, 529 and the shared gateway statuses itself, and treats
-    // any status whose message contains a billing phrase as insufficient credits. Everything else
+    // any status whose message contains a billing phrase as insufficient credits. From SDK 1.4.1 a
+    // 401 is InvalidApiKeyException, a RequestException that names the provider. Everything else
     // is rethrown as the HTTP client's RequestException, which is not failoverable.
     dataset('provider errors', [
         '429 rate limited' => [429, 'Slow down', RateLimitedException::class, true, 'Application rate limited by AI provider [anthropic].'],
@@ -183,7 +188,9 @@ describe('exception classes for provider errors', function () {
         '503 unavailable' => [503, 'Unavailable', ProviderOverloadedException::class, true, 'AI provider [anthropic] is overloaded.'],
         '504 gateway timeout' => [504, 'Timeout', ProviderOverloadedException::class, true, 'AI provider [anthropic] is overloaded.'],
         '500 server error' => [500, 'Server error', RequestException::class, false, 'HTTP request returned status code 500'],
-        '401 unauthorised' => [401, 'Invalid key', RequestException::class, false, 'HTTP request returned status code 401'],
+        '401 unauthorised' => Sdk::raisesInvalidApiKey()
+            ? [401, 'Invalid key', InvalidApiKeyException::class, false, 'Missing or invalid API key for AI provider [anthropic]. HTTP request returned status code 401']
+            : [401, 'Invalid key', RequestException::class, false, 'HTTP request returned status code 401'],
         '400 bad request' => [400, 'Bad request', RequestException::class, false, 'HTTP request returned status code 400'],
         '404 not found' => [404, 'No such model', RequestException::class, false, 'HTTP request returned status code 404'],
         '400 credit balance message' => [400, 'Your credit balance is too low to access the API.', InsufficientCreditsException::class, true, 'AI provider [anthropic] has insufficient credits or quota.'],
@@ -243,11 +250,13 @@ describe('exception classes for provider errors', function () {
             'Laravel\Ai\Exceptions\ApprovalNotResumableException',
             'Laravel\Ai\Exceptions\EmbeddingsCountMismatchException',
             'Laravel\Ai\Exceptions\InsufficientCreditsException',
+            ...(Sdk::raisesInvalidApiKey() ? ['Laravel\Ai\Exceptions\InvalidApiKeyException'] : []),
             'Laravel\Ai\Exceptions\NoSuchToolException',
             'Laravel\Ai\Exceptions\ProviderConnectionException',
             'Laravel\Ai\Exceptions\ProviderOverloadedException',
             'Laravel\Ai\Exceptions\RateLimitedException',
             'Laravel\Ai\Exceptions\StreamErrorException',
+            ...(Sdk::recoversFromToolFailures() ? ['Laravel\Ai\Exceptions\ToolExecutionException'] : []),
         ])->and($classes->filter(fn (string $class) => is_subclass_of($class, FailoverableException::class))->values()->all())->toBe([
             'Laravel\Ai\Exceptions\InsufficientCreditsException',
             'Laravel\Ai\Exceptions\ProviderConnectionException',
@@ -258,6 +267,9 @@ describe('exception classes for provider errors', function () {
 });
 
 describe('a tool that throws', function () {
+    // Before SDK 1.4.0 the tool's exception ends the run. From 1.4.0 the SDK reports it, answers the
+    // model with it as a failed tool result and asks for another step.
+
     it('fires ToolFailed and then AgentFailed, with no StepFailed', function () {
         FakeAnthropic::script([failingToolTurn('explode', 'toolu_1', ['query' => 'laravel'])]);
 
@@ -274,21 +286,53 @@ describe('a tool that throws', function () {
             'AgentFailed',
         ])->and($thrown->getMessage())->toBe('Tool broke')
             ->and($this->sdk->sole(AgentFailed::class)->event->exception)->toBe($thrown);
-    });
+    })->skip(fn () => Sdk::recoversFromToolFailures(), 'From SDK 1.4.0 a tool that throws does not end the run.');
+
+    it('fires ToolFailed, answers the model with the failure and runs another step', function () {
+        Exceptions::fake();
+        $anthropic = FakeAnthropic::script([failingToolTurn('explode', 'toolu_1', ['query' => 'laravel']), FakeAnthropic::text('The lookup failed.')]);
+
+        $broke = new RuntimeException('Tool broke');
+        $tool = new CallbackTool('explode', fn () => throw $broke);
+
+        $response = (new AssistantAgent([$tool]))->prompt('Hi');
+
+        $sent = collect($anthropic->requests()[1]['messages'])->last()['content'][0];
+
+        expect($this->sdk->timeline())->toBe([
+            'PromptingAgent',
+            'StartingStep#0',
+            'StepCompleted#0',
+            'InvokingTool(explode)',
+            'ToolFailed(explode)',
+            'StartingStep#1',
+            'StepCompleted#1',
+            'AgentPrompted',
+        ])->and($response->text)->toBe('The lookup failed.')
+            ->and($response->toolResults)->toHaveCount(1)
+            ->and($response->toolResults[0]->failed)->toBeTrue()
+            ->and($response->toolResults[0]->result)->toBe('The tool call failed: Tool broke')
+            ->and($sent)->toMatchArray(['type' => 'tool_result', 'tool_use_id' => 'toolu_1', 'content' => 'The tool call failed: Tool broke'])
+            ->and($this->sdk->of(AgentFailed::class))->toBe([]);
+
+        // The tool's own exception is reported, the one ToolFailed carries, and nothing else.
+        expect(Exceptions::reported())->toBe([$broke]);
+    })->skip(fn () => ! Sdk::recoversFromToolFailures(), 'Before SDK 1.4.0 a tool that throws ends the run.');
 
     it('carries the tool, arguments, exception, duration and both invocation ids on ToolFailed', function () {
-        FakeAnthropic::script([failingToolTurn('explode', 'toolu_1', ['query' => 'laravel'])]);
+        FakeAnthropic::script([failingToolTurn('explode', 'toolu_1', ['query' => 'laravel']), ...FakeAnthropic::afterToolFailure(FakeAnthropic::text('The lookup failed.'))]);
 
-        $tool = new CallbackTool('explode', fn () => throw new RuntimeException('Tool broke'));
+        $broke = new RuntimeException('Tool broke');
+        $tool = new CallbackTool('explode', fn () => throw $broke);
 
-        $thrown = failingThrown(fn () => (new AssistantAgent([$tool]))->prompt('Hi'));
+        expect(Failures::outcome(fn () => (new AssistantAgent([$tool]))->prompt('Hi')))->toBe(Sdk::recoversFromToolFailures() ? null : $broke);
 
         $failed = $this->sdk->sole(ToolFailed::class)->event;
         $invoking = $this->sdk->of(InvokingTool::class)[0]->event;
 
         expect($failed->tool)->toBe($tool)
             ->and($failed->arguments)->toBe(['query' => 'laravel'])
-            ->and($failed->exception)->toBe($thrown)
+            ->and($failed->exception)->toBe($broke)
             ->and($failed->time)->toBeFloat()->toBeGreaterThanOrEqual(0.0)->toBeLessThan(5000.0)
             ->and($failed->agent)->toBeInstanceOf(AssistantAgent::class)
             ->and($failed->invocationId)->toBe($this->sdk->sole(PromptingAgent::class)->invocationId)
@@ -296,16 +340,17 @@ describe('a tool that throws', function () {
             ->and($failed->toolInvocationId)->toBe($invoking->toolInvocationId);
     });
 
-    it('does not fire ToolInvoked for the failed call, and the response is never built', function () {
-        FakeAnthropic::script([failingToolTurn('explode')]);
+    it('does not fire ToolInvoked or StepFailed for the failed call, and builds a response only where the run goes on', function () {
+        FakeAnthropic::script([failingToolTurn('explode'), ...FakeAnthropic::afterToolFailure(FakeAnthropic::text('The lookup failed.'))]);
 
-        $tool = new CallbackTool('explode', fn () => throw new RuntimeException('Tool broke'));
+        $broke = new RuntimeException('Tool broke');
+        $tool = new CallbackTool('explode', fn () => throw $broke);
 
-        failingThrown(fn () => (new AssistantAgent([$tool]))->prompt('Hi'));
+        expect(Failures::outcome(fn () => (new AssistantAgent([$tool]))->prompt('Hi')))->toBe(Sdk::recoversFromToolFailures() ? null : $broke);
 
         expect($this->sdk->of(ToolInvoked::class))->toBe([])
             ->and($this->sdk->of(StepFailed::class))->toBe([])
-            ->and($this->sdk->of(AgentPrompted::class))->toBe([]);
+            ->and($this->sdk->of(AgentPrompted::class))->toHaveCount(Sdk::recoversFromToolFailures() ? 1 : 0);
     });
 
     it('fails the run on the first throwing tool and skips the tools after it in the same step', function () {
@@ -326,7 +371,37 @@ describe('a tool that throws', function () {
             'ToolFailed(explode)',
             'AgentFailed',
         ]);
-    });
+    })->skip(fn () => Sdk::recoversFromToolFailures(), 'From SDK 1.4.0 a tool that throws does not end the run.');
+
+    it('still runs the tools after a throwing one in the same step', function () {
+        Exceptions::fake();
+        FakeAnthropic::script([
+            FakeAnthropic::toolUse([
+                ['id' => 'toolu_1', 'name' => 'explode', 'input' => []],
+                ['id' => 'toolu_2', 'name' => 'lookup', 'input' => ['query' => 'laravel']],
+            ]),
+            FakeAnthropic::text('Found it anyway.'),
+        ]);
+
+        $broke = new RuntimeException('Tool broke');
+        $tool = new CallbackTool('explode', fn () => throw $broke);
+
+        $response = (new AssistantAgent([$tool, new LookupTool]))->prompt('Hi');
+
+        expect($this->sdk->timeline())->toBe([
+            'PromptingAgent',
+            'StartingStep#0',
+            'StepCompleted#0',
+            'InvokingTool(explode)',
+            'ToolFailed(explode)',
+            'InvokingTool(lookup)',
+            'ToolInvoked(lookup)',
+            'StartingStep#1',
+            'StepCompleted#1',
+            'AgentPrompted',
+        ])->and($response->toolResults->map(fn (ToolResult $result) => $result->failed)->all())->toBe([true, false])
+            ->and(Exceptions::reported())->toBe([$broke]);
+    })->skip(fn () => ! Sdk::recoversFromToolFailures(), 'Before SDK 1.4.0 a tool that throws ends the run.');
 });
 
 describe('a tool that fails validation', function () {

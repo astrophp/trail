@@ -1,16 +1,18 @@
 # Known limits
 
-This page lists what Trail does not do or does imperfectly in `v0.1.0`, so you do not have to
+This page lists what Trail does not do or does imperfectly today, so you do not have to
 find out from a missing number.
 
 ## Things the SDK does not report
 
 Trail records what the SDK reports through its events, so a few things cannot be recorded:
 
-- When an agent remembers conversations and generates a title for a new one, the SDK makes an
-  extra model call that no event reports. It is neither recorded nor priced.
+- Before `laravel/ai` 1.4.0, when an agent remembers conversations and generates a title for a new
+  one, the SDK makes an extra model call that no event reports. It is neither recorded nor priced.
+  From 1.4.0 the title is an agent run of its own, recorded and priced as a child run of the run
+  that opened the conversation.
 - Embeddings served from the SDK's embeddings cache fire no events, so they do not appear.
-- Images, audio and transcription are not recorded. Classification and reranking are recorded.
+- Image, audio and transcription calls are recorded, but never their image or audio bytes.
 
 ## A paused run and the run that resumed it are separate traces
 
@@ -83,10 +85,26 @@ until explicitly updated; they do not expire automatically. Check [Cost](cost.md
 
 The dashboard's JavaScript and CSS are inlined into the page, so there is nothing to publish and
 no asset URL to configure. The cost is that every dashboard page load carries them. In this
-release the script is about 1.3 MB, about 380 KB gzipped
-(measure it with `gzip -c dist/app.js | wc -c`), and the stylesheet is about 135 KB, about 20 KB
+release the script is about 1.5 MB, about 440 KB gzipped
+(measure it with `gzip -c dist/app.js | wc -c`), and the stylesheet is about 140 KB, about 23 KB
 gzipped. Whether the page is compressed in transit depends on your web server. The size changes
 with every release that changes the dashboard.
+
+## Answers shown as markdown
+
+Model answers are drawn as GitHub-flavoured markdown (see [Payloads](payloads.md#how-answers-are-shown)),
+with these limits:
+
+- Code is not highlighted.
+- Raw HTML is shown as the text it is, never as markup.
+- An image is never loaded: its description and address are shown, and a long inline `data:`
+  image is summarised.
+- A link to anything but an `http`, `https` or `mailto` address is shown as text.
+- A long answer is drawn in parts of about 4,000 characters, cut between blocks. A code block
+  is never cut, so a part holding a very long one is longer.
+- Block quotes nested more than 64 deep are shown as plain text.
+
+Raw always shows the answer exactly as stored.
 
 ## Several SQLite writers can lose a trace
 
@@ -235,9 +253,25 @@ about 377 MiB on MySQL and 409 MiB on Postgres at 100,000 runs, and about 3.7 Gi
 `trail:prune` is how you bound it.
 
 
+## Image, audio and transcription pricing
+
+These calls are priced like a model step: their reported input and output tokens at their model's
+ordinary token rates, with limits:
+
+- No default prices ship for them, so they are Unpriced until you add a price for the model.
+- A call whose provider reports no tokens has a cost that is Not captured, never zero. That
+  includes models billed per image, per character or per minute, and every speech call through
+  the SDK's OpenAI, OpenRouter and Mistral gateways, which report no usage for speech. The audio
+  call's `characters` and the transcription's `audio_seconds` are stored, but nothing is priced
+  by them.
+- One input rate and one output rate apply to every token. Image and audio tokens that a provider
+  charges at a different rate from text tokens are charged at the rate you set. The image token
+  counts the SDK reports are stored as `image_input_tokens` and `image_output_tokens` metadata.
+
 ## Classification and reranking limits
 
-From SDK 1.2.2 each failed embeddings, classification or reranking attempt fires a failure event
+From SDK 1.2.2 each failed embeddings, classification, reranking, image, audio or transcription
+attempt fires a failure event
 that names the call, and Trail stores the call as Failed with its own error and duration. Each SDK
 failover attempt has its own ID and may appear as a separate standalone trace.
 
@@ -245,7 +279,7 @@ Before SDK 1.2.2 the SDK exposes start and successful completion events, but no 
 failure event. A nested call still open when its recorded caller ends becomes Incomplete with no
 inferred error or duration. A standalone call without a completion stays Running until the stale
 rule or sweep applies. A generic ProviderFailedOver event cannot prove which classification,
-reranking or embedding call failed; ambiguous events leave evidence incomplete. The recorder bounds
+reranking, image, audio, transcription or embedding call failed; ambiguous events leave evidence incomplete. The recorder bounds
 remembered IDs and conservatively suppresses embedding failover attribution after ambiguity overflow
 until its next flush.
 

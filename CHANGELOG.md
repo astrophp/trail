@@ -4,6 +4,103 @@ All notable changes to Trail are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and Trail follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## v1.0.0 - 2026-11-01
+
+### Added
+
+- Draw model answers as markdown in the dashboard: an assistant's response in a conversation, and
+  the response or text of an agent run or a model step in a run's evidence. Headings, lists,
+  task lists, tables, block quotes, code and links are drawn; prompts, instructions, tool
+  payloads and structured output are shown as stored, as before.
+- A Rendered / Raw switch beside each answer. Raw is the text exactly as stored; the choice
+  applies to every answer and is remembered in the browser.
+- In a conversation, the prompt and the answer each sit in a container of their own, with a
+  header above the message: the prompt lightly tinted with the user's initials and name, the
+  answer a white card with the agent, its model and the switch, and the turn's figures at its
+  foot. The agent's tool calls sit between them as a compact line, and a tool result stored as
+  JSON text can be read as a tree. The column beside the transcript is a stack of cards that
+  stays in view while you scroll; its jump list comes first, as a timeline that marks the turn
+  you are reading.
+- The execution timeline of a run reads like a network waterfall: ticks at the quarters of the
+  run, gridlines through every row, bars coloured by the kind of work (agent runs, model steps,
+  tools, retrieval, media) with a legend, the start, length and end of a span on hover, and
+  connectors between parents and children.
+
+### Security
+
+- Nothing in an answer runs or loads: raw HTML is shown as text, images are never loaded (their
+  description and address are shown), and only `http`, `https` and `mailto` links are followed,
+  in a new tab, with the address written beside them; any other link is marked as not linked.
+  Redaction markers stay highlighted, inside code and tables too.
+
+### Changed
+
+- One look across the dashboard: every card is the same panel, every choice of view (Tree or Raw,
+  Rendered or Raw, Volume, Duration or Cost) is the same switch, and a titled payload on the run
+  page is one framed block with its switch and copy button in a header bar.
+- Pages and panels no longer carry long descriptions. What keeps a figure honest (estimates,
+  the time zone, partial data) is in a short line or behind an ⓘ beside the title it qualifies.
+- The activity chart on the overview fills the height of the list beside it.
+- The dashboard script grows by about 56 KB gzipped (to about 441 KB), mostly for the markdown
+  parser.
+
+## v0.4.2 - 2026-10-20
+
+### Fixed
+
+- Store no structured data for a structured-output agent's run or step that has not answered.
+  A step that calls tools, an answer that does not decode (blank, prose or cut short), a run that
+  pauses for tool approval and a run that the SDK's `Stop` middleware ends early were stored with
+  empty structured data, which looked like an empty answer. An answer of `{}` is still stored.
+  Laravel AI SDK 1.3.0 gives such runs empty structured data with every provider; earlier versions
+  did so with Anthropic.
+
+### Changed
+
+- CI also runs the test suite on exact Laravel AI SDK 1.3.0 on Laravel 12 and 13.
+- The release script recognises newer curl's wording for a missing Packagist package.
+
+## v0.4.1
+
+### Fixed
+
+- Pass PHPStan at level max on PHP 8.5: the bounded maps that remember skipped and ambiguous call
+  ids are trimmed with `array_slice`, and the trace id prefix query raises its last digit without
+  `chr()`. Behaviour is unchanged.
+- Make the UTC date test independent of the Carbon version: Carbon before 3.12.0 read dates in the
+  timezone of a frozen test clock. Dates in the API were already correct.
+
+### Changed
+
+- CI runs static analysis on PHP 8.4 and 8.5, and the test suite with the lowest dependencies the
+  package allows on Laravel 12 and 13.
+
+## v0.4.0
+
+### Added
+
+- Record image generation, text-to-speech audio and transcription calls through the Laravel AI SDK's
+  events, as the span types `image`, `audio` and `transcription`. A call made on its own is a trace
+  of its own; a call made inside a tool is a span under that tool. Each stores its settings and
+  counts (image size, quality and count, the voice and number of characters spoken, the language
+  and the seconds of audio transcribed), its texts only when payloads are captured, and never
+  image or audio bytes.
+- Record their failures as Failed with their own error and duration from the `ImageFailed`,
+  `AudioFailed` and `TranscriptionFailed` events of SDK 1.2.2 and later. On earlier versions a
+  failed call is left for its caller (Incomplete) or the stale rule, as for classification.
+- Filter the runs list, its CSV export and the Boost trace listing by the new root operations.
+
+### Changed
+
+- Image, audio and transcription calls bill: their reported tokens count in a run's totals and are
+  priced from the ordinary token rates of their model. No defaults ship for these models, so they
+  are Unpriced until you add a price; a call whose provider reports no tokens is Not captured.
+
+### Upgrade
+
+- No new migrations or configuration. Deploy the new version to every process that reads Trail's
+  tables before recording these calls: an earlier version cannot read the new span types.
+
 ## v0.3.2
 
 ### Added

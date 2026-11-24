@@ -1,6 +1,7 @@
 <?php
 
 use Astro\Trail\Tests\Fixtures\Agents\AssistantAgent;
+use Astro\Trail\Tests\Fixtures\Sdk\Sdk;
 use Astro\Trail\Tests\Fixtures\Tools\CallbackTool;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
@@ -266,37 +267,48 @@ describe('embeddings failures', function () {
             ->and($failedOver->model)->toBe('text-embedding-3-small');
     });
 
-    it('fails the tool call and the run when embeddings fail inside a tool', function () {
+    it('fails the tool call when embeddings fail inside a tool, and before SDK 1.4.0 the run', function () {
         Http::fake(['api.openai.com/*' => Http::response(['error' => ['message' => 'bad']], 500)]);
         AssistantAgent::fake([new ToolCall('call_1', 'embed', ['query' => 'x']), 'Done']);
 
         $tool = new CallbackTool('embed', fn () => (string) count(Embeddings::for(['hello'])->generate()));
+        $recovers = Sdk::recoversFromToolFailures();
 
         $caught = null;
 
         try {
-            (new AssistantAgent([$tool]))->prompt('Hi');
+            $response = (new AssistantAgent([$tool]))->prompt('Hi');
         } catch (Throwable $exception) {
             $caught = $exception;
         }
 
-        expect($caught)->toBeInstanceOf(RequestException::class)
-            ->and($this->sdk->timeline())->toBe([
-                'PromptingAgent',
-                'StartingStep#0',
-                'StepCompleted#0',
-                'InvokingTool(embed)',
-                'GeneratingEmbeddings',
-                ...sdkFailed('EmbeddingsFailed'),
-                'ToolFailed(embed)',
-                'AgentFailed',
-            ]);
+        expect($this->sdk->timeline())->toBe([
+            'PromptingAgent',
+            'StartingStep#0',
+            'StepCompleted#0',
+            'InvokingTool(embed)',
+            'GeneratingEmbeddings',
+            ...sdkFailed('EmbeddingsFailed'),
+            'ToolFailed(embed)',
+            ...($recovers ? ['StartingStep#1', 'StepCompleted#1', 'AgentPrompted'] : ['AgentFailed']),
+        ]);
 
         [$runId] = $this->sdk->invocationIds();
         $toolId = $this->sdk->sole(InvokingTool::class)->event->toolInvocationId;
+        $toolException = $this->sdk->sole(ToolFailed::class)->event->exception;
 
         expect($this->sdk->sole(GeneratingEmbeddings::class)->parentInvocation)->toBe([$runId, $toolId])
-            ->and($this->sdk->sole(ToolFailed::class)->event->exception)->toBe($caught)
+            ->and($toolException)->toBeInstanceOf(RequestException::class);
+
+        if ($recovers) {
+            expect($caught)->toBeNull()
+                ->and($response->text)->toBe('Done')
+                ->and($this->sdk->of(AgentFailed::class))->toBe([]);
+
+            return;
+        }
+
+        expect($caught)->toBe($toolException)
             ->and($this->sdk->sole(AgentFailed::class)->event->exception)->toBe($caught)
             ->and($this->sdk->sole(AgentFailed::class)->invocationId)->toBe($runId);
     });

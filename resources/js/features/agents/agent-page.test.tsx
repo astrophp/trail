@@ -6,6 +6,7 @@ import { forgetBreakdownRefreshFailures } from '@/features/agents/use-agent-brea
 import { forgetRecentTracesRefreshFailures } from '@/features/traces'
 import { agentPath } from '@/lib/agent-path'
 import { renderApp } from '@/test/render-app'
+import { stubResizeObserver } from '@/test/resize-observer'
 import {
     breakdownUrls,
     delegating,
@@ -390,12 +391,16 @@ describe('the chart mode', () => {
         await open('SupportAssistant', { chart: 'duration' })
 
         expect(screen.getByRole('radio', { name: 'Duration' })).toBeChecked()
-        await waitFor(() =>
-            expect(
-                screen.getByText(
-                    'Average duration of the traces started per hour',
-                ),
-            ).toBeVisible(),
+
+        // The hint beside the chart's title says what it draws. The tooltip measures itself;
+        // jsdom has nothing to measure with.
+        stubResizeObserver()
+        await userEvent.hover(
+            await screen.findByRole('button', { name: 'About this chart' }),
+        )
+
+        expect(await screen.findByRole('tooltip')).toHaveTextContent(
+            'Average duration of the traces started per hour.',
         )
     })
 })

@@ -6,8 +6,13 @@ use Astro\Trail\Capture\Recorder;
 use Laravel\Ai\Events\AgentFailed;
 use Laravel\Ai\Events\AgentFailedOver;
 use Laravel\Ai\Events\AgentPrompted;
+use Laravel\Ai\Events\AudioGenerated;
 use Laravel\Ai\Events\EmbeddingsGenerated;
+use Laravel\Ai\Events\GeneratingAudio;
 use Laravel\Ai\Events\GeneratingEmbeddings;
+use Laravel\Ai\Events\GeneratingImage;
+use Laravel\Ai\Events\GeneratingTranscription;
+use Laravel\Ai\Events\ImageGenerated;
 use Laravel\Ai\Events\InvokingTool;
 use Laravel\Ai\Events\PromptingAgent;
 use Laravel\Ai\Events\ProviderFailedOver;
@@ -16,6 +21,7 @@ use Laravel\Ai\Events\StepCompleted;
 use Laravel\Ai\Events\StepFailed;
 use Laravel\Ai\Events\ToolFailed;
 use Laravel\Ai\Events\ToolInvoked;
+use Laravel\Ai\Events\TranscriptionGenerated;
 use RuntimeException;
 use Throwable;
 use TypeError;
@@ -88,6 +94,16 @@ class ThrowingRecorder extends Recorder
     public function embeddingsFailed(string $invocationId, Throwable $exception): void
     {
         throw new RuntimeException('embeddingsFailed failed');
+    }
+
+    public function mediaStarting(GeneratingImage|GeneratingAudio|GeneratingTranscription $event): void
+    {
+        throw new RuntimeException('mediaStarting failed');
+    }
+
+    public function mediaCompleted(ImageGenerated|AudioGenerated|TranscriptionGenerated $event): void
+    {
+        throw new TypeError('mediaCompleted failed');
     }
 
     public function capabilityFailed(string $invocationId, Throwable $exception): void

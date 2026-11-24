@@ -48,15 +48,18 @@ it('counts each billable operation once in stores, SQL summaries and raw model r
         $store->store($trace, $spans);
     }
     $stored = Trace::findOrFail($trace->id);
-    expect($array->totals($trace->id)->inputTokens)->toBe(30)
-        ->and($stored->input_tokens)->toBe(30)
+    // Every billable type but reranking reports ten tokens priced at 0.1.
+    $billable = count(SpanType::billable());
+    $priced = $billable - 1;
+    expect($array->totals($trace->id)->inputTokens)->toBe(10 * $priced)
+        ->and($stored->input_tokens)->toBe(10 * $priced)
         ->and($array->totals($trace->id)->searchUnits)->toBe('0.100000')
-        ->and($array->totals($trace->id)->cost)->toBe(0.3)
-        ->and($stored->cost)->toBe(0.3)
+        ->and($array->totals($trace->id)->cost)->toBe(round(0.1 * $priced, 10))
+        ->and($stored->cost)->toBe(round(0.1 * $priced, 10))
         ->and($stored->unpriced_span_count)->toBe(1)
-        ->and(Summaries::only(Summaries::models($trace->id), ['steps', 'reported_steps', 'unpriced_steps']))->toBe([['steps' => 4, 'reported_steps' => 4, 'unpriced_steps' => 1]]);
+        ->and(Summaries::only(Summaries::models($trace->id), ['steps', 'reported_steps', 'unpriced_steps']))->toBe([['steps' => $billable, 'reported_steps' => $billable, 'unpriced_steps' => 1]]);
     $models = app(AgentBreakdown::class)->models($trace->name, TimeRange::fromRequest(Illuminate\Http\Request::create('/')));
-    expect((int) $models[0]->calls)->toBe(4)->and((int) $models[0]->unpriced)->toBe(1);
+    expect((int) $models[0]->calls)->toBe($billable)->and((int) $models[0]->unpriced)->toBe(1);
 });
 
 it('reads new root types and exact quantities in direct HTTP and MCP usage', function (SpanType $type, string|int|null $quantity, ?string $expected) {

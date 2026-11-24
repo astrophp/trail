@@ -13,6 +13,7 @@ import {
     sonnet,
     tableLoaded,
 } from '@/test/prices-api'
+import { stubResizeObserver } from '@/test/resize-observer'
 import { json, mockQuietApi, spendFor } from '@/test/usage-api'
 
 // The wording reads the install's currency from the boot object, which is kept after first use:
@@ -59,15 +60,15 @@ describe('the model prices wording in the install currency', () => {
     it.each([
         [
             'USD',
-            'Token rates are US dollars per million tokens; reranking rates show their billing unit. Models come from your Trail configuration and recorded usage.',
+            'Token rates are US dollars per million tokens. A saved price applies to runs recorded from now on; recorded costs stay as they were. A long-running worker can take a minute to pick it up. Reranking rates show their billing unit.',
         ],
         [
             'EUR',
-            'Token rates are EUR per million tokens; reranking rates show their billing unit. Models come from your Trail configuration and recorded usage. Bundled prices are in US dollars and are not used.',
+            'Token rates are EUR per million tokens. A saved price applies to runs recorded from now on; recorded costs stay as they were. A long-running worker can take a minute to pick it up. Reranking rates show their billing unit. Bundled prices are in US dollars and are not used.',
         ],
         [
             null,
-            'Token rates are per million tokens; reranking rates show their billing unit. Models come from your Trail configuration and recorded usage.',
+            'Token rates are per million tokens. A saved price applies to runs recorded from now on; recorded costs stay as they were. A long-running worker can take a minute to pick it up. Reranking rates show their billing unit.',
         ],
     ])('says what the token rates are in for %s', async (currency, text) => {
         install.currency = currency
@@ -75,7 +76,19 @@ describe('the model prices wording in the install currency', () => {
         renderPrices()
         await tableLoaded()
 
-        expect(screen.getByText(text)).toBeVisible()
+        // The tooltip measures itself; jsdom has nothing to measure with.
+        stubResizeObserver()
+        await userEvent.hover(
+            screen.getByRole('button', { name: 'About model prices' }),
+        )
+
+        const hint = await screen.findByRole('tooltip')
+
+        expect(hint).toHaveTextContent(text)
+
+        if (currency !== 'EUR') {
+            expect(hint).not.toHaveTextContent('Bundled prices')
+        }
     })
 
     it.each([

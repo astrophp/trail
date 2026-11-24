@@ -27,6 +27,17 @@ const statusOrder = [
 /** Which runs a view shows: all of them, or those with one status. */
 export const statusFilters = ['all', ...statusOrder] as const
 
+/** The root operations a run can be, in the order the API lists them. */
+export const operationTypes = [
+    'agent',
+    'embedding',
+    'classification',
+    'reranking',
+    'image',
+    'audio',
+    'transcription',
+] as const satisfies readonly OperationType[]
+
 export type StatusFilter = (typeof statusFilters)[number]
 
 /** Which runs a view shows by issue kind: all of them, or those with one kind. */
@@ -43,10 +54,7 @@ export const defaultTraceSort: TraceSort = '-started_at'
  * `agent`, `provider`, `model`, `tool` or `conversation` means all, and so does `issue_kind` left out.
  */
 export const traceListParams = {
-    operation_type: enumParam(
-        ['all', 'agent', 'embedding', 'classification', 'reranking'] as const,
-        'all',
-    ),
+    operation_type: enumParam(['all', ...operationTypes] as const, 'all'),
     sort: enumParam(traceSorts, defaultTraceSort),
     page: intParam(1, { min: 1 }),
     status: enumParam(statusFilters, 'all'),

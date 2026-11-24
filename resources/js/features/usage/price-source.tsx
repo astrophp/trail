@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import type { Price } from '@/api/types'
+import { InfoHint } from '@/components/patterns/info-hint'
 import { Timestamp } from '@/components/telemetry/timestamp'
 
 /** What a source adds under its name, in the same quiet voice. */
@@ -18,14 +19,17 @@ function Note({ children }: { children: ReactNode }) {
  */
 export function PriceSource({ price }: { price: Price }) {
     return (
-        <>
+        <span className="inline-flex items-center gap-1">
             <SourceName price={price} />
             {price.observed && price.rates.input === null ? (
-                <span className="block text-caption text-warning">
-                    Token calls without an input rate show as Unpriced
-                </span>
+                <InfoHint
+                    label="Why token calls show as Unpriced"
+                    className="text-warning"
+                >
+                    Token calls without an input rate show as Unpriced.
+                </InfoHint>
             ) : null}
-        </>
+        </span>
     )
 }
 

@@ -14,10 +14,7 @@ export function OverviewPage() {
 
     return (
         <>
-            <PageHeader
-                title="Overview"
-                description="How your agents are doing, at a glance."
-            >
+            <PageHeader title="Overview">
                 <TimeRangeSelect value={range} onValueChange={setRange} />
             </PageHeader>
             <OverviewMetrics className="mt-5.75 lg:mt-6.5" />

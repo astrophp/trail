@@ -249,6 +249,9 @@ export function inputShape(span: Pick<Span, 'type' | 'input'>): Shape<unknown> {
     switch (span.type) {
         case 'classification':
         case 'reranking':
+        case 'image':
+        case 'audio':
+        case 'transcription':
             return holdsSomething(span.input) ? whole : none
         case 'agent':
             return agentInput(span.input)
@@ -268,6 +271,9 @@ export function outputShape(
     switch (span.type) {
         case 'classification':
         case 'reranking':
+        case 'image':
+        case 'audio':
+        case 'transcription':
             return holdsSomething(span.output) ? whole : none
         case 'agent':
             return agentOutput(span.output)

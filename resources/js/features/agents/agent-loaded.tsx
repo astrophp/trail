@@ -9,7 +9,6 @@ import type { ActivityMode } from '@/components/telemetry/activity-mode'
 import { AttentionSection } from '@/components/telemetry/attention-section'
 import { SummaryStrip } from '@/components/telemetry/summary-strip'
 import { AgentBreakdown } from '@/features/agents/agent-breakdown'
-import { agentTitle } from '@/features/agents/agent-words'
 import { DelegatedFacts } from '@/features/agents/delegated-facts'
 import { formatCount } from '@/lib/format'
 import type {} from '@/lib/refresh-policy'
@@ -63,22 +62,9 @@ export function AgentLoaded({
 
     if (own === null && delegated === null) {
         return (
+            // The page's header already names the agent.
             <Notice tone="info" title="Nothing ran in this range.">
-                <span className="wrap-anywhere whitespace-pre-wrap">
-                    {agentTitle(agent.name)}
-                </span>
-                {agent.agent_class === null ? null : (
-                    <>
-                        {' ('}
-                        <span className="font-mono text-xs wrap-anywhere">
-                            {agent.agent_class}
-                        </span>
-                        {')'}
-                    </>
-                )}{' '}
-                was recorded, but no run started under this name in the selected
-                range, as itself or as a sub-agent.
-                {range === '7d' ? null : ' Try a longer range.'}
+                {range === '7d' ? null : 'Try a longer range.'}
             </Notice>
         )
     }
@@ -92,8 +78,7 @@ export function AgentLoaded({
                     title="It has no runs of its own in this range."
                     className="mb-4"
                 >
-                    Its runs are recorded inside the runs of the agents that
-                    delegated to it, so its figures are part of theirs.
+                    Its figures are part of the agents that delegated to it.
                 </Notice>
                 {delegated === null ? null : (
                     <BusyRegion busy={placeholder} label="Loading the figures">

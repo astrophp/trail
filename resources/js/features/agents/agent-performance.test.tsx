@@ -172,7 +172,7 @@ describe('the agent performance panel', () => {
         ).toBe(false)
     })
 
-    it('has its title as a level 2 heading under the page’s one level 1, and a description', async () => {
+    it('has its title as a level 2 heading under the page’s one level 1, and no description', async () => {
         serve()
         const of = await open()
 
@@ -184,10 +184,10 @@ describe('the agent performance panel', () => {
             '2',
         )
         expect(
-            within(of).getByText(
+            within(of).queryByText(
                 'The busiest agents by runs, with their error rate, speed and cost.',
             ),
-        ).toBeVisible()
+        ).toBeNull()
         expect(
             screen
                 .getAllByRole('heading', { level: 1 })
