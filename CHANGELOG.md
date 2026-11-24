@@ -30,6 +30,8 @@ All notable changes to Trail are documented here. The format follows
   says so. Recording goes on. A blank value is the default.
 - `TraceCsv::COLUMNS` and `SpendCsv::COLUMNS` are replaced by `columns()` methods, because the
   names now depend on the currency.
+- CI also runs the test suite on PHP 8.6, on Laravel 13. The README lists the versions CI tests
+  under Compatibility, and a test keeps that table in step with the workflow.
 
 ### Security
 
