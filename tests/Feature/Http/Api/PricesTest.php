@@ -169,6 +169,37 @@ describe('the list', function () {
     });
 });
 
+describe('in a currency other than the one the config prices are in', function () {
+    beforeEach(function () {
+        config(['trail.currency' => 'EUR', 'trail.pricing' => ['openai' => ['gpt-5' => ['input' => 1.25, 'output' => 10.0]]]]);
+        observedStep('openai', 'gpt-5-2025-08-07');
+    });
+
+    it('lists the models of the config as unpriced', function () {
+        expect($this->getJson('/trail/api/prices')->assertOk()->json('data'))->toBe([
+            priceOf('openai', 'gpt-5-2025-08-07', ratesOf(null, null), 'none', observed: true),
+            priceOf('openai', 'gpt-5', ratesOf(null, null), 'none'),
+        ]);
+    });
+
+    it('saves a price, resolves a version through it, and resets it to nothing', function () {
+        $saved = $this->putJson(priceUrl('openai', 'gpt-5'), ['input' => 2, 'output' => 8])->assertOk()->assertExactJson(['data' => priceOf(
+            'openai', 'gpt-5', ratesOf(2, 8), 'saved',
+            default: ['source' => 'none', 'via' => null, 'rates' => ratesOf(null, null)],
+            savedAt: '2026-01-02T12:00:00.000Z',
+        )])->json('data');
+
+        $this->getJson('/trail/api/prices')->assertOk()->assertJsonPath('data.0', priceOf(
+            'openai', 'gpt-5-2025-08-07', ratesOf(2, 8), 'prefix', observed: true, via: ['model' => 'gpt-5', 'saved' => true],
+        ));
+
+        $this->deleteJson(priceUrl('openai', 'gpt-5'))->assertOk()->assertExactJson(['data' => priceOf('openai', 'gpt-5', ratesOf(null, null), 'none')]);
+
+        expect($saved['source'])->toBe('saved')
+            ->and(savedPrice('openai', 'gpt-5'))->toBeNull();
+    });
+});
+
 it('marks a model observed when a step was recorded with it and not when only an agent span asked for it', function () {
     config(['trail.pricing' => []]);
     Stored::run([], [

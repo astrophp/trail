@@ -9,16 +9,24 @@ namespace Astro\Trail\Http\Resources;
  */
 final class SpendCsv extends Csv
 {
-    public const COLUMNS = [
-        'kind', 'from', 'to', 'bucket', 'full', 'in_progress', 'runs',
-        'cost_state', 'estimated_cost_usd', 'cumulative_state', 'cumulative_estimated_cost_usd',
-        'projected_usd', 'projected_line_usd',
-    ];
+    /**
+     * The columns in order; the amounts are named after the install's currency.
+     *
+     * @return list<string>
+     */
+    public static function columns(): array
+    {
+        return [
+            'kind', 'from', 'to', 'bucket', 'full', 'in_progress', 'runs',
+            'cost_state', self::amountColumn('estimated_cost'), 'cumulative_state', self::amountColumn('cumulative_estimated_cost'),
+            self::amountColumn('projected'), self::amountColumn('projected_line'),
+        ];
+    }
 
     /** The header line. */
     public static function header(): string
     {
-        return self::line(self::COLUMNS);
+        return self::line(self::columns());
     }
 
     /**
@@ -41,9 +49,9 @@ final class SpendCsv extends Csv
             'in_progress' => $bucket['in_progress'] ?? null,
             'runs' => $runs['all'] ?? null,
             'cost_state' => $cost['state'] ?? null,
-            'estimated_cost_usd' => $cost['amount'] ?? null,
+            self::amountColumn('estimated_cost') => $cost['amount'] ?? null,
             'cumulative_state' => $cumulative['state'] ?? null,
-            'cumulative_estimated_cost_usd' => $cumulative['amount'] ?? null,
+            self::amountColumn('cumulative_estimated_cost') => $cumulative['amount'] ?? null,
         ]);
     }
 
@@ -59,8 +67,8 @@ final class SpendCsv extends Csv
             'from' => $bucket['from'] ?? null,
             'to' => $bucket['to'] ?? null,
             'bucket' => $unit,
-            'projected_usd' => $bucket['amount'] ?? null,
-            'projected_line_usd' => $bucket['cumulative'] ?? null,
+            self::amountColumn('projected') => $bucket['amount'] ?? null,
+            self::amountColumn('projected_line') => $bucket['cumulative'] ?? null,
         ]);
     }
 
@@ -69,6 +77,6 @@ final class SpendCsv extends Csv
      */
     private static function values(array $values): string
     {
-        return self::line(array_map(fn (string $column) => self::cell($values[$column] ?? null), self::COLUMNS));
+        return self::line(array_map(fn (string $column) => self::cell($values[$column] ?? null), self::columns()));
     }
 }

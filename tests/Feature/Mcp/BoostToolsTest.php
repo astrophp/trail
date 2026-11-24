@@ -135,3 +135,30 @@ it('rejects invalid arguments and unknown trace IDs', function () {
         ->and(app(TrailShowConversation::class)->handle(new Request(['limit' => 11]))->isError())->toBeTrue()
         ->and(app(TrailUsageSummary::class)->handle(new Request(['limit' => 21]))->isError())->toBeTrue();
 });
+
+it('names the currency of the install in the output of every tool', function (?string $configured, ?string $currency) {
+    if ($configured !== null) {
+        config(['trail.currency' => $configured]);
+    }
+
+    Rows::trace(['id' => 'run-1', 'status' => Status::Completed, 'conversation_id' => 'conversation-1', 'started_at' => '2026-01-02 10:00:00']);
+
+    $outputs = [
+        app(TrailListTraces::class)->handle(new Request([])),
+        app(TrailShowTrace::class)->handle(new Request(['id' => 'run-1'])),
+        app(TrailShowConversation::class)->handle(new Request(['id' => 'conversation-1'])),
+        app(TrailUsageSummary::class)->handle(new Request([])),
+    ];
+
+    foreach ($outputs as $response) {
+        expect($response->isError())->toBeFalse();
+
+        $data = json_decode((string) $response->content(), true, flags: JSON_THROW_ON_ERROR);
+
+        expect($data)->toHaveKey('currency')->and($data['currency'])->toBe($currency);
+    }
+})->with([
+    'the default' => [null, 'USD'],
+    'a configured one' => ['eur', 'EUR'],
+    'not a currency' => ['EURO', null],
+]);

@@ -11,6 +11,7 @@ const full = {
     version: 'v0.1.0',
     staleAfter: 900,
     recording: 'paused',
+    currency: 'EUR',
 }
 
 describe('parseBoot', () => {
@@ -26,6 +27,7 @@ describe('parseBoot', () => {
                 csrfToken: null,
                 appName: null,
                 recording: null,
+                currency: 'USD',
             })
         }
     })
@@ -55,6 +57,23 @@ describe('parseBoot', () => {
             staleAfter: 3600,
         })
     })
+})
+
+describe('parseBoot currency', () => {
+    it('is US dollars when the page does not say', () => {
+        expect(parseBoot({ ...full, currency: undefined }).currency).toBe('USD')
+    })
+
+    it.each(['USD', 'EUR', 'CNY'])('keeps the code %s', (currency) => {
+        expect(parseBoot({ ...full, currency }).currency).toBe(currency)
+    })
+
+    it.each([null, 'usd', 'US', 'USDX', 'U$D', '', 12, true])(
+        'is null for %j, the setting that is not valid',
+        (currency) => {
+            expect(parseBoot({ ...full, currency }).currency).toBeNull()
+        },
+    )
 })
 
 describe('boot', () => {

@@ -16,7 +16,7 @@ class CostCalculator
     }
 
     /**
-     * The cost in USD of one usage report, or null when it cannot be priced.
+     * The cost, in the install's currency, of one usage report, or null when it cannot be priced.
      *
      * Input tokens are the total sent, cached tokens included; cache read and
      * cache write tokens are parts of that total and are charged at their own

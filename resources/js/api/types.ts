@@ -550,7 +550,7 @@ export type BookmarkResponse = {
     data: { trace_id: string; bookmarked: boolean }
 }
 
-/** What a model costs per million tokens, in US dollars, for each kind of token. `null` is unknown, never free; `0` is a free rate. */
+/** What a model costs per million tokens, in the install's currency, for each kind of token. `null` is unknown, never free; `0` is a free rate. */
 export type PriceRates = {
     input: number | null
     output: number | null

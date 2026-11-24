@@ -10,6 +10,7 @@ import {
 import { priceKey, rateKeys, rateNames } from '@/features/usage/price-draft'
 import { PriceRow } from '@/features/usage/price-row'
 import type { PriceEditor } from '@/features/usage/use-price-editor'
+import { tokenRateUnit } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
 const head =
@@ -31,8 +32,8 @@ export function PriceTable({
     return (
         <Table className={cn('border-separate border-spacing-0', className)}>
             <TableCaption className="sr-only">
-                Model prices: token rates in US dollars per million tokens;
-                reranking rates show their billing unit
+                Model prices: token rates {tokenRateUnit('in')}; reranking rates
+                show their billing unit
             </TableCaption>
             <TableHeader>
                 <TableRow className="border-b-0 hover:bg-transparent">

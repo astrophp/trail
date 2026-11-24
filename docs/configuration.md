@@ -37,7 +37,8 @@ set nothing. A key with an environment variable can be set in `.env` without pub
 | `redaction.keys` | none | 15 entries, listed [below](#redaction-keys) | Keys whose value is replaced as a whole. A list you set replaces the defaults. |
 | `redaction.patterns` | none | 22 patterns | Regular expressions whose matches are replaced inside any string. A list you set replaces the defaults. |
 | `stale_after` | none | `3600` | Seconds after which a run still marked running is treated as abandoned and shown as Incomplete. Values below 60 behave as 60. |
-| `pricing` | none | 173 model IDs across 10 providers, see [Cost](cost.md) | Token prices in USD per million and separate reranking prices by explicit billing basis, keyed by provider driver and model id. |
+| `currency` | `TRAIL_CURRENCY` | `'USD'` | The one currency every amount in the install is in, as a three-letter code. Nothing is converted. Set it before Trail records. The prices in `pricing` are US dollars and are used only when this is `USD`. See [Currency](cost.md#currency). |
+| `pricing` | none | 173 model IDs across 10 providers, see [Cost](cost.md) | Token prices in US dollars per million and separate reranking prices by explicit billing basis, keyed by provider driver and model id. Used only when `currency` is `USD`. |
 
 ### Notes on single keys
 
@@ -61,6 +62,11 @@ set nothing. A key with an environment variable can be set in `.env` without pub
   number read from an environment variable as text is accepted.
 - **`stale_after`** should be above the longest run you expect. `trail:sweep` writes the Incomplete
   status to the database; until it runs, the dashboard already shows it.
+- **`currency`** labels every amount and is never converted. Changing it later relabels saved
+  prices and recorded costs, so set it before recording, and restart queue workers and Octane after
+  a change. In any currency other than `USD`, every entry of `pricing` is ignored, including the
+  ones you added; price models in the dashboard. A value that is not three letters is reported and
+  no currency is used. See [Currency](cost.md#currency).
 
 ### Redaction keys
 
@@ -88,6 +94,7 @@ TRAIL_ENABLED=true
 TRAIL_DASHBOARD_ENABLED=true
 TRAIL_PATH=trail
 TRAIL_SAMPLING=1.0
+TRAIL_CURRENCY=USD
 ```
 
 `TRAIL_DOMAIN`, `TRAIL_GUARD` and `TRAIL_DB_CONNECTION` take a name, for example
@@ -96,7 +103,8 @@ TRAIL_SAMPLING=1.0
 
 ### Capability pricing
 
-Keep ordinary token rates in their existing fields. The shipped catalogue includes verified
+The prices on this page are US dollars: `pricing` entries, including the examples below, are used
+only when `currency` is `USD`. Keep ordinary token rates in their existing fields. The shipped catalogue includes verified
 Cohere, Voyage and Jina reranking groups. Reranking never falls back to ordinary token rates:
 
 ```php
@@ -109,7 +117,8 @@ Cohere, Voyage and Jina reranking groups. Reranking never falls back to ordinary
 ],
 ```
 
-Select exactly one basis: `search_units` (USD per unit) or `input_tokens` (`input`, USD per million).
+Select exactly one basis: `search_units` (per unit) or `input_tokens` (`input`, per million), in the
+install's currency.
 The selected quantity and its rate must both exist, even for an explicitly reported zero quantity.
 Ordinary and reranking groups resolve exact IDs and version suffixes independently. Saving one group
 preserves the other. Rates are estimates you configure, not provider billing records.

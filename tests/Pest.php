@@ -11,7 +11,7 @@ use Astro\Trail\Tests\Fixtures\Workbench\BootsWorkbench;
 use Astro\Trail\Tests\TestCase;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
-uses(TestCase::class)->in('Feature');
+uses(TestCase::class)->in('Feature', 'Unit/Http/TraceCsvTest.php');
 // These tests run real agents without a refreshed database; Trail records into memory so it never writes to a persistent one.
 uses(ObservesSdk::class)->beforeEach(fn () => Trail::fake())->in('Feature/Sdk');
 uses(ObservesSdk::class, RefreshDatabase::class)->in('Feature/Capture');

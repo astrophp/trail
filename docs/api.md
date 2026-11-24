@@ -22,7 +22,7 @@ versioned, and it may change between releases. This page is the contract every e
 | -- | -- |
 | Date and time | ISO 8601 in UTC with milliseconds: `2026-01-01T12:00:00.000Z` |
 | Duration | Milliseconds as a number, possibly fractional: `duration_ms` |
-| Money | US dollars as a number, as stored (up to 10 decimal places). The client formats it and never adds amounts up |
+| Money | A number in the install's currency (`trail.currency`), as stored (up to 10 decimal places). The client formats it and never adds amounts up |
 | Count | Integer. A count is the one place where `0` is a real answer |
 | Enum | The stored lowercase value: `completed`, `rate_limited` |
 
@@ -630,7 +630,7 @@ list and by both writes.
 }
 ```
 
-- `rates` is what a run with this model is priced at now, in US dollars per million tokens. All four
+- `rates` is what a run with this model is priced at now, in the install's currency (`trail.currency`) per million tokens. All four
   keys are always there, each a number or `null`. `null` is unknown, never free: usage with tokens
   of a kind that has no rate is given no cost at all. `0` is a real rate, a free one.
 - `source` says where `rates` comes from. `saved`: a saved price of exactly this provider and model.
@@ -1309,6 +1309,9 @@ The file has one header row, then one row for each group. The columns that name 
 | `estimated_cost_usd` | `cost.amount` as a plain decimal with up to 10 places, never in exponent notation. Amounts are floats, so beyond about 15 significant digits a digit can differ from the stored decimal. For a `pending` row it is what has been recorded so far; for a `partial` row it is the amount of the priced part |
 | `reported_steps`, `unpriced_steps`, `unpriced_tokens` | `coverage`, as in the breakdown |
 
+- The amount column ends in the install's currency (`trail.currency`) in lower case: it is
+  `estimated_cost_usd` by default and `estimated_cost_eur` for `EUR`. When the setting is not a valid
+  code the suffix is left out and the column is `estimated_cost`. Nothing is converted.
 - A value that was not captured is an **empty cell**, never `0`: a `0` in the file is a count or an
   amount that was recorded, a rate of `0` among them (`estimated_cost_usd` is `0`). `usage_state`
   and `cost_state` say why a figure is missing or not final. `unpriced_tokens` is empty when the
@@ -1354,6 +1357,10 @@ each projected bucket (none unless the projection's `state` is `projected`):
 | `projected_usd` | a projected bucket's `amount`; empty on a recorded row |
 | `projected_line_usd` | a projected bucket's `cumulative`, where a chart continues the recorded line; empty on a recorded row |
 
+- The amount columns end in the install's currency (`trail.currency`) in lower case: `usd` by
+  default, so `estimated_cost_eur`, `cumulative_estimated_cost_eur`, `projected_eur` and
+  `projected_line_eur` for `EUR`. When the setting is not a valid code the suffix is left out
+  (`estimated_cost`, `cumulative_estimated_cost`, `projected`, `projected_line`). Nothing is converted.
 - A projected value is never written in a cost column, and a recorded value never in a projected
   column: the rows are told apart by `kind` and by living in different columns. A projection is not
   a cost and is not to be summed with one.
@@ -1561,13 +1568,16 @@ The file has one header row, then one row for each run, in these columns:
 | `usage_state` | `reported`, `pending` or `not_reported` |
 | `input_tokens`, `output_tokens`, `cache_read_tokens`, `cache_write_tokens`, `reasoning_tokens`, `total_tokens` | counts |
 | `cost_state` | `estimated`, `partial`, `unpriced`, `pending` or `not_captured` |
-| `cost_usd` | US dollars as a plain decimal, never in exponent notation: `0.0000000001`, not `1.0E-10`. For a `pending` run it is what has been recorded so far |
+| `cost_usd` | the run's cost in the install's currency as a plain decimal, never in exponent notation: `0.0000000001`, not `1.0E-10`. For a `pending` run it is what has been recorded so far |
 | `span_count` | the number of spans |
 | `conversation_id` | as in the list |
 | `user_id`, `user_type`, `user_name`, `user_email` | the run's user. `user_name` and `user_email` are empty when the user can no longer be resolved |
 | `started_at`, `ended_at` | ISO 8601 in UTC with milliseconds, as everywhere in the API |
 | `prompt_excerpt`, `response_excerpt` | as in the list |
 
+- The amount column ends in the install's currency (`trail.currency`) in lower case: it is `cost_usd`
+  by default and `cost_eur` for `EUR`. When the setting is not a valid code the suffix is left out
+  and the column is `cost`. Nothing is converted.
 - A value that was not captured is an **empty cell**. It is never `0`: a `0` in the file is a count
   or an amount that was recorded. `usage_state` and `cost_state` say why a figure is missing or
   not final (`pending`, `partial`, `unpriced`, `not_reported`, `not_captured`), so a reader never
@@ -1816,7 +1826,7 @@ Each item is [The price](#the-price).
 ### `PUT /api/prices?provider=…&model=…`
 
 Saves a model's price. The body is a JSON object, sent with a JSON content type, with any of the
-four rates, in US dollars per million tokens, and answers `200` with the price as it now resolves
+four rates, in the install's currency (`trail.currency`) per million tokens, and answers `200` with the price as it now resolves
 (`source` `saved`):
 
 ```json

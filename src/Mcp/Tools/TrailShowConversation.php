@@ -4,6 +4,7 @@ namespace Astro\Trail\Mcp\Tools;
 
 use Astro\Trail\Http\Resources\ConversationResource;
 use Astro\Trail\Http\Resources\TraceResource;
+use Astro\Trail\Pricing\Currency;
 use Astro\Trail\Queries\ConversationId;
 use Astro\Trail\Queries\ConversationIndex;
 use Astro\Trail\Queries\Conversations;
@@ -98,6 +99,7 @@ class TrailShowConversation extends Tool
         }, TraceResource::of($traces)->collection($traces));
 
         return Response::json([
+            'currency' => Currency::configured(),
             'conversation' => $conversation,
             'turns' => $turns,
             'window' => $outside,

@@ -291,11 +291,28 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Currency
+    |--------------------------------------------------------------------------
+    |
+    | The one currency every amount in this install is in, as a three-letter
+    | ISO 4217 code. Nothing is converted. Set it before Trail records: changing
+    | it later relabels the saved prices and the recorded costs without
+    | converting them. The prices below are US dollars, so they are used only
+    | when this is USD; in any other currency a model is unpriced until you
+    | save its price.
+    |
+    */
+
+    'currency' => env('TRAIL_CURRENCY', 'USD'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Model Prices
     |--------------------------------------------------------------------------
     |
-    | List prices in USD per one million tokens, keyed by AI provider driver
-    | and model id, used to estimate token-based calls. Reranking entries use
+    | List prices in US dollars per one million tokens, used only when the
+    | currency above is USD. They are keyed by AI provider driver and model id
+    | and used to estimate token-based calls. Reranking entries use
     | an explicit "input_tokens" (USD per million) or "search_units" (USD
     | per unit) basis in their own "reranking" group. Rates
     | saved from the dashboard override the ones here.

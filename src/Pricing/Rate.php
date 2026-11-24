@@ -5,7 +5,7 @@ namespace Astro\Trail\Pricing;
 use DateTimeInterface;
 
 /**
- * USD per one million tokens. A null rate is unknown, not free.
+ * The install's currency per one million tokens. A null rate is unknown, not free.
  */
 final readonly class Rate
 {

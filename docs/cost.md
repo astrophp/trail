@@ -4,13 +4,41 @@ Trail shows an **estimated** cost for every step, run, agent and model. It is no
 the tokens a provider reported, multiplied by list prices Trail holds, and it can differ from what
 your provider charges you. For the real figure, use your provider's invoice or usage page.
 
+## Currency
+
+An install has one currency, set with `trail.currency` (`TRAIL_CURRENCY`, default `USD`): a
+three-letter code such as `USD`, `EUR` or `TRY`. Every amount Trail stores, computes and shows is in
+it: saved prices, recorded costs, totals and the spend projection.
+
+- **Nothing is converted.** Trail has no exchange rates. The code is a label, and the dashboard
+  shows amounts with it.
+- **Set it before Trail records.** Changing it later relabels the saved prices and the costs
+  already recorded as the new currency, without converting them.
+- **The prices Trail ships are US dollars.** `trail.pricing` is used only when the currency is
+  `USD`. In any other currency every entry of `trail.pricing`, including entries you added yourself, is
+  ignored: a model is Unpriced until you save a price for it in the dashboard, in your currency.
+- **A provider that bills in another currency:** set `TRAIL_CURRENCY` to that currency and save the
+  provider's prices in the dashboard. The models Trail knows are still listed there.
+- **An app that pays providers in two currencies** must pick one for the install, and enter the prices of
+  the other converted by hand.
+- **CSV exports are named after it.** The amount columns end in the currency in lower case:
+  `cost_usd` on a `USD` install, `cost_eur` on a `EUR` one. When the code is not valid the suffix is
+  left out (`cost`). The same goes for `estimated_cost`, `cumulative_estimated_cost`, `projected` and
+  `projected_line`.
+- **After changing it,** rebuild the configuration cache if you use one and restart queue workers
+  and Octane, which read the configuration once.
+- **A code that is not three letters** (an empty value, `null`, `EURO`, `12`) is reported,
+  and the dashboard has no currency to show. Recording goes on: the prices in `trail.pricing` are
+  not used, saved prices are. Only the shape is checked: Trail does not look the code up in a list
+  of real currencies.
+
 ## How an estimate is made
 
 Each model step, embeddings call and classification call is priced by its own usage when it is recorded. A run's cost is the
 sum of its priced steps.
 
-- Prices are in US dollars per **one million tokens**, with up to four rates per model: `input`,
-  `output`, `cache_read` and `cache_write`.
+- Prices are in the install's [currency](#currency) per **one million tokens**, with up to four
+  rates per model: `input`, `output`, `cache_read` and `cache_write`.
 - Input tokens are the total sent, cached tokens included. Cache-read and cache-write tokens are
   parts of that total and are charged at their own rates instead of the input rate.
 - Reasoning tokens are already inside the output tokens, so they are not charged again.
@@ -48,12 +76,15 @@ For the provider driver and model id of a step, Trail looks, in this order:
    it goes through.
 4. **Nothing.** Any other model is unpriced until you add it.
 
+Steps 2 and 3 use the entries of `trail.pricing` only when the [currency](#currency) is `USD`.
+
 A saved price replaces the config entry as a whole: a rate you leave blank in it is unknown and
 does not fall back to the config value.
 
 ### Adding a model
 
-Add it to `trail.pricing` in your published `config/trail.php`, under its provider driver:
+Add it to `trail.pricing` in your published `config/trail.php`, under its provider driver. This
+applies to a `USD` install; in another currency, save the price in the dashboard instead:
 
 ```php
 'pricing' => [
@@ -113,6 +144,8 @@ model on that list can be given a price.
 - **Save** a price to override the config value. Saved prices are stored in `trail_prices`, in
   your database. Leave a rate blank to mark it unknown.
 - **Reset to config** removes a model's saved price, which returns it to the config entry or the prefix it resolves through.
+  Where the config prices are not used (the currency is not `USD`), the remaining price may be none:
+  the model is then Unpriced.
 - A saved price takes effect for runs recorded after it is saved. A process that is already
   running may take up to a minute to see it.
 
@@ -130,8 +163,8 @@ recorded amounts and is not added to them.
 
 ## Reranking and coverage
 
-Reranking uses an explicit selected billing basis: input tokens at USD per million, or search units
-at USD per unit. It never falls back to ordinary model rates, and it never charges both quantities.
+Reranking uses an explicit selected billing basis: input tokens per million, or search units per
+unit, in the install's currency. It never falls back to ordinary model rates, and it never charges both quantities.
 A missing selected quantity or rate is unknown; an explicit rate of zero is free. The responding
 model is used when the SDK reports it, with the requested model as the fallback.
 

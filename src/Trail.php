@@ -6,6 +6,7 @@ use Astro\Trail\Capture\Guard;
 use Astro\Trail\Capture\Recorder;
 use Astro\Trail\Capture\Sampler;
 use Astro\Trail\Pricing\CostCalculator;
+use Astro\Trail\Pricing\Currency;
 use Astro\Trail\Storage\ArrayTraceStore;
 use Astro\Trail\Storage\Contracts\TraceStore;
 use Astro\Trail\Storage\StaleRuns;
@@ -204,7 +205,7 @@ class Trail
     /**
      * What the dashboard needs to start, written into the page as window.Trail.
      *
-     * @return array{path: string, apiPath: string, csrfToken: ?string, appName: mixed, environment: string, timezone: mixed, version: ?string, staleAfter: int, recording: ?string}
+     * @return array{path: string, apiPath: string, csrfToken: ?string, appName: mixed, environment: string, timezone: mixed, version: ?string, staleAfter: int, recording: ?string, currency: ?string}
      */
     public function scriptVariables(): array
     {
@@ -221,6 +222,7 @@ class Trail
             'version' => $this->version(),
             'staleAfter' => StaleRuns::timeout(),
             'recording' => $this->recording(),
+            'currency' => Currency::configured(),
         ];
     }
 

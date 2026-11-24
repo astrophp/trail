@@ -77,6 +77,16 @@ it('reads the saved prices when the same run is not faked', function () {
         ->and((float) DB::table('trail_traces')->where('id', $id)->value('cost'))->toEqualWithDelta(CONFIG_COST, 1e-9);
 });
 
+it('leaves a faked run unpriced when the currency is not the one the config prices are in, with no query', function () {
+    config(['trail.currency' => 'EUR']);
+    $fake = Trail::fake();
+
+    [$id, $queries] = ($this->run)();
+
+    expect($queries)->toHaveCount(0)
+        ->and($fake->totals($id)->cost)->toBeNull();
+});
+
 it('reports nothing to the exception handler while faked, with no saved prices table', function () {
     ($this->withoutPriceTable)();
     Exceptions::fake();

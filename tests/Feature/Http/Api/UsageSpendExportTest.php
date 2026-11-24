@@ -2,6 +2,7 @@
 
 use Astro\Trail\Enums\Status;
 use Astro\Trail\Http\Resources\Csv;
+use Astro\Trail\Http\Resources\SpendCsv;
 use Astro\Trail\Tests\Fixtures\Http\UsageRows;
 use Illuminate\Auth\GenericUser;
 use Illuminate\Support\Carbon;
@@ -442,4 +443,33 @@ describe('access', function () {
         // Rolling back this test's migrations asks for confirmation in production.
         $this->app['env'] = 'testing';
     });
+});
+
+describe('the currency of the install', function () {
+    it('names the amount columns after it, recorded and projected', function (string $currency, string $suffix) {
+        config(['trail.currency' => $currency]);
+        spendExportDay();
+
+        $content = $this->get('/trail/api/usage/spend/export')->assertOk()->streamedContent();
+        $lines = array_map(fn (string $line) => str_getcsv($line, ',', '"', ''), explode("\r\n", substr($content, strlen(Csv::BYTE_ORDER_MARK), -2)));
+        $header = $lines[0];
+
+        expect($header)->toBe([
+            'kind', 'from', 'to', 'bucket', 'full', 'in_progress', 'runs', 'cost_state', 'estimated_cost'.$suffix,
+            'cumulative_state', 'cumulative_estimated_cost'.$suffix, 'projected'.$suffix, 'projected_line'.$suffix,
+        ]);
+
+        $recorded = array_combine($header, $lines[25]);
+        $projected = array_combine($header, str_getcsv(SpendCsv::projected('hour', ['from' => '2026-01-02T13:00:00.000Z', 'to' => '2026-01-02T14:00:00.000Z', 'amount' => 2.5, 'cumulative' => 417.5]), ',', '"', ''));
+
+        expect($recorded['kind'])->toBe('recorded')
+            ->and($recorded['estimated_cost'.$suffix])->toBe('200')
+            ->and($recorded['cumulative_estimated_cost'.$suffix])->toBe('415')
+            ->and($projected['kind'])->toBe('projected')
+            ->and($projected['projected'.$suffix])->toBe('2.5')
+            ->and($projected['projected_line'.$suffix])->toBe('417.5');
+    })->with([
+        'eur' => ['eur', '_eur'],
+        'not a currency' => ['EURO', ''],
+    ]);
 });

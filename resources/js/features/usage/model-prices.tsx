@@ -22,7 +22,7 @@ import {
 import { usePrices } from '@/features/usage/use-prices'
 import { useFocusHandoff } from '@/hooks/use-focus-handoff'
 import { useQueryStatus } from '@/hooks/use-query-status'
-import { formatCount } from '@/lib/format'
+import { currencyCode, formatCount, tokenRateUnit } from '@/lib/format'
 
 const isTab = (value: string): value is PriceTab =>
     priceTabs.some((tab) => tab === value)
@@ -44,6 +44,7 @@ export function ModelPrices({ className }: { className?: string }) {
     const editor = usePriceEditor(prices)
     const view = usePriceView(prices)
     const filterRef = useRef<HTMLInputElement>(null)
+    const code = currencyCode()
 
     useLeaveWarning(editor.unsaved)
     // The retry button, or the one of the refresh note, goes away when the list loads.
@@ -115,10 +116,12 @@ export function ModelPrices({ className }: { className?: string }) {
                                 </Notice>
                             ) : null}
                             <p className="px-5 pb-3 text-caption text-muted-foreground">
-                                Token rates are US dollars per million tokens;
-                                reranking rates show their billing unit. Models
-                                come from your Trail configuration and recorded
-                                usage.
+                                Token rates are {tokenRateUnit()}; reranking
+                                rates show their billing unit. Models come from
+                                your Trail configuration and recorded usage.
+                                {code === null || code === 'USD'
+                                    ? null
+                                    : ' Bundled prices are in US dollars and are not used.'}
                             </p>
                             <CountTabs
                                 aria-label="Which models to list"

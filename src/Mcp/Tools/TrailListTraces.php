@@ -3,6 +3,7 @@
 namespace Astro\Trail\Mcp\Tools;
 
 use Astro\Trail\Http\Resources\TraceResource;
+use Astro\Trail\Pricing\Currency;
 use Astro\Trail\Queries\Page;
 use Astro\Trail\Queries\TimeRange;
 use Astro\Trail\Queries\TraceFilters;
@@ -65,6 +66,7 @@ class TrailListTraces extends Tool
 
         return Response::json([
             'range' => $range->toArray(),
+            'currency' => Currency::configured(),
             'total' => $counts[$filters->status === null ? 'all' : $filters->status->value],
             'traces' => $summary,
         ]);

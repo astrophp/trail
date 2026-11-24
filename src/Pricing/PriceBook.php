@@ -2,10 +2,12 @@
 
 namespace Astro\Trail\Pricing;
 
+use Astro\Trail\Capture\Guard;
 use Illuminate\Contracts\Config\Repository;
 use Illuminate\Database\ConnectionResolverInterface;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use InvalidArgumentException;
 use Throwable;
 
 class PriceBook
@@ -26,6 +28,8 @@ class PriceBook
     private ?array $rows = null;
 
     private ?int $loadedAt = null;
+
+    private bool $reportedCurrency = false;
 
     public function __construct(
         private readonly Repository $config,
@@ -169,7 +173,7 @@ class PriceBook
      */
     private function table(string $provider, ?string $withoutSaved = null, bool $reranking = false): array
     {
-        $pricing = $this->config->get('trail.pricing');
+        $pricing = $this->configPricesApply() ? $this->config->get('trail.pricing') : null;
         $entries = is_array($pricing) ? ($pricing[$provider] ?? null) : null;
         $table = [];
 
@@ -191,6 +195,25 @@ class PriceBook
         $saved = array_filter($saved, fn (Rate $rate): bool => $reranking ? $rate->rerankingRatesSet : $rate->tokenRatesSet);
 
         return array_replace($table, $saved);
+    }
+
+    /**
+     * Whether the prices in `trail.pricing` can be used: they are US dollars, so only on a USD
+     * install. An invalid currency is reported once and treated as not USD.
+     */
+    private function configPricesApply(): bool
+    {
+        $currency = Currency::from($this->config);
+
+        if ($currency === null && ! $this->reportedCurrency) {
+            $this->reportedCurrency = true;
+
+            Guard::run(function (): void {
+                throw new InvalidArgumentException('Trail ignored trail.currency: it must be a three-letter currency code such as USD. The prices in trail.pricing are not used.');
+            });
+        }
+
+        return $currency === Currency::DEFAULT;
     }
 
     /**

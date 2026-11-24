@@ -1,7 +1,7 @@
 import { Outlet } from 'react-router'
 import { useSessionIssue } from '@/app/providers/session-issue'
 import { ErrorState } from '@/components/patterns/error-state'
-import { RecordingNotice, useMetaStatus } from '@/features/meta'
+import { CurrencyNotice, RecordingNotice, useMetaStatus } from '@/features/meta'
 import { SetupScreen } from '@/features/setup'
 import { useFocusHandoff } from '@/hooks/use-focus-handoff'
 import { reloadPage } from '@/lib/reload-page'
@@ -14,7 +14,8 @@ import { reloadPage } from '@/lib/reload-page'
  *    screen can be trusted or refreshed until the page is reloaded;
  * 2. the API cannot be reached and there is no cached meta to show: the dashboard has nothing;
  * 3. no run has ever been recorded: one setup screen instead of empty pages;
- * 4. the routed page, with the notice that recording is paused above it.
+ * 4. the routed page, with the notices that recording is paused and that the currency setting is
+ *    not valid above it.
  *
  * While the very first meta request is pending and nothing is cached, the content area is empty
  * (the shell stays): the page is not mounted, so it fires no queries behind a setup screen, and
@@ -82,6 +83,7 @@ export function AppContent() {
     return (
         <>
             <RecordingNotice />
+            <CurrencyNotice />
             <Outlet />
         </>
     )
