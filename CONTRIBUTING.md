@@ -31,7 +31,7 @@ scripts/install-test.sh 13   # fresh Laravel app: require, migrate, record (12 o
 ```
 
 Run `composer test` for a change to PHP and `npm run lint`, `npm run typecheck` and `npm test` for
-a change to the dashboard. Continuous integration runs both, on PHP 8.3, 8.4 and 8.5, Laravel 12 and
+a change to the dashboard. Continuous integration runs both, on PHP 8.3, 8.4, 8.5 and 8.6, Laravel 12 and
 13, and on MySQL and Postgres as well as SQLite.
 
 - Each pull request should be independently mergeable and green.

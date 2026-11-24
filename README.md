@@ -15,6 +15,7 @@
   <a href="https://packagist.org/packages/astrophp/trail"><img src="https://img.shields.io/packagist/v/astrophp/trail" alt="Latest version on Packagist"></a>
   <a href="https://packagist.org/packages/astrophp/trail"><img src="https://img.shields.io/packagist/php-v/astrophp/trail" alt="PHP version"></a>
   <a href="composer.json"><img src="https://img.shields.io/badge/Laravel-12%20%7C%2013-FF2D20?logo=laravel&logoColor=white" alt="Laravel 12 and 13"></a>
+  <a href="#compatibility"><img src="https://img.shields.io/badge/laravel%2Fai-1.1%20%E2%80%93%201.4-FF2D20" alt="Tested with laravel/ai 1.1 to 1.4"></a>
   <a href="https://packagist.org/packages/astrophp/trail/stats"><img src="https://img.shields.io/packagist/dt/astrophp/trail" alt="Total downloads"></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/astrophp/trail" alt="MIT licence"></a>
 </p>
@@ -39,6 +40,15 @@ steps, tool calls, sub-agents, tokens and estimated cost) into your application'
 It serves a dashboard for those runs from your application, in the way Horizon and Telescope do. It
 is a package, not a hosted service: Trail stores recorded runs in your database and sends them to no
 service. Errors inside Trail go to your application's exception handler.
+
+Trail is tested in CI against `laravel/ai` 1.1.0 to 1.4.1, on Laravel 12 and 13, PHP 8.3 to
+8.6, and SQLite, MySQL and Postgres ([Compatibility](#compatibility)).
+
+Before it stores anything, Trail redacts secrets and cuts every string to 10,000 characters by
+default, and you can turn payload capture off and keep only timing, usage and cost. A run is
+buffered in memory and written in one batch at the end of its request, command or job, not on
+every SDK event. See [Payloads](docs/payloads.md) and
+[When it is written](docs/recording.md#when-it-is-written).
 
 ## When to use Trail
 
@@ -68,12 +78,20 @@ Run an AI agent and visit `/trail` in your Laravel application.
 
 Trail is not a general-purpose OpenTelemetry backend or a hosted monitoring platform. It captures the operations exposed through Laravel AI SDK events. See [Known limits](docs/limits.md) for coverage and limitations.
 
-## Requirements
+## Compatibility
 
-- PHP 8.3 or newer
-- Laravel 12 or 13
-- `laravel/ai` 1.1 or newer
-- SQLite, MySQL or Postgres
+Every version below is run in [continuous integration](.github/workflows/tests.yml) on each
+change:
+
+| | Tested |
+|---|---|
+| `laravel/ai` | 1.1.0, 1.2.0, 1.3.0, 1.4.0, 1.4.1 |
+| Laravel | 12, 13 |
+| PHP | 8.3, 8.4, 8.5, 8.6 |
+| Database | SQLite, MySQL, Postgres |
+
+PHP 8.6 is tested on Laravel 13 only, because Laravel 12's test tools cannot be installed on it
+yet. Composer allows `laravel/ai` 1.1 or newer within 1.x.
 
 ## Install
 
